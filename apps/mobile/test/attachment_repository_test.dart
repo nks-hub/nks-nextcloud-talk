@@ -170,9 +170,44 @@ void main() {
     expect(
       left.data['n'],
       0,
-      reason: 'a row nothing can decode can also never be finished or '
+      reason:
+          'a row nothing can decode can also never be finished or '
           'cancelled, so it is deleted instead of logged about forever',
     );
+  });
+
+  test('a row from a newer build is dropped the same way', () async {
+    // The other direction of the same accident: a phase, a lane or a profile
+    // written by a build that knows more than this one. Those come back out
+    // of `_enumValue` as a `StateError`, not a `TalkProtocolException`, and
+    // the metadata decoder ran outside the guard entirely — so a downgrade,
+    // or a beta build installed side by side, bricked attachments for good.
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    await _insertAccount(database, 'account-a');
+    final repository = AttachmentRepository(database);
+    final runtime = _runtime(
+      accountId: 'account-a',
+      sourceHandle: 'nctalk-media-v1:cccccccccccccccccccccccccccccccc',
+    );
+    await repository.persistAdmission(
+      account: runtime.snapshot.accounts.values.single,
+      job: runtime.job,
+      metadata: runtime.metadata,
+      updatedAt: DateTime.utc(2026, 8, 24),
+    );
+
+    await database.customStatement(
+      "update attachment_jobs set phase = 'draftresolved'",
+    );
+
+    final loaded = await repository.loadRuntime();
+
+    expect(loaded.snapshot.accounts.values.single.jobs, isEmpty);
+    final left = await database
+        .customSelect('select count(*) as n from attachment_jobs')
+        .getSingle();
+    expect(left.data['n'], 0);
   });
 
   test('keeps attachment runtime isolated by account', () async {

@@ -268,9 +268,16 @@ final class AttachmentRepository {
           throw StateError('Attachment job server binding is inconsistent');
         }
         final AttachmentJob job;
+        final AttachmentExecutionMetadata jobMetadata;
         try {
           job = _decodeJob(jobRow);
-        } on TalkProtocolException catch (error) {
+          // Inside the guard, not after it: the metadata decoder reads the
+          // same row through `_enumValue` and non-null assertions, so a phase
+          // or a profile this build no longer knows throws `StateError` or
+          // `TypeError` here — past the catch below, and straight back into
+          // the failure the catch exists to prevent.
+          jobMetadata = _decodeMetadata(jobRow);
+        } on Object catch (error) {
           // A row the CURRENT model refuses. It used to bring the whole
           // attachment runtime down with it: the exception escaped
           // `loadRuntime`, `attachmentServiceProvider` never resolved, and the
@@ -282,18 +289,21 @@ final class AttachmentRepository {
           // narrowing the voice formats the app may send left a queued job with
           // an `audio/mp4` source that no longer satisfies `supportsSource`.
           // Any future tightening of the model would do the same to a phone
-          // that had a job in flight across the update.
+          // that had a job in flight across the update. A downgrade does it
+          // the other way round: a row written by a newer build carries a
+          // phase this one cannot name.
           //
           // So a row that cannot be decoded is dropped, not obeyed. The bytes
           // it points at are cleaned up by the source store's own sweep; what
           // must not happen is losing attachments altogether.
-          debugPrint('[attachments] dropping undecodable job ${jobRow.jobId}: $error');
+          debugPrint(
+            '[attachments] dropping undecodable job ${jobRow.jobId}: $error',
+          );
           undecodable.add(jobRow.jobId);
           continue;
         }
         jobs[job.jobId] = job;
-        metadata[(accountId: row.accountId, jobId: jobRow.jobId)] =
-            _decodeMetadata(jobRow);
+        metadata[(accountId: row.accountId, jobId: jobRow.jobId)] = jobMetadata;
       }
       accounts[accountId] = AttachmentAccountState(
         accountId: accountId,
@@ -315,9 +325,9 @@ final class AttachmentRepository {
       // Deleted rather than left behind: a row nothing can decode is a row
       // nothing can finish or cancel, and keeping it only repeats the log line
       // on every start.
-      await (_database.delete(_database.attachmentJobs)
-            ..where((job) => job.jobId.isIn(undecodable)))
-          .go();
+      await (_database.delete(
+        _database.attachmentJobs,
+      )..where((job) => job.jobId.isIn(undecodable))).go();
     }
     return LoadedAttachmentRuntime(
       snapshot: AttachmentRuntimeSnapshot(accounts: accounts),
