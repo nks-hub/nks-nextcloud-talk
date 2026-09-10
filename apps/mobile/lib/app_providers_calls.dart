@@ -129,8 +129,18 @@ final callMediaEngineProvider = Provider<CallMediaEngine>((ref) {
 /// Where a call hears that the system took its audio — an incoming telephone
 /// call, an alarm. Without this the microphone keeps capturing through the
 /// interruption, which the other participants hear.
+/// Only Android and iOS register a handler for the channel. Subscribing
+/// anywhere else is not merely useless: `EventChannel` reports a failed
+/// `listen` through `FlutterError.reportError` rather than through the stream,
+/// so the stream's own error handling cannot swallow it and every desktop call
+/// raised two unhandled `MissingPluginException`s — one on joining, one on
+/// leaving. Found by a real call on Windows.
 final callAudioInterruptionsProvider = Provider<CallAudioInterruptions>((ref) {
-  return const PlatformCallAudioInterruptions();
+  return switch (defaultTargetPlatform) {
+    TargetPlatform.android ||
+    TargetPlatform.iOS => const PlatformCallAudioInterruptions(),
+    _ => const SilentCallAudioInterruptions(),
+  };
 });
 
 /// The small window a call shrinks into when the user leaves the app. Armed

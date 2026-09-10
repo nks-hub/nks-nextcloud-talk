@@ -33,10 +33,14 @@ abstract interface class CallAudioInterruptions {
   Stream<CallAudioInterruption> get events;
 }
 
-/// Reads the platform's audio focus. Silent where no implementation is
-/// registered: a platform that never interrupts is indistinguishable from one
-/// that has not been taught to report it, and neither is a reason to fail a
-/// call.
+/// Reads the platform's audio focus.
+///
+/// USE IT ONLY WHERE A HANDLER IS REGISTERED — Android and iOS. The
+/// `handleError` below covers a `MissingPluginException` that arrives as a
+/// stream error, but `EventChannel` reports a failed `listen` or `cancel`
+/// through `FlutterError.reportError` instead, which no stream can catch;
+/// on a platform without a handler that is two unhandled errors per call.
+/// `callAudioInterruptionsProvider` is what makes that choice.
 final class PlatformCallAudioInterruptions implements CallAudioInterruptions {
   const PlatformCallAudioInterruptions({
     EventChannel channel = const EventChannel(channelName),
