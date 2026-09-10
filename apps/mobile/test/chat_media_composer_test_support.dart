@@ -54,6 +54,10 @@ Widget _composerApp({
         contactSelectionBackend: contactSelectionBackend,
         createVoiceCaptureBackend: voiceBackends?.createCapture,
         createVoicePlaybackBackend: voiceBackends?.createPlayback,
+        // A widget test starts and stops a recording within the same
+        // millisecond, which now reads as a recording too short to send. This
+        // is the clock a finger would have moved.
+        voiceClock: _FixedStepClock(),
       ),
     ),
   );
@@ -345,6 +349,17 @@ final class _VoiceBackendFactory {
     for (final backend in playbackBackends) {
       await backend.closeIfNeeded();
     }
+  }
+}
+
+/// Advances three seconds every time it is asked what time it is.
+final class _FixedStepClock implements VoiceRecordingClock {
+  static DateTime _now = DateTime.utc(2026, 1, 1);
+
+  @override
+  DateTime now() {
+    _now = _now.add(const Duration(seconds: 3));
+    return _now;
   }
 }
 

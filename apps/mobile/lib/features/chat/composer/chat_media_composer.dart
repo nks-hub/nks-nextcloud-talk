@@ -208,6 +208,7 @@ final class ChatMediaComposer extends StatefulWidget {
     this.imageSelectionBackend = const PlatformAttachmentSelectionBackend(),
     this.contactSelectionBackend = const PlatformContactSelectionBackend(),
     this.createVoiceCaptureBackend,
+    this.voiceClock = const SystemVoiceRecordingClock(),
     this.createVoicePlaybackBackend,
   }) : assert(leadingAction == null || !showAttachmentButton);
 
@@ -247,6 +248,11 @@ final class ChatMediaComposer extends StatefulWidget {
   final ImageSelectionBackend imageSelectionBackend;
   final ContactSelectionBackend contactSelectionBackend;
   final CreateVoiceCaptureBackend? createVoiceCaptureBackend;
+
+  /// Where the recorder reads elapsed time from. The recorder already takes
+  /// one for the same reason: a widget test starts and stops a recording in
+  /// the same millisecond, which is nothing like what a finger does.
+  final VoiceRecordingClock voiceClock;
   final CreateVoicePlaybackBackend? createVoicePlaybackBackend;
 
   @override
@@ -456,6 +462,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     final recorder = RecordVoiceRecorder(
       backend: captureBackend,
       store: widget.sourceStore,
+      clock: widget.voiceClock,
     );
     final playbackBackend =
         widget.createVoicePlaybackBackend?.call() ??

@@ -183,6 +183,7 @@ Widget _threadComposerApp({
         contactSelectionBackend: contactSelectionBackend,
         createVoiceCaptureBackend: voiceBackends?.createCapture,
         createVoicePlaybackBackend: voiceBackends?.createPlayback,
+        voiceClock: _FixedStepClock(),
       ),
     ),
   );
