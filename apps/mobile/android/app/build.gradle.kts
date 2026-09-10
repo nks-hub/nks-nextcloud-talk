@@ -48,6 +48,15 @@ gradle.taskGraph.whenReady {
     }
 }
 
+// Robolectric refuses to build a sandbox for Android SDK 36 and up on Java 17
+// ("Android SDK 36 requires Java 21"), which silently turned four test classes
+// red while the code they cover was fine. Only the tests move to 21; the app
+// still compiles against 17, which is what ships.
+tasks.withType<Test>().configureEach {
+    javaLauncher =
+        javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+
 android {
     testOptions.unitTests.isIncludeAndroidResources = true
     namespace = "com.nkshub.nextcloudtalk"

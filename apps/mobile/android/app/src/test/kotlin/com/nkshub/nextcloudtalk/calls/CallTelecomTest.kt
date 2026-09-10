@@ -9,6 +9,7 @@ import android.telecom.ConnectionRequest
 import android.telecom.PhoneAccount
 import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
+import android.os.Looper
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import org.junit.After
@@ -20,6 +21,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
@@ -94,7 +96,12 @@ class CallTelecomTest {
 
         val connection = CallTelecomRegistry.create(request()) as? CallTelecomConnection
         assertNotNull(connection)
-        assertEquals(Connection.STATE_ACTIVE, connection!!.state)
+        // The state is set from a post to the main looper, deliberately: a
+        // state set inside `create` is replaced by DIALING when Telecom
+        // registers the connection. Nothing has run it yet here.
+        assertEquals(Connection.STATE_NEW, connection!!.state)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(Connection.STATE_ACTIVE, connection.state)
         assertEquals(
             Connection.PROPERTY_SELF_MANAGED,
             connection.connectionProperties and Connection.PROPERTY_SELF_MANAGED,
@@ -136,6 +143,7 @@ class CallTelecomTest {
         )
 
         val connection = CallTelecomRegistry.create(request()) as CallTelecomConnection
+        shadowOf(Looper.getMainLooper()).idle()
         assertEquals(Connection.STATE_RINGING, connection.state)
 
         connection.onAnswer()

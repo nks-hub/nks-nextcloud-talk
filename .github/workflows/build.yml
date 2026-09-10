@@ -51,7 +51,12 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          # Robolectric needs Java 21 for an Android SDK 36 sandbox, while the
+          # app still compiles on 17. Listing 17 last leaves JAVA_HOME on 17;
+          # Gradle's toolchain detection finds the 21 through JAVA_HOME_21_X64.
+          java-version: |
+            21
+            17
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
