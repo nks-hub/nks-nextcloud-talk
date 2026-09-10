@@ -20,6 +20,13 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- An iOS notification says which conversation it came from, and that is now
+  shown on a simulator rather than argued from the code. Until now every
+  push arrived as a banner from the application, because what the phone
+  decrypts carries the room's token and never its name; the app now leaves the
+  names it knows where the notification extension can read them, and the
+  banner is attributed to the conversation. A room the app has not seen yet
+  still gets the ordinary notification rather than none.
 - Large text keeps the conversation name in the header. The rule that gives
   the name its share was already written to grow with the text size, but
   nothing checked it; at 200 % the header now provably folds its actions into
