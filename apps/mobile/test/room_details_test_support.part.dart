@@ -209,19 +209,9 @@ void _growViewport(WidgetTester tester, {double height = 1600}) {
   addTearDown(tester.view.resetPhysicalSize);
 }
 
-Future<void> _pumpUntil(
-  WidgetTester tester,
-  bool Function() condition, {
-  int maxAttempts = 100,
-}) async {
-  for (var attempt = 0; attempt < maxAttempts; attempt++) {
-    if (condition()) {
-      return;
-    }
-    await tester.pump(const Duration(milliseconds: 10));
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 1)),
+Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) =>
+    pumpUntilCondition(
+      tester,
+      condition,
+      reason: 'the room details screen never reached the expected state',
     );
-  }
-  fail('Condition was not reached');
-}

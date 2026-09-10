@@ -179,10 +179,22 @@ Future<void> pumpUntilCondition(
   String reason = 'the condition was never reached',
   Duration timeout = const Duration(seconds: 30),
   Duration step = const Duration(milliseconds: 5),
+  // The fake clock has to move as well as the real one. A bare `pump()`
+  // advances it by nothing, so anything waiting on a timer or an animation
+  // never arrives however long the deadline is - which is how the room details
+  // screen sat here for thirty seconds instead of one.
+  Duration frame = const Duration(milliseconds: 10),
 }) async {
+  // Asked before anything is pumped, and that is not only an optimisation: a
+  // caller already inside `tester.runAsync` whose condition already holds must
+  // not reach the `runAsync` below, because a reentrant call to it is an
+  // error. Room details calls this from exactly there.
+  if (condition()) {
+    return;
+  }
   final deadline = DateTime.now().add(timeout);
   while (true) {
-    await tester.pump();
+    await tester.pump(frame);
     if (condition()) {
       return;
     }

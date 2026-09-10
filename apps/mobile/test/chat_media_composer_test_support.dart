@@ -143,12 +143,32 @@ Future<void> _pickAttachmentSource(
   }
 }
 
-Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) =>
-    pumpUntilCondition(
-      tester,
-      condition,
-      reason: 'the media composer never reached the expected state',
+/// This file's own wait, with a real-time deadline instead of a pump count.
+///
+/// Deliberately not `pumpUntilCondition`: sharing that one was tried and it
+/// broke this file twice, because the private loops differed in ways that
+/// matter. Here the frame must carry no fake time - advancing the clock runs
+/// the voice recorder's timers on and the test then looks for a control the
+/// recording has already passed - and the first pump must happen even when the
+/// condition already holds, because it is what flushes the frame these
+/// assertions read. Only the count-versus-clock part was ever the bug: two
+/// hundred five-millisecond waits is a budget of one second, and one second is
+/// not enough while the rest of the suite runs.
+Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 30));
+  while (true) {
+    await tester.pump();
+    if (condition()) {
+      return;
+    }
+    if (DateTime.now().isAfter(deadline)) {
+      fail('Timed out after 30s: the media composer never reached that state');
+    }
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 5)),
     );
+  }
+}
 
 final class _RecordingBridge {
   _RecordingBridge({AttachmentCapabilityProfile? profile})
