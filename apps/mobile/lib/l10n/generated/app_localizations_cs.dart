@@ -1951,6 +1951,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get searchMessagesTooltip => 'Hledat ve zprávách';
 
   @override
+  String get searchMessagesClear => 'Vymazat hledání';
+
+  @override
   String get searchMessagesTitle => 'Hledat ve zprávách';
 
   @override
@@ -2739,6 +2742,12 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsPasswordFieldLabel => 'Nové heslo';
 
   @override
+  String get roomDetailsPasswordShow => 'Zobrazit heslo';
+
+  @override
+  String get roomDetailsPasswordHide => 'Skrýt heslo';
+
+  @override
   String get roomDetailsPasswordRemoveAction => 'Odebrat heslo';
 
   @override
@@ -2780,6 +2789,12 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get roomDetailsBreakoutCreateDialogTitle =>
       'Kolik oddělených místností?';
+
+  @override
+  String get roomDetailsBreakoutFewer => 'O místnost méně';
+
+  @override
+  String get roomDetailsBreakoutMore => 'O místnost více';
 
   @override
   String get roomDetailsBreakoutModeAutomatic => 'Rozdělit všechny rovnoměrně';

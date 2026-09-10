@@ -220,6 +220,9 @@ final class _PasswordDialogState extends State<_PasswordDialog> {
           errorMaxLines: 5,
           suffixIcon: IconButton(
             key: const Key('room-details-password-reveal'),
+            tooltip: _obscured
+                ? strings.roomDetailsPasswordShow
+                : strings.roomDetailsPasswordHide,
             icon: Icon(
               _obscured
                   ? Icons.visibility_outlined

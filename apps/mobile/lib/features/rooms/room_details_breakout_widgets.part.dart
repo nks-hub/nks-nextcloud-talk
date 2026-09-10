@@ -142,6 +142,7 @@ final class _BreakoutAmountDialogState extends State<_BreakoutAmountDialog> {
   List<Widget> _amountControls(BuildContext context) {
     return [
       IconButton(
+        tooltip: AppLocalizations.of(context).roomDetailsBreakoutFewer,
         onPressed: _amount > breakoutRoomsMinimum
             ? () => setState(() => _amount--)
             : null,
@@ -153,6 +154,7 @@ final class _BreakoutAmountDialogState extends State<_BreakoutAmountDialog> {
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       IconButton(
+        tooltip: AppLocalizations.of(context).roomDetailsBreakoutMore,
         onPressed: _amount < breakoutRoomsMaximum
             ? () => setState(() => _amount++)
             : null,

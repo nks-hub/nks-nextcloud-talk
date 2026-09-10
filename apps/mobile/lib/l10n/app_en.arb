@@ -690,6 +690,7 @@
   "messageActionUnsupported": "This action isn't available here.",
   "messageActionMessageMissing": "This message is no longer available.",
   "searchMessagesTooltip": "Search messages",
+  "searchMessagesClear": "Clear the search",
   "searchMessagesTitle": "Search messages",
   "searchMessagesInConversation": "Search in {conversation}",
   "@searchMessagesInConversation": {
@@ -1063,6 +1064,8 @@
     "description": "Title of the dialog that sets the conversation password."
   },
   "roomDetailsPasswordFieldLabel": "New password",
+  "roomDetailsPasswordShow": "Show the password",
+  "roomDetailsPasswordHide": "Hide the password",
   "@roomDetailsPasswordFieldLabel": {
     "description": "Label of the password text field."
   },
@@ -1101,6 +1104,8 @@
   },
   "roomDetailsBreakoutCreate": "Create breakout rooms",
   "roomDetailsBreakoutCreateDialogTitle": "How many breakout rooms?",
+  "roomDetailsBreakoutFewer": "One room fewer",
+  "roomDetailsBreakoutMore": "One room more",
   "roomDetailsBreakoutModeAutomatic": "Spread everyone evenly",
   "roomDetailsBreakoutModeManual": "Assign people myself",
   "roomDetailsBreakoutModeFree": "Let people pick a room",

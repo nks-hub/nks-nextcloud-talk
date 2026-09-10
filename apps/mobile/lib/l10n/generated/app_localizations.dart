@@ -3590,6 +3590,12 @@ abstract class AppLocalizations {
   /// **'Search messages'**
   String get searchMessagesTooltip;
 
+  /// No description provided for @searchMessagesClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the search'**
+  String get searchMessagesClear;
+
   /// No description provided for @searchMessagesTitle.
   ///
   /// In en, this message translates to:
@@ -4970,6 +4976,18 @@ abstract class AppLocalizations {
   /// **'New password'**
   String get roomDetailsPasswordFieldLabel;
 
+  /// No description provided for @roomDetailsPasswordShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the password'**
+  String get roomDetailsPasswordShow;
+
+  /// No description provided for @roomDetailsPasswordHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide the password'**
+  String get roomDetailsPasswordHide;
+
   /// Action that clears the conversation password.
   ///
   /// In en, this message translates to:
@@ -5047,6 +5065,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'How many breakout rooms?'**
   String get roomDetailsBreakoutCreateDialogTitle;
+
+  /// No description provided for @roomDetailsBreakoutFewer.
+  ///
+  /// In en, this message translates to:
+  /// **'One room fewer'**
+  String get roomDetailsBreakoutFewer;
+
+  /// No description provided for @roomDetailsBreakoutMore.
+  ///
+  /// In en, this message translates to:
+  /// **'One room more'**
+  String get roomDetailsBreakoutMore;
 
   /// No description provided for @roomDetailsBreakoutModeAutomatic.
   ///

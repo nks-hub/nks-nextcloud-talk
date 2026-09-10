@@ -131,6 +131,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
                       return const SizedBox.shrink();
                     }
                     return IconButton(
+                      tooltip: strings.searchMessagesClear,
                       icon: const Icon(Icons.clear),
                       onPressed: () {
                         _controller.clear();

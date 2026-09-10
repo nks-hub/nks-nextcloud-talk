@@ -6,6 +6,7 @@ import 'package:nextcloudtalk/features/search/message_search_screen.dart';
 import 'package:nextcloudtalk/features/search/message_search_service.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'accessibility_probe.dart' show expectEveryButtonNamed;
 import 'test_support.dart';
 
 MessageSearchResult _result({
@@ -111,6 +112,25 @@ void main() {
 
     expect(find.byKey(const Key('message-search-idle')), findsOneWidget);
     expect(service.searchedTerms, isEmpty);
+  });
+
+  testWidgets('the clear button says what it does', (tester) async {
+    // It only exists once something is typed, which is why the screen-wide
+    // audit never saw it: a screen reader used to announce it as "button".
+    final semantics = tester.ensureSemantics();
+    final service = _FakeMessageSearchService((_) async => const []);
+    await pumpScreen(tester, service);
+
+    await tester.enterText(
+      find.byKey(const Key('message-search-field')),
+      'popisek',
+    );
+    await tester.pump();
+
+    expectEveryButtonNamed(tester, screen: 'message search');
+    semantics.dispose();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('shows a bounded spinner while searching', (tester) async {

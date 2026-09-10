@@ -1954,6 +1954,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchMessagesTooltip => 'Search messages';
 
   @override
+  String get searchMessagesClear => 'Clear the search';
+
+  @override
   String get searchMessagesTitle => 'Search messages';
 
   @override
@@ -2742,6 +2745,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roomDetailsPasswordFieldLabel => 'New password';
 
   @override
+  String get roomDetailsPasswordShow => 'Show the password';
+
+  @override
+  String get roomDetailsPasswordHide => 'Hide the password';
+
+  @override
   String get roomDetailsPasswordRemoveAction => 'Remove the password';
 
   @override
@@ -2782,6 +2791,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get roomDetailsBreakoutCreateDialogTitle => 'How many breakout rooms?';
+
+  @override
+  String get roomDetailsBreakoutFewer => 'One room fewer';
+
+  @override
+  String get roomDetailsBreakoutMore => 'One room more';
 
   @override
   String get roomDetailsBreakoutModeAutomatic => 'Spread everyone evenly';
