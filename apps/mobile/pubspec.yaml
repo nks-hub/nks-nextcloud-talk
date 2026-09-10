@@ -102,6 +102,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   record_platform_interface: 2.1.0
+  # user32 for the desktop integration test, which minimizes its own window
+  ffi: ^2.1.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
