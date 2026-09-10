@@ -20,6 +20,21 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- A call on the desktop keeps going while the window is minimized, and this is
+  now measured rather than reasoned about. A real call was started from the
+  Windows client, the window was minimized for seventy-five seconds through the
+  system, and the other side watched the server the whole time: the seat, the
+  session and the published audio and video flags never moved, and the call was
+  still there when the window came back.
+- Fixed: every desktop call raised two errors nobody could see. The app asked
+  Windows for the audio-focus notifications only Android and iOS actually
+  provide, once when joining and once when leaving. Nothing broke for the user,
+  but the errors were real and are gone.
+- Fixed: closing a window during a call could end in a database error. The call
+  cleans its own session up as the window goes away, which sometimes lost the
+  race with the database closing. The cleanup is now allowed to fail quietly;
+  the leftover it removes is one the next start clears by itself.
+
 - An iOS notification says which conversation it came from, and that is now
   shown on a simulator rather than argued from the code. Until now every
   push arrived as a banner from the application, because what the phone
