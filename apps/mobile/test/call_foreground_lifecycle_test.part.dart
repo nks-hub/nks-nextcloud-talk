@@ -254,12 +254,9 @@ void _registerCallForegroundLifecycleTests() {
     // by then dropped, could no longer end.
     final ready = Completer<void>();
     final foreground = _ForegroundCalls(startGate: ready.future);
-    var microphones = 0;
     final fixture = await _ForegroundJoinFixture.create(
       foreground,
-      _DelayedMicrophone(() async {
-        microphones++;
-      }),
+      _DelayedMicrophone(() async {}),
     );
     addTearDown(fixture.close);
 
