@@ -702,7 +702,19 @@ final class _CallSignalingLane {
     _disposed = true;
     await _stopIo();
     if (deleteDurableState) {
-      await sessions.delete(accountId: key.accountId, roomToken: key.roomToken);
+      // Best effort on purpose. This runs while everything is being taken
+      // down, and the database can already be gone - closing a desktop window
+      // during a call ends the shutdown in "Channel was closed before
+      // receiving a response" from drift, reported as an unhandled error from
+      // a disposal nobody can await. The row it wanted to remove is a stale
+      // signalling session, which the next start recovers by itself, so
+      // failing here is not worth an error the user cannot act on.
+      try {
+        await sessions.delete(
+          accountId: key.accountId,
+          roomToken: key.roomToken,
+        );
+      } on Object catch (_) {}
     }
     await _updates.close();
   }

@@ -518,6 +518,36 @@ void main() {
     },
   );
 
+  test('a shutdown outlives its own database', () async {
+    // Closing a desktop window during a call disposes the tree, and the lane's
+    // release then deletes its durable session - on a database that may
+    // already be gone. That delete used to surface as an unhandled drift
+    // "Channel was closed before receiving a response" from a disposal nobody
+    // can await, seen on a real Windows call.
+    await _insertAccount(accounts, credentials, accountId: 'account-a');
+    final client = _HeldSettingsClient();
+    final api = HttpNextcloudApi(client: client);
+    final coordinator = CallSignalingCoordinator(
+      accounts: accounts,
+      sessions: sessions,
+      credentials: credentials,
+      api: api,
+      refreshConversationSession: (_, _) async => null,
+    );
+    addTearDown(api.close);
+    await coordinator.start(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      nextcloudSessionId: 'session-a',
+    );
+    await client.waitForRequestCount(1);
+
+    await database.close();
+
+    await expectLater(coordinator.shutdownAccount('account-a'), completes);
+    await expectLater(coordinator.dispose(), completes);
+  });
+
   test('account shutdown leaves another signaling lane durable', () async {
     await _insertAccount(accounts, credentials, accountId: 'account-a');
     await _insertAccount(accounts, credentials, accountId: 'account-b');
