@@ -388,6 +388,50 @@ void main() {
     expect(await panelWidth(2200), 500);
   });
 
+  testWidgets('the composer survives a sync error at 200 % text', (
+    tester,
+  ) async {
+    // The error banner is the one part of the pane that grows without asking.
+    // At 200 % text on a 360 px phone it wrapped to 467 px, took every pixel
+    // the timeline had and pushed the composer off the bottom: the person
+    // could neither read the room nor answer it.
+    tester.view.physicalSize = const Size(360, 740);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final overflows = await overflowsWhile(() async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [appDatabaseProvider.overrideWithValue(database)],
+          child: localizedTestApp(
+            home: Builder(
+              builder: (context) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: const TextScaler.linear(2)),
+                child: const _Harness(initialToken: 'breakpointtoken'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    });
+
+    expect(overflows, isEmpty, reason: overflows.join(' | '));
+    expect(
+      find.byIcon(Icons.cloud_off_rounded),
+      findsOneWidget,
+      reason: 'without the banner this proves nothing',
+    );
+    expect(find.byKey(const Key('chat-composer')), findsOneWidget);
+    expect(
+      tester.getRect(find.byKey(const Key('chat-composer'))).bottom,
+      lessThanOrEqualTo(740),
+    );
+
+    await settle(tester);
+  });
+
   testWidgets('a conversation row fits the narrowest list at 200 % text', (
     tester,
   ) async {

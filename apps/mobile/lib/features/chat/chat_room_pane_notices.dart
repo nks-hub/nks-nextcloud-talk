@@ -23,6 +23,13 @@ final class _ChatErrorNotice extends StatelessWidget {
               Expanded(
                 child: Text(
                   _chatErrorMessage(strings, error),
+                  // Capped because this banner is the one part of the pane
+                  // that can grow without asking: at 200 % text it wrapped to
+                  // 467 px on a 360 px phone, which left the timeline nothing
+                  // and pushed the composer off the bottom of the screen. A
+                  // screen reader still gets the whole sentence.
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: scheme.onErrorContainer),
                 ),
               ),
@@ -85,8 +92,7 @@ String _messageActionErrorMessage(
     ChatMessageActionError.network => strings.chatUnavailable,
     ChatMessageActionError.accountMissing ||
     ChatMessageActionError.conversationMissing ||
-    ChatMessageActionError.expiryInThePast =>
-      strings.messagePinExpiryInThePast,
+    ChatMessageActionError.expiryInThePast => strings.messagePinExpiryInThePast,
     ChatMessageActionError.invalidResponse => strings.chatInvalidResponse,
   };
 }
