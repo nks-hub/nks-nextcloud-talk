@@ -729,6 +729,45 @@ final class _MediaSessionTests {
       },
     );
 
+    test('a socket that resumes keeps the peers it already had', () async {
+      // A resumable HPB drop reports "not ready" and comes back with the SAME
+      // room epoch and the same local peer id, so nothing here would rebuild
+      // the connections — and the far end saw no interruption, so it will not
+      // offer again. Closing them left this side, when it is not the offerer,
+      // waiting for an offer that never comes.
+      final media = session(
+        _update(localPeerId: _local, participants: [_participant(_remote)]),
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      expect(engine.connections, hasLength(1));
+
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+          phase: SignalingAccountPhase.reconnectWaiting,
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(media.state.phase, CallMediaPhase.preparing);
+      expect(
+        engine.connections.single.closed,
+        isFalse,
+        reason: 'the connection outlives a socket that is coming back',
+      );
+
+      // The same authority returns: still one connection, now live again.
+      updates.add(
+        _update(localPeerId: _local, participants: [_participant(_remote)]),
+      );
+      await pumpEventQueue();
+
+      expect(engine.connections, hasLength(1));
+      expect(media.state.error, isNull);
+    });
+
     test('a reconnect that never completes still ends the call', () async {
       // The wait is bounded on purpose: signalling that does not come back
       // means the call really is gone, and saying otherwise would be a lie

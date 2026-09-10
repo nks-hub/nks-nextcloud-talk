@@ -287,8 +287,6 @@ final class CallMediaSession {
       await _holdForRenegotiation();
       return;
     }
-    _renegotiationHold?.cancel();
-    _renegotiationHold = null;
     if (update.topology == SignalingTopology.externalMcu &&
         _sendControl == null) {
       await _failAndStop(CallMediaError.topologyUnsupported);
@@ -296,10 +294,24 @@ final class CallMediaSession {
     }
     _mcu = update.topology == SignalingTopology.externalMcu;
     if (!update.signalingReady || !update.roomConfirmed) {
-      await _closeAllPeers();
+      // The peers stay. A socket that is reconnecting keeps its room epoch
+      // and this side's peer id, so nothing below would rebuild them — and
+      // the other side saw no interruption at all, so it will not offer
+      // again. Tearing them down here left a mesh call where this side is
+      // not the offerer waiting for an offer that never comes, stuck in
+      // "connecting" until the far end's ICE gave up. A drop that really
+      // invalidates them arrives as a new epoch or as renegotiationRequired,
+      // and both are handled above and below.
       _emit(const CallMediaState(phase: CallMediaPhase.preparing));
       return;
     }
+    // Cancelled only once the signalling is actually usable again. A hello
+    // clears `renegotiationRequired` before the room is confirmed, and
+    // cancelling on that alone left a call with no deadline at all: if the
+    // room join was then never confirmed it sat in "preparing" forever
+    // instead of saying so after the hold's 45 seconds.
+    _renegotiationHold?.cancel();
+    _renegotiationHold = null;
     final localPeerId = update.localPeerId;
     _localPeerId = localPeerId?.value;
     if (localPeerId == null) {
