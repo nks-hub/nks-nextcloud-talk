@@ -18,6 +18,14 @@ to TestFlight. Their content cannot be broken down item by item: at that time
 the build number was not raised by a commit, so no boundary in the history leads
 to them. Only what is documented from App Store Connect is stated for them.
 
+## Unreleased
+
+- Sharing a screen from the desktop was watched arriving on a second device for
+  the first time: pick a monitor in a call and the other side sees that monitor,
+  live. Choosing a window INSTEAD of a monitor, after the first share has been
+  stopped, does not reach the other side yet - that is being looked into and no
+  fix is claimed here.
+
 ## 1.0.1 (67) — 10 September 2026
 
 - A pin with an end shows its end. Pinning already asked how long the message
