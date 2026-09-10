@@ -31,6 +31,11 @@ to them. Only what is documented from App Store Connect is stated for them.
   the name its share was already written to grow with the text size, but
   nothing checked it; at 200 % the header now provably folds its actions into
   the menu instead of squeezing the name out.
+- Call reactions are covered by tests that actually press the button. Two
+  reports said the round control beside Raise hand did nothing; neither could
+  be reproduced, and the reason they stayed open is that every test asserted
+  the button existed without ever pressing it. Pressing it, choosing an emoji
+  and refusing to open while the call is still connecting are all pinned now.
 - The call screen is covered by the accessibility audit the other screens
   already had. Nothing was wrong there today; the point is that a future
   control without a spoken name now fails a test rather than reaching somebody

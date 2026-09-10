@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/l10n/generated/app_localizations.dart';
+import 'package:nextcloudtalk/features/calls/call_controls.dart';
 import 'package:nextcloudtalk/features/calls/call_join_controller.dart';
 import 'package:nextcloudtalk/features/calls/call_media_engine.dart';
 import 'package:nextcloudtalk/features/calls/call_media_session.dart';
@@ -27,8 +28,14 @@ final class _FrozenJoinController extends CallJoinController {
 
   final CallJoinState frozen;
 
+  /// Every emoji the controls asked to send, in order.
+  final reactions = <String>[];
+
   @override
   CallJoinState build(CallRoomKey arg) => frozen;
+
+  @override
+  Future<void> sendReaction(String emoji) async => reactions.add(emoji);
 
   void fail() => state = const CallJoinState(phase: CallJoinPhase.failed);
   void publish(CallJoinState next) => state = next;
@@ -697,6 +704,62 @@ void main() {
     );
   });
 
+
+  // Reported twice: the round button beside Raise hand does nothing, and
+  // reactions do nothing. Neither reproduced on the S9+, and the tests that
+  // existed only asserted the button was PRESENT - none of them ever pressed
+  // it. This does, on a desktop-sized window, which is where both reports were
+  // left open.
+  testWidgets('the reaction picker opens and sends what was chosen', (
+    tester,
+  ) async {
+    await _pumpCallScreen(tester);
+    final controller =
+        ProviderScope.containerOf(
+              tester.element(find.byType(CallScreen)),
+            ).read(callJoinControllerProvider(_key).notifier)
+            as _FrozenJoinController;
+
+    await tester.tap(find.byKey(const Key('call-screen-react')));
+    await tester.pumpAndSettle();
+
+    for (final emoji in callReactions) {
+      expect(
+        find.byKey(Key('call-screen-react-$emoji')),
+        findsOneWidget,
+        reason: 'the picker must offer $emoji',
+      );
+    }
+
+    await tester.tap(find.byKey(Key('call-screen-react-${callReactions.first}')));
+    await tester.pumpAndSettle();
+
+    expect(controller.reactions, <String>[callReactions.first]);
+  });
+
+  // The remaining open shape from the same report: a picker tapped while the
+  // controls are busy. It must not open and must not send - a reaction
+  // dispatched through a session that is still coming up is the "did nothing"
+  // the reporter saw.
+  testWidgets('a busy call does not open the picker', (tester) async {
+    await _pumpCallScreen(tester);
+    final controller =
+        ProviderScope.containerOf(
+              tester.element(find.byType(CallScreen)),
+            ).read(callJoinControllerProvider(_key).notifier)
+            as _FrozenJoinController;
+    controller.publish(const CallJoinState(phase: CallJoinPhase.joining));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const Key('call-screen-react')),
+      warnIfMissed: false,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(Key('call-screen-react-${callReactions.first}')), findsNothing);
+    expect(controller.reactions, isEmpty);
+  });
   // The densest safety-critical screen in the app: mute, camera, screen share,
   // recording, raise hand, reactions and leave all sit here, and a control a
   // screen reader announces as just "button" is unusable in a live call. Every
