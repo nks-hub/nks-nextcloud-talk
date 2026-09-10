@@ -283,6 +283,31 @@ void _registerCallForegroundLifecycleTests() {
     ]);
   });
 
+  test('leaving a call stops the screen capture service', () async {
+    // The service is a foreground service of type mediaProjection: it keeps
+    // running, notification and all, until something stops it. Only the
+    // share button ever did, so leaving a call while sharing left the phone
+    // telling its owner the screen was still being shared.
+    final screenShare = _RecordingScreenShare();
+    final foreground = _ForegroundCalls();
+    final fixture = await _ForegroundJoinFixture.create(
+      foreground,
+      _ScreenShareEngine(),
+      screenShare: screenShare,
+    );
+    addTearDown(fixture.close);
+    await fixture.controller.join();
+    final error = await fixture.controller.setScreenSharing(true);
+
+    expect(error, isNull);
+    expect(screenShare.starts, 1);
+    expect(screenShare.stops, 0);
+
+    await fixture.controller.leave();
+
+    expect(screenShare.stops, 1, reason: 'the notification has to go too');
+  });
+
   test(
     'failed foreground admission releases REST without opening a microphone',
     () async {
@@ -485,6 +510,7 @@ final class _ForegroundJoinFixture {
     CallMediaEngine engine, {
     bool holdSettings = false,
     CallTelecom telecom = const NoCallTelecom(),
+    CallScreenShareService? screenShare,
   }) async {
     final rest = await _CallHarness.create(
       onCall: (request, _) async => _ocsResponse(
@@ -518,6 +544,8 @@ final class _ForegroundJoinFixture {
         callMediaEngineProvider.overrideWithValue(engine),
         callForegroundServiceProvider.overrideWithValue(foreground),
         callTelecomProvider.overrideWithValue(telecom),
+        if (screenShare != null)
+          callScreenShareServiceProvider.overrideWithValue(screenShare),
         callAudioInterruptionsProvider.overrideWithValue(
           const SilentCallAudioInterruptions(),
         ),
@@ -547,6 +575,39 @@ final class _ForegroundJoinFixture {
     await pumpEventQueue();
     await rest.dispose();
   }
+}
+
+/// An engine that can also open a screen, so a share really starts.
+final class _ScreenShareEngine implements CallMediaEngine {
+  final audio = _CameraForegroundAudio();
+  final screen = _CameraForegroundVideo();
+
+  @override
+  Future<CallLocalAudio> openMicrophone() async => audio;
+
+  @override
+  Future<bool> requestScreenConsent() async => true;
+
+  @override
+  Future<CallLocalVideo> openScreen({CallScreenSource? source}) async => screen;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// Counts what the platform was told about the screen-capture service.
+final class _RecordingScreenShare implements CallScreenShareService {
+  int starts = 0;
+  int stops = 0;
+
+  @override
+  Future<bool> start() async {
+    starts++;
+    return true;
+  }
+
+  @override
+  Future<void> stop() async => stops++;
 }
 
 final class _DisposalFailureEngine implements CallMediaEngine {

@@ -15,6 +15,7 @@ import 'call_signaling_session.dart';
 import 'call_media_engine.dart';
 import 'call_media_session.dart';
 import 'call_proximity.dart';
+import 'call_screen_share_service.dart';
 import 'call_telecom.dart';
 import 'call_transport_service.dart';
 
@@ -148,6 +149,14 @@ base class CallJoinController
   /// A hang-up that arrived while the join was still in flight.
   bool _leaveRequested = false;
   ({CallForegroundService service, String owner})? _foregroundCall;
+
+  /// The screen-capture service while a share is running.
+  ///
+  /// Held rather than read again where it has to be stopped: both places that
+  /// stop it — the teardown and the media state that reports the share gone —
+  /// can run while the container is already going away, and reading a
+  /// provider there throws.
+  CallScreenShareService? _screenShare;
 
   /// The system's own record of this call, once Telecom accepted one. Held
   /// rather than read again on teardown, where reading a provider throws.
@@ -399,6 +408,14 @@ base class CallJoinController
         canDownloadAttendance: _moderator.canDownloadAttendance,
       );
       unawaited(_applyProximity(media));
+      // The share can end without anybody pressing the button: closing every
+      // peer connection stops the capture, which is what a network drop and a
+      // renegotiation both do. The system service outlives it either way, and
+      // its notification then tells the person their screen is still being
+      // shared when it is not.
+      if (!media.screenSharing) {
+        unawaited(_stopScreenShareService());
+      }
       if (media.phase == CallMediaPhase.failed) {
         unawaited(_abandonFailedCall(session));
       }
@@ -427,6 +444,14 @@ base class CallJoinController
   /// than the self-managed API, a ROM without Telecom, a platform failure —
   /// and leaves the call exactly as it was: this must never fail a join.
   Future<void> _startTelecomCall() async {
+    // Captured before the await, and compared by identity after it. A null
+    // check is not enough: a call can end and another one start while the
+    // platform is answering, and the handle for the first would then be
+    // stored against the second and never ended.
+    final session = _session;
+    if (session == null) {
+      return;
+    }
     try {
       // A container already going away has no platform left to tell.
       final telecom = ref.read(callTelecomProvider);
@@ -437,7 +462,7 @@ base class CallJoinController
       if (call == null) {
         return;
       }
-      if (_disposed || _session == null) {
+      if (_disposed || !identical(_session, session)) {
         // The call ended while the system was being told about it.
         await telecom.endCall(call.callId);
         return;
@@ -623,6 +648,7 @@ base class CallJoinController
           return current() ? CallMediaError.screenShareUnavailable : null;
         }
         serviceStarted = true;
+        _screenShare = service;
         if (!current()) return null;
       }
       await session.setScreenSharing(sharing, source: source);
@@ -631,6 +657,7 @@ base class CallJoinController
       return current() ? error.code : null;
     } finally {
       if (!sharing || (serviceStarted && !session.state.screenSharing)) {
+        _screenShare = null;
         await service.stop();
       }
     }
@@ -818,6 +845,16 @@ base class CallJoinController
 
   Future<void> _performTeardown({required bool leaveServer}) async {
     _hold(false);
+    // Taken first, so nothing that runs later in this teardown can be told
+    // about a call that is already going. A join still finishing in parallel
+    // reads this null and stops: the system used to be handed a call handle
+    // right after the teardown had ended the previous one, and that handle
+    // then belonged to nobody.
+    final session = _session;
+    _session = null;
+    final subscription = _mediaStates;
+    _mediaStates = null;
+    await _stopScreenShareService();
     await _releaseProximity();
     await _endTelecomCall();
     _cameraEpoch++;
@@ -825,10 +862,6 @@ base class CallJoinController
     _cameraError = null;
     final foreground = _foregroundCall;
     _foregroundCall = null;
-    final subscription = _mediaStates;
-    _mediaStates = null;
-    final session = _session;
-    _session = null;
     final disposal = session?.dispose();
     try {
       await subscription?.cancel();
@@ -840,6 +873,16 @@ base class CallJoinController
         if (leaveServer) await _leaveServer();
       }
     }
+  }
+
+  /// Stops the screen-capture service if this call started one.
+  Future<void> _stopScreenShareService() async {
+    final service = _screenShare;
+    if (service == null) {
+      return;
+    }
+    _screenShare = null;
+    await service.stop();
   }
 
   Future<void> _stopForegroundCall() async {

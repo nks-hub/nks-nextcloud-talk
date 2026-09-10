@@ -16,6 +16,7 @@ import 'package:nextcloudtalk/features/calls/call_audio_interruptions.dart';
 import 'package:nextcloudtalk/features/calls/call_foreground_service.dart';
 import 'package:nextcloudtalk/features/calls/call_join_controller.dart';
 import 'package:nextcloudtalk/features/calls/call_signaling_session.dart';
+import 'package:nextcloudtalk/features/calls/call_screen_share_service.dart';
 import 'package:nextcloudtalk/features/calls/call_telecom.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_signaling.dart';
 import 'package:nextcloudtalk/features/calls/call_lifecycle_service.dart';
