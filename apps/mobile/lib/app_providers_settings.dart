@@ -209,11 +209,30 @@ base class CallRelayController extends Notifier<bool> {
   }
 }
 
+/// Who installed this build. Asked once — the answer cannot change while the
+/// app is running — and only ever a real question on Android.
+final appInstallSourceProvider = FutureProvider<AppInstallSource>(
+  (ref) => const AppInstallSourceReader().read(),
+);
+
 /// Whether this platform may offer the update check at all. A provider rather
 /// than the bare predicate so a test can pump the settings screen as a
 /// desktop without pretending to be one.
+///
+/// The desktops always may. Android may only when the build was installed by
+/// hand rather than by a shop: a shop keeps its own builds up to date, and
+/// offering a download beside one breaks its rules. An answer that has not
+/// arrived, or that the system refused, counts as a shop — the half of being
+/// wrong that costs nothing but a missing line in settings.
 final updateCheckHostProvider = Provider<bool>((ref) {
-  return isDesktopUpdateCheckPlatform;
+  if (isDesktopUpdateCheckPlatform) {
+    return true;
+  }
+  if (defaultTargetPlatform != TargetPlatform.android) {
+    return false;
+  }
+  return ref.watch(appInstallSourceProvider).valueOrNull ==
+      AppInstallSource.sideloaded;
 });
 
 final updateCheckPreferenceStoreProvider = Provider<UpdateCheckPreferenceStore>(

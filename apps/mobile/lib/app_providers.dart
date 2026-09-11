@@ -74,6 +74,7 @@ import 'features/conversations/list_pane_preference.dart';
 import 'features/settings/call_relay_preference.dart';
 import 'features/settings/reply_layout_preference.dart';
 import 'features/settings/theme_preference.dart';
+import 'features/settings/app_install_source.dart';
 import 'features/settings/update_check_preference.dart';
 import 'features/settings/update_check_service.dart';
 import 'features/settings/update_installer_service.dart';

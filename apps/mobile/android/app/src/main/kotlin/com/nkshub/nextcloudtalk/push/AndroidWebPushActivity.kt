@@ -24,6 +24,7 @@ import com.nkshub.nextcloudtalk.calls.ScreenShareChannel
 import com.nkshub.nextcloudtalk.calls.ScreenShareService
 import com.nkshub.nextcloudtalk.attachments.ChatAttachmentSaver
 import com.nkshub.nextcloudtalk.contacts.ContactPickerChannel
+import com.nkshub.nextcloudtalk.updates.AndroidInstallSource
 import com.nkshub.nextcloudtalk.share.AndroidShareCaptureResult
 import com.nkshub.nextcloudtalk.share.AndroidShareDelivery
 import com.nkshub.nextcloudtalk.share.AndroidShareInbox
@@ -44,6 +45,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
     private var deviceKeyStore: AndroidPushDeviceKeyStore? = null
     private var fcmChannel: MethodChannel? = null
     private var contactPickerChannel: ContactPickerChannel? = null
+    private var installSourceChannel: MethodChannel? = null
     private var backgroundDrainChannel: MethodChannel? = null
     private var shortcutChannel: MethodChannel? = null
     private var callAudioFocusChannel: EventChannel? = null
@@ -207,6 +209,15 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         }
         backgroundDrainChannel = drain
         BackgroundDrain.attachForeground(drain)
+
+        // Who installed this build, which decides whether the update check is
+        // offered at all on Android.
+        val installSource = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            AndroidInstallSource.CHANNEL_NAME,
+        )
+        installSource.setMethodCallHandler(AndroidInstallSource(applicationContext))
+        installSourceChannel = installSource
 
         val shortcuts = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -450,6 +461,8 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         backgroundDrainChannel = null
         shortcutChannel?.setMethodCallHandler(null)
         shortcutChannel = null
+        installSourceChannel?.setMethodCallHandler(null)
+        installSourceChannel = null
         callAudioFocusChannel?.setStreamHandler(null)
         callAudioFocusChannel = null
         callProximityChannel?.setMethodCallHandler(null)

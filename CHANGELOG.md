@@ -27,6 +27,13 @@ to them. Only what is documented from App Store Connect is stated for them.
   also has to be signed by this project before it is allowed anywhere near the
   one installed, whatever its checksum said.
 
+- An Android build somebody installed from the published file now looks for a
+  newer one too, and offers the release to open. A build from a shop still
+  does not, and neither does one whose origin the system will not name: a shop
+  keeps its own builds up to date, and putting a download beside it breaks its
+  rules. Nothing is installed from inside the app there; that would need a
+  permission this build has no business asking for.
+
 - The app looks for a newer build by itself now. Until now it only asked
   GitHub while the settings screen was open, so a window left up for days
   never learned about a release; it asks every few hours instead, and marks
