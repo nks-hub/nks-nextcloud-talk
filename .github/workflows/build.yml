@@ -493,7 +493,9 @@ jobs:
               git log --no-merges --pretty='- %s' "$previous..${GITHUB_REF_NAME}"                 | grep -E '^- (feat|fix|perf)' || echo "- Maintenance only; see the commit log."
             fi
             echo
-            echo "Artifacts below are signed release builds. \`SHA256SUMS\` lists the checksums of the ones built here; the macOS zip is built on the maintainer's Apple Silicon host and carries its own \`nks-talk-macos.zip.sha256\`."
+            echo "Artifacts below are signed release builds, and \`SHA256SUMS\` lists their checksums."
+            echo
+            echo "The Apple builds are added after this run, from the maintainer's Apple Silicon host, because no macOS runner takes part here. The macOS zip is Developer ID signed, notarized and stapled. The iOS file is the App Store build: it installs through TestFlight, not by being downloaded. Both are appended to \`SHA256SUMS\` when they land."
           } > notes.md
           cat notes.md
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
