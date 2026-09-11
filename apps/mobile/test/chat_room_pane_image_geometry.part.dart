@@ -93,23 +93,44 @@ void _registerChatRoomPaneImageGeometryTests() {
         final controller = tester
             .widget<CustomScrollView>(listFinder)
             .controller!;
-        controller.jumpTo(300);
-        await tester.pump();
-        await tester.pump();
-        final viewport = tester.getRect(listFinder);
-        final visible = <(int, Rect)>[];
-        for (var id = 101; id <= 130; id++) {
-          final finder = find.byKey(Key('chat-message-target-$id'));
-          if (finder.evaluate().isEmpty || imageIds.contains(id)) continue;
-          final rect = tester.getRect(finder);
-          if (rect.top > viewport.top + 8 &&
-              rect.bottom < viewport.bottom - 8) {
-            visible.add((id, rect));
+        final oldest = imageIds.reduce((a, b) => a < b ? a : b);
+        // Scrolled until a row ABOVE the images is on screen, rather than to
+        // a fixed offset: how much history fits above them depends on the
+        // font the device draws with, and at 300 an emulator showed only the
+        // images themselves.
+        var viewport = Rect.zero;
+        var visible = <(int, Rect)>[];
+        for (var offset = 300.0; offset <= 1200; offset += 150) {
+          controller.jumpTo(offset);
+          await tester.pump();
+          await tester.pump();
+          viewport = tester.getRect(listFinder);
+          visible = <(int, Rect)>[];
+          for (var id = 101; id <= 130; id++) {
+            final finder = find.byKey(Key('chat-message-target-$id'));
+            if (finder.evaluate().isEmpty || imageIds.contains(id)) continue;
+            final rect = tester.getRect(finder);
+            if (rect.top > viewport.top + 8 &&
+                rect.bottom < viewport.bottom - 8) {
+              visible.add((id, rect));
+            }
+          }
+          if (visible.any((row) => row.$1 < oldest)) {
+            break;
           }
         }
         visible.sort((a, b) => a.$2.top.compareTo(b.$2.top));
-        expect(visible, isNotEmpty);
-        final anchor = visible.first;
+        // A row ABOVE everything that is about to grow. What the reading
+        // anchor promises is that history does not slide out from under the
+        // eye — a row BELOW the growing images has to move down by exactly
+        // what they gain, and asserting it stays put asserts the opposite of
+        // the design. `visible.first` was whichever row happened to be
+        // topmost, which on one font landed above the images and on another
+        // below them: the same code then passed on a phone and failed on an
+        // emulator.
+        final above = visible.where((row) => row.$1 < oldest).toList();
+        expect(above, isNotEmpty, reason: 'nothing visible above the images');
+        final anchor = above.first;
         for (final id in imageIds) {
           expect(find.byKey(Key('chat-image-loading-$id-0')), findsOneWidget);
           await (database.update(
@@ -191,25 +212,39 @@ void _registerChatRoomPaneImageGeometryTests() {
         await tester.pump();
         final list = find.byKey(const Key('chat-message-list'));
         final controller = tester.widget<CustomScrollView>(list).controller!;
-        controller.jumpTo(300);
-        await tester.pump();
-        await tester.pump();
-        final loading = find.byKey(const Key('chat-image-loading-123-0'));
-        expect(loading, findsOneWidget);
-        final initialSize = tester.getSize(loading);
-        final viewport = tester.getRect(list);
-        final visible = <(int, Rect)>[];
-        for (var id = 101; id <= 130; id++) {
-          final finder = find.byKey(Key('chat-message-target-$id'));
-          if (finder.evaluate().isEmpty || id == 123) continue;
-          final rect = tester.getRect(finder);
-          if (rect.top > viewport.top + 8 &&
-              rect.bottom < viewport.bottom - 8) {
-            visible.add((id, rect));
+        // Scrolled until a row ABOVE the image is on screen: the reading
+        // anchor promises that history above the growing content stays where
+        // it is, while a row below it has to move down by what the image
+        // gains. How much fits above depends on the device's font, so the
+        // offset cannot be a constant.
+        var viewport = Rect.zero;
+        var visible = <(int, Rect)>[];
+        Size? initialSize;
+        for (var offset = 300.0; offset <= 1200; offset += 150) {
+          controller.jumpTo(offset);
+          await tester.pump();
+          await tester.pump();
+          final loading = find.byKey(const Key('chat-image-loading-123-0'));
+          expect(loading, findsOneWidget);
+          initialSize = tester.getSize(loading);
+          viewport = tester.getRect(list);
+          visible = <(int, Rect)>[];
+          for (var id = 101; id <= 130; id++) {
+            final finder = find.byKey(Key('chat-message-target-$id'));
+            if (finder.evaluate().isEmpty || id == 123) continue;
+            final rect = tester.getRect(finder);
+            if (rect.top > viewport.top + 8 &&
+                rect.bottom < viewport.bottom - 8) {
+              visible.add((id, rect));
+            }
+          }
+          if (visible.any((row) => row.$1 < 123)) {
+            break;
           }
         }
+        visible = visible.where((row) => row.$1 < 123).toList();
         visible.sort((a, b) => a.$2.top.compareTo(b.$2.top));
-        expect(visible, isNotEmpty);
+        expect(visible, isNotEmpty, reason: 'nothing visible above the image');
         final anchor = visible.first;
         preview.complete(image);
         var decoded = false;
@@ -225,7 +260,11 @@ void _registerChatRoomPaneImageGeometryTests() {
             closeTo(anchor.$2.top, 0.5),
             reason: 'history moved during decode frame $frame',
           );
-          if (image.decodedDimensions != null && loading.evaluate().isEmpty) {
+          if (image.decodedDimensions != null &&
+              find
+                  .byKey(const Key('chat-image-loading-123-0'))
+                  .evaluate()
+                  .isEmpty) {
             decoded = true;
             break;
           }
