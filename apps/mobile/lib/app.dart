@@ -77,7 +77,12 @@ final class _NextcloudTalkAppState extends ConsumerState<NextcloudTalkApp> {
       supportedLocales: AppLocalizations.supportedLocales,
       navigatorObservers: ref.watch(telemetryNavigatorObserversProvider),
       home: const ConversationShortcutsHost(
-        child: AppLockGate(child: IncomingShareHost(child: _AppHome())),
+        // The share host is ABOVE the lock gate on purpose: the gate replaces
+        // its child while the app is locked, and an unmounted host
+        // deregisters the platform channel the system hands the share to —
+        // which the native side offers exactly once. It keeps the share and
+        // waits for the unlock before showing anything.
+        child: IncomingShareHost(child: AppLockGate(child: _AppHome())),
       ),
     );
   }

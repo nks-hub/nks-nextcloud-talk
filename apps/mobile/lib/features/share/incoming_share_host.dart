@@ -10,6 +10,7 @@ import '../../app_providers.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../conversations/conversation_avatar_widget.dart';
+import '../settings/app_lock/app_lock_controller.dart';
 import 'incoming_share_bridge.dart';
 import 'incoming_share_coordinator.dart';
 
@@ -130,13 +131,21 @@ final class _IncomingShareHostState extends ConsumerState<IncomingShareHost> {
   Future<void> _drain() async {
     final coordinator = _coordinator;
     if (_draining || coordinator == null || !mounted) return;
+    // Nothing is shown over a locked app. This host now sits ABOVE the lock
+    // gate so the platform channel stays registered while the app is locked —
+    // it used to be unmounted with everything else, its handler deregistered,
+    // and the share the system had already handed over was lost for good,
+    // because the native side offers a launch share exactly once. Staying
+    // mounted means the share is kept; this check means the picker, which
+    // lists the person's conversations, still waits for the unlock.
+    if (!ref.read(appLockControllerProvider).exposesApp) return;
     _draining = true;
     try {
       while (mounted) {
         final share = coordinator.takeNext();
         if (share == null) return;
         if (!mounted) return;
-        final sent = await showDialog<bool>(
+        await showDialog<bool>(
           context: context,
           barrierDismissible: false,
           builder: (context) => IncomingShareTargetDialog(
@@ -146,12 +155,14 @@ final class _IncomingShareHostState extends ConsumerState<IncomingShareHost> {
           ),
         );
         if (!mounted) return;
-        if (sent == true || sent == false) {
-          try {
-            await coordinator.complete(share);
-          } on Object {
-            _showCompletionFailure();
-          }
+        // Completed however the dialog closed, `null` included. The system
+        // back button pops it with null, and skipping the completion left the
+        // entry in the native inbox while this side had already remembered
+        // its id — on iOS a stuck first entry blocks every later share.
+        try {
+          await coordinator.complete(share);
+        } on Object {
+          _showCompletionFailure();
         }
       }
     } finally {
@@ -309,7 +320,16 @@ final class _IncomingShareHostState extends ConsumerState<IncomingShareHost> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    // A share that arrived while the app was locked waits here; the unlock is
+    // what releases it.
+    ref.listen(appLockControllerProvider, (previous, next) {
+      if (next.exposesApp && !(previous?.exposesApp ?? false)) {
+        _scheduleDrain();
+      }
+    });
+    return widget.child;
+  }
 }
 
 final class IncomingShareTargetDialog extends StatefulWidget {
@@ -507,8 +527,7 @@ final class _IncomingShareTargetDialogState
                   (room) =>
                       room.label.toLowerCase().contains(query) ||
                       room.threads.any(
-                        (thread) =>
-                            thread.title.toLowerCase().contains(query),
+                        (thread) => thread.title.toLowerCase().contains(query),
                       ),
                 )
                 .toList(growable: false);
@@ -520,10 +539,7 @@ final class _IncomingShareTargetDialogState
         rows.add(
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
-            child: Text(
-              account.label,
-              style: _accountHeadingStyle(context),
-            ),
+            child: Text(account.label, style: _accountHeadingStyle(context)),
           ),
         );
       }
@@ -656,10 +672,9 @@ final class _IncomingShareTargetDialogState
   }
 }
 
-TextStyle? _accountHeadingStyle(BuildContext context) =>
-    Theme.of(context).textTheme.labelLarge?.copyWith(
-      color: Theme.of(context).colorScheme.primary,
-    );
+TextStyle? _accountHeadingStyle(BuildContext context) => Theme.of(
+  context,
+).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.primary);
 
 String _accountLabel(StoredAccount account) {
   final server = Uri.tryParse(account.serverUrl)?.host;

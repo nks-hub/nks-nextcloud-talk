@@ -9,6 +9,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/share/incoming_share_bridge.dart';
 import 'package:nextcloudtalk/features/share/incoming_share_coordinator.dart';
 import 'package:nextcloudtalk/features/share/incoming_share_host.dart';
+import 'package:nextcloudtalk/features/settings/app_lock/app_lock_authenticator.dart';
+import 'package:nextcloudtalk/features/settings/app_lock/app_lock_controller.dart';
+import 'package:nextcloudtalk/features/settings/app_lock/app_lock_gate.dart';
+import 'package:nextcloudtalk/features/settings/app_lock/app_lock_store.dart';
 import 'package:nextcloudtalk/l10n/generated/app_localizations.dart';
 
 void main() {
@@ -45,6 +49,73 @@ void main() {
     expect(launchCalls, 1);
     // Reset in the body: the invariant that catches a leaked debug variable
     // runs before tearDowns do.
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('a share that arrives while the app is locked is not lost', (
+    tester,
+  ) async {
+    // Reported shape: the lock gate replaced its child, the host went with
+    // it, its channel handler was deregistered, and the native side offers a
+    // launch share exactly once — so the share was gone for good. The host
+    // now lives above the gate, keeps the share, and shows the picker only
+    // once the app is open again.
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'getLaunchShare') {
+            return <String, Object?>{'id': 'share-locked', 'text': 'ahoj'};
+          }
+          return true;
+        });
+    final unlocked = Completer<bool>();
+    final container = ProviderContainer(
+      overrides: [
+        appLockMobilePlatformProvider.overrideWithValue(true),
+        appLockStoreProvider.overrideWithValue(_ShareLockStore()),
+        appLockAuthenticatorProvider.overrideWithValue(
+          _ShareLockAuthenticator(unlocked.future),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: _localizedApp(const AppLockGate(child: SizedBox.shrink())),
+      ),
+    );
+    await tester.pump();
+    // The host sits above the gate, exactly as `app.dart` nests them.
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: _localizedApp(
+          const IncomingShareHost(child: AppLockGate(child: SizedBox.shrink())),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(
+      find.byKey(const Key('incoming-share-target-dialog')),
+      findsNothing,
+      reason: 'the picker names conversations and must not sit over the lock',
+    );
+
+    unlocked.complete(true);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(
+      find.byKey(const Key('incoming-share-target-dialog')),
+      findsOneWidget,
+      reason: 'the share survived the lock and is offered after the unlock',
+    );
     debugDefaultTargetPlatformOverride = null;
   });
 
@@ -119,55 +190,60 @@ void main() {
     expect(coordinator.takeNext(), isNull);
   });
 
-  testWidgets('the picker lists every conversation and sends to the one tapped', (
-    tester,
-  ) async {
-    IncomingShareTarget? sent;
-    await tester.pumpWidget(
-      _localizedApp(
-        IncomingShareTargetDialog(
-          share: const IncomingShare(id: 'share-3', text: 'hello', file: null),
-          loadAccounts: () async => const [
-            IncomingShareAccount(
-              id: 'account-a',
-              label: 'alice · cloud.example',
-              rooms: [IncomingShareRoom(token: 'room-a', label: 'Project')],
+  testWidgets(
+    'the picker lists every conversation and sends to the one tapped',
+    (tester) async {
+      IncomingShareTarget? sent;
+      await tester.pumpWidget(
+        _localizedApp(
+          IncomingShareTargetDialog(
+            share: const IncomingShare(
+              id: 'share-3',
+              text: 'hello',
+              file: null,
             ),
-            IncomingShareAccount(
-              id: 'account-b',
-              label: 'bob · other.example',
-              rooms: [IncomingShareRoom(token: 'room-b', label: 'Team')],
-            ),
-          ],
-          send: (target) async => sent = target,
+            loadAccounts: () async => const [
+              IncomingShareAccount(
+                id: 'account-a',
+                label: 'alice · cloud.example',
+                rooms: [IncomingShareRoom(token: 'room-a', label: 'Project')],
+              ),
+              IncomingShareAccount(
+                id: 'account-b',
+                label: 'bob · other.example',
+                rooms: [IncomingShareRoom(token: 'room-b', label: 'Team')],
+              ),
+            ],
+            send: (target) async => sent = target,
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    // Every conversation of every account is on screen at once, under its
-    // account's heading - no picker has to be opened first.
-    expect(find.text('alice · cloud.example'), findsOneWidget);
-    expect(find.text('bob · other.example'), findsOneWidget);
-    expect(find.text('Project'), findsOneWidget);
-    expect(find.text('Team'), findsOneWidget);
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const Key('incoming-share-send')))
-          .onPressed,
-      isNull,
-    );
+      // Every conversation of every account is on screen at once, under its
+      // account's heading - no picker has to be opened first.
+      expect(find.text('alice · cloud.example'), findsOneWidget);
+      expect(find.text('bob · other.example'), findsOneWidget);
+      expect(find.text('Project'), findsOneWidget);
+      expect(find.text('Team'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('incoming-share-send')))
+            .onPressed,
+        isNull,
+      );
 
-    await tester.tap(
-      find.byKey(const Key('incoming-share-room-account-b-room-b')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('incoming-share-send')));
-    await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('incoming-share-room-account-b-room-b')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('incoming-share-send')));
+      await tester.pumpAndSettle();
 
-    expect(sent?.accountId, 'account-b');
-    expect(sent?.roomToken, 'room-b');
-  });
+      expect(sent?.accountId, 'account-b');
+      expect(sent?.roomToken, 'room-b');
+    },
+  );
 
   testWidgets('the picker searches once there are enough conversations', (
     tester,
@@ -347,8 +423,10 @@ void main() {
 
     expect(find.byKey(const Key('incoming-share-no-targets')), findsOneWidget);
     expect(
-      find.text('None of your accounts takes file attachments. Their servers '
-          'have them turned off; text can still be shared.'),
+      find.text(
+        'None of your accounts takes file attachments. Their servers '
+        'have them turned off; text can still be shared.',
+      ),
       findsOneWidget,
     );
     expect(
@@ -495,4 +573,24 @@ final class _QueuedIncomingSharePlatform implements IncomingSharePlatform {
 
   @override
   Future<void> dispose() => _opened.close();
+}
+
+final class _ShareLockStore implements AppLockStore {
+  @override
+  Future<bool> readEnabled() async => true;
+
+  @override
+  Future<void> writeEnabled(bool value) async {}
+}
+
+final class _ShareLockAuthenticator implements AppLockAuthenticator {
+  _ShareLockAuthenticator(this._result);
+
+  final Future<bool> _result;
+
+  @override
+  Future<bool> authenticate(String reason) => _result;
+
+  @override
+  Future<bool> isSupported() async => true;
 }
