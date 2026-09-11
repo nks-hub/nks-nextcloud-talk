@@ -45,6 +45,11 @@ const _macOSBundleName = 'nextcloudtalk.app';
 const _linuxBundleName = 'bundle';
 const _linuxExecutableName = 'nextcloudtalk';
 
+/// Names the directory an update is unpacked into, beside the build it
+/// replaces. Recognisable on sight so a leftover can be cleared, and hidden so
+/// it does not appear in a file manager while it exists.
+const _stagingPrefix = '.nks-talk-update-';
+
 UpdateInstallKind? _installKind(TargetPlatform platform) =>
     switch (platform) {
       TargetPlatform.windows => UpdateInstallKind.runInstaller,
@@ -270,7 +275,11 @@ final class UpdateInstallerService {
     }
     Directory? staging;
     try {
-      staging = await current.parent.createTemp('.nks-talk-update-');
+      // A process killed between unpacking and starting the script leaves its
+      // staging directory behind, and that is a whole build's worth of files.
+      // Nothing else ever writes these, so the next attempt clears them.
+      await _clearStaleStaging(current.parent);
+      staging = await current.parent.createTemp(_stagingPrefix);
       final unpacked = await _unpack(archive, staging);
       if (unpacked == null) {
         return false;
@@ -392,6 +401,24 @@ final class UpdateInstallerService {
       multiLine: true,
     ).firstMatch(described)?.group(1);
     return team == null || team == 'not' || team == 'not set' ? null : team;
+  }
+
+  /// Removes staging directories a previous attempt left behind. Only ever
+  /// paths this service itself names, and only directly beside the build.
+  Future<void> _clearStaleStaging(Directory beside) async {
+    try {
+      await for (final entry in beside.list(followLinks: false)) {
+        if (entry is! Directory) {
+          continue;
+        }
+        final name = entry.path.split(Platform.pathSeparator).last;
+        if (name.startsWith(_stagingPrefix)) {
+          await _deleteQuietly(entry);
+        }
+      }
+    } on Object {
+      // A directory that cannot even be listed is one to leave alone.
+    }
   }
 
   Future<void> _deleteQuietly(Directory directory) async {

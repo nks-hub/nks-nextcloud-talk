@@ -241,4 +241,27 @@ void main() {
     expect(harness.quits, isEmpty);
   });
 
+  test('a staging directory a killed run left behind is cleared', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    final install = await installed('old');
+    // What a process killed between unpacking and the swap leaves behind.
+    final stale = Directory('${install.parent.path}/.nks-talk-update-stale');
+    await Directory('${stale.path}/bundle').create(recursive: true);
+    await File('${stale.path}/bundle/big').writeAsString('a whole build');
+    // Something else living beside the build must be left exactly alone.
+    final neighbour = Directory('${install.parent.path}/keep-me');
+    await neighbour.create(recursive: true);
+
+    final archive = await linuxArchive();
+    final harness = service(install);
+
+    expect(
+      await harness.service.runInstaller(UpdateInstallReady(archive)),
+      isTrue,
+    );
+
+    expect(stale.existsSync(), isFalse, reason: 'the leftover has to go');
+    expect(neighbour.existsSync(), isTrue, reason: 'and nothing else may');
+  });
+
 }
