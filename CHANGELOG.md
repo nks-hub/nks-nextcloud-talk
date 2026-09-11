@@ -20,6 +20,10 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Fixed: removing an account stopped its Web Push registration from working
+  but never gave it up, so the device stayed registered for an account that
+  no longer existed and kept that account's keys.
+
 ## 1.0.2 (68) — 11 September 2026
 
 - Fixed: a call ended the moment another conversation of the same account was

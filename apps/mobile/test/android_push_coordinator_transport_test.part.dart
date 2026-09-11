@@ -156,4 +156,50 @@ void _registerAndroidPushTransportHandoverTests() {
     );
     expect(platform.retiredServerRevocations, isEmpty);
   });
+
+  test('removing an account gives up its Web Push registration', () async {
+    final fixture = await _createAccounts(const <String>[
+      'account-a',
+      'account-b',
+    ]);
+    final requests = <http.Request>[];
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        requests.add(request);
+        if (request.method == 'DELETE' &&
+            request.url.path.endsWith('/webpush')) {
+          return http.Response(jsonEncode(_ocs(const <Object>[], 200)), 200);
+        }
+        fail('Unexpected request: ${request.method} ${request.url.path}');
+      }),
+    );
+    addTearDown(api.close);
+    final platform = _FakeAndroidWebPushPlatform()
+      ..phase = AndroidWebPushRegistrationPhase.active
+      ..generation = 1;
+    final coordinator = AndroidPushCoordinator(
+      accounts: fixture.accounts,
+      credentials: fixture.credentials,
+      api: api,
+      platform: platform,
+      onWakeUp: (_) async {},
+    );
+    addTearDown(coordinator.close);
+
+    // The order account removal uses: stop the account first, so nothing
+    // re-registers behind the revocation, and only then give the
+    // registration up. Suspending alone used to be the whole story, which
+    // left the device registered for an account that no longer existed.
+    await coordinator.suspendAccount('account-a');
+    expect(await coordinator.revokeAccount('account-a'), isTrue);
+
+    expect(platform.preparedServerRevocations, <String>['account-a']);
+    expect(platform.retiredServerRevocations, <Object>[
+      (accountId: 'account-a', generation: 1),
+    ]);
+    expect(
+      requests.where((request) => request.method == 'DELETE'),
+      hasLength(1),
+    );
+  });
 }

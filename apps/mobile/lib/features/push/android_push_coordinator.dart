@@ -415,12 +415,48 @@ final class AndroidPushCoordinator {
     }
   }
 
-  Future<void> _revokeWebPush(_PushAccountContext context, int epoch) async {
+  /// Gives up one account's Web Push registration for good: the server's, and
+  /// the native one the distributor keeps alive.
+  ///
+  /// Account removal suspended this coordinator and stopped there, so a
+  /// removed account stayed registered on the device — its endpoint kept
+  /// receiving, and the native state kept the account's keys. Call it after
+  /// [suspendAccount], so nothing re-registers behind the revocation.
+  ///
+  /// Returns whether nothing is left to revoke. The caller reports a failure
+  /// to the person removing the account rather than claiming a clean removal.
+  Future<bool> revokeAccount(String accountId) async {
+    if (_closed) {
+      return false;
+    }
+    final context = await _loadContext(accountId);
+    if (context == null) {
+      // No account or no credential left to address the registration with.
+      // Removal's own unregister call is the only remaining lever.
+      return false;
+    }
+    await _revokeWebPush(
+      context,
+      _accountEpochs[accountId] ?? 0,
+      suspended: true,
+    );
+    return true;
+  }
+
+  /// [suspended] skips the epoch gate, which exists to abandon work an
+  /// account change has overtaken. A revocation asked for by that very change
+  /// is the one case where being suspended must not stop the work.
+  Future<void> _revokeWebPush(
+    _PushAccountContext context,
+    int epoch, {
+    bool suspended = false,
+  }) async {
     final accountId = context.account.id;
     final generations = await _platform.prepareServerRevocation(
       accountId: accountId,
     );
-    if (generations.isEmpty || !_isAccountActive(accountId, epoch)) {
+    if (generations.isEmpty ||
+        (!suspended && !_isAccountActive(accountId, epoch))) {
       return;
     }
     await _api.unregisterWebPush(

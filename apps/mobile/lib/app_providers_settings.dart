@@ -44,8 +44,15 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
       ]);
     },
     revokePush: (accountId) async {
-      final coordinator = ref.read(androidPushRegistrationCoordinatorProvider);
-      return coordinator == null || await coordinator.revokeAccount(accountId);
+      // Both transports, because either one can hold a live registration for
+      // the account being removed. The Web Push side is revoked only here:
+      // the suspension above stops it working, it does not unregister it.
+      final webPush = ref.read(androidPushCoordinatorProvider);
+      final webPushRevoked =
+          webPush == null || await webPush.revokeAccount(accountId);
+      final proxy = ref.read(androidPushRegistrationCoordinatorProvider);
+      final proxyRevoked = proxy == null || await proxy.revokeAccount(accountId);
+      return webPushRevoked && proxyRevoked;
     },
   );
 });
