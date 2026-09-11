@@ -8,25 +8,54 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../core/app_version.dart';
+import 'update_bundle_swap.dart';
 import 'update_check_service.dart';
 
-/// Whether this platform may download and run an update itself.
+/// Whether this platform may download and install an update itself.
 ///
-/// Windows only. macOS would need a notarised build to run something it just
-/// downloaded without Gatekeeper refusing it outright, and this app is not
-/// notarised for that — so macOS only ever gets the release page to open by
-/// hand, same as [isDesktopUpdateCheckPlatform] intends for every store
-/// build. Linux gets a tarball with no installer to run either; a link to the
-/// release is the honest answer there too.
-// ponytail: a Linux .desktop/AppImage installer is real work for a platform
-// with no single packaging convention; offering only the release link is the
-// correct lazy choice, not a shortcut taken to avoid it.
+/// All three desktops. Windows runs the installer the release carries. macOS
+/// and Linux ship a directory rather than an installer, so there the download
+/// is unpacked and put in the place of the running one; see
+/// [update_bundle_swap.dart] for how that is done without the process
+/// replacing itself.
+///
+/// Never the phones: a build from Google Play or the App Store is updated by
+/// the store, and pointing somebody at a download outside it breaks both
+/// stores' rules. That is also why this is not a preference.
 bool get canDownloadAndInstallUpdate {
   if (kIsWeb) {
     return false;
   }
-  return defaultTargetPlatform == TargetPlatform.windows;
+  return switch (defaultTargetPlatform) {
+    TargetPlatform.windows ||
+    TargetPlatform.macOS ||
+    TargetPlatform.linux => true,
+    _ => false,
+  };
 }
+
+/// What installing means here: run the file, or put a directory in place of
+/// the running one.
+enum UpdateInstallKind { runInstaller, replaceBundle }
+
+/// What the release archives unpack to, and what runs inside them. Checked
+/// after unpacking, so an archive that is not shaped like ours is refused
+/// before anything is put in the running build's place.
+const _macOSBundleName = 'nextcloudtalk.app';
+const _linuxBundleName = 'bundle';
+const _linuxExecutableName = 'nextcloudtalk';
+
+/// The team every macOS build of this app is signed by. A replacement signed
+/// by anybody else is refused, whatever its checksum said.
+const appleTeamIdentifier = 'DG3SLRLF7A';
+
+UpdateInstallKind? _installKind(TargetPlatform platform) =>
+    switch (platform) {
+      TargetPlatform.windows => UpdateInstallKind.runInstaller,
+      TargetPlatform.macOS ||
+      TargetPlatform.linux => UpdateInstallKind.replaceBundle,
+      _ => null,
+    };
 
 /// Hosts a real GitHub release asset may live on. `browser_download_url`
 /// always starts on `github.com`, which then answers with a redirect to the
@@ -42,6 +71,8 @@ bool _isGitHubControlledHost(Uri uri) {
       host == 'api.github.com' ||
       host.endsWith('.githubusercontent.com');
 }
+
+void _exitProcess() => exit(0);
 
 /// Aborts the current HTTP request, including stalled headers or body reads.
 final class DownloadCancellation {
@@ -108,14 +139,30 @@ final class UpdateInstallerService {
   UpdateInstallerService({
     http.Client Function()? clientFactory,
     this.downloadTimeout = const Duration(minutes: 5),
-    this.maximumInstallerBytes = 64 * 1024 * 1024,
+    this.maximumInstallerBytes = 128 * 1024 * 1024,
     this.maximumSha256SumsBytes = 16 * 1024,
-  }) : _clientFactory = clientFactory ?? http.Client.new;
+    this.exitDelay = const Duration(seconds: 2),
+    void Function()? quit,
+    this.bundleDirectory = runningBundleDirectory,
+  }) : _clientFactory = clientFactory ?? http.Client.new,
+       quit = quit ?? _exitProcess;
 
   final http.Client Function() _clientFactory;
   final Duration downloadTimeout;
   final int maximumInstallerBytes;
   final int maximumSha256SumsBytes;
+
+  /// How long the window stays up after the swap script is started, so the
+  /// person sees that the update began rather than the app simply vanishing.
+  final Duration exitDelay;
+
+  /// Ends this process so the waiting script can replace it. Injected, because
+  /// a test must be able to watch this being asked for without dying itself.
+  final void Function() quit;
+
+  /// Where the running build lives. Injected for the same reason: a test needs
+  /// a stand-in installation it may safely have replaced.
+  final Directory? Function() bundleDirectory;
   final Map<DownloadCancellation, http.Client> _downloads = {};
 
   static const _maxRedirects = 5;
@@ -136,7 +183,7 @@ final class UpdateInstallerService {
     void Function(int receivedBytes, int? totalBytes)? onProgress,
     DownloadCancellation? cancellation,
   }) async {
-    final installerUri = release.windowsInstallerAssetUri;
+    final installerUri = release.installerAssetUri;
     final sumsUri = release.sha256SumsAssetUri;
     if (!canDownloadAndInstallUpdate ||
         installerUri == null ||
@@ -180,14 +227,29 @@ final class UpdateInstallerService {
     }
   }
 
-  /// Starts the verified installer. Only ever called with an
+  /// Installs the verified download. Only ever called with an
   /// [UpdateInstallReady] the caller itself obtained from
-  /// [downloadAndVerify], so nothing reaches [Process.start] without having
-  /// passed the checksum check first.
+  /// [downloadAndVerify], so nothing is run or unpacked without having passed
+  /// the checksum check first.
+  ///
+  /// On Windows that means starting the installer, which replaces the build
+  /// and restarts it. On macOS and Linux there is no installer: the archive is
+  /// unpacked beside the running build and a small script puts it in place
+  /// once this process has exited, so this asks the process to exit.
   Future<bool> runInstaller(UpdateInstallReady ready) async {
+    return switch (_installKind(defaultTargetPlatform)) {
+      UpdateInstallKind.runInstaller => _startInstaller(ready.installerFile),
+      UpdateInstallKind.replaceBundle => _replaceRunningBundle(
+        ready.installerFile,
+      ),
+      null => false,
+    };
+  }
+
+  Future<bool> _startInstaller(File installer) async {
     try {
       await Process.start(
-        ready.installerFile.path,
+        installer.path,
         const <String>[],
         mode: ProcessStartMode.detached,
       );
@@ -195,6 +257,145 @@ final class UpdateInstallerService {
     } on Object {
       return false;
     }
+  }
+
+  /// Unpacks [archive] next to the running build and hands the swap to a
+  /// script that waits for this process to exit.
+  ///
+  /// The staging directory is a sibling of the build being replaced, not
+  /// somewhere under the system temp directory: the script replaces by
+  /// renaming, and a rename only stays atomic within one filesystem. A staging
+  /// directory on another disk would turn the one irreversible moment into a
+  /// long copy that can fail halfway.
+  Future<bool> _replaceRunningBundle(File archive) async {
+    final current = bundleDirectory();
+    if (current == null) {
+      return false;
+    }
+    Directory? staging;
+    try {
+      staging = await current.parent.createTemp('.nks-talk-update-');
+      final unpacked = await _unpack(archive, staging);
+      if (unpacked == null) {
+        return false;
+      }
+      if (!await _isTrustedBundle(unpacked)) {
+        return false;
+      }
+      final swap = BundleSwap(
+        currentDirectory: current.path,
+        newDirectory: unpacked.path,
+        relaunchExecutable: defaultTargetPlatform == TargetPlatform.macOS
+            ? current.path
+            : _join(current.path, _linuxExecutableName),
+      );
+      final script = buildSwapScript(
+        pid: pid,
+        swap: swap,
+        stagingDirectory: staging.path,
+        useOpen: defaultTargetPlatform == TargetPlatform.macOS,
+      );
+      await Process.start('/bin/sh', <String>[
+        '-c',
+        script,
+      ], mode: ProcessStartMode.detached);
+      // The script is already waiting on this process. Leave long enough for
+      // the caller to show that the update started, then go.
+      Timer(exitDelay, quit);
+      return true;
+    } on Object {
+      if (staging != null) {
+        await _deleteQuietly(staging);
+      }
+      return false;
+    }
+  }
+
+  /// Unpacks [archive] into [staging] with the system's own tool and returns
+  /// the directory that replaces the running one.
+  ///
+  /// `ditto` rather than a Dart zip reader on macOS, and `tar` on Linux,
+  /// because both carry what a plain file-by-file extraction drops: symlinks,
+  /// executable bits and, on macOS, the extended attributes the code signature
+  /// is checked against. An unpacked bundle that lost those is one Gatekeeper
+  /// refuses to start.
+  Future<Directory?> _unpack(File archive, Directory staging) async {
+    final macOS = defaultTargetPlatform == TargetPlatform.macOS;
+    final result = macOS
+        ? await Process.run('/usr/bin/ditto', <String>[
+            '-x',
+            '-k',
+            archive.path,
+            staging.path,
+          ])
+        : await Process.run('/usr/bin/env', <String>[
+            'tar',
+            '-xzf',
+            archive.path,
+            '-C',
+            staging.path,
+          ]);
+    if (result.exitCode != 0) {
+      return null;
+    }
+    final root = Directory(
+      _join(staging.path, macOS ? _macOSBundleName : _linuxBundleName),
+    );
+    if (!await root.exists()) {
+      return null;
+    }
+    final executable = File(
+      macOS
+          ? _join(root.path, 'Contents', 'MacOS', _linuxExecutableName)
+          : _join(root.path, _linuxExecutableName),
+    );
+    return await executable.exists() ? root : null;
+  }
+
+  /// On macOS, whether the unpacked bundle is really one of ours.
+  ///
+  /// The checksum already proved the archive is the one GitHub published, so
+  /// this is not the first line of defence — it is the one that still holds if
+  /// the checksum list itself were ever wrong, and it is what Gatekeeper will
+  /// ask anyway when the replacement starts. Failing here now beats replacing
+  /// a working build with one that cannot open.
+  Future<bool> _isTrustedBundle(Directory bundle) async {
+    if (defaultTargetPlatform != TargetPlatform.macOS) {
+      return true;
+    }
+    final verify = await Process.run('/usr/bin/codesign', <String>[
+      '--verify',
+      '--strict',
+      bundle.path,
+    ]);
+    if (verify.exitCode != 0) {
+      return false;
+    }
+    final show = await Process.run('/usr/bin/codesign', <String>[
+      '-dv',
+      bundle.path,
+    ]);
+    final description = '${show.stdout}${show.stderr}';
+    return description.contains('TeamIdentifier=$appleTeamIdentifier');
+  }
+
+  Future<void> _deleteQuietly(Directory directory) async {
+    try {
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    } on Object {
+      // Best effort, exactly as for a refused download.
+    }
+  }
+
+  String _join(String first, String second, [String? third, String? fourth]) {
+    return <String?>[
+      first,
+      second,
+      third,
+      fourth,
+    ].whereType<String>().join(Platform.pathSeparator);
   }
 
   Future<UpdateInstallResult> _downloadAndVerify({

@@ -12,10 +12,10 @@ import 'update_installer_service.dart';
 /// The desktop update section: a switch that decides whether GitHub is asked
 /// at all, and — only once it is on — what the last answer was.
 ///
-/// A newer build is always offered as a link to its release page. On Windows,
-/// once the release carries an installer, it is also offered as a download —
-/// but only after the person says so, and again before it is ever run; every
-/// other platform only ever gets the link.
+/// A newer build is always offered as a link to its release page. On the
+/// desktops, once the release carries this platform's own download, it is also
+/// offered as one — but only after the person says so, and again before
+/// anything is installed; every other platform only ever gets the link.
 final class UpdateCheckSettingsTile extends ConsumerWidget {
   const UpdateCheckSettingsTile({super.key});
 
@@ -62,7 +62,7 @@ final class UpdateCheckSettingsTile extends ConsumerWidget {
           ),
         if (available is UpdateAvailable &&
             canDownloadAndInstallUpdate &&
-            available.windowsInstallerAssetUri != null)
+            available.installerAssetUri != null)
           _InstallRow(
             release: available,
             state: installState,
@@ -200,8 +200,8 @@ final class UpdateCheckSettingsTile extends ConsumerWidget {
   }
 }
 
-/// The Windows-only download/install row, shown under the check result once
-/// a release carries an installer.
+/// The desktop download and install row, shown under the check result once a
+/// release carries a download for this platform.
 final class _InstallRow extends StatelessWidget {
   const _InstallRow({
     required this.release,
@@ -262,5 +262,27 @@ final class _InstallRow extends StatelessWidget {
         ),
       ),
     };
+  }
+}
+
+/// The settings icon, marked while a newer build is waiting.
+///
+/// The check runs whether or not the settings screen is open, so without a
+/// mark somewhere on the way in, an update would only ever be found by
+/// somebody who happened to go looking. The mark is a dot rather than a
+/// number: there is only ever one newer build worth naming, the newest.
+final class SettingsIconWithUpdateMark extends ConsumerWidget {
+  const SettingsIconWithUpdateMark({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    const icon = Icon(Icons.settings_outlined);
+    if (!ref.watch(updateAvailableProvider)) {
+      return icon;
+    }
+    return Semantics(
+      label: AppLocalizations.of(context).settingsUpdateMark,
+      child: const Badge(key: Key('settings-update-mark'), child: icon),
+    );
   }
 }

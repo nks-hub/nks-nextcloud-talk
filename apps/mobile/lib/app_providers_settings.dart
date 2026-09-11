@@ -256,12 +256,29 @@ base class UpdateCheckController extends Notifier<bool> {
 /// The answer of the last check, or null while the check is switched off.
 /// Null rather than [UpdateUpToDate]: nothing was asked, which is not the
 /// same as knowing this build is the newest.
+///
+/// Asked again on a timer rather than only when the settings screen opens: a
+/// desktop window that stays up for a week would otherwise never learn about a
+/// release, which is the whole difference between a button and an update this
+/// app looks for by itself.
 final latestBuildProvider = FutureProvider<UpdateCheckResult?>((ref) async {
   if (!ref.watch(updateCheckEnabledProvider)) {
     return null;
   }
+  final timer = Timer.periodic(
+    updateCheckInterval,
+    (_) => ref.invalidateSelf(),
+  );
+  ref.onDispose(timer.cancel);
   return ref.watch(updateCheckServiceProvider).check();
 });
+
+/// Whether a newer build is published, for the small mark on the way into
+/// settings. False while the check is off, still running, or has found
+/// nothing — a mark is only ever shown for an answer that says so.
+final updateAvailableProvider = Provider<bool>(
+  (ref) => ref.watch(latestBuildProvider).valueOrNull is UpdateAvailable,
+);
 
 final updateInstallerServiceProvider = Provider<UpdateInstallerService>((ref) {
   final service = UpdateInstallerService();

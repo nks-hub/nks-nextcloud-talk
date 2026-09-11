@@ -1313,8 +1313,11 @@ class AppLocalizationsCs extends AppLocalizations {
   String get settingsUpdateCheck => 'Hlídat novější sestavení';
 
   @override
+  String get settingsUpdateMark => 'Čeká nová verze';
+
+  @override
   String get settingsUpdateCheckSubtitle =>
-      'Zapnuté hlídání se GitHubu zeptá, které sestavení je nejnovější — tím mu prozradí, že tato instalace existuje. Nic o vás, vašem účtu ani konverzacích se neposílá. Ve Windows si pak můžete vyžádat stažení instalátoru a jeho ověření, než se cokoliv spustí; nic se nestáhne ani nespustí bez vašeho dvojího potvrzení.';
+      'Zapnuté hlídání se GitHubu zeptá, které sestavení je nejnovější — tím mu prozradí, že tato instalace existuje. Nic o vás, vašem účtu ani konverzacích se neposílá. Ve Windows, macOS i Linuxu si pak můžete vyžádat stažení nové verze a její ověření, než se cokoliv nainstaluje; nic se nestáhne ani nenainstaluje bez vašeho dvojího potvrzení.';
 
   @override
   String settingsUpdateCheckCurrentBuild(Object build) {
@@ -1347,11 +1350,11 @@ class AppLocalizationsCs extends AppLocalizations {
   String get settingsUpdateCheckDownloadInstall => 'Stáhnout a nainstalovat';
 
   @override
-  String get settingsUpdateCheckDownloadConfirmTitle => 'Stáhnout instalátor?';
+  String get settingsUpdateCheckDownloadConfirmTitle => 'Stáhnout novou verzi?';
 
   @override
   String get settingsUpdateCheckDownloadConfirmBody =>
-      'Stáhne se instalátor pro Windows z GitHubu do dočasné složky a ověří se proti kontrolnímu součtu, který k němu GitHub zveřejnil. Zatím se nic nespustí.';
+      'Stáhne se nová verze z GitHubu do dočasné složky a ověří se proti kontrolnímu součtu, který k ní GitHub zveřejnil. Zatím se nic nenainstaluje.';
 
   @override
   String get settingsUpdateCheckDownloadConfirmAction => 'Stáhnout';
@@ -1375,7 +1378,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get settingsUpdateCheckDownloadFailed =>
-      'Instalátor se nepodařilo stáhnout. Zkuste to prosím později.';
+      'Novou verzi se nepodařilo stáhnout. Zkuste to prosím později.';
 
   @override
   String get settingsUpdateCheckVerificationFailed =>
@@ -1389,7 +1392,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get settingsUpdateCheckInstallConfirmBody =>
-      'Spustí se instalátor, který kvůli dokončení instalace nové verze zavře NKS Talk.';
+      'Nainstaluje se nová verze. NKS Talk se kvůli dokončení zavře a sám se zase otevře.';
 
   @override
   String get settingsUpdateCheckInstallConfirmAction => 'Nainstalovat';
@@ -1398,11 +1401,12 @@ class AppLocalizationsCs extends AppLocalizations {
   String get settingsUpdateCheckInstallDismiss => 'Teď ne';
 
   @override
-  String get settingsUpdateCheckInstallStarted => 'Instalátor byl spuštěn.';
+  String get settingsUpdateCheckInstallStarted =>
+      'Instaluje se. NKS Talk se zavře a zase otevře.';
 
   @override
   String get settingsUpdateCheckInstallStartFailed =>
-      'Instalátor se nepodařilo spustit.';
+      'Novou verzi se nepodařilo nainstalovat.';
 
   @override
   String get settingsPushSection => 'Push notifikace';

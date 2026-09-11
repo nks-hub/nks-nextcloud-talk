@@ -31,7 +31,7 @@ void main() {
     releaseUri: Uri.parse(
       'https://github.com/nks-hub/nks-nextcloud-talk/releases/tag/v0.1.0%2B63',
     ),
-    windowsInstallerAssetUri: installer ?? installerUri,
+    installerAssetUri: installer ?? installerUri,
     sha256SumsAssetUri: sums ?? sumsUri,
   );
 

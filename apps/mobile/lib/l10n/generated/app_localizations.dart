@@ -2420,10 +2420,16 @@ abstract class AppLocalizations {
   /// **'Look for newer builds'**
   String get settingsUpdateCheck;
 
+  /// Spoken for the mark on the way into settings when a newer build is published.
+  ///
+  /// In en, this message translates to:
+  /// **'A newer build is waiting'**
+  String get settingsUpdateMark;
+
   /// No description provided for @settingsUpdateCheckSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent. On Windows you can then choose to download the installer and have it checked before anything runs; nothing downloads or runs without you saying so, twice.'**
+  /// **'Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent. On Windows, macOS and Linux you can then choose to download the new build and have it checked before anything is installed; nothing downloads or installs without you saying so, twice.'**
   String get settingsUpdateCheckSubtitle;
 
   /// No description provided for @settingsUpdateCheckCurrentBuild.
@@ -2477,13 +2483,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsUpdateCheckDownloadConfirmTitle.
   ///
   /// In en, this message translates to:
-  /// **'Download the installer?'**
+  /// **'Download the new build?'**
   String get settingsUpdateCheckDownloadConfirmTitle;
 
   /// No description provided for @settingsUpdateCheckDownloadConfirmBody.
   ///
   /// In en, this message translates to:
-  /// **'This downloads the Windows installer from GitHub into a temporary folder and checks it against the checksum GitHub published for it. Nothing runs yet.'**
+  /// **'This downloads the new build from GitHub into a temporary folder and checks it against the checksum GitHub published for it. Nothing is installed yet.'**
   String get settingsUpdateCheckDownloadConfirmBody;
 
   /// No description provided for @settingsUpdateCheckDownloadConfirmAction.
@@ -2525,7 +2531,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsUpdateCheckDownloadFailed.
   ///
   /// In en, this message translates to:
-  /// **'The installer could not be downloaded. Try again later.'**
+  /// **'The new build could not be downloaded. Try again later.'**
   String get settingsUpdateCheckDownloadFailed;
 
   /// No description provided for @settingsUpdateCheckVerificationFailed.
@@ -2549,7 +2555,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsUpdateCheckInstallConfirmBody.
   ///
   /// In en, this message translates to:
-  /// **'This starts the installer, which closes NKS Talk to finish installing the new build.'**
+  /// **'This installs the new build. NKS Talk closes to finish and opens again by itself.'**
   String get settingsUpdateCheckInstallConfirmBody;
 
   /// No description provided for @settingsUpdateCheckInstallConfirmAction.
@@ -2567,13 +2573,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsUpdateCheckInstallStarted.
   ///
   /// In en, this message translates to:
-  /// **'The installer has started.'**
+  /// **'Installing. NKS Talk will close and open again.'**
   String get settingsUpdateCheckInstallStarted;
 
   /// No description provided for @settingsUpdateCheckInstallStartFailed.
   ///
   /// In en, this message translates to:
-  /// **'The installer could not be started.'**
+  /// **'The new build could not be installed.'**
   String get settingsUpdateCheckInstallStartFailed;
 
   /// No description provided for @settingsPushSection.

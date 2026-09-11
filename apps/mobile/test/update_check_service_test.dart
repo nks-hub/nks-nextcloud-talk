@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -12,12 +13,17 @@ void main() {
     String currentBuild = '62',
     Duration timeout = const Duration(seconds: 5),
     int maximumResponseBytes = 128 * 1024,
+    // Named rather than taken from the host: a test process reports itself as
+    // Android, so without this every asset check would run against a platform
+    // that is offered no download at all and pass for the wrong reason.
+    TargetPlatform assetPlatform = TargetPlatform.windows,
   }) {
     final built = UpdateCheckService(
       client: client,
       currentBuild: currentBuild,
       timeout: timeout,
       maximumResponseBytes: maximumResponseBytes,
+      assetPlatform: assetPlatform,
     );
     addTearDown(built.close);
     return built;
@@ -160,8 +166,8 @@ void main() {
     expect(result, isA<UpdateCheckUnavailable>());
   });
 
-  test('the Windows installer and its checksum list are picked out of the '
-      'asset array', () async {
+  test('the download for this platform and the checksum list are picked out '
+      'of the asset array', () async {
     final result = await service(
       MockClient(
         (_) async => release(
@@ -190,7 +196,7 @@ void main() {
 
     final available = result as UpdateAvailable;
     expect(
-      available.windowsInstallerAssetUri.toString(),
+      available.installerAssetUri.toString(),
       'https://github.com/nks-hub/nks-nextcloud-talk/releases/download/'
       'v0.1.0%2B63/NKS-Talk-0.1.0-63-windows-x64-setup.exe',
     );
@@ -201,13 +207,73 @@ void main() {
     );
   });
 
+  test('each desktop is offered its own file out of the same release', () async {
+    const base =
+        'https://github.com/nks-hub/nks-nextcloud-talk/releases/download/'
+        'v1.0.4%2B70';
+    final wholeRelease = <Map<String, Object?>>[
+      asset('NKS-Talk-1.0.4-70-windows-x64-setup.exe',
+          '$base/NKS-Talk-1.0.4-70-windows-x64-setup.exe'),
+      asset('nks-talk-macos-1.0.4-70.zip', '$base/nks-talk-macos-1.0.4-70.zip'),
+      asset('nks-talk-linux-x64.tar.gz', '$base/nks-talk-linux-x64.tar.gz'),
+      asset('app-release.apk', '$base/app-release.apk'),
+      asset('SHA256SUMS', '$base/SHA256SUMS'),
+    ];
+    const expected = <TargetPlatform, String>{
+      TargetPlatform.windows: 'NKS-Talk-1.0.4-70-windows-x64-setup.exe',
+      TargetPlatform.macOS: 'nks-talk-macos-1.0.4-70.zip',
+      TargetPlatform.linux: 'nks-talk-linux-x64.tar.gz',
+    };
+    for (final entry in expected.entries) {
+      final result = await service(
+        MockClient((_) async => release('v1.0.4+70', assets: wholeRelease)),
+        assetPlatform: entry.key,
+      ).check();
+      final available = result as UpdateAvailable;
+      expect(
+        available.installerAssetUri.toString(),
+        '$base/${entry.value}',
+        reason: 'wrong file offered on ${entry.key}',
+      );
+      expect(available.sha256SumsAssetUri.toString(), '$base/SHA256SUMS');
+    }
+  });
+
+  test('a phone is offered no file at all, whatever the release carries',
+      () async {
+    const base =
+        'https://github.com/nks-hub/nks-nextcloud-talk/releases/download/'
+        'v1.0.4%2B70';
+    for (final platform in const <TargetPlatform>[
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+    ]) {
+      final result = await service(
+        MockClient(
+          (_) async => release(
+            'v1.0.4+70',
+            assets: [
+              asset('app-release.apk', '$base/app-release.apk'),
+              asset('NKS-Talk-1.0.4-70-windows-x64-setup.exe',
+                  '$base/NKS-Talk-1.0.4-70-windows-x64-setup.exe'),
+              asset('SHA256SUMS', '$base/SHA256SUMS'),
+            ],
+          ),
+        ),
+        assetPlatform: platform,
+      ).check();
+      final available = result as UpdateAvailable;
+      expect(available.installerAssetUri, isNull, reason: '$platform');
+    }
+  });
+
   test('no assets means no installer to offer, not a broken check', () async {
     final result = await service(
       MockClient((_) async => release('v0.1.0+63')),
     ).check();
 
     final available = result as UpdateAvailable;
-    expect(available.windowsInstallerAssetUri, isNull);
+    expect(available.installerAssetUri, isNull);
     expect(available.sha256SumsAssetUri, isNull);
   });
 
@@ -232,7 +298,7 @@ void main() {
     ).check();
 
     final available = result as UpdateAvailable;
-    expect(available.windowsInstallerAssetUri, isNull);
+    expect(available.installerAssetUri, isNull);
     expect(available.sha256SumsAssetUri, isNotNull);
   });
 }

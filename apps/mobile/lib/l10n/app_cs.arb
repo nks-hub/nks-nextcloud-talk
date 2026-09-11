@@ -45,7 +45,9 @@
   "reauthenticateAccountMismatch": "Přihlaste se ke stejnému účtu. Uložený účet nebyl změněn.",
   "localPersistenceFailed": "Účet se nepodařilo bezpečně uložit do tohoto zařízení.",
   "scanLoginCode": "Načíst přihlašovací kód",
-  "@scanLoginCode": {"description": "Button that opens the camera to scan a Nextcloud login QR code"},
+  "@scanLoginCode": {
+    "description": "Button that opens the camera to scan a Nextcloud login QR code"
+  },
   "scanLoginCodeHint": "Namiřte fotoaparát na QR kód, který server ukáže v Nastavení, Zabezpečení, Vytvořit nové heslo aplikace.",
   "scanLoginCodeCameraDenied": "Přístup k fotoaparátu je vypnutý. Povolte jej v nastavení systému, aby šlo kód načíst.",
   "scanLoginCodeCameraUnavailable": "Toto zařízení nemá fotoaparát, kterým by šlo kód načíst.",
@@ -54,9 +56,13 @@
   "unexpectedError": "Něco se nepodařilo. Data účtu nebyla změněna.",
   "accounts": "Účty",
   "hideConversationList": "Skrýt seznam konverzací",
-  "@hideConversationList": {"description": "Tooltip for folding the conversation list away on a wide window"},
+  "@hideConversationList": {
+    "description": "Tooltip for folding the conversation list away on a wide window"
+  },
   "showConversationList": "Zobrazit seznam konverzací",
-  "@showConversationList": {"description": "Tooltip for bringing the folded conversation list back"},
+  "@showConversationList": {
+    "description": "Tooltip for bringing the folded conversation list back"
+  },
   "conversations": "Konverzace",
   "addAccount": "Přidat účet",
   "switchAccount": "Přepnout účet",
@@ -452,7 +458,11 @@
   "settingsDesktopAutostartFailed": "Systémové automatické spuštění se nepodařilo změnit.",
   "settingsUpdatesSection": "Aktualizace",
   "settingsUpdateCheck": "Hlídat novější sestavení",
-  "settingsUpdateCheckSubtitle": "Zapnuté hlídání se GitHubu zeptá, které sestavení je nejnovější — tím mu prozradí, že tato instalace existuje. Nic o vás, vašem účtu ani konverzacích se neposílá. Ve Windows si pak můžete vyžádat stažení instalátoru a jeho ověření, než se cokoliv spustí; nic se nestáhne ani nespustí bez vašeho dvojího potvrzení.",
+  "settingsUpdateMark": "Čeká nová verze",
+  "@settingsUpdateMark": {
+    "description": "Spoken for the mark on the way into settings when a newer build is published."
+  },
+  "settingsUpdateCheckSubtitle": "Zapnuté hlídání se GitHubu zeptá, které sestavení je nejnovější — tím mu prozradí, že tato instalace existuje. Nic o vás, vašem účtu ani konverzacích se neposílá. Ve Windows, macOS i Linuxu si pak můžete vyžádat stažení nové verze a její ověření, než se cokoliv nainstaluje; nic se nestáhne ani nenainstaluje bez vašeho dvojího potvrzení.",
   "settingsUpdateCheckCurrentBuild": "Toto sestavení je {build}",
   "settingsUpdateCheckChecking": "Dotaz na GitHub…",
   "settingsUpdateCheckUpToDate": "Nic novějšího zatím nevyšlo.",
@@ -461,23 +471,23 @@
   "settingsUpdateCheckOpen": "Otevřít vydání",
   "settingsUpdateCheckOpenFailed": "Stránku vydání se nepodařilo otevřít.",
   "settingsUpdateCheckDownloadInstall": "Stáhnout a nainstalovat",
-  "settingsUpdateCheckDownloadConfirmTitle": "Stáhnout instalátor?",
-  "settingsUpdateCheckDownloadConfirmBody": "Stáhne se instalátor pro Windows z GitHubu do dočasné složky a ověří se proti kontrolnímu součtu, který k němu GitHub zveřejnil. Zatím se nic nespustí.",
+  "settingsUpdateCheckDownloadConfirmTitle": "Stáhnout novou verzi?",
+  "settingsUpdateCheckDownloadConfirmBody": "Stáhne se nová verze z GitHubu do dočasné složky a ověří se proti kontrolnímu součtu, který k ní GitHub zveřejnil. Zatím se nic nenainstaluje.",
   "settingsUpdateCheckDownloadConfirmAction": "Stáhnout",
   "settingsUpdateCheckDownloadDismiss": "Teď ne",
   "settingsUpdateCheckDownloadingProgress": "Stahuje se… {percent} %",
   "settingsUpdateCheckDownloadingUnknown": "Stahuje se…",
   "settingsUpdateCheckDownloadCancel": "Zrušit stahování",
   "settingsUpdateCheckDownloadCancelled": "Stahování zrušeno.",
-  "settingsUpdateCheckDownloadFailed": "Instalátor se nepodařilo stáhnout. Zkuste to prosím později.",
+  "settingsUpdateCheckDownloadFailed": "Novou verzi se nepodařilo stáhnout. Zkuste to prosím později.",
   "settingsUpdateCheckVerificationFailed": "Stažený soubor neodpovídá kontrolnímu součtu, který GitHub zveřejnil, proto byl odmítnut a smazán.",
   "settingsUpdateCheckInstallNow": "Nainstalovat",
   "settingsUpdateCheckInstallConfirmTitle": "Spustit instalaci?",
-  "settingsUpdateCheckInstallConfirmBody": "Spustí se instalátor, který kvůli dokončení instalace nové verze zavře NKS Talk.",
+  "settingsUpdateCheckInstallConfirmBody": "Nainstaluje se nová verze. NKS Talk se kvůli dokončení zavře a sám se zase otevře.",
   "settingsUpdateCheckInstallConfirmAction": "Nainstalovat",
   "settingsUpdateCheckInstallDismiss": "Teď ne",
-  "settingsUpdateCheckInstallStarted": "Instalátor byl spuštěn.",
-  "settingsUpdateCheckInstallStartFailed": "Instalátor se nepodařilo spustit.",
+  "settingsUpdateCheckInstallStarted": "Instaluje se. NKS Talk se zavře a zase otevře.",
+  "settingsUpdateCheckInstallStartFailed": "Novou verzi se nepodařilo nainstalovat.",
   "settingsPushSection": "Push notifikace",
   "settingsNotificationPermission": "Systémové oprávnění notifikací",
   "settingsNotificationPermissionGranted": "Uděleno",
@@ -696,7 +706,11 @@
   "newConversationSettingsSummary": "Nastavení konverzace",
   "newConversationForcedSetting": "{setting} (nastavuje server)",
   "@newConversationForcedSetting": {
-    "placeholders": { "setting": { "type": "String" } }
+    "placeholders": {
+      "setting": {
+        "type": "String"
+      }
+    }
   },
   "newConversationTypeLabel": "Typ konverzace",
   "newConversationTypeGroup": "Soukromá skupina",
@@ -706,7 +720,11 @@
   "newConversationPasswordMissing": "Zadejte heslo pro tuto veřejnou konverzaci.",
   "newConversationPartialInvitations": "Konverzace byla vytvořena, ale {count} pozvánek se nepodařilo odeslat.",
   "@newConversationPartialInvitations": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "newConversationCreationUncertain": "Server nepotvrdil, zda konverzace vznikla. Před dalším pokusem zkontrolujte seznam konverzací.",
   "newConversationPolicyChanged": "Nastavení serveru se změnilo. Před vytvořením konverzace zkontrolujte nové nastavení.",

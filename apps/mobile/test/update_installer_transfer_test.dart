@@ -15,7 +15,7 @@ void main() {
     buildNumber: 65,
     name: 'Build 65',
     releaseUri: Uri.parse('https://github.com/example/talk/releases/tag/v65'),
-    windowsInstallerAssetUri: Uri.parse(
+    installerAssetUri: Uri.parse(
       'https://github.com/example/talk/releases/download/v65/$installerName',
     ),
     sha256SumsAssetUri: Uri.parse(

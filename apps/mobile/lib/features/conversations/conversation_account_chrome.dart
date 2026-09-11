@@ -103,7 +103,7 @@ final class _AccountRail extends StatelessWidget {
                   key: const Key('open-settings'),
                   onPressed: () => _openSettings(context),
                   tooltip: strings.settingsTitle,
-                  icon: const Icon(Icons.settings_outlined),
+                  icon: const SettingsIconWithUpdateMark(),
                 ),
               ],
             ),
@@ -189,7 +189,7 @@ final class _AccountMenu extends StatelessWidget {
           value: _settingsKey,
           child: ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.settings_outlined),
+            leading: const SettingsIconWithUpdateMark(),
             title: Text(strings.settingsTitle),
           ),
         ),

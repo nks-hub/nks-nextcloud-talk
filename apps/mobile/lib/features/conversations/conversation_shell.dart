@@ -25,6 +25,7 @@ import '../rooms/room_details_screen.dart';
 import '../search/message_search_screen.dart';
 import '../search/message_search_thread_screen.dart';
 import '../settings/settings_screen.dart';
+import '../settings/update_check_tile.dart';
 import 'conversation_list_actions.dart';
 import 'desktop_attachment_drop.dart';
 import 'federation_invitation_service.dart';

@@ -45,7 +45,9 @@
   "reauthenticateAccountMismatch": "Sign in with the same account. The stored account was not changed.",
   "localPersistenceFailed": "The account could not be stored securely on this device.",
   "scanLoginCode": "Scan a login code",
-  "@scanLoginCode": {"description": "Button that opens the camera to scan a Nextcloud login QR code"},
+  "@scanLoginCode": {
+    "description": "Button that opens the camera to scan a Nextcloud login QR code"
+  },
   "scanLoginCodeHint": "Point the camera at the QR code your server shows under Settings, Security, Create new app password.",
   "scanLoginCodeCameraDenied": "Camera access is turned off. Allow it in system settings to scan a login code.",
   "scanLoginCodeCameraUnavailable": "This device has no camera that can read a login code.",
@@ -54,9 +56,13 @@
   "unexpectedError": "Something went wrong. No account data was changed.",
   "accounts": "Accounts",
   "hideConversationList": "Hide the conversation list",
-  "@hideConversationList": {"description": "Tooltip for folding the conversation list away on a wide window"},
+  "@hideConversationList": {
+    "description": "Tooltip for folding the conversation list away on a wide window"
+  },
   "showConversationList": "Show the conversation list",
-  "@showConversationList": {"description": "Tooltip for bringing the folded conversation list back"},
+  "@showConversationList": {
+    "description": "Tooltip for bringing the folded conversation list back"
+  },
   "conversations": "Conversations",
   "addAccount": "Add account",
   "switchAccount": "Switch account",
@@ -466,7 +472,11 @@
   "settingsDesktopAutostartFailed": "The system startup setting could not be changed.",
   "settingsUpdatesSection": "Updates",
   "settingsUpdateCheck": "Look for newer builds",
-  "settingsUpdateCheckSubtitle": "Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent. On Windows you can then choose to download the installer and have it checked before anything runs; nothing downloads or runs without you saying so, twice.",
+  "settingsUpdateMark": "A newer build is waiting",
+  "@settingsUpdateMark": {
+    "description": "Spoken for the mark on the way into settings when a newer build is published."
+  },
+  "settingsUpdateCheckSubtitle": "Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent. On Windows, macOS and Linux you can then choose to download the new build and have it checked before anything is installed; nothing downloads or installs without you saying so, twice.",
   "settingsUpdateCheckCurrentBuild": "This build is {build}",
   "settingsUpdateCheckChecking": "Asking GitHub…",
   "settingsUpdateCheckUpToDate": "Nothing newer has been published.",
@@ -475,23 +485,23 @@
   "settingsUpdateCheckOpen": "Open release",
   "settingsUpdateCheckOpenFailed": "The release page could not be opened.",
   "settingsUpdateCheckDownloadInstall": "Download and install",
-  "settingsUpdateCheckDownloadConfirmTitle": "Download the installer?",
-  "settingsUpdateCheckDownloadConfirmBody": "This downloads the Windows installer from GitHub into a temporary folder and checks it against the checksum GitHub published for it. Nothing runs yet.",
+  "settingsUpdateCheckDownloadConfirmTitle": "Download the new build?",
+  "settingsUpdateCheckDownloadConfirmBody": "This downloads the new build from GitHub into a temporary folder and checks it against the checksum GitHub published for it. Nothing is installed yet.",
   "settingsUpdateCheckDownloadConfirmAction": "Download",
   "settingsUpdateCheckDownloadDismiss": "Not now",
   "settingsUpdateCheckDownloadingProgress": "Downloading… {percent}%",
   "settingsUpdateCheckDownloadingUnknown": "Downloading…",
   "settingsUpdateCheckDownloadCancel": "Cancel download",
   "settingsUpdateCheckDownloadCancelled": "Download cancelled.",
-  "settingsUpdateCheckDownloadFailed": "The installer could not be downloaded. Try again later.",
+  "settingsUpdateCheckDownloadFailed": "The new build could not be downloaded. Try again later.",
   "settingsUpdateCheckVerificationFailed": "The download did not match the checksum GitHub published for it, so it was refused and deleted.",
   "settingsUpdateCheckInstallNow": "Install now",
   "settingsUpdateCheckInstallConfirmTitle": "Install now?",
-  "settingsUpdateCheckInstallConfirmBody": "This starts the installer, which closes NKS Talk to finish installing the new build.",
+  "settingsUpdateCheckInstallConfirmBody": "This installs the new build. NKS Talk closes to finish and opens again by itself.",
   "settingsUpdateCheckInstallConfirmAction": "Install",
   "settingsUpdateCheckInstallDismiss": "Not now",
-  "settingsUpdateCheckInstallStarted": "The installer has started.",
-  "settingsUpdateCheckInstallStartFailed": "The installer could not be started.",
+  "settingsUpdateCheckInstallStarted": "Installing. NKS Talk will close and open again.",
+  "settingsUpdateCheckInstallStartFailed": "The new build could not be installed.",
   "settingsPushSection": "Push notifications",
   "settingsNotificationPermission": "System notification permission",
   "settingsNotificationPermissionGranted": "Granted",
@@ -619,14 +629,20 @@
   "@profileAbsenceRange": {
     "description": "Both days of an absence, inclusive.",
     "placeholders": {
-      "first": {"type": "String"},
-      "last": {"type": "String"}
+      "first": {
+        "type": "String"
+      },
+      "last": {
+        "type": "String"
+      }
     }
   },
   "profileAbsenceReplacement": "Standing in: {name}",
   "@profileAbsenceReplacement": {
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "profileAbsenceSet": "Set absence",
@@ -725,7 +741,11 @@
   "newConversationSettingsSummary": "Conversation settings",
   "newConversationForcedSetting": "{setting} (set by the server)",
   "@newConversationForcedSetting": {
-    "placeholders": { "setting": { "type": "String" } }
+    "placeholders": {
+      "setting": {
+        "type": "String"
+      }
+    }
   },
   "newConversationTypeLabel": "Conversation type",
   "newConversationTypeGroup": "Private group",
@@ -735,7 +755,11 @@
   "newConversationPasswordMissing": "Enter a password for this public conversation.",
   "newConversationPartialInvitations": "The conversation was created, but {count} invitations failed.",
   "@newConversationPartialInvitations": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "newConversationCreationUncertain": "The server did not confirm whether the conversation was created. Check the conversation list before trying again.",
   "newConversationPolicyChanged": "The server settings changed. Review the updated settings before creating the conversation.",

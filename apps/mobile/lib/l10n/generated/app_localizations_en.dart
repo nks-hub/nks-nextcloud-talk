@@ -1312,8 +1312,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsUpdateCheck => 'Look for newer builds';
 
   @override
+  String get settingsUpdateMark => 'A newer build is waiting';
+
+  @override
   String get settingsUpdateCheckSubtitle =>
-      'Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent. On Windows you can then choose to download the installer and have it checked before anything runs; nothing downloads or runs without you saying so, twice.';
+      'Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent. On Windows, macOS and Linux you can then choose to download the new build and have it checked before anything is installed; nothing downloads or installs without you saying so, twice.';
 
   @override
   String settingsUpdateCheckCurrentBuild(Object build) {
@@ -1347,11 +1350,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsUpdateCheckDownloadConfirmTitle =>
-      'Download the installer?';
+      'Download the new build?';
 
   @override
   String get settingsUpdateCheckDownloadConfirmBody =>
-      'This downloads the Windows installer from GitHub into a temporary folder and checks it against the checksum GitHub published for it. Nothing runs yet.';
+      'This downloads the new build from GitHub into a temporary folder and checks it against the checksum GitHub published for it. Nothing is installed yet.';
 
   @override
   String get settingsUpdateCheckDownloadConfirmAction => 'Download';
@@ -1375,7 +1378,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsUpdateCheckDownloadFailed =>
-      'The installer could not be downloaded. Try again later.';
+      'The new build could not be downloaded. Try again later.';
 
   @override
   String get settingsUpdateCheckVerificationFailed =>
@@ -1389,7 +1392,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsUpdateCheckInstallConfirmBody =>
-      'This starts the installer, which closes NKS Talk to finish installing the new build.';
+      'This installs the new build. NKS Talk closes to finish and opens again by itself.';
 
   @override
   String get settingsUpdateCheckInstallConfirmAction => 'Install';
@@ -1398,11 +1401,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsUpdateCheckInstallDismiss => 'Not now';
 
   @override
-  String get settingsUpdateCheckInstallStarted => 'The installer has started.';
+  String get settingsUpdateCheckInstallStarted =>
+      'Installing. NKS Talk will close and open again.';
 
   @override
   String get settingsUpdateCheckInstallStartFailed =>
-      'The installer could not be started.';
+      'The new build could not be installed.';
 
   @override
   String get settingsPushSection => 'Push notifications';

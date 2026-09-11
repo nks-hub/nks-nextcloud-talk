@@ -18,9 +18,24 @@ final defaultLatestReleaseUri = Uri.parse(
 /// version name in front of it has not moved in a long time.
 final _tagPattern = RegExp(r'^v?\d+\.\d+\.\d+\+(\d+)$');
 
-/// `NKS-Talk-0.1.0-63-windows-x64-setup.exe` — the installer asset name for
-/// every release, whatever its version and build.
-final _windowsInstallerName = RegExp(r'^NKS-Talk-.*-windows-x64-setup\.exe$');
+/// The release asset each desktop platform installs from, whatever the
+/// version and build in the middle of the name:
+/// `NKS-Talk-1.0.4-70-windows-x64-setup.exe`, `nks-talk-macos-1.0.4-70.zip`
+/// and `nks-talk-linux-x64.tar.gz`.
+///
+/// Null for every other platform, which is how a store build ends up with no
+/// download offered even if this code is reached.
+RegExp? installerAssetPattern([TargetPlatform? platform]) {
+  if (kIsWeb) {
+    return null;
+  }
+  return switch (platform ?? defaultTargetPlatform) {
+    TargetPlatform.windows => RegExp(r'^NKS-Talk-.*-windows-x64-setup\.exe$'),
+    TargetPlatform.macOS => RegExp(r'^nks-talk-macos-.*\.zip$'),
+    TargetPlatform.linux => RegExp(r'^nks-talk-linux-x64\.tar\.gz$'),
+    _ => null,
+  };
+}
 
 /// Whether this platform may check for a build at all.
 ///
@@ -39,6 +54,11 @@ bool get isDesktopUpdateCheckPlatform {
   };
 }
 
+/// How often a running app asks again. Long on purpose: a release happens at
+/// most a few times a week, and the point is that a window left open for days
+/// still notices one, not that GitHub is polled.
+const updateCheckInterval = Duration(hours: 6);
+
 /// What one check found.
 sealed class UpdateCheckResult {
   const UpdateCheckResult();
@@ -51,24 +71,26 @@ final class UpdateUpToDate extends UpdateCheckResult {
 }
 
 /// A newer build exists. [releaseUri] is the release page to open in a
-/// browser. [windowsInstallerAssetUri] and [sha256SumsAssetUri] are set only
-/// when the release carries a Windows installer and its checksum list — the
-/// one platform this app ever downloads and runs something for; every other
-/// platform only ever gets [releaseUri] to open by hand.
+/// browser. [installerAssetUri] and [sha256SumsAssetUri] are set only when the
+/// release carries this platform's own download and the checksum list to
+/// check it against; without both, the release page is all there is to offer.
 @immutable
 final class UpdateAvailable extends UpdateCheckResult {
   const UpdateAvailable({
     required this.buildNumber,
     required this.name,
     required this.releaseUri,
-    this.windowsInstallerAssetUri,
+    this.installerAssetUri,
     this.sha256SumsAssetUri,
   });
 
   final int buildNumber;
   final String name;
   final Uri releaseUri;
-  final Uri? windowsInstallerAssetUri;
+
+  /// The Windows installer, the macOS application zip or the Linux tarball,
+  /// whichever this platform is.
+  final Uri? installerAssetUri;
   final Uri? sha256SumsAssetUri;
 }
 
@@ -94,6 +116,7 @@ final class UpdateCheckService {
     this.currentBuild = appBuildNumber,
     this.timeout = const Duration(seconds: 10),
     this.maximumResponseBytes = 128 * 1024,
+    this.assetPlatform,
   }) : _client = client ?? http.Client(),
        _uri = latestReleaseUri ?? defaultLatestReleaseUri;
 
@@ -102,6 +125,10 @@ final class UpdateCheckService {
   final String currentBuild;
   final Duration timeout;
   final int maximumResponseBytes;
+
+  /// Which platform's asset to look for. Null means this one; a test names
+  /// another so every platform's choice can be checked from one machine.
+  final TargetPlatform? assetPlatform;
 
   Future<UpdateCheckResult> check() async {
     final current = int.tryParse(currentBuild.trim());
@@ -156,25 +183,26 @@ final class UpdateCheckService {
       return const UpdateCheckUnavailable();
     }
     final name = decoded['name'];
-    final (installer, sums) = _windowsAssets(decoded['assets']);
+    final (installer, sums) = _platformAssets(decoded['assets']);
     return UpdateAvailable(
       buildNumber: published,
       name: name is String && name.trim().isNotEmpty ? name.trim() : tag,
       releaseUri: releaseUri,
-      windowsInstallerAssetUri: installer,
+      installerAssetUri: installer,
       sha256SumsAssetUri: sums,
     );
   }
 
-  /// Picks the Windows installer and its `SHA256SUMS` list out of the
-  /// release's asset array, if both are there. Every asset URL goes through
-  /// the same GitHub-only check as the release page: [UpdateInstallerService]
-  /// downloads real bytes from whatever this returns, so a stray asset
-  /// pointing off GitHub must never survive this far.
-  (Uri?, Uri?) _windowsAssets(Object? assets) {
+  /// Picks this platform's download and the release's `SHA256SUMS` list out of
+  /// the asset array, if both are there. Every asset URL goes through the same
+  /// GitHub-only check as the release page: [UpdateInstallerService] downloads
+  /// real bytes from whatever this returns, so a stray asset pointing off
+  /// GitHub must never survive this far.
+  (Uri?, Uri?) _platformAssets(Object? assets) {
     if (assets is! List<Object?>) {
       return (null, null);
     }
+    final wanted = installerAssetPattern(assetPlatform);
     Uri? installer;
     Uri? sums;
     for (final asset in assets) {
@@ -188,7 +216,7 @@ final class UpdateCheckService {
       }
       if (name == 'SHA256SUMS') {
         sums = uri;
-      } else if (_windowsInstallerName.hasMatch(name)) {
+      } else if (wanted != null && wanted.hasMatch(name)) {
         installer = uri;
       }
     }

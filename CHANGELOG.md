@@ -20,6 +20,19 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- The desktop builds now update themselves, not only Windows. macOS and Linux
+  ship a folder rather than an installer, so the download is unpacked beside
+  the one running and put in its place once the app has stepped aside; if any
+  step fails the previous build goes straight back. On macOS the replacement
+  also has to be signed by this project before it is allowed anywhere near the
+  one installed, whatever its checksum said.
+
+- The app looks for a newer build by itself now. Until now it only asked
+  GitHub while the settings screen was open, so a window left up for days
+  never learned about a release; it asks every few hours instead, and marks
+  the way into settings when there is something waiting. Nothing downloads or
+  installs without being asked, twice, exactly as before.
+
 ## 1.0.4 (70) — 11 September 2026
 
 - Fixed: no iOS build could be made at all. The notification extension asked for

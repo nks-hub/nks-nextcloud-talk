@@ -138,53 +138,67 @@ void main() {
     expect(find.byKey(const Key('settings-update-check-open')), findsNothing);
   });
 
-  testWidgets(
-    'Windows offers to download the installer once one is published',
-    (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
-
-      await tester.pumpWidget(
-        _tile(
-          store: _Store(enabled: true),
-          answer: () async => _releaseWithInstaller(),
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      expect(
-        find.byKey(const Key('settings-update-check-download-row')),
-        findsOneWidget,
-      );
-      debugDefaultTargetPlatformOverride = null;
-    },
-  );
-
-  for (final platform in const [TargetPlatform.macOS, TargetPlatform.linux]) {
+  for (final platform in const [
+    TargetPlatform.windows,
+    TargetPlatform.macOS,
+    TargetPlatform.linux,
+  ]) {
     testWidgets(
-      '$platform never offers a download, even for a release that has one',
+      '$platform offers to download the new build once one is published',
       (tester) async {
         debugDefaultTargetPlatformOverride = platform;
+        try {
+          await tester.pumpWidget(
+            _tile(
+              store: _Store(enabled: true),
+              answer: () async => _releaseWithInstaller(),
+            ),
+          );
+          await tester.pump();
+          await tester.pump();
 
-        await tester.pumpWidget(
-          _tile(
-            store: _Store(enabled: true),
-            answer: () async => _releaseWithInstaller(),
-          ),
-        );
-        await tester.pump();
-        await tester.pump();
+          expect(
+            find.byKey(const Key('settings-update-check-download-row')),
+            findsOneWidget,
+          );
+          // The link every platform gets is still there beside it.
+          expect(
+            find.byKey(const Key('settings-update-check-open')),
+            findsOneWidget,
+          );
+        } finally {
+          debugDefaultTargetPlatformOverride = null;
+        }
+      },
+    );
+  }
 
-        expect(
-          find.byKey(const Key('settings-update-check-download-row')),
-          findsNothing,
-        );
-        // The link every platform gets is still there.
-        expect(
-          find.byKey(const Key('settings-update-check-open')),
-          findsOneWidget,
-        );
-        debugDefaultTargetPlatformOverride = null;
+  for (final platform in const [TargetPlatform.android, TargetPlatform.iOS]) {
+    testWidgets(
+      '$platform is never offered a download, whatever the release carries',
+      (tester) async {
+        debugDefaultTargetPlatformOverride = platform;
+        try {
+          await tester.pumpWidget(
+            _tile(
+              store: _Store(enabled: true),
+              answer: () async => _releaseWithInstaller(),
+            ),
+          );
+          await tester.pump();
+          await tester.pump();
+
+          expect(
+            find.byKey(const Key('settings-update-check-download-row')),
+            findsNothing,
+          );
+          expect(
+            find.byKey(const Key('settings-update-check-open')),
+            findsOneWidget,
+          );
+        } finally {
+          debugDefaultTargetPlatformOverride = null;
+        }
       },
     );
   }
@@ -235,6 +249,53 @@ void main() {
     );
     debugDefaultTargetPlatformOverride = null;
   });
+  testWidgets('the way into settings is marked while a build is waiting', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _tile(
+        store: _Store(enabled: true),
+        answer: () async => _releaseWithInstaller(),
+        child: const SettingsIconWithUpdateMark(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const Key('settings-update-mark')), findsOneWidget);
+  });
+
+  testWidgets('nothing newer leaves the way into settings unmarked', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _tile(
+        store: _Store(enabled: true),
+        answer: () async => const UpdateUpToDate(),
+        child: const SettingsIconWithUpdateMark(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const Key('settings-update-mark')), findsNothing);
+  });
+
+  testWidgets('a check that is switched off never marks anything', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _tile(
+        store: _Store(enabled: false),
+        answer: () async => _releaseWithInstaller(),
+        child: const SettingsIconWithUpdateMark(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const Key('settings-update-mark')), findsNothing);
+  });
 }
 
 final _switch = find.byKey(const Key('settings-update-check'));
@@ -258,7 +319,7 @@ UpdateAvailable _releaseWithInstaller() => UpdateAvailable(
   releaseUri: Uri.parse(
     'https://github.com/nks-hub/nks-nextcloud-talk/releases/tag/v0.1.0%2B63',
   ),
-  windowsInstallerAssetUri: Uri.parse(
+  installerAssetUri: Uri.parse(
     'https://github.com/nks-hub/nks-nextcloud-talk/releases/download/'
     'v0.1.0%2B63/$_installerName',
   ),
@@ -273,6 +334,9 @@ Widget _tile({
   required Future<UpdateCheckResult> Function() answer,
   ReferenceUriLauncher? launcher,
   http.Client? installerClient,
+  // The mark on the way into settings reads the same answer as the tile, so
+  // it is worth pumping under the same overrides rather than a second set.
+  Widget child = const UpdateCheckSettingsTile(),
 }) {
   return ProviderScope(
     overrides: [
@@ -294,9 +358,7 @@ Widget _tile({
           UpdateInstallerService(clientFactory: () => installerClient),
         ),
     ],
-    child: localizedTestApp(
-      home: const Scaffold(body: UpdateCheckSettingsTile()),
-    ),
+    child: localizedTestApp(home: Scaffold(body: child)),
   );
 }
 
