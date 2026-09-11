@@ -76,7 +76,16 @@ final class AndroidPushCoordinator {
   static const _drainBatchSize = 50;
   static const _maximumDrainBatches = 8;
   static const _maximumPayloadBytes = 16 * 1024;
-  static const _actionDrainBatchSize = 20;
+
+  /// One action per claim, because the native side counts an attempt against
+  /// EVERY action it hands over, while this side stops at the first failure.
+  /// A phone offline with five replies in the shade used to spend one attempt
+  /// on all five per wake, and after eight wakes threw all five away with
+  /// five failure notices — four of them for replies that were never sent.
+  static const _actionDrainBatchSize = 1;
+
+  /// How many actions one wake may run before it gives the queue back.
+  static const _actionDrainLimit = 20;
 
   final AccountRepository _accounts;
   final CredentialVault _credentials;
@@ -490,11 +499,18 @@ final class AndroidPushCoordinator {
     if (handler == null || _closed) {
       return;
     }
-    final actions = await _platform.drainNotificationActions(
-      accountId: accountId,
-      limit: _actionDrainBatchSize,
-    );
-    for (final action in actions) {
+    // Claimed one at a time, in a loop: the queue is still emptied in one
+    // wake, but a claim now costs an attempt only to the action that is
+    // actually about to run.
+    for (var claimed = 0; claimed < _actionDrainLimit; claimed++) {
+      final actions = await _platform.drainNotificationActions(
+        accountId: accountId,
+        limit: _actionDrainBatchSize,
+      );
+      if (actions.isEmpty) {
+        return;
+      }
+      final action = actions.first;
       if (_closed) {
         return;
       }
