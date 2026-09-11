@@ -100,7 +100,16 @@ void _registerChatRoomPaneImageGeometryTests() {
         // images themselves.
         var viewport = Rect.zero;
         var visible = <(int, Rect)>[];
-        for (var offset = 300.0; offset <= 1200; offset += 150) {
+        // Scanned in both directions: which way history lies depends on how
+        // the list is anchored, and an offset that shows the rows above the
+        // images can carry the images themselves out of the tree.
+        final offsets = <double>[
+          for (var offset = 300.0; offset <= 1500; offset += 100) offset,
+          for (var offset = 200.0; offset >= 0; offset -= 100) offset,
+        ];
+        var settled = false;
+        for (final offset in offsets) {
+          if (offset > controller.position.maxScrollExtent) continue;
           controller.jumpTo(offset);
           await tester.pump();
           await tester.pump();
@@ -125,9 +134,15 @@ void _registerChatRoomPaneImageGeometryTests() {
                 .isNotEmpty,
           );
           if (visible.any((row) => row.$1 < oldest) && imagesBuilt) {
+            settled = true;
             break;
           }
         }
+        expect(
+          settled,
+          isTrue,
+          reason: 'no offset shows both the images and history above them',
+        );
         visible.sort((a, b) => a.$2.top.compareTo(b.$2.top));
         // A row ABOVE everything that is about to grow. What the reading
         // anchor promises is that history does not slide out from under the
