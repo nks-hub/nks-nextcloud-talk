@@ -20,6 +20,14 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+## 1.0.4 (70) — 11 September 2026
+
+- Fixed: no iOS build could be made at all. The notification extension asked for
+  permission to send notifications that come from a person, which Apple grants
+  to applications and watch extensions and to nothing else, so signing it was
+  refused outright. The application itself still holds that permission, which is
+  where the extension's notifications get it from.
+
 ## 1.0.3 (69) — 11 September 2026
 
 - Fixed: the iOS release build refused to finish. Its licence check found the
