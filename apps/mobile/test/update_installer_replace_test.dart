@@ -182,4 +182,63 @@ void main() {
     );
     expect(harness.quits, isEmpty);
   });
+  test('a replacement signed by nobody in particular is refused', () async {
+    if (!Platform.isMacOS) {
+      return;
+    }
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+
+    Future<Directory> signedBundle(String name) async {
+      final bundle = Directory('${root.path}/$name.app');
+      await Directory('${bundle.path}/Contents/MacOS').create(recursive: true);
+      await File(
+        '${bundle.path}/Contents/MacOS/nextcloudtalk',
+      ).writeAsString('#!/bin/sh\n');
+      // codesign refuses anything it cannot read as a bundle.
+      await File('${bundle.path}/Contents/Info.plist').writeAsString(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+        '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+        '<plist version="1.0"><dict>\n'
+        '<key>CFBundleExecutable</key><string>nextcloudtalk</string>\n'
+        '<key>CFBundleIdentifier</key><string>test.nkstalk</string>\n'
+        '<key>CFBundlePackageType</key><string>APPL</string>\n'
+        '<key>CFBundleName</key><string>nextcloudtalk</string>\n'
+        '<key>CFBundleVersion</key><string>1</string>\n'
+        '</dict></plist>\n',
+      );
+      // Ad-hoc: a real signature, but one that names no team at all.
+      final signed = await Process.run('/usr/bin/codesign', <String>[
+        '--force',
+        '--sign',
+        '-',
+        bundle.path,
+      ]);
+      expect(signed.exitCode, 0, reason: signed.stderr.toString());
+      return bundle;
+    }
+
+    final install = await signedBundle('installed');
+    final replacement = await signedBundle('make/nextcloudtalk');
+    final archive = File('${root.path}/release.zip');
+    final zipped = await Process.run('/usr/bin/ditto', <String>[
+      '-c',
+      '-k',
+      '--sequesterRsrc',
+      '--keepParent',
+      replacement.path,
+      archive.path,
+    ]);
+    expect(zipped.exitCode, 0, reason: zipped.stderr.toString());
+
+    final harness = service(install);
+
+    expect(
+      await harness.service.runInstaller(UpdateInstallReady(archive)),
+      isFalse,
+      reason: 'a signature naming no team proves nothing about who made it',
+    );
+    expect(harness.quits, isEmpty);
+  });
+
 }

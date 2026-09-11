@@ -45,10 +45,6 @@ const _macOSBundleName = 'nextcloudtalk.app';
 const _linuxBundleName = 'bundle';
 const _linuxExecutableName = 'nextcloudtalk';
 
-/// The team every macOS build of this app is signed by. A replacement signed
-/// by anybody else is refused, whatever its checksum said.
-const appleTeamIdentifier = 'DG3SLRLF7A';
-
 UpdateInstallKind? _installKind(TargetPlatform platform) =>
     switch (platform) {
       TargetPlatform.windows => UpdateInstallKind.runInstaller,
@@ -352,13 +348,18 @@ final class UpdateInstallerService {
     return await executable.exists() ? root : null;
   }
 
-  /// On macOS, whether the unpacked bundle is really one of ours.
+  /// On macOS, whether the unpacked bundle really replaces this one.
   ///
   /// The checksum already proved the archive is the one GitHub published, so
   /// this is not the first line of defence — it is the one that still holds if
   /// the checksum list itself were ever wrong, and it is what Gatekeeper will
   /// ask anyway when the replacement starts. Failing here now beats replacing
   /// a working build with one that cannot open.
+  ///
+  /// The team is read off the build that is running rather than written down
+  /// here, so this asks the only question worth asking — is the replacement
+  /// signed by whoever signed me — and keeps working for anybody who builds
+  /// and signs this themselves.
   Future<bool> _isTrustedBundle(Directory bundle) async {
     if (defaultTargetPlatform != TargetPlatform.macOS) {
       return true;
@@ -371,12 +372,26 @@ final class UpdateInstallerService {
     if (verify.exitCode != 0) {
       return false;
     }
-    final show = await Process.run('/usr/bin/codesign', <String>[
-      '-dv',
-      bundle.path,
-    ]);
-    final description = '${show.stdout}${show.stderr}';
-    return description.contains('TeamIdentifier=$appleTeamIdentifier');
+    final current = bundleDirectory();
+    if (current == null) {
+      return false;
+    }
+    final signedBy = await _teamIdentifierOf(bundle.path);
+    final runningAs = await _teamIdentifierOf(current.path);
+    return signedBy != null && signedBy == runningAs;
+  }
+
+  /// The signing team of the bundle at [path], or null when it has none — an
+  /// ad-hoc signature says `not set`, and a replacement like that must never
+  /// stand in for a real one.
+  Future<String?> _teamIdentifierOf(String path) async {
+    final shown = await Process.run('/usr/bin/codesign', <String>['-dv', path]);
+    final described = '${shown.stdout}${shown.stderr}';
+    final team = RegExp(
+      r'^TeamIdentifier=(\S+)$',
+      multiLine: true,
+    ).firstMatch(described)?.group(1);
+    return team == null || team == 'not' || team == 'not set' ? null : team;
   }
 
   Future<void> _deleteQuietly(Directory directory) async {

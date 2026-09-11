@@ -61,7 +61,7 @@ void main() {
     });
 
     test('carries a path holding a single quote', () {
-      expect(shellQuote("/home/o'brien/app"), r"'/home/o'\''brien/app'");
+      expect(shellQuote("/opt/o'brien/app"), r"'/opt/o'\''brien/app'");
     });
   });
 }
