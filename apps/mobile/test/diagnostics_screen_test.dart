@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1042,4 +1044,32 @@ void main() {
       );
     });
   }
+  testWidgets('a load that is still running says so instead of showing nothing',
+      (tester) async {
+    _useTallSurface(tester);
+    final stalled = Completer<LocalDiagnostics>();
+    addTearDown(() {
+      if (!stalled.isCompleted) {
+        stalled.completeError(StateError('abandoned'));
+      }
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          localDiagnosticsProvider.overrideWith((ref, accountId) => stalled.future),
+        ],
+        child: localizedTestApp(
+          home: const DiagnosticsScreen(accountId: 'account-a'),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Naming the operating system took 1.6 seconds on Windows, and for all
+    // that time this screen was an empty page nobody could tell from a broken
+    // one.
+    expect(find.byKey(const Key('diagnostics-loading')), findsOneWidget);
+  });
+
 }

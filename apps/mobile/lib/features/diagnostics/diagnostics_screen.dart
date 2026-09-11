@@ -38,10 +38,19 @@ final class DiagnosticsScreen extends ConsumerWidget {
       ),
       body: diagnostics.when(
         data: (data) => _DiagnosticsList(data, accountId: accountId),
-        // Reading a handful of local rows resolves immediately. An
-        // indeterminate spinner would animate forever and wedge any
-        // pumpAndSettle, so the gap stays quiet instead.
-        loading: () => const SizedBox(height: 24),
+        // Says so rather than showing an empty page. It used to be a bare
+        // gap, on the assumption that reading a handful of local rows
+        // resolves immediately; naming the operating system did not, and a
+        // blank screen is indistinguishable from a broken one. Text and not
+        // a spinner, which would animate forever and wedge any
+        // pumpAndSettle on this screen.
+        loading: () => Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            key: const Key('diagnostics-loading'),
+            strings.diagnosticsLoading,
+          ),
+        ),
         error: (error, stackTrace) => Padding(
           padding: const EdgeInsets.all(16),
           child: Text(

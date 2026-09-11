@@ -1467,6 +1467,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get diagnosticsRefresh => 'Načíst znovu';
 
   @override
+  String get diagnosticsLoading => 'Čtu, co je uloženo v tomto zařízení…';
+
+  @override
   String get diagnosticsLoadFailed => 'Lokální stav se nepodařilo načíst.';
 
   @override

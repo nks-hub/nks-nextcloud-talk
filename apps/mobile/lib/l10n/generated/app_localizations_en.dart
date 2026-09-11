@@ -1468,6 +1468,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsRefresh => 'Read again';
 
   @override
+  String get diagnosticsLoading => 'Reading what is stored on this device…';
+
+  @override
   String get diagnosticsLoadFailed => 'The local state could not be read.';
 
   @override

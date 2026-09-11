@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
@@ -276,9 +277,7 @@ final class LocalDiagnosticsLoader {
     final talkFeatures = _talkFeatures(account.talkFeaturesJson);
     final databaseDiagnostics = await _databaseDiagnostics();
     return LocalDiagnostics(
-      operatingSystem:
-          '${Platform.operatingSystem} '
-          '${Platform.operatingSystemVersion}',
+      operatingSystem: await _operatingSystem(),
       database: databaseDiagnostics,
       conversationCount: await _countRows(
         database.cachedConversations,
@@ -454,6 +453,20 @@ final class LocalDiagnosticsLoader {
     return attempts <= 4 ? '2-4' : '5+';
   }
 
+  /// The operating system, named off the interface thread and only once.
+  ///
+  /// `Platform.operatingSystemVersion` is a synchronous getter, and on Windows
+  /// its first call was measured at 1.6 seconds — long enough to freeze the
+  /// window while this screen loaded, which is what made the screen look
+  /// broken rather than busy. Asking a separate isolate keeps the window
+  /// answering; keeping the answer means only the first visit waits, because
+  /// each new isolate would otherwise pay that second all over again.
+  Future<String> _operatingSystem() {
+    return _namedOperatingSystem ??= Isolate.run(
+      () => Platform.operatingSystemVersion,
+    ).then((version) => '${Platform.operatingSystem} $version');
+  }
+
   Future<PushDiagnostics> _pushDiagnostics(String accountId) async {
     if (proxySelected) {
       final registration = proxyPush?.call(accountId);
@@ -534,6 +547,10 @@ DateTime? _instant(int? millis) {
       ? null
       : DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
 }
+
+/// The operating system this process runs on. It cannot change while the
+/// process lives, and asking costs a second on Windows, so it is asked once.
+Future<String>? _namedOperatingSystem;
 
 /// Diagnostics of exactly one account. Recomputed on every visit; nothing here
 /// is cached, so what the screen shows is the state on disk right now.

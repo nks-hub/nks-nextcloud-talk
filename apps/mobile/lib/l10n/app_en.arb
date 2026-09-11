@@ -520,6 +520,10 @@
   "settingsOpenDiagnosticsSubtitle": "Local state of the active account",
   "diagnosticsTitle": "Local diagnostics",
   "diagnosticsRefresh": "Read again",
+  "diagnosticsLoading": "Reading what is stored on this device…",
+  "@diagnosticsLoading": {
+    "description": "Shown while the diagnostics screen reads local state."
+  },
   "diagnosticsLoadFailed": "The local state could not be read.",
   "diagnosticsAppSection": "Application",
   "diagnosticsLicenses": "Open source licences",

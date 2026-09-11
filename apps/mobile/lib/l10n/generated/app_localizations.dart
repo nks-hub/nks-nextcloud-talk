@@ -2690,6 +2690,12 @@ abstract class AppLocalizations {
   /// **'Read again'**
   String get diagnosticsRefresh;
 
+  /// Shown while the diagnostics screen reads local state.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading what is stored on this device…'**
+  String get diagnosticsLoading;
+
   /// No description provided for @diagnosticsLoadFailed.
   ///
   /// In en, this message translates to:

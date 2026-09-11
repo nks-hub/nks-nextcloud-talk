@@ -506,6 +506,10 @@
   "settingsOpenDiagnosticsSubtitle": "Lokální stav aktivního účtu",
   "diagnosticsTitle": "Lokální diagnostika",
   "diagnosticsRefresh": "Načíst znovu",
+  "diagnosticsLoading": "Čtu, co je uloženo v tomto zařízení…",
+  "@diagnosticsLoading": {
+    "description": "Shown while the diagnostics screen reads local state."
+  },
   "diagnosticsLoadFailed": "Lokální stav se nepodařilo načíst.",
   "diagnosticsAppSection": "Aplikace",
   "diagnosticsLicenses": "Licence otevřeného softwaru",
