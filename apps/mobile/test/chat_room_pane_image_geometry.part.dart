@@ -115,7 +115,16 @@ void _registerChatRoomPaneImageGeometryTests() {
               visible.add((id, rect));
             }
           }
-          if (visible.any((row) => row.$1 < oldest)) {
+          // Both have to hold: history above the images on screen, and the
+          // images themselves still built — scrolling far enough to expose
+          // the first can carry the second out of the tree.
+          final imagesBuilt = imageIds.every(
+            (id) => find
+                .byKey(Key('chat-image-loading-$id-0'))
+                .evaluate()
+                .isNotEmpty,
+          );
+          if (visible.any((row) => row.$1 < oldest) && imagesBuilt) {
             break;
           }
         }
