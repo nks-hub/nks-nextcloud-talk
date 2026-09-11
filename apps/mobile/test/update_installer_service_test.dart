@@ -198,25 +198,59 @@ void main() {
     expect(after.difference(before), isEmpty);
   });
 
-  test('macOS and Linux never download, even with a valid installer', () async {
-    for (final platform in const [TargetPlatform.macOS, TargetPlatform.linux]) {
-      debugDefaultTargetPlatformOverride = platform;
+  test('the phones never download, even with a valid file published', () async {
+    for (final platform in const [
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+    ]) {
+      forcePlatform(platform);
+      final asked = <Uri>[];
       final result = await service(
-        MockClient(
-          (request) async => fail('must never contact ${request.url}'),
-        ),
+        MockClient((request) async {
+          asked.add(request.url);
+          return http.Response('should not have been asked', 500);
+        }),
       ).downloadAndVerify(release: release());
 
       expect(
         result,
         isA<UpdateInstallUnavailable>(),
-        reason: '$platform must not download an installer',
+        reason: '$platform must not download anything',
+      );
+      expect(
+        asked,
+        isEmpty,
+        reason: '$platform must not even reach the network',
       );
     }
-    debugDefaultTargetPlatformOverride = null;
+  });
+
+  test('every desktop does download, and verifies before handing it over', () async {
+    for (final platform in const [
+      TargetPlatform.windows,
+      TargetPlatform.macOS,
+      TargetPlatform.linux,
+    ]) {
+      forcePlatform(platform);
+      final result = await service(
+        MockClient(
+          (request) async =>
+              respondTo(request, sumsBody: '$installerHash  $installerName\n'),
+        ),
+      ).downloadAndVerify(release: release());
+
+      expect(result, isA<UpdateInstallReady>(), reason: '$platform');
+      final ready = result as UpdateInstallReady;
+      addTearDown(() => ready.installerFile.parent.delete(recursive: true));
+      expect(await ready.installerFile.exists(), isTrue, reason: '$platform');
+    }
   });
 
   test('starting a file that is not a real installer fails cleanly', () async {
+    // Windows is the platform that runs the download rather than unpacking it,
+    // and without saying so a test process passes this as an Android build,
+    // which installs nothing and would prove nothing.
+    forcePlatform(TargetPlatform.windows);
     final dir = await Directory.systemTemp.createTemp('nks-talk-update-test-');
     addTearDown(() => dir.delete(recursive: true));
     final bogus = File('${dir.path}${Platform.pathSeparator}bogus.exe');
