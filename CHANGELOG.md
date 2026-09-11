@@ -20,6 +20,8 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+## 1.0.3 (69) — 11 September 2026
+
 - Fixed: the iOS release build refused to finish. Its licence check found the
   notice for one package listed twice, once by Flutter itself and once by
   hand, and the hand-written half had stopped being needed.
