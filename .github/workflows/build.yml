@@ -148,6 +148,8 @@ jobs:
           python3 tool/secret_log_scan.py
           python3 tool/test_secret_log_scan.py
           python3 tool/test_release_license_gate.py
+          cd "$GITHUB_WORKSPACE"
+          python3 tool/test_changelog_section.py
       # This repository is public: nothing that names the operator's hosts,
       # machines, accounts or identifiers may be committed (CONTRIBUTING.md).
       #
@@ -472,12 +474,12 @@ jobs:
           # The changelog keeps SHA-256 for every artefact, so the release
           # carries the same list rather than a different one.
           ( cd release && sha256sum * > SHA256SUMS && cat SHA256SUMS )
-      # From the commits rather than from CHANGELOG.md, and the reason is no
-      # longer the language: the changelog was Czech for the wiki and the
-      # store listings when this was written, and has been English since the
-      # repository went English on 5 September 2026. What still separates them
-      # is the audience - the changelog says what a tester notices, a release
-      # page says what changed in the tree, so it is built from the commits.
+      # Both halves, because they answer different questions. The changelog
+      # section for this version says what a tester notices, and the commit
+      # list says what moved in the tree. The changelog was Czech for the wiki
+      # and the store listings when this job was first written, which is why
+      # it used to be left out; it has been English since the repository went
+      # English on 5 September 2026, so there is nothing left to keep it away.
       - name: Write the release notes
         run: |
           version=$(sed -n 's/^version: *//p' apps/mobile/pubspec.yaml)
@@ -488,6 +490,10 @@ jobs:
             else
               echo "First tagged release of this line."
             fi
+            echo
+            python3 tool/changelog_section.py "$version" || true
+            echo
+            echo "### Commits"
             echo
             if [ -n "$previous" ]; then
               git log --no-merges --pretty='- %s' "$previous..${GITHUB_REF_NAME}"                 | grep -E '^- (feat|fix|perf)' || echo "- Maintenance only; see the commit log."
