@@ -20,6 +20,10 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Fixed: the iOS release build refused to finish. Its licence check found the
+  notice for one package listed twice, once by Flutter itself and once by
+  hand, and the hand-written half had stopped being needed.
+
 - Fixed: removing an account stopped its Web Push registration from working
   but never gave it up, so the device stayed registered for an account that
   no longer existed and kept that account's keys.
