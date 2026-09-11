@@ -20,6 +20,67 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+## 1.0.2 (68) — 11 September 2026
+
+- Fixed: a call ended the moment another conversation of the same account was
+  opened. The server keeps one active session per account, so the chat asking
+  for one took the call's away and closed the connection underneath it. A call
+  now keeps its room; the other conversation goes without the extras a session
+  would have given it, which is the smaller loss by far.
+
+- Fixed: hanging up in the phone's own call screen while the call was still
+  connecting did nothing at all. The call finished connecting with the
+  microphone open and no system screen left to end it.
+
+- Fixed: the screen-capture service kept running after a call ended, telling
+  its owner the screen was still being shared when it was not. It stops now
+  whenever the share does, including when the network takes it away.
+
+- Fixed: a short network drop tore down the connections it was about to come
+  back to. On a call between two people, the side that does not make the offer
+  then waited for one that never came.
+
+- Fixed: one attachment row this build could not read switched attachments off
+  for the whole account, permanently. Such a row is dropped now, the way a row
+  from a newer build already should have been.
+
+- Fixed: a database left behind by an interrupted first start of an older
+  version kept that version's shape while being stamped as current, and a
+  single orphaned row could stop the application from ever starting. Both are
+  repaired at startup instead.
+
+- Fixed: a voice message was deleted when the message it replied to was deleted
+  while it was being recorded, and an incoming telephone call was recorded into
+  it instead of pausing it. A recording too short to hear is refused outright.
+
+- Fixed: a share that arrived while the app was locked was lost for good.
+
+- Fixed: a reply sent from the notification shade spent one of its attempts on
+  every other reply waiting beside it, so five offline replies were thrown away
+  together after eight wake-ups.
+
+- Fixed: pressing enter on a message that ends in a mention inserted a blank
+  line instead of sending it, and a candidate a Chinese or Japanese keyboard
+  was still composing could be sent as a message.
+
+- Fixed: a draft was lost when the room was left within half a second of
+  typing, and switching rooms could write an empty draft over the new room's
+  own.
+
+- Fixed: the conversation pane could be squeezed until its header overflowed,
+  by the details panel on a window under about 1000 px or by a list width
+  restored from a larger screen. The details open as a page there instead.
+
+- Fixed: at 200 % text a sync error covered the conversation and pushed the
+  composer off the screen, a conversation row overflowed with its date, and a
+  short window cut off both the list and the placeholder beside it.
+
+- Fixed: several controls announced themselves only as "button" to a screen
+  reader, and the presence dot and a call tile did not meet contrast.
+
+- The signature check in the release workflow no longer reports success when
+  the tool it runs crashes.
+
 - Fixed: a phone that lost its network kept saying a call could not be joined
   long after the network was back - and would not start one. The chat came
   back, the call did not, because only the chat was woken; the room's call
