@@ -20,6 +20,8 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+## 1.0.5 (71) — 12 September 2026
+
 - A slow sync now says which step was slow. Until now it reported only that
   it took ten seconds, which is enough to know something is wrong and not
   enough to know what: the credential store, the server, or writing the
