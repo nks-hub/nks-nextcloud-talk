@@ -49,6 +49,11 @@ import urllib.parse
 from pathlib import Path
 
 HOST_NAME = "talk.localtest.me"
+# The origin the server hands back in Login Flow v2. Rewritten in main()
+# once the socket is bound, because a device that cannot listen on 443 --
+# any real phone, whose adbd is not root -- reaches the rig through a
+# forwarded high port, and a flow URL without that port polls nowhere.
+ORIGIN = f"https://{HOST_NAME}"
 USER = "alex"
 DISPLAY_NAME = "Alex Morgan"
 
@@ -588,11 +593,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     {
                         "poll": {
                             "token": POLL_TOKEN,
-                            "endpoint": f"https://{HOST_NAME}"
-                            "/index.php/login/v2/poll",
+                            "endpoint": f"{ORIGIN}/index.php/login/v2/poll",
                         },
-                        "login": f"https://{HOST_NAME}"
-                        f"/index.php/login/v2/flow/{LOGIN_TOKEN}",
+                        "login": f"{ORIGIN}/index.php/login/v2/flow/{LOGIN_TOKEN}",
                     }
                 ).encode()
             )
@@ -600,7 +603,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(
                 json.dumps(
                     {
-                        "server": f"https://{HOST_NAME}",
+                        "server": ORIGIN,
                         "loginName": USER,
                         "appPassword": APP_PASSWORD,
                     }
@@ -701,6 +704,7 @@ def main() -> None:
     parser.add_argument("--certificate-dir", type=Path, default=None)
     arguments = parser.parse_args()
 
+    global ORIGIN
     Handler.language = arguments.language
     directory = arguments.certificate_dir or Path(tempfile.mkdtemp())
     pem, pin = certificate(directory)
@@ -710,6 +714,8 @@ def main() -> None:
     server = http.server.ThreadingHTTPServer(("127.0.0.1", arguments.port), Handler)
     server.socket = context.wrap_socket(server.socket, server_side=True)
     bound_port = server.socket.getsockname()[1]
+    if bound_port != 443:
+        ORIGIN = f"https://{HOST_NAME}:{bound_port}"
     print(
         f"https://{HOST_NAME} on 127.0.0.1:{bound_port} ({arguments.language})",
         flush=True,
