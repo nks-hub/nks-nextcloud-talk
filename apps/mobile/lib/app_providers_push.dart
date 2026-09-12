@@ -386,26 +386,49 @@ final appleConversationIdentityProvider = Provider<void>((ref) {
   if (coordinator == null) {
     return;
   }
-  ref.listen<AsyncValue<List<StoredAccount>>>(accountsProvider, (_, next) {
-    for (final account in next.valueOrNull ?? const <StoredAccount>[]) {
-      ref.listen<AsyncValue<List<CachedConversation>>>(
-        conversationsProvider(account.id),
-        (_, rooms) {
-          final named = <String, String>{
-            for (final room in rooms.valueOrNull ?? const <CachedConversation>[])
-              if (room.displayName.trim().isNotEmpty)
-                room.token: room.displayName.trim(),
-          };
-          if (named.isEmpty) {
-            return;
-          }
-          unawaited(coordinator.recordConversationNames(account.id, named));
-        },
-        fireImmediately: true,
-      );
-    }
-  }, fireImmediately: true);
+  // Watched, not listened to. Registering the per-account listeners below
+  // inside an `accountsProvider` callback added a new set on every emission
+  // and removed none, so each conversation change was handed to every set
+  // that had ever been made. Watching rebuilds this provider instead, which
+  // tears the old listeners down before making new ones.
+  final accounts =
+      ref.watch(accountsProvider).valueOrNull ?? const <StoredAccount>[];
+  // What each account was last told, so an unchanged list is not written
+  // again. The names go to the keychain, which is slow enough that writing
+  // twenty of them on every sync was the larger half of this problem.
+  final sent = <String, Map<String, String>>{};
+  for (final account in accounts) {
+    ref.listen<AsyncValue<List<CachedConversation>>>(
+      conversationsProvider(account.id),
+      (_, rooms) {
+        final named = <String, String>{
+          for (final room in rooms.valueOrNull ?? const <CachedConversation>[])
+            if (room.displayName.trim().isNotEmpty)
+              room.token: room.displayName.trim(),
+        };
+        if (named.isEmpty || _sameNames(sent[account.id], named)) {
+          return;
+        }
+        sent[account.id] = named;
+        unawaited(coordinator.recordConversationNames(account.id, named));
+      },
+      fireImmediately: true,
+    );
+  }
 });
+
+/// Whether the extension already knows exactly these names.
+bool _sameNames(Map<String, String>? previous, Map<String, String> named) {
+  if (previous == null || previous.length != named.length) {
+    return false;
+  }
+  for (final entry in named.entries) {
+    if (previous[entry.key] != entry.value) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /// hands every token to [applePushRegistrationCoordinatorProvider] so it can
 /// register (or refresh) push v2.

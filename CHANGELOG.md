@@ -20,6 +20,16 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Fixed: the application grew slower the longer it stayed open, until on an
+  iPhone it stopped responding altogether. Since build 67 it has been keeping
+  the notification extension supplied with the names of your rooms, and it
+  did that twice wrongly: it wrote all of them to the keychain on every sync
+  even when nothing had changed, and it added a fresh set of watchers each
+  time the account list changed without ever removing the previous ones, so
+  the same write happened once more for every hour the window had been open.
+  The names are written now only when one of them actually changes, and the
+  watchers are replaced rather than stacked.
+
 ## 1.0.5 (71) — 12 September 2026
 
 - A slow sync now says which step was slow. Until now it reported only that
