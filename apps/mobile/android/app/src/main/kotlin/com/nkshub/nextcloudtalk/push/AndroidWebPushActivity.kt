@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import com.nkshub.nextcloudtalk.attachments.AttachmentSaverActivityLifecycle
 import com.nkshub.nextcloudtalk.background.BackgroundDrain
 import com.nkshub.nextcloudtalk.calls.CallAudioFocus
@@ -25,6 +26,7 @@ import com.nkshub.nextcloudtalk.calls.ScreenShareService
 import com.nkshub.nextcloudtalk.attachments.ChatAttachmentSaver
 import com.nkshub.nextcloudtalk.contacts.ContactPickerChannel
 import com.nkshub.nextcloudtalk.updates.AndroidInstallSource
+import com.nkshub.nextcloudtalk.window.FlutterWindowInsetsRepair
 import com.nkshub.nextcloudtalk.share.AndroidShareCaptureResult
 import com.nkshub.nextcloudtalk.share.AndroidShareDelivery
 import com.nkshub.nextcloudtalk.share.AndroidShareInbox
@@ -286,6 +288,23 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
                 foregroundHandler.onResume()
             }
         })
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus) {
+            return
+        }
+        // Coming back from another activity - the picture picker above all - is
+        // where Flutter's keyboard-inset deferral gets stuck, and where the
+        // whole app is left laying out into a keyboard-sized viewport. Posted,
+        // because the window's own insets for this focus are not in yet.
+        val content = findViewById<View>(android.R.id.content) ?: return
+        content.post {
+            FlutterWindowInsetsRepair.flutterViewIn(content)?.let(
+                FlutterWindowInsetsRepair::repair,
+            )
+        }
     }
 
     override fun onUserLeaveHint() {
