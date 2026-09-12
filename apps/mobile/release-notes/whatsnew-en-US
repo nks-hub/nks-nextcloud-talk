@@ -1,5 +1,3 @@
-Fixes found on real devices.
+Fixed: half a screen after picking a picture from the gallery.
 
-On a tablet, and on a phone turned sideways, the app could open on an empty screen — the conversation list now stays until a conversation is open. Voice messages arrive as voice messages, and older ones that would not play repair themselves. The conversation's name is back in its header. On Android 10 and 11 the microphone closes when somebody calls you.
-
-Forwarding a message shows conversations with pictures and a search box.
+Picking a picture with the keyboard open left the app drawing into the top half of the screen only. The dead space below it stayed there on every other screen too, and cleared up only once the keyboard had been opened and closed again. The window's real measurements are now restored the moment the app comes back to the front.

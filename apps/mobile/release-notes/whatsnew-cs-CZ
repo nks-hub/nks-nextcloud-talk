@@ -1,5 +1,3 @@
-Opravy nalezené na skutečném zařízení.
+Opraveno: půlka obrazovky po výběru obrázku z galerie.
 
-Na tabletu a na telefonu otočeném na šířku se aplikace mohla otevřít na prázdné obrazovce — seznam konverzací teď zůstává, dokud není otevřená konverzace. Hlasovky dorazí jako hlasovky a ty starší, které nešlo přehrát, se samy opraví. V záhlaví konverzace je zase vidět její název. Na Androidu 10 a 11 se mikrofon zavře, když vám někdo volá.
-
-Přeposílání zprávy nabízí konverzace s obrázky a hledáním.
+Když jste s otevřenou klávesnicí vybrali obrázek z galerie, aplikace se dál vykreslovala jen do horní poloviny obrazovky a mrtvá plocha pod ní zůstala i po přechodu jinam. Uklidilo se to až po dalším otevření a zavření klávesnice. Skutečné rozměry okna se teď obnoví, jakmile se aplikace vrátí do popředí.
