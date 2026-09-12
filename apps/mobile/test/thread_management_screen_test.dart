@@ -17,6 +17,7 @@ import 'package:nextcloudtalk/features/threads/thread_management_screen.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'accessibility_probe.dart';
 import 'test_support.dart';
 
 const _server = 'https://cloud.example.invalid';
@@ -695,6 +696,67 @@ void main() {
     await tester.pump();
     await disposeHarness(tester);
   });
+
+  testWidgets('the date sits at the right edge, not inside the subtitle', (
+    tester,
+  ) async {
+    await _setLargeSurface(tester);
+    await tester.pumpWidget(
+      buildApp(
+        home: ThreadManagementScreen(
+          account: account,
+          conversation: conversation,
+        ),
+        handler: _successfulHandler,
+      ),
+    );
+    await _pumpUntil(tester, () => find.text('Design').evaluate().isNotEmpty);
+
+    const activity = Key('thread-management-activity-rooma123-120');
+    expect(find.byKey(activity), findsOneWidget);
+
+    // Right of the title and hard against the row's own right edge, which is
+    // where the conversation list has always put it.
+    final row = tester.getRect(
+      find.byKey(const Key('thread-management-item-rooma123-120')),
+    );
+    final date = tester.getRect(find.byKey(activity));
+    final name = tester.getRect(find.text('Design'));
+    expect(date.left, greaterThan(name.right));
+    expect(
+      row.right - date.right,
+      lessThan(80),
+      reason: 'the date belongs at the edge, not floating mid-row',
+    );
+    await disposeHarness(tester);
+  });
+
+  testWidgets('the thread list survives 200 % text on a narrow window', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(420, 900);
+    addTearDown(tester.view.reset);
+
+    final overflows = await overflowsWhile(() async {
+      await tester.pumpWidget(
+        buildApp(
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: ThreadManagementScreen(
+              account: account,
+              conversation: conversation,
+            ),
+          ),
+          handler: _successfulHandler,
+        ),
+      );
+      await _pumpUntil(tester, () => find.text('Design').evaluate().isNotEmpty);
+    });
+
+    expect(overflows, isEmpty, reason: overflows.join(' | '));
+    await disposeHarness(tester);
+  });
 }
 
 Future<void> _setLargeSurface(WidgetTester tester) async {
@@ -888,4 +950,5 @@ http.Response _jsonResponse(Object? body, int statusCode) {
       'content-type': 'application/json; charset=utf-8',
     },
   );
+
 }

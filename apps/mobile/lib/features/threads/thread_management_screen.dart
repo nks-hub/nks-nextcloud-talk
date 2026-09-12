@@ -745,15 +745,19 @@ final class _ThreadListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     final title = thread.title.trim().isEmpty ? strings.thread : thread.title;
+    // Room and replies only. The date used to be joined onto the end of this
+    // line, which put it in a different place in every row depending on how
+    // long the room name was; a conversation row has always carried it at the
+    // right edge instead, and these two lists sit one tap apart.
     final details = <String>[
       ?roomName,
       strings.threadReplies(thread.numReplies),
-      _formatActivity(context, thread.lastActivity),
     ].join(' · ');
     final notification = _notificationLevelLabel(
       strings,
       thread.notificationLevel,
     );
+    final scheme = Theme.of(context).colorScheme;
     return ListTile(
       key: Key('thread-management-item-${thread.roomToken}-${thread.threadId}'),
       minTileHeight: context.secondaryRowHeight,
@@ -761,12 +765,37 @@ final class _ThreadListTile extends StatelessWidget {
       leading: const CircleAvatar(child: Icon(Icons.forum_outlined)),
       title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(details, maxLines: 2, overflow: TextOverflow.ellipsis),
-      trailing: Tooltip(
-        message: notification,
-        child: Icon(
-          _notificationIcon(thread.notificationLevel),
-          semanticLabel: notification,
-        ),
+      // Both in the trailing slot, which is the one place a list tile keeps
+      // hard against its right edge. Putting the date in the title row beside
+      // an expanded title splits the row in half and leaves it floating in
+      // the middle, and joining it onto the subtitle put it in a different
+      // place in every row. Side by side rather than stacked: at 200 % text a
+      // stack of the two was taller than the row by exactly the gap between
+      // them, and the row has width to spare where it has no height.
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _formatActivity(context, thread.lastActivity),
+            key: Key(
+              'thread-management-activity-'
+              '${thread.roomToken}-${thread.threadId}',
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: notification,
+            child: Icon(
+              _notificationIcon(thread.notificationLevel),
+              semanticLabel: notification,
+            ),
+          ),
+        ],
       ),
       onTap: onTap,
     );

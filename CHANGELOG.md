@@ -20,6 +20,13 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+## 1.0.7 (73) — 12 September 2026
+
+- Fixed: in the thread list the date sat in the middle of the second line,
+  after the room name and the reply count, so it started in a different place
+  in every row. It is at the right edge now, beside the notification icon,
+  which is where a conversation row has always carried it.
+
 ## 1.0.6 (72) — 12 September 2026
 
 - Fixed: the application grew slower the longer it stayed open, until on an
