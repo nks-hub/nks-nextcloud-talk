@@ -20,6 +20,19 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+## 1.0.8 (74) — 12 September 2026
+
+- Fixed: after picking a picture from the gallery with the keyboard open, the
+  whole application went on drawing into the top half of the screen, with dead
+  space below it, and stayed that way on every screen until the keyboard had
+  been opened and closed again. Flutter holds window insets back while the
+  keyboard animates so the layout can move with it, and it does that by
+  swallowing every insets update until the animation ends. Samsung's keyboard
+  starts that animation and never ends it when the application is paused in the
+  middle of it, which is exactly what opening the picker does, so nothing the
+  window reported ever reached the layout again. The real insets are now put
+  back the moment the window comes back to the front.
+
 ## 1.0.7 (73) — 12 September 2026
 
 - Fixed: in the thread list the date sat in the middle of the second line,
