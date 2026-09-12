@@ -20,6 +20,8 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+## 1.0.6 (72) — 12 September 2026
+
 - Fixed: the application grew slower the longer it stayed open, until on an
   iPhone it stopped responding altogether. Since build 67 it has been keeping
   the notification extension supplied with the names of your rooms, and it
