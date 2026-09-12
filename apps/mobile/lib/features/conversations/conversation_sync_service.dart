@@ -115,11 +115,16 @@ final class ConversationSyncService {
     // in the catch below would have measured the successful syncs and the
     // transport errors while silently dropping every classified failure.
     var outcome = TracedOutcome.completed;
+    // The steps are timed by whichever flight actually runs; a caller that
+    // only waited on somebody else's run reports none of its own, which is
+    // the truth about what it did.
+    var phases = const <TracedPhase, Duration>{};
     try {
       final completed = await _syncFlights(
         accountId,
         abortTrigger: abortTrigger,
         forceFull: forceFull,
+        onFlight: (flight) => phases = flight.phases.measured,
       );
       if (!completed) outcome = TracedOutcome.cancelled;
       return completed;
@@ -140,6 +145,7 @@ final class ConversationSyncService {
         operation: TracedOperation.conversationSync,
         started: started,
         outcome: outcome,
+        phases: phases,
       );
     }
   }
@@ -148,10 +154,12 @@ final class ConversationSyncService {
     String accountId, {
     required Future<void>? abortTrigger,
     required bool forceFull,
+    void Function(_ConversationSyncFlight flight)? onFlight,
   }) async {
     while (true) {
       final flight =
           _inFlight[accountId] ?? _startFlight(accountId, forceFull: forceFull);
+      onFlight?.call(flight);
       final satisfiesRequestedMode = !forceFull || flight.forceFull;
       final waiter = flight.tryWait(abortTrigger);
       if (waiter != null) {
@@ -193,6 +201,7 @@ final class ConversationSyncService {
         accountId,
         abortTrigger: flight.transportCancellation,
         forceFull: forceFull,
+        phases: flight.phases,
       ),
     );
 
@@ -237,6 +246,7 @@ final class ConversationSyncService {
     String accountId, {
     Future<void>? abortTrigger,
     required bool forceFull,
+    required PhaseRecorder phases,
   }) async {
     final account = await _accounts.getAccount(accountId);
     if (account == null) {
@@ -259,7 +269,10 @@ final class ConversationSyncService {
     // the server). A handful of re-reads separates the two.
     for (var attempt = 0; attempt < _credentialReadAttempts; attempt++) {
       try {
-        appPassword = await _credentials.readAppPassword(accountId);
+        appPassword = await phases.record(
+          TracedPhase.credentials,
+          () => _credentials.readAppPassword(accountId),
+        );
       } on CredentialVaultTemporarilyUnavailable {
         throw const ConversationSyncException(ConversationSyncError.network);
       }
@@ -279,14 +292,20 @@ final class ConversationSyncService {
       await _fail(accountId, ConversationSyncError.credentialMissing);
     }
     _flightPasswords[accountId] = appPassword;
+    // Held as its own non-null local: the steps below run inside closures, so
+    // the promotion `_fail` above earns does not reach into them.
+    final password = appPassword;
 
     try {
       final server = ServerBase.parse(account.serverUrl);
-      final capabilities = await _api.getAuthenticatedCapabilities(
-        server: server,
-        loginName: account.loginName,
-        appPassword: appPassword,
-        abortTrigger: abortTrigger,
+      final capabilities = await phases.record(
+        TracedPhase.capabilities,
+        () => _api.getAuthenticatedCapabilities(
+          server: server,
+          loginName: account.loginName,
+          appPassword: password,
+          abortTrigger: abortTrigger,
+        ),
       );
       if (!capabilities.hasTalk) {
         await _fail(accountId, ConversationSyncError.talkUnavailable);
@@ -305,7 +324,10 @@ final class ConversationSyncService {
 
       var currentAccount = account;
       for (var attempt = 0; attempt < 2; attempt++) {
-        final state = await _accounts.loadConversationState(currentAccount);
+        final state = await phases.record(
+          TracedPhase.localState,
+          () => _accounts.loadConversationState(currentAccount),
+        );
         final typedAccountId = AccountId.parse(accountId);
         final lastFull = _lastFullFetch[accountId];
         final now = _clock();
@@ -327,11 +349,14 @@ final class ConversationSyncService {
               ? state.cursor
               : null,
         );
-        final response = await _api.getConversations(
-          conversationRequest: request,
-          loginName: account.loginName,
-          appPassword: appPassword,
-          abortTrigger: abortTrigger,
+        final response = await phases.record(
+          TracedPhase.fetch,
+          () => _api.getConversations(
+            conversationRequest: request,
+            loginName: account.loginName,
+            appPassword: password,
+            abortTrigger: abortTrigger,
+          ),
         );
         if (response case ConversationListSuccess()) {
           _recordFederationInvites(accountId, response.federationInvites);
@@ -343,7 +368,10 @@ final class ConversationSyncService {
             response: response,
             observedAt: DateTime.now().toUtc(),
           );
-          await _accounts.applyConversationMerge(plan);
+          await phases.record(
+            TracedPhase.store,
+            () => _accounts.applyConversationMerge(plan),
+          );
           if (plan.outcome == ConversationMergeOutcome.applied) {
             if (mode == ConversationFetchMode.full) {
               _lastFullFetch[accountId] = now;
@@ -503,6 +531,11 @@ final class ConversationSyncService {
 /// The transport is aborted only after the final attached waiter cancels.
 final class _ConversationSyncFlight {
   _ConversationSyncFlight({required this.forceFull});
+
+  /// Where this run's steps are timed. Owned by the flight rather than
+  /// the caller, because several callers can wait on one run and the
+  /// phases belong to the run.
+  final PhaseRecorder phases = PhaseRecorder();
 
   final bool forceFull;
   final Completer<void> _transportCancellation = Completer<void>();

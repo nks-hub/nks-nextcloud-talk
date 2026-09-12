@@ -171,4 +171,112 @@ void main() {
     expect(reported.single.outcome, TracedOutcome.cancelled);
     expect(reported.single.durationBucket, '<10s');
   });
+  group('phases', () {
+    test('a span with no phases reports exactly what it always did', () {
+      const span = TracedSpan(
+        operation: TracedOperation.conversationSync,
+        outcome: TracedOutcome.completed,
+        duration: Duration(seconds: 3),
+      );
+
+      expect(span.tags, <String, String>{
+        'operation': 'conversation.sync',
+        'outcome': 'completed',
+        'duration': '<10s',
+      });
+      expect(span.slowestPhase, isNull);
+    });
+
+    test('each step is reported as its own bucket, and the worst is named', () {
+      const span = TracedSpan(
+        operation: TracedOperation.conversationSync,
+        outcome: TracedOutcome.failed,
+        duration: Duration(seconds: 12),
+        phases: <TracedPhase, Duration>{
+          TracedPhase.credentials: Duration(milliseconds: 40),
+          TracedPhase.capabilities: Duration(milliseconds: 300),
+          TracedPhase.fetch: Duration(seconds: 11),
+          TracedPhase.store: Duration(milliseconds: 600),
+        },
+      );
+
+      expect(span.tags, <String, String>{
+        'operation': 'conversation.sync',
+        'outcome': 'failed',
+        'duration': '>=10s',
+        'phase.credentials': '<100ms',
+        'phase.capabilities': '<500ms',
+        'phase.fetch': '>=10s',
+        'phase.store': '<2s',
+        'slowest_phase': 'fetch',
+      });
+    });
+
+    test('a step entered twice reports what it cost altogether', () async {
+      var now = DateTime.utc(2026);
+      final recorder = PhaseRecorder(clock: () => now);
+
+      Future<void> spend(Duration cost) async {
+        now = now.add(cost);
+      }
+
+      await recorder.record(
+        TracedPhase.credentials,
+        () => spend(const Duration(milliseconds: 400)),
+      );
+      await recorder.record(
+        TracedPhase.credentials,
+        () => spend(const Duration(milliseconds: 700)),
+      );
+
+      expect(recorder.measured, <TracedPhase, Duration>{
+        TracedPhase.credentials: const Duration(milliseconds: 1100),
+      });
+    });
+
+    test('a step that fails slowly is still timed, and still throws',
+        () async {
+      var now = DateTime.utc(2026);
+      final recorder = PhaseRecorder(clock: () => now);
+
+      await expectLater(
+        recorder.record(TracedPhase.fetch, () async {
+          now = now.add(const Duration(seconds: 30));
+          throw const FormatException('server said no');
+        }),
+        throwsA(isA<FormatException>()),
+      );
+
+      expect(
+        recorder.measured[TracedPhase.fetch],
+        const Duration(seconds: 30),
+        reason: 'a step that fails slowly is the one worth seeing',
+      );
+    });
+
+    test('traceInPhases reports the steps the action named', () async {
+      final reported = <TracedSpan>[];
+      var now = DateTime.utc(2026);
+      final telemetry = PerformanceTelemetry(
+        report: reported.add,
+        clock: () => now,
+      );
+
+      await telemetry.traceInPhases(TracedOperation.conversationSync, (
+        phases,
+      ) async {
+        await phases.record(TracedPhase.capabilities, () async {
+          now = now.add(const Duration(milliseconds: 900));
+        });
+        await phases.record(TracedPhase.fetch, () async {
+          now = now.add(const Duration(seconds: 4));
+        });
+      });
+
+      expect(reported.single.tags['slowest_phase'], 'fetch');
+      expect(reported.single.tags['phase.capabilities'], '<2s');
+      expect(reported.single.tags['phase.fetch'], '<10s');
+    });
+  });
+
 }

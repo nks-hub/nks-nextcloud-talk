@@ -20,6 +20,13 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- A slow sync now says which step was slow. Until now it reported only that
+  it took ten seconds, which is enough to know something is wrong and not
+  enough to know what: the credential store, the server, or writing the
+  result. Each step is timed and reported as its own bucket, alongside the
+  name of the one that took longest. Still buckets and still a closed list of
+  step names, so nothing about an account or a conversation travels with it.
+
 - The desktop builds now update themselves, not only Windows. macOS and Linux
   ship a folder rather than an installer, so the download is unpacked beside
   the one running and put in its place once the app has stepped aside; if any

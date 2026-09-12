@@ -26,24 +26,76 @@ enum TracedOperation {
 /// carry a server address or a file name.
 enum TracedOutcome { completed, failed, cancelled }
 
+/// The steps inside a traced operation.
+///
+/// A closed set for the same reason [TracedOperation] is one, and worth
+/// having for a plainer reason: an operation timed as a whole says only that
+/// it was slow. Ten seconds of "conversation.sync" could be the network, the
+/// credential store or the database, and until 12 September 2026 there was no
+/// way to tell which — every investigation had to guess and then measure by
+/// hand on a machine nobody could reproduce the problem on.
+enum TracedPhase {
+  /// Reading the stored app password, which on some platforms talks to the
+  /// operating system's own credential store.
+  credentials('credentials'),
+
+  /// Asking the server what it supports.
+  capabilities('capabilities'),
+
+  /// Reading what is already stored, before anything is asked of the server.
+  localState('local_state'),
+
+  /// The request that fetches the thing being synced.
+  fetch('fetch'),
+
+  /// Writing what came back.
+  store('store');
+
+  const TracedPhase(this.tagName);
+
+  /// The literal name reported for this phase. Never interpolated.
+  final String tagName;
+}
+
 /// One finished measurement, ready to report.
 final class TracedSpan {
   const TracedSpan({
     required this.operation,
     required this.outcome,
     required this.duration,
+    this.phases = const <TracedPhase, Duration>{},
   });
 
   final TracedOperation operation;
   final TracedOutcome outcome;
   final Duration duration;
 
+  /// How long each step took, for the operations that record them. Empty for
+  /// the ones that do not, which changes nothing about what they report.
+  final Map<TracedPhase, Duration> phases;
+
   /// Durations are reported as a bucket rather than a millisecond count.
   ///
   /// A precise duration on a rare operation is close to an identifier: it
   /// links two events of the same user across a session. Buckets keep the
   /// signal that matters — is this fast, slow or hopeless — and drop the rest.
-  String get durationBucket {
+  String get durationBucket => bucketOf(duration);
+
+  /// The step that took the longest, or null when none were recorded. The one
+  /// tag worth reading first: it names where the time went.
+  TracedPhase? get slowestPhase {
+    TracedPhase? slowest;
+    var longest = Duration.zero;
+    for (final entry in phases.entries) {
+      if (entry.value > longest) {
+        longest = entry.value;
+        slowest = entry.key;
+      }
+    }
+    return slowest;
+  }
+
+  static String bucketOf(Duration duration) {
     final milliseconds = duration.inMilliseconds;
     if (milliseconds < 100) {
       return '<100ms';
@@ -63,11 +115,48 @@ final class TracedSpan {
   /// Everything this measurement is allowed to carry. Deliberately built from
   /// closed enums and a bucket, so there is no field an account id, a room
   /// token, a URL or a file name could travel in.
-  Map<String, String> get tags => <String, String>{
-    'operation': operation.spanName,
-    'outcome': outcome.name,
-    'duration': durationBucket,
-  };
+  Map<String, String> get tags {
+    final tags = <String, String>{
+      'operation': operation.spanName,
+      'outcome': outcome.name,
+      'duration': durationBucket,
+    };
+    for (final entry in phases.entries) {
+      tags['phase.${entry.key.tagName}'] = bucketOf(entry.value);
+    }
+    final slowest = slowestPhase;
+    if (slowest != null) {
+      tags['slowest_phase'] = slowest.tagName;
+    }
+    return tags;
+  }
+}
+
+/// Times the steps inside one traced operation.
+///
+/// A step entered more than once — a retry, a loop — adds to what it already
+/// spent, so the total still says how much of the operation that step was.
+final class PhaseRecorder {
+  PhaseRecorder({DateTime Function() clock = DateTime.now}) : _clock = clock;
+
+  final DateTime Function() _clock;
+  final Map<TracedPhase, Duration> _spent = <TracedPhase, Duration>{};
+
+  Map<TracedPhase, Duration> get measured =>
+      Map<TracedPhase, Duration>.unmodifiable(_spent);
+
+  /// Runs [step] and adds its time to [phase]. A thrown error is timed the
+  /// same as a returned value and rethrown untouched: a step that fails
+  /// slowly is exactly the one worth seeing.
+  Future<T> record<T>(TracedPhase phase, Future<T> Function() step) async {
+    final started = _clock();
+    try {
+      return await step();
+    } finally {
+      _spent[phase] = (_spent[phase] ?? Duration.zero) +
+          _clock().difference(started);
+    }
+  }
 }
 
 typedef TracedSpanSink = void Function(TracedSpan span);
@@ -113,6 +202,27 @@ final class PerformanceTelemetry {
     }
   }
 
+  /// Runs [action], timing it and the steps it chooses to name.
+  ///
+  /// The recorder is handed in rather than taken from the ambient telemetry,
+  /// so the phases belong to this one run and cannot be mixed with another
+  /// sync happening at the same time.
+  Future<T> traceInPhases<T>(
+    TracedOperation operation,
+    Future<T> Function(PhaseRecorder phases) action,
+  ) async {
+    final started = _clock();
+    final recorder = PhaseRecorder(clock: _clock);
+    try {
+      final result = await action(recorder);
+      _finish(operation, started, TracedOutcome.completed, recorder.measured);
+      return result;
+    } on Object {
+      _finish(operation, started, TracedOutcome.failed, recorder.measured);
+      rethrow;
+    }
+  }
+
   /// Records an operation whose start and end are not one call — an upload,
   /// for instance, which is enqueued in one place and reaches its terminal
   /// phase in another.
@@ -120,7 +230,8 @@ final class PerformanceTelemetry {
     required TracedOperation operation,
     required DateTime started,
     required TracedOutcome outcome,
-  }) => _finish(operation, started, outcome);
+    Map<TracedPhase, Duration> phases = const <TracedPhase, Duration>{},
+  }) => _finish(operation, started, outcome, phases);
 
   /// Records an operation that ended without running to completion, such as a
   /// sync abandoned because the room was closed.
@@ -130,8 +241,9 @@ final class PerformanceTelemetry {
   void _finish(
     TracedOperation operation,
     DateTime started,
-    TracedOutcome outcome,
-  ) {
+    TracedOutcome outcome, [
+    Map<TracedPhase, Duration> phases = const <TracedPhase, Duration>{},
+  ]) {
     final now = _clock();
     final duration = now.difference(started);
     // A sync that finished quickly is the expected state, and there is one
@@ -150,7 +262,12 @@ final class PerformanceTelemetry {
     }
     _lastReported[operation] = now;
     _report(
-      TracedSpan(operation: operation, outcome: outcome, duration: duration),
+      TracedSpan(
+        operation: operation,
+        outcome: outcome,
+        duration: duration,
+        phases: phases,
+      ),
     );
   }
 
