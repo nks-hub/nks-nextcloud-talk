@@ -2,10 +2,7 @@
 
 Date of the last check: 3 September 2026.
 
-This document is a continuous distribution gate for a project licensed under
-`GPL-3.0-or-later`. The record is based on a specific lockfile and the license
-file of the downloaded package; the package description or a badge on a website
-is not enough on its own.
+This document is a continuous distribution gate for a project licensed under `GPL-3.0-or-later`. The record is based on a specific lockfile and the license file of the downloaded package; the package description or a badge on a website is not enough on its own.
 
 ## Direct runtime dependencies of `talk_protocol`
 
@@ -21,11 +18,7 @@ is not enough on its own.
 
 ## Direct Flutter runtime dependencies
 
-The following table covers the direct dependencies declared in
-`apps/mobile/pubspec.yaml`; `geolocator` and `pasteboard` are still missing from
-it and need to be added. The versions and archive SHA-256 come from
-`apps/mobile/pubspec.lock`; the licenses and their SHA-256 were verified in the
-corresponding downloaded package in the local Pub cache.
+The following table covers the direct dependencies declared in `apps/mobile/pubspec.yaml`; `geolocator` and `pasteboard` are still missing from it and need to be added. The versions and archive SHA-256 come from `apps/mobile/pubspec.lock`; the licenses and their SHA-256 were verified in the corresponding downloaded package in the local Pub cache.
 
 <!-- markdownlint-disable MD013 -->
 
@@ -64,39 +57,17 @@ corresponding downloaded package in the local Pub cache.
 
 <!-- markdownlint-enable MD013 -->
 
-All the licenses listed are permissive and compatible with distributing the
-application under `GPL-3.0-or-later`; their copyright notices and disclaimers
-must stay in the resulting third-party notice.
+All the licenses listed are permissive and compatible with distributing the application under `GPL-3.0-or-later`; their copyright notices and disclaimers must stay in the resulting third-party notice.
 
-The onboarding QR scanner is deliberately `camera` + `zxing2`, not
-`mobile_scanner`. The package `mobile_scanner` 7.4.0 is itself BSD-3-Clause, but
-on Android it pulls in `com.google.mlkit:barcode-scanning`,
-`…:barcode-scanning-common`, `com.google.mlkit:common`, `…:vision-common`,
-`…:vision-interfaces` and
-`com.google.android.gms:play-services-mlkit-barcode-scanning`. Their POM declares
-"ML Kit Terms of Service" — a proprietary license for which SPDX has no
-identifier and which the license gate does not know yet (verified on 3 September
-2026 from the POM at `dl.google.com/dl/android/maven2`). The pair `camera` +
-`zxing2` solves the same thing and adds not a single extra proprietary artifact
-into the APK.
+The onboarding QR scanner is deliberately `camera` + `zxing2`, not `mobile_scanner`. The package `mobile_scanner` 7.4.0 is itself BSD-3-Clause, but on Android it pulls in `com.google.mlkit:barcode-scanning`, `…:barcode-scanning-common`, `com.google.mlkit:common`, `…:vision-common`, `…:vision-interfaces` and `com.google.android.gms:play-services-mlkit-barcode-scanning`. Their POM declares "ML Kit Terms of Service" — a proprietary license for which SPDX has no identifier and which the license gate does not know yet (verified on 3 September 2026 from the POM at `dl.google.com/dl/android/maven2`). The pair `camera` + `zxing2` solves the same thing and adds not a single extra proprietary artifact into the APK.
 
-The table is complete for the current direct hosted Flutter packages. The Android
-release artifact is additionally covered by the automatic gate described below.
-For iOS the same artifact record still has to be created; this state is therefore
-not yet a complete multi-platform release clearance.
+The table is complete for the current direct hosted Flutter packages. The Android release artifact is additionally covered by the automatic gate described below. For iOS the same artifact record still has to be created; this state is therefore not yet a complete multi-platform release clearance.
 
-The direct SDK dependencies `flutter` and `flutter_localizations` come from
-Flutter 3.44.4, revision `ad70ec4617166f1c38e5d2bfd388af71fda14f06`. The root
-Flutter `LICENSE` is BSD-3-Clause with SHA-256
-`a3a9fd82f800a47377f7d3f60c60a5c91cae0495be8f329031e1448ce0f5dab9`.
-`talk_protocol` is an internal workspace package under the same project license,
-not a foreign distribution dependency.
+The direct SDK dependencies `flutter` and `flutter_localizations` come from Flutter 3.44.4, revision `ad70ec4617166f1c38e5d2bfd388af71fda14f06`. The root Flutter `LICENSE` is BSD-3-Clause with SHA-256 `a3a9fd82f800a47377f7d3f60c60a5c91cae0495be8f329031e1448ce0f5dab9`. `talk_protocol` is an internal workspace package under the same project license, not a foreign distribution dependency.
 
 ## Direct Android runtime dependencies for Web Push
 
-The following artifacts come from the current `debugRuntimeClasspath`. The SHA-256
-belongs to the AAR/JAR actually downloaded into the local Gradle cache; the
-SHA-256 of the license belongs to the file at the exact upstream tag.
+The following artifacts come from the current `debugRuntimeClasspath`. The SHA-256 belongs to the AAR/JAR actually downloaded into the local Gradle cache; the SHA-256 of the license belongs to the file at the exact upstream tag.
 
 <!-- markdownlint-disable MD013 -->
 
@@ -108,43 +79,17 @@ SHA-256 of the license belongs to the file at the exact upstream tag.
 
 <!-- markdownlint-enable MD013 -->
 
-`flutter_secure_storage` 11.0.0 brings in an unused `tink-android` 1.23.0. Its
-classes overlap with the Tink Core 1.23.0 required by the connector and the build
-would fail on duplicate classes. The application Gradle configuration therefore
-excludes only `tink-android`; the current dependency graph confirms a single Tink
-Core 1.23.0. The source of the Android part of `flutter_secure_storage` does not
-import the Tink API.
+`flutter_secure_storage` 11.0.0 brings in an unused `tink-android` 1.23.0. Its classes overlap with the Tink Core 1.23.0 required by the connector and the build would fail on duplicate classes. The application Gradle configuration therefore excludes only `tink-android`; the current dependency graph confirms a single Tink Core 1.23.0. The source of the Android part of `flutter_secure_storage` does not import the Tink API.
 
-Further transitive JVM dependencies of the connector (`gson`, `protobuf-java`,
-`jsr305`, Error Prone annotations) are covered by the exact Android release
-classpath, the CycloneDX SBOM and the notice embedded into the APK. The mere
-presence of the LGPL text, however, does not replace the distributor's final
-corresponding-source/relink clearance.
+Further transitive JVM dependencies of the connector (`gson`, `protobuf-java`, `jsr305`, Error Prone annotations) are covered by the exact Android release classpath, the CycloneDX SBOM and the notice embedded into the APK. The mere presence of the LGPL text, however, does not replace the distributor's final corresponding-source/relink clearance.
 
 ## LGPL-2.1 distributor: clearance
 
-Decided 2026-09-03. `embedded-fcm-distributor` 3.1.0 is LGPL-2.1 and is compiled
-into the APK, so §6 of the LGPL (the possibility of a relink) cannot be satisfied
-by shipping object files. The path the LGPL itself offers is §3: the library may
-be distributed under the GPL (version 2 or later) as part of a GPL work. NKS Talk
-is GPL-3.0-or-later, the distributor is therefore distributed within it under
-GPL-3.0-or-later and the obligation towards the recipient of a build is the
-complete corresponding source of the whole work — which covers the relink (the
-recipient can swap the library and build the work). The repository is private, so
-a build carries a WRITTEN OFFER: the Open source licences screen states
-GPL-3.0-or-later, the LGPL §3 conversion of the distributor and the availability
-of the complete source on request from whoever handed over the build
-(`diagnosticsLicensesLegalese`). The SBOM in the APK records the component as
-`LGPL-2.1-only` with a hashed license text; the conflict between the Maven POM
-(Apache-2.0) and the tag LICENSE (LGPL-2.1) is resolved by taking the STRICTER of
-the two, because a POM cannot broaden the license of the sources. The iOS build
-does not contain the distributor.
+Decided 2026-09-03. `embedded-fcm-distributor` 3.1.0 is LGPL-2.1 and is compiled into the APK, so §6 of the LGPL (the possibility of a relink) cannot be satisfied by shipping object files. The path the LGPL itself offers is §3: the library may be distributed under the GPL (version 2 or later) as part of a GPL work. NKS Talk is GPL-3.0-or-later, the distributor is therefore distributed within it under GPL-3.0-or-later and the obligation towards the recipient of a build is the complete corresponding source of the whole work — which covers the relink (the recipient can swap the library and build the work). The repository is private, so a build carries a WRITTEN OFFER: the Open source licences screen states GPL-3.0-or-later, the LGPL §3 conversion of the distributor and the availability of the complete source on request from whoever handed over the build (`diagnosticsLicensesLegalese`). The SBOM in the APK records the component as `LGPL-2.1-only` with a hashed license text; the conflict between the Maven POM (Apache-2.0) and the tag LICENSE (LGPL-2.1) is resolved by taking the STRICTER of the two, because a POM cannot broaden the license of the sources. The iOS build does not contain the distributor.
 
 ## Direct Android runtime dependencies for WebRTC calls
 
-`flutter_webrtc` 1.6.1 adds exactly two Maven artifacts to the Android runtime
-classpath. Both are declared in `release-licenses/components.tsv` and were
-verified against the POM in the local Gradle cache, not guessed.
+`flutter_webrtc` 1.6.1 adds exactly two Maven artifacts to the Android runtime classpath. Both are declared in `release-licenses/components.tsv` and were verified against the POM in the local Gradle cache, not guessed.
 
 <!-- markdownlint-disable MD013 -->
 
@@ -155,39 +100,17 @@ verified against the POM in the local Gradle cache, not guessed.
 
 <!-- markdownlint-enable MD013 -->
 
-JitPack (`https://jitpack.io`) is added to the repositories by the plugin's own
-`android/build.gradle`, not by this project. It is where `audioswitch` resolves
-from; nothing else in the graph uses it.
+JitPack (`https://jitpack.io`) is added to the repositories by the plugin's own `android/build.gradle`, not by this project. It is where `audioswitch` resolves from; nothing else in the graph uses it.
 
 ## The Android release artifact gate
 
-Commit `94a0987` added fail-closed generation from the exact
-`releaseRuntimeClasspath` and `pubspec.lock`. Every Maven artifact must be in
-`release-licenses/components.tsv`, every Pub package must be either in the
-generated Flutter `NOTICES.Z` or in a separate manifest, and every manually
-supplied notice is bound by SHA-256. The build embeds a CycloneDX 1.6 `SBOM.json`
-and `THIRD_PARTY_NOTICES.txt` into the release APK; the `assembleRelease`
-finalizer reopens the real APK and verifies completeness, the SPDX identifiers,
-duplicates, the integrity of the notice and the match with the plugin metadata.
+Commit `94a0987` added fail-closed generation from the exact `releaseRuntimeClasspath` and `pubspec.lock`. Every Maven artifact must be in `release-licenses/components.tsv`, every Pub package must be either in the generated Flutter `NOTICES.Z` or in a separate manifest, and every manually supplied notice is bound by SHA-256. The build embeds a CycloneDX 1.6 `SBOM.json` and `THIRD_PARTY_NOTICES.txt` into the release APK; the `assembleRelease` finalizer reopens the real APK and verifies completeness, the SPDX identifiers, duplicates, the integrity of the notice and the match with the plugin metadata.
 
-Commit `105302e` additionally binds the Gradle task to the contents of
-`android-classes-jar` as well as to the exact Maven coordinates of the runtime
-graph. Adding or changing a dependency therefore invalidates the generated assets
-even with an unchanged manifest. The regression run first proved a fail-closed
-missing `play-services-location:21.2.0`, then invalidation by an artificial change
-of the graph, and finally two correct `UP-TO-DATE` runs of a stable graph.
+Commit `105302e` additionally binds the Gradle task to the contents of `android-classes-jar` as well as to the exact Maven coordinates of the runtime graph. Adding or changing a dependency therefore invalidates the generated assets even with an unchanged manifest. The regression run first proved a fail-closed missing `play-services-location:21.2.0`, then invalidation by an artificial change of the graph, and finally two correct `UP-TO-DATE` runs of a stable graph.
 
-Build 33 passed with 145 Flutter packages and 112 Android runtime components. The
-validator has 17/17 unit tests, `bundleRelease` passed 721 tasks and the embedded
-SBOM contains `pkg:maven/com.google.android.gms/play-services-location@21.2.0`.
-The gate is Android-only; it does not yet cover the iOS artifact and its native
-dependency graph.
+Build 33 passed with 145 Flutter packages and 112 Android runtime components. The validator has 17/17 unit tests, `bundleRelease` passed 721 tasks and the embedded SBOM contains `pkg:maven/com.google.android.gms/play-services-location@21.2.0`. The gate is Android-only; it does not yet cover the iOS artifact and its native dependency graph.
 
-After `flutter_webrtc` was added, `flutter build apk --release` reported
-"release-license gate passed: 160 Flutter packages, 134 Android runtime
-components" and produced a 123.1 MB release APK. The two extra Maven components
-are the WebRTC ones above; the size is libwebrtc, which ships native code for
-every ABI in the fat APK.
+After `flutter_webrtc` was added, `flutter build apk --release` reported "release-license gate passed: 160 Flutter packages, 134 Android runtime components" and produced a 123.1 MB release APK. The two extra Maven components are the WebRTC ones above; the size is libwebrtc, which ships native code for every ABI in the fat APK.
 
 ## Transitive runtime dependencies
 
@@ -217,70 +140,33 @@ every ABI in the fat APK.
 
 <!-- markdownlint-enable MD013 -->
 
-`flutter_test` comes from the same Flutter SDK and is only a dev dependency in
-the application. `lints` 6.1.0 and `test` 1.31.2 from `talk_protocol` use the
-BSD-3-Clause license of the Dart project; the exact transitive versions are held
-by the respective lockfile.
+`flutter_test` comes from the same Flutter SDK and is only a dev dependency in the application. `lints` 6.1.0 and `test` 1.31.2 from `talk_protocol` use the BSD-3-Clause license of the Dart project; the exact transitive versions are held by the respective lockfile.
 
 ## The pixel evidence tool
 
-`apps/mobile/tool/requirements.txt` pins `Pillow==12.1.0` exactly, but does not
-contain a hash pin yet. The verified PyPI wheel
-`pillow-12.1.0-cp312-cp312-win_amd64.whl` has SHA-256
-`d70534cea9e7966169ad29a903b99fc507e932069a881d0965a1a84bb57f6c6d`. Its metadata
-declare `MIT-CMU`; the bundled `LICENSE` has SHA-256
-`926df5f888a7337fd4126a435202edf2847312be81a167df91a6d70cfa3f2ed3` and preserves
-the notices of PIL, Secret Labs, Fredrik Lundh and the Pillow contributors.
-Pillow serves only the host-side screenshot/WCAG harness and is not part of the
-mobile or the desktop runtime artifact.
+`apps/mobile/tool/requirements.txt` pins `Pillow==12.1.0` exactly, but does not contain a hash pin yet. The verified PyPI wheel `pillow-12.1.0-cp312-cp312-win_amd64.whl` has SHA-256 `d70534cea9e7966169ad29a903b99fc507e932069a881d0965a1a84bb57f6c6d`. Its metadata declare `MIT-CMU`; the bundled `LICENSE` has SHA-256 `926df5f888a7337fd4126a435202edf2847312be81a167df91a6d70cfa3f2ed3` and preserves the notices of PIL, Secret Labs, Fredrik Lundh and the Pillow contributors. Pillow serves only the host-side screenshot/WCAG harness and is not part of the mobile or the desktop runtime artifact.
 
 ## Tooling of the executable contracts
 
-`contracts/push-client` reuses the same exactly pinned Python tools as the
-existing `contracts/push-gateway`; it adds no mobile runtime dependency. The
-locally installed metadata of 23 August 2026 confirm:
+`contracts/push-client` reuses the same exactly pinned Python tools as the existing `contracts/push-gateway`; it adds no mobile runtime dependency. The locally installed metadata of 23 August 2026 confirm:
 
 - `cryptography` 50.0.0: `Apache-2.0 OR BSD-3-Clause`;
 - `jsonschema` 4.26.0: `MIT`;
 - `openapi-spec-validator` 0.9.0: `Apache-2.0`.
 
-These packages serve only local and CI generation and verification of the
-synthetic fixtures. They are not part of the future Android/iOS artifact. Their
-exact versions are in `contracts/push-client/requirements.txt` and
-`contracts/push-gateway/requirements.txt`. A clean installation of both identical
-sets and `pip-audit` on 23 August 2026 found no known vulnerability. The release
-notice will be built from the final distributed artifacts, not from the global
-Python environment.
+These packages serve only local and CI generation and verification of the synthetic fixtures. They are not part of the future Android/iOS artifact. Their exact versions are in `contracts/push-client/requirements.txt` and `contracts/push-gateway/requirements.txt`. A clean installation of both identical sets and `pip-audit` on 23 August 2026 found no known vulnerability. The release notice will be built from the final distributed artifacts, not from the global Python environment.
 
 ## Assets and adopted code
 
-No image, font, sound or implementation code from the official Talk clients was
-added. The platform scaffolding does, however, contain standard Flutter assets
-that have to be recorded:
+No image, font, sound or implementation code from the official Talk clients was added. The platform scaffolding does, however, contain standard Flutter assets that have to be recorded:
 
-- all 31 PNG/ICO icons and launch images in the Android, iOS, macOS and Windows
-  targets are, by SHA-256, byte-for-byte identical with the source in Flutter SDK
-  3.44.4 or in its exactly pinned package `flutter_template_images` 5.0.0;
-- `flutter_template_images` 5.0.0 has archive SHA-256
-  `0120589a786dbae4e86af1f61748baccd8530abd56a60e7a13479647a75222fe`
-  and a BSD-3-Clause `LICENSE` with SHA-256
-  `89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9`;
-- the Android launch XML, the iOS storyboard and the other generated platform
-  files come from the same Flutter template revision, not from the Talk clients;
-- the source `CupertinoIcons.ttf` from `cupertino_icons` has SHA-256
-  `67c44fe9183b002e79dde7f6977e2988661c9a3e4a3c5fce968787efdbed823c`
-  and follows the MIT license of the package listed above;
-- `uses-material-design: true` uses the SDK source `MaterialIcons-Regular.otf`
-  with SHA-256
-  `d9865b671a09d683d13a863089d8825e0f61a37696ce5d7d448bc8023aa62453`;
-  the bundled CC-BY-4.0 text has SHA-256
-  `be698262aecd042c0de6f886cc0af622f8def446462026992cc530275d8a9e74`
-  and the release notice must preserve its attribution conditions.
+- all 31 PNG/ICO icons and launch images in the Android, iOS, macOS and Windows targets are, by SHA-256, byte-for-byte identical with the source in Flutter SDK 3.44.4 or in its exactly pinned package `flutter_template_images` 5.0.0;
+- `flutter_template_images` 5.0.0 has archive SHA-256 `0120589a786dbae4e86af1f61748baccd8530abd56a60e7a13479647a75222fe` and a BSD-3-Clause `LICENSE` with SHA-256 `89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9`;
+- the Android launch XML, the iOS storyboard and the other generated platform files come from the same Flutter template revision, not from the Talk clients;
+- the source `CupertinoIcons.ttf` from `cupertino_icons` has SHA-256 `67c44fe9183b002e79dde7f6977e2988661c9a3e4a3c5fce968787efdbed823c` and follows the MIT license of the package listed above;
+- `uses-material-design: true` uses the SDK source `MaterialIcons-Regular.otf` with SHA-256 `d9865b671a09d683d13a863089d8825e0f61a37696ce5d7d448bc8023aa62453`; the bundled CC-BY-4.0 text has SHA-256 `be698262aecd042c0de6f886cc0af622f8def446462026992cc530275d8a9e74` and the release notice must preserve its attribution conditions.
 
-Our own brand mark is drawn by application code and adds no separate binary
-asset. A debug/release build may tree-shake unused icons or font glyphs; the real
-contents and notices are therefore derived again from the final artifacts. The
-root GPL text does not change.
+Our own brand mark is drawn by application code and adds no separate binary asset. A debug/release build may tree-shake unused icons or font glyphs; the real contents and notices are therefore derived again from the final artifacts. The root GPL text does not change.
 
 ## Gate for further changes
 
@@ -289,10 +175,7 @@ Before a commit, every new direct dependency or asset must document:
 1. the exact version and integrity from the lockfile;
 2. the whole license text from the artifact actually downloaded;
 3. GPL compatibility and the mandatory copyright/notice;
-4. whether it is part of the distributed runtime, only a build tool, or a dev
-   test;
+4. whether it is part of the distributed runtime, only a build tool, or a dev test;
 5. the origin of the asset and the permitted modifications or redistribution.
 
-Before a release, a complete third-party notice is created from the final Android
-and iOS artifacts. This continuously maintained file does not replace a check of
-the transitive runtime dependencies or of the resulting binary package.
+Before a release, a complete third-party notice is created from the final Android and iOS artifacts. This continuously maintained file does not replace a check of the transitive runtime dependencies or of the resulting binary package.
