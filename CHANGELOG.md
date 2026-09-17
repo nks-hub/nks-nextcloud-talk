@@ -10,6 +10,8 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+- Fixed: sharing something into the application listed every synced thread under its conversation, so the list of places to share to was several times longer than the list of conversations. Only conversations are offered now.
+
 - Fixed: a share the application never finished came back for good. Killing the application while the target picker was open left the item in the native inbox, and every later start replayed it, so the picker asked for a conversation for something shared days earlier; opening the application from the recent-tasks list did the same on Android, because the system hands the task its original share intent again. A share that has been waiting for more than an hour is now dropped with its copy of the file, and an intent restored from the task history is ignored.
 
 ## 1.0.8 (74) — 12 September 2026
