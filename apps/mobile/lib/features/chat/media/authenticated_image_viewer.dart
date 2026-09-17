@@ -130,6 +130,9 @@ final class _AuthenticatedImageViewerState
           uri: smaller,
         );
       }
+      // No preview in any size: the server never produced one for this file.
+      // The attachment is the picture, so it is shown instead of an error.
+      image ??= await _loadOriginal();
       return image;
     } finally {
       if (mounted) {
@@ -137,6 +140,20 @@ final class _AuthenticatedImageViewerState
           _loaded = image;
         });
       }
+    }
+  }
+
+  Future<ChatMediaImage?> _loadOriginal() async {
+    if (!widget.originalContentType.startsWith('image/')) return null;
+    try {
+      final file = await widget.repository.loadOriginalFile(
+        account: widget.account,
+        uri: widget.originalUri,
+        expectedContentType: widget.originalContentType,
+      );
+      return ChatMediaImage(body: file.body, contentType: file.contentType);
+    } on ChatMediaRepositoryException {
+      return null;
     }
   }
 

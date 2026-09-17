@@ -1,5 +1,10 @@
 part of 'chat_message_content.dart';
 
+/// Widest a bubble picture is ever decoded to. A preview arrives at 1024, but
+/// the original stands in when the server has none, and a phone photo decoded
+/// at 4032 wide costs about forty megabytes of bitmap for a thumbnail.
+const int _maximumDecodedPreviewWidth = 1280;
+
 final class _InlineChatImagePreview extends StatefulWidget {
   const _InlineChatImagePreview({
     super.key,
@@ -67,8 +72,10 @@ final class _InlineChatImagePreviewState
       _decodedSize = Size(cached.width.toDouble(), cached.height.toDouble());
       return;
     }
-    _stream = MemoryImage(
-      image.body,
+    _stream = ResizeImage(
+      MemoryImage(image.body),
+      width: _maximumDecodedPreviewWidth,
+      allowUpscaling: false,
     ).resolve(createLocalImageConfiguration(context));
     _listener = ImageStreamListener(
       (info, synchronous) {
@@ -195,6 +202,7 @@ final class _InlineChatImagePreviewState
               child: Image.memory(
                 image.body,
                 key: Key('chat-image-${widget.messageId}-${widget.index}'),
+                cacheWidth: _maximumDecodedPreviewWidth,
                 fit: BoxFit.contain,
                 gaplessPlayback: true,
                 excludeFromSemantics: true,

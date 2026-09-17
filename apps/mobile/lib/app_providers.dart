@@ -832,14 +832,32 @@ final class ConversationAvatarProviderKey {
 /// the running provider and refetched the image; that is what made pictures
 /// and GIFs blink every few seconds while a room was open.
 final class ChatMediaProviderKey {
-  const ChatMediaProviderKey({required this.account, required this.uri});
+  const ChatMediaProviderKey({
+    required this.account,
+    required this.uri,
+    this.originalUri,
+    this.originalContentType,
+  });
 
   final StoredAccount account;
   final Uri uri;
 
+  /// The attachment itself, used when the server has no preview of it. A
+  /// Nextcloud instance can fail to produce one and then answer 404 for every
+  /// box forever — measured on two photos of the reference instance on
+  /// 17 September 2026 — and the picture is there to be shown either way.
+  final Uri? originalUri;
+  final String? originalContentType;
+
   @override
-  int get hashCode =>
-      Object.hash(account.id, account.serverUrl, account.loginName, uri);
+  int get hashCode => Object.hash(
+    account.id,
+    account.serverUrl,
+    account.loginName,
+    uri,
+    originalUri,
+    originalContentType,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -848,7 +866,9 @@ final class ChatMediaProviderKey {
           other.account.id == account.id &&
           other.account.serverUrl == account.serverUrl &&
           other.account.loginName == account.loginName &&
-          other.uri == uri);
+          other.uri == uri &&
+          other.originalUri == originalUri &&
+          other.originalContentType == originalContentType);
 }
 
 /// Preview image of a link reference, fetched from the account's own server.
@@ -914,10 +934,9 @@ final chatMediaProvider = FutureProvider.autoDispose
           cache.write(cacheKey, persisted);
           return persisted;
         }
-        final loaded = await repository.loadPreview(
-          account: key.account,
-          uri: key.uri,
-        );
+        final loaded =
+            await repository.loadPreview(account: key.account, uri: key.uri) ??
+            await _loadOriginalAsPreview(repository, key);
         if (loaded != null) {
           cache.write(cacheKey, loaded);
           await disk.write(
@@ -929,6 +948,31 @@ final chatMediaProvider = FutureProvider.autoDispose
         return loaded;
       });
     });
+
+/// The attachment itself, read as the picture, for a file the server has no
+/// preview of. A failure here is the same as no preview at all: the bubble
+/// already says the image could not be loaded and offers a retry.
+Future<ChatMediaImage?> _loadOriginalAsPreview(
+  ChatMediaRepository repository,
+  ChatMediaProviderKey key,
+) async {
+  final uri = key.originalUri;
+  final contentType = key.originalContentType;
+  if (uri == null || contentType == null || !contentType.startsWith('image/')) {
+    return null;
+  }
+  try {
+    final file = await repository.loadOriginalFile(
+      account: key.account,
+      uri: uri,
+      expectedContentType: contentType,
+      maximumBytes: ChatMediaRepository.maximumPreviewFallbackBytes,
+    );
+    return ChatMediaImage(body: file.body, contentType: file.contentType);
+  } on ChatMediaRepositoryException {
+    return null;
+  }
+}
 
 final chatMessagesProvider = StreamProvider.autoDispose
     .family<List<CachedChatMessage>, ChatRoomProviderKey>((ref, key) {

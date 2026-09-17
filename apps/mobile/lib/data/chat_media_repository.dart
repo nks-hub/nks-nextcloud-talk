@@ -77,6 +77,11 @@ final class ChatMediaRepository {
        _wait = wait ?? Future<void>.delayed;
 
   static const int _maximumPreviewBytes = 8 * 1024 * 1024;
+
+  /// Ceiling for an original stood in for a preview the server does not have.
+  /// The bytes are decoded into a chat bubble, so this is the preview budget,
+  /// not the export one.
+  static const int maximumPreviewFallbackBytes = _maximumPreviewBytes;
   static const int _maximumVoiceBytes = 32 * 1024 * 1024;
   static const int _maximumOriginalBytes = 64 * 1024 * 1024;
 
@@ -357,7 +362,9 @@ final class ChatMediaRepository {
     required Uri uri,
     required String expectedContentType,
     ChatDownloadProgress? onProgress,
+    int? maximumBytes,
   }) async {
+    final limit = maximumBytes ?? _maximumOriginalBytes;
     final server = ServerBase.parse(account.serverUrl);
     final expected = _normalizedMediaType(expectedContentType);
     if (!_isAllowedOriginalUri(server, account.loginName, uri)) {
@@ -401,7 +408,7 @@ final class ChatMediaRepository {
         ChatMediaRepositoryError.unavailable,
       );
     }
-    if ((response.contentLength ?? 0) > _maximumOriginalBytes) {
+    if ((response.contentLength ?? 0) > limit) {
       await _discard(response);
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.responseTooLarge,
@@ -423,7 +430,7 @@ final class ChatMediaRepository {
     onProgress?.call(0, response.contentLength);
     final body = await _readBoundedBody(
       response,
-      maximumBytes: _maximumOriginalBytes,
+      maximumBytes: limit,
       onProgress: onProgress,
       total: response.contentLength,
     );
