@@ -1,3 +1,3 @@
-Fixed: half a screen after picking a picture from the gallery.
+Fixed: pictures that would not load, and a share that kept coming back.
 
-Picking a picture with the keyboard open left the app drawing into the top half of the screen only. The dead space below it stayed there on every other screen too, and cleared up only once the keyboard had been opened and closed again. The window's real measurements are now restored the moment the app comes back to the front.
+A photo the server has no preview of said it could not be loaded, although the file itself was fine. The attachment is now downloaded and shown instead, in the bubble and full screen alike. A share you never finished is no longer offered again at every later start, and the list of places to share to holds conversations only, not their threads.

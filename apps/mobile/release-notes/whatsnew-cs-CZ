@@ -1,3 +1,3 @@
-Opraveno: půlka obrazovky po výběru obrázku z galerie.
+Opraveno: obrázky, které nešly načíst, a sdílení, které se vracelo.
 
-Když jste s otevřenou klávesnicí vybrali obrázek z galerie, aplikace se dál vykreslovala jen do horní poloviny obrazovky a mrtvá plocha pod ní zůstala i po přechodu jinam. Uklidilo se to až po dalším otevření a zavření klávesnice. Skutečné rozměry okna se teď obnoví, jakmile se aplikace vrátí do popředí.
+Fotka, ke které server nemá náhled, hlásila, že ji nelze načíst, i když soubor byl v pořádku. Nově se v takovém případě stáhne a zobrazí příloha sama, v bublině i na celou obrazovku. Sdílení do aplikace, které jste nedokončili, se už nenabízí donekonečna při každém dalším spuštění. A ve výběru, kam sdílet, jsou jen konverzace, ne jejich vlákna.

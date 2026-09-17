@@ -10,6 +10,8 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+## 1.0.9 (75) — 17 September 2026
+
 - Fixed: a picture the server holds no preview of said it could not be loaded, although the file itself was there and intact. A Nextcloud instance can fail to produce a preview of a photo and then answer 404 for every size of it for good, which is what two photos shared from a phone ran into. The attachment itself is now downloaded and shown when no preview of any size exists, in the bubble and full screen alike, and a bubble picture is decoded at no more than 1280 pixels wide so that standing in for the preview with a full phone photo does not cost tens of megabytes of memory per picture.
 
 - Fixed: sharing something into the application listed every synced thread under its conversation, so the list of places to share to was several times longer than the list of conversations. Only conversations are offered now.
