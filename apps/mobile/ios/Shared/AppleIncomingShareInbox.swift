@@ -43,6 +43,7 @@ final class AppleIncomingShareInbox {
 
   private static let maximumBytes: Int64 = 512 * 1024 * 1024
   private static let maximumPending = 16
+  private static let maximumPendingAgeMillis: Int64 = 60 * 60 * 1_000
   private static let maximumTextLength = 32_768
   private static let maximumCaptionLength = 4_000
   private static let copyBufferBytes = 64 * 1024
@@ -161,6 +162,10 @@ final class AppleIncomingShareInbox {
     }
   }
 
+  /// Shares still waiting to be sent, oldest first. An entry the app never got
+  /// to finish - it was killed while the picker was open - is dropped once it
+  /// is older than `maximumPendingAgeMillis` instead of being offered again at
+  /// every later start.
   func pending() -> [AppleIncomingShare] {
     guard let files = try? fileManager.contentsOfDirectory(
       at: root,
@@ -169,9 +174,16 @@ final class AppleIncomingShareInbox {
     ) else {
       return []
     }
+    let oldestAccepted = Int64(now().timeIntervalSince1970 * 1_000)
+      - Self.maximumPendingAgeMillis
     return files
       .filter { $0.pathExtension == "json" }
       .compactMap(readMetadata)
+      .filter { share in
+        guard share.createdAtMillis < oldestAccepted else { return true }
+        complete(id: share.id)
+        return false
+      }
       .sorted { $0.createdAtMillis < $1.createdAtMillis }
       .prefix(Self.maximumPending)
       .map { $0 }

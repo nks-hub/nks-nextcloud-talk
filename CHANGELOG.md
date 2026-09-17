@@ -10,6 +10,8 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+- Fixed: a share the application never finished came back for good. Killing the application while the target picker was open left the item in the native inbox, and every later start replayed it, so the picker asked for a conversation for something shared days earlier; opening the application from the recent-tasks list did the same on Android, because the system hands the task its original share intent again. A share that has been waiting for more than an hour is now dropped with its copy of the file, and an intent restored from the task history is ignored.
+
 ## 1.0.8 (74) — 12 September 2026
 
 - Fixed: after picking a picture from the gallery with the keyboard open, the whole application went on drawing into the top half of the screen, with dead space below it, and stayed that way on every screen until the keyboard had been opened and closed again. Flutter holds window insets back while the keyboard animates so the layout can move with it, and it does that by swallowing every insets update until the animation ends. Samsung's keyboard starts that animation and never ends it when the application is paused in the middle of it, which is exactly what opening the picker does, so nothing the window reported ever reached the layout again. The real insets are now put back the moment the window comes back to the front.

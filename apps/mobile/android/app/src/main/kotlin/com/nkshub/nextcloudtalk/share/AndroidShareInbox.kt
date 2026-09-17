@@ -60,6 +60,12 @@ internal class AndroidShareInbox(
         if (source.action != Intent.ACTION_SEND) {
             return AndroidShareCaptureResult.Ignored
         }
+        // Launching the app from the recent-tasks list hands back the intent
+        // the task was started with, so a share handled days ago arrived again
+        // on every relaunch and the picker opened over a stale item.
+        if (source.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) {
+            return AndroidShareCaptureResult.Ignored
+        }
         val existingId = source.getStringExtra(EXTRA_DELIVERY_ID)
         if (existingId != null) {
             val existing = read(existingId)
@@ -132,10 +138,25 @@ internal class AndroidShareInbox(
         }
     }
 
+    /**
+     * Shares still waiting to be sent, oldest first. An entry the app never
+     * got to finish - it was killed while the picker was open - is dropped
+     * once it is older than [MAXIMUM_PENDING_AGE_MILLIS] instead of being
+     * offered again at every later start.
+     */
     fun pending(): List<AndroidIncomingShare> {
         val files = root.listFiles { file -> file.name.endsWith(METADATA_SUFFIX) }
             ?: return emptyList()
+        val oldestAccepted = clock() - MAXIMUM_PENDING_AGE_MILLIS
         return files.mapNotNull { file -> readMetadata(file) }
+            .filter { share ->
+                if (share.createdAtMillis >= oldestAccepted) {
+                    true
+                } else {
+                    removeFiles(share.id)
+                    false
+                }
+            }
             .sortedBy(AndroidIncomingShare::createdAtMillis)
             .take(MAXIMUM_PENDING_SHARES)
     }
@@ -323,6 +344,7 @@ internal class AndroidShareInbox(
         private const val MAXIMUM_TEXT_LENGTH = 32768
         private const val MAXIMUM_FILE_CAPTION_LENGTH = 4000
         private const val MAXIMUM_PENDING_SHARES = 16
+        private const val MAXIMUM_PENDING_AGE_MILLIS = 60L * 60 * 1000
         private const val MAXIMUM_FILE_BYTES = 512L * 1024 * 1024
         private const val EXTRA_DELIVERY_ID = "com.nkshub.nextcloudtalk.share.DELIVERY_ID"
         private val ID_PATTERN = Regex(

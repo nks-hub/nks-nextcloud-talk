@@ -103,6 +103,28 @@ final class AppleIncomingShareInboxTests: XCTestCase {
     XCTAssertTrue(try AppleIncomingShareInbox(rootDirectory: root).pending().isEmpty)
   }
 
+  func testPendingShareOlderThanAnHourIsDroppedAndDeleted() throws {
+    var now = Date(timeIntervalSince1970: 1_700_000_000)
+    let inbox = try AppleIncomingShareInbox(rootDirectory: root, now: { now })
+    let captured = try inbox.capture(
+      text: "abandoned",
+      fileURL: nil,
+      mimeType: nil,
+      displayName: nil
+    )
+
+    now = now.addingTimeInterval(59 * 60)
+    XCTAssertEqual(inbox.pending().count, 1)
+
+    now = now.addingTimeInterval(2 * 60)
+    XCTAssertTrue(inbox.pending().isEmpty)
+    XCTAssertFalse(
+      FileManager.default.fileExists(
+        atPath: root.appendingPathComponent("\(captured.share.id).json").path
+      )
+    )
+  }
+
   func testInterruptedTemporaryFilesAreRemovedOnStartup() throws {
     let payload = root.appendingPathComponent("stale.payload.tmp")
     let metadata = root.appendingPathComponent("stale.json.tmp")

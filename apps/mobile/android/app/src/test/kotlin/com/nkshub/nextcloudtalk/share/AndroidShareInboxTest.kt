@@ -167,6 +167,42 @@ class AndroidShareInboxTest {
     }
 
     @Test
+    fun intentRestoredFromRecentTasksIsIgnored() {
+        val inbox = inbox()
+        val intent = Intent(Intent.ACTION_SEND)
+            .setType("text/plain")
+            .putExtra(Intent.EXTRA_TEXT, "yesterday")
+            .setFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)
+
+        assertEquals(AndroidShareCaptureResult.Ignored, inbox.capture(intent))
+        assertTrue(inbox.pending().isEmpty())
+    }
+
+    @Test
+    fun pendingShareOlderThanAnHourIsDroppedAndDeleted() {
+        var now = 1_700_000_000_000L
+        val inbox = AndroidShareInbox(
+            context = context,
+            idFactory = { "00000000-0000-0000-0000-${(++nextId).toString().padStart(12, '0')}" },
+            clock = { now },
+        )
+        val accepted = inbox.capture(
+            Intent(Intent.ACTION_SEND)
+                .setType("text/plain")
+                .putExtra(Intent.EXTRA_TEXT, "abandoned"),
+        ) as AndroidShareCaptureResult.Accepted
+
+        now += 59 * 60 * 1000L
+        assertEquals(1, inbox.pending().size)
+
+        now += 2 * 60 * 1000L
+        assertTrue(inbox.pending().isEmpty())
+        assertFalse(
+            File(context.noBackupFilesDir, "share-inbox-v1/${accepted.share.id}.json").exists(),
+        )
+    }
+
+    @Test
     fun completingShareDeletesMetadataAndPayload() {
         val uri = provider.put("document.pdf", "application/pdf", byteArrayOf(4, 2))
         val inbox = inbox()
