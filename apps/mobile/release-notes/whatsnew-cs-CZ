@@ -1,3 +1,3 @@
-Opraveno: obrázky, které nešly načíst, a sdílení, které se vracelo.
+Opraveno: příčina náhledů, které se nikdy nenačetly.
 
-Fotka, ke které server nemá náhled, hlásila, že ji nelze načíst, i když soubor byl v pořádku. Nově se v takovém případě stáhne a zobrazí příloha sama, v bublině i na celou obrazovku. Sdílení do aplikace, které jste nedokončili, se už nenabízí donekonečna při každém dalším spuštění. A ve výběru, kam sdílet, jsou jen konverzace, ne jejich vlákna.
+Aplikace si od serveru říkala o dvě velikosti téže fotky najednou — malou do bubliny a velkou do otevřeného obrázku. Nextcloud na takovou dvojici umí odpovědět chybou a přitom smazat náhled v plné velikosti, ze kterého všechny ostatní velikosti vznikají; fotka pak už nikdy nešla načíst. Teď se aplikace ptá vždy jen na jednu velikost naráz.
