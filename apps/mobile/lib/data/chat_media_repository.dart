@@ -88,6 +88,22 @@ final class ChatMediaRepository {
   final CredentialVault _credentials;
   final http.Client _client;
   final bool _ownsClient;
+
+  /// One preview request per file at a time, keyed by account and file id.
+  ///
+  /// Measured against Nextcloud 34.0.3 on 18 September 2026: two preview
+  /// requests for the same freshly uploaded picture, arriving in the same
+  /// second, make the server answer one of them 500 — and sometimes leave the
+  /// file permanently broken, because the crashing request deletes the shared
+  /// maximum-size preview while the database row for it stays behind. Every
+  /// size other than the one that survived then answers 404 for good, which is
+  /// exactly what two photos in a conversation ran into.
+  ///
+  /// The collision is the server's bug, but this client used to supply it: the
+  /// bubble asks for 1024, the opened picture for 2048, and a 500 is retried a
+  /// second later while the first attempt may still be generating. Asking for
+  /// one size at a time removes our half of it.
+  final Map<String, Future<void>> _previewGates = <String, Future<void>>{};
   final Duration requestTimeout;
 
   /// How long to wait before asking again for a preview the server has not
@@ -223,6 +239,31 @@ final class ChatMediaRepository {
         ChatMediaRepositoryError.invalidUri,
       );
     }
+    return _oneAtATimePerFile(
+      '${account.id}|${uri.queryParameters['fileId']}',
+      () => _loadPreviewAttempts(account: account, uri: uri),
+    );
+  }
+
+  /// Runs [action] after whatever is already queued for [key], so that two
+  /// sizes of the same picture never reach the server together.
+  Future<T> _oneAtATimePerFile<T>(String key, Future<T> Function() action) {
+    final previous = _previewGates[key];
+    final gate = Completer<void>();
+    _previewGates[key] = gate.future;
+    Future<T> run() => action().whenComplete(() {
+      if (identical(_previewGates[key], gate.future)) {
+        _previewGates.remove(key);
+      }
+      gate.complete();
+    });
+    return previous == null ? run() : previous.then((_) => run());
+  }
+
+  Future<ChatMediaImage?> _loadPreviewAttempts({
+    required StoredAccount account,
+    required Uri uri,
+  }) async {
     for (var attempt = 0; ; attempt++) {
       try {
         return await _loadImage(account: account, uri: uri);

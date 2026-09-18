@@ -56,6 +56,62 @@ void main() {
     ]);
   });
 
+  test('two sizes of the same picture never reach the server together',
+      () async {
+    var inFlight = 0;
+    var overlaps = 0;
+    final repository = _repository((request) async {
+      inFlight++;
+      if (inFlight > 1) overlaps++;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      inFlight--;
+      return http.StreamedResponse(
+        Stream.value(_jpeg),
+        200,
+        headers: {'content-type': 'image/jpeg'},
+      );
+    });
+
+    await Future.wait([
+      repository.loadPreview(account: _account, uri: _previewUri),
+      repository.loadPreview(account: _account, uri: _fullScreenUri),
+      repository.loadPreview(account: _account, uri: _previewUri),
+    ]);
+
+    expect(overlaps, 0);
+  });
+
+  test('pictures that are not the same file still load side by side', () async {
+    var peak = 0;
+    var inFlight = 0;
+    final repository = _repository((request) async {
+      inFlight++;
+      peak = peak > inFlight ? peak : inFlight;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      inFlight--;
+      return http.StreamedResponse(
+        Stream.value(_jpeg),
+        200,
+        headers: {'content-type': 'image/jpeg'},
+      );
+    });
+
+    await Future.wait([
+      repository.loadPreview(account: _account, uri: _previewUri),
+      repository.loadPreview(
+        account: _account,
+        uri: _previewUri.replace(
+          queryParameters: <String, String>{
+            ..._previewUri.queryParameters,
+            'fileId': '1183331',
+          },
+        ),
+      ),
+    ]);
+
+    expect(peak, 2, reason: 'the gate is per file, not a global queue');
+  });
+
   test('without an original the missing preview stays missing', () async {
     final container = _container(
       (request) async => http.StreamedResponse(const Stream.empty(), 404),
@@ -70,6 +126,20 @@ void main() {
 
     expect(image, isNull);
   });
+}
+
+ChatMediaRepository _repository(
+  Future<http.StreamedResponse> Function(http.BaseRequest request) handler,
+) {
+  final vault = MemoryCredentialVault()
+    ..values[_account.id] = 'fixture-app-password';
+  final repository = ChatMediaRepository(
+    vault,
+    client: _StreamingClient(handler),
+    previewRetries: const <Duration>[],
+  );
+  addTearDown(repository.close);
+  return repository;
 }
 
 ProviderContainer _container(
@@ -124,6 +194,14 @@ final Uint8List _jpeg = Uint8List.fromList(const [
 final Uri _previewUri = Uri.parse(
   'https://cloud.example.invalid/index.php/core/preview'
   '?fileId=1183325&x=1024&y=1024&a=1',
+);
+
+final Uri _fullScreenUri = _previewUri.replace(
+  queryParameters: <String, String>{
+    ..._previewUri.queryParameters,
+    'x': '2048',
+    'y': '2048',
+  },
 );
 
 final Uri _originalUri = Uri.parse(

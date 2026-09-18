@@ -10,6 +10,8 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+- Fixed: asking the server for two sizes of the same picture at once. The bubble asks for 1024 pixels, the opened picture for 2048, and a failed request was retried a second later while the first one could still be running. Measured against Nextcloud 34.0.3: two preview requests for the same freshly uploaded photo arriving together make the server answer one of them with an error, and that error can delete the full-size preview every other size is derived from while the database still records it — after which every size but the one that survived answers "not found" for good. That is what left two photos in a conversation unable to load. The server's race is not ours to fix, but supplying it was: this client now asks for one size of a picture at a time.
+
 ## 1.0.9 (75) — 17 September 2026
 
 - Fixed: a picture the server holds no preview of said it could not be loaded, although the file itself was there and intact. A Nextcloud instance can fail to produce a preview of a photo and then answer 404 for every size of it for good, which is what two photos shared from a phone ran into. The attachment itself is now downloaded and shown when no preview of any size exists, in the bubble and full screen alike, and a bubble picture is decoded at no more than 1280 pixels wide so that standing in for the preview with a full phone photo does not cost tens of megabytes of memory per picture.
