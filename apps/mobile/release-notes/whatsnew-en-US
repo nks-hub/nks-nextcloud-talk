@@ -1,3 +1,3 @@
-Fixed: no notification of messages that arrived after the app was closed.
+Fixed: saving and opening large attachments.
 
-While a conversation is on screen the app tells the server you are reading it, and Talk deliberately withholds notifications from anyone it believes is present. That presence used to be released on a short delay, which a closed app on Android never gets to carry out, so the server counted the user as present for tens of minutes afterwards and messages arriving in between reached no device. Presence is now released the moment the app leaves the screen.
+An attachment was read into memory as a whole, so anything over 64 MB was refused as too large for export — and the refusal arrived only after a long download. A 117 MB file shared in a conversation could not be saved at all. Attachments now stream straight to disk, both when saving and when opening, so free space decides what fits, not memory.

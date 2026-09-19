@@ -71,6 +71,17 @@ abstract interface class ChatAttachmentSystem {
     required String contentType,
   });
 
+  /// Hands an already downloaded file to the platform's save dialog.
+  ///
+  /// Used for chat attachments, which can be hundreds of megabytes: holding
+  /// one in memory only to write it out again is what made a 117 MB build
+  /// refuse to save at all.
+  Future<ChatAttachmentSystemResult> saveFile({
+    required File source,
+    required String fileName,
+    required String contentType,
+  });
+
   Future<ChatAttachmentSystemResult> share({
     required Uint8List bytes,
     required String fileName,
@@ -135,6 +146,58 @@ final class PlatformChatAttachmentSystem implements ChatAttachmentSystem {
             fileName: fileName,
             contentType: contentType,
           );
+  }
+
+  @override
+  Future<ChatAttachmentSystemResult> saveFile({
+    required File source,
+    required String fileName,
+    required String contentType,
+  }) async {
+    try {
+      if (!await source.exists() || await source.length() == 0) {
+        return ChatAttachmentSystemResult.invalid;
+      }
+      if (_mobilePlatform) {
+        final result = await _mobileSaver.save(
+          sourcePath: source.path,
+          fileName: fileName,
+          contentType: contentType,
+        );
+        return switch (result) {
+          ChatAttachmentMobileSaveResult.saved =>
+            ChatAttachmentSystemResult.completed,
+          ChatAttachmentMobileSaveResult.cancelled =>
+            ChatAttachmentSystemResult.cancelled,
+        };
+      }
+      final destination = await _saveLocationPicker(suggestedName: fileName);
+      if (destination == null) {
+        return ChatAttachmentSystemResult.cancelled;
+      }
+      await source.copy(destination.path);
+      return ChatAttachmentSystemResult.completed;
+    } on ChatAttachmentMobileSaveException catch (error) {
+      return switch (error.failure) {
+        ChatAttachmentMobileSaveFailure.permissionDenied =>
+          ChatAttachmentSystemResult.permissionDenied,
+        ChatAttachmentMobileSaveFailure.storageFailed =>
+          ChatAttachmentSystemResult.storageFailed,
+        ChatAttachmentMobileSaveFailure.tooLarge =>
+          ChatAttachmentSystemResult.tooLarge,
+        ChatAttachmentMobileSaveFailure.invalidSource =>
+          ChatAttachmentSystemResult.invalid,
+        ChatAttachmentMobileSaveFailure.inProgress ||
+        ChatAttachmentMobileSaveFailure.unavailable =>
+          ChatAttachmentSystemResult.unavailable,
+      };
+    } on FileSystemException catch (error) {
+      return chatAttachmentStorageErrorResult(error);
+    } on PlatformException catch (error) {
+      return chatAttachmentStorageErrorResult(error);
+    } on MissingPluginException catch (error) {
+      return chatAttachmentStorageErrorResult(error);
+    }
   }
 
   Future<ChatAttachmentSystemResult> _saveWithDesktopPicker({
@@ -279,12 +342,22 @@ final class ChatAttachmentExporter implements ChatAttachmentExportAction {
   ChatAttachmentExporter({
     required ChatMediaRepository repository,
     ChatAttachmentSystem? system,
-  }) : this._(repository, system ?? PlatformChatAttachmentSystem());
+    Future<Directory> Function()? temporaryDirectory,
+  }) : this._(
+         repository,
+         system ?? PlatformChatAttachmentSystem(),
+         temporaryDirectory ?? getApplicationCacheDirectory,
+       );
 
-  ChatAttachmentExporter._(this._repository, this._system);
+  ChatAttachmentExporter._(
+    this._repository,
+    this._system,
+    this._temporaryDirectory,
+  );
 
   final ChatMediaRepository _repository;
   final ChatAttachmentSystem _system;
+  final Future<Directory> Function() _temporaryDirectory;
 
   @override
   Future<ChatAttachmentSaveResult> save({
@@ -294,21 +367,42 @@ final class ChatAttachmentExporter implements ChatAttachmentExportAction {
     required String expectedContentType,
     ChatDownloadProgress? onProgress,
   }) async {
-    final download = await _download(
-      account: account,
-      uri: uri,
-      expectedContentType: expectedContentType,
-      onProgress: onProgress,
-    );
-    if (download case _AttachmentDownloadFailure(:final failure)) {
-      return _saveDownloadFailure(failure);
+    final name = chatAttachmentFileName(fileName);
+    Directory? scratch;
+    final ChatAttachmentSystemResult result;
+    try {
+      final root = await _temporaryDirectory();
+      await root.create(recursive: true);
+      scratch = await root.createTemp('chat-attachment-download-');
+      final source = File('${scratch.path}${Platform.pathSeparator}$name');
+      final String contentType;
+      try {
+        contentType = await _repository.downloadOriginalToFile(
+          account: account,
+          uri: uri,
+          expectedContentType: expectedContentType,
+          target: source,
+          onProgress: onProgress,
+        );
+      } on ChatMediaRepositoryException catch (error) {
+        return _saveDownloadFailure(_downloadFailureKind(error));
+      } on Object {
+        return _saveDownloadFailure(
+          _AttachmentDownloadFailureKind.downloadFailed,
+        );
+      }
+      result = await _system.saveFile(
+        source: source,
+        fileName: name,
+        contentType: contentType,
+      );
+    } on FileSystemException {
+      return ChatAttachmentSaveResult.storageFailed;
+    } on MissingPlatformDirectoryException {
+      return ChatAttachmentSaveResult.storageFailed;
+    } finally {
+      await _discardScratch(scratch);
     }
-    final attachment = (download as _AttachmentDownloadSuccess).file;
-    final result = await _system.save(
-      bytes: attachment.body,
-      fileName: chatAttachmentFileName(fileName),
-      contentType: attachment.contentType,
-    );
     return switch (result) {
       ChatAttachmentSystemResult.completed => ChatAttachmentSaveResult.saved,
       ChatAttachmentSystemResult.cancelled =>
@@ -361,6 +455,30 @@ final class ChatAttachmentExporter implements ChatAttachmentExportAction {
         ChatAttachmentShareResult.shareFailed,
     };
   }
+
+  Future<void> _discardScratch(Directory? scratch) async {
+    if (scratch == null) return;
+    try {
+      if (await scratch.exists()) await scratch.delete(recursive: true);
+    } on FileSystemException {
+      // The save already reported its outcome; a leftover in the private
+      // cache is the OS's to reclaim.
+    }
+  }
+
+  _AttachmentDownloadFailureKind _downloadFailureKind(
+    ChatMediaRepositoryException error,
+  ) => switch (error.code) {
+    ChatMediaRepositoryError.credentialMissing =>
+      _AttachmentDownloadFailureKind.reauthenticationRequired,
+    ChatMediaRepositoryError.responseTooLarge =>
+      _AttachmentDownloadFailureKind.tooLarge,
+    ChatMediaRepositoryError.invalidUri ||
+    ChatMediaRepositoryError.invalidResponse =>
+      _AttachmentDownloadFailureKind.invalid,
+    ChatMediaRepositoryError.unavailable =>
+      _AttachmentDownloadFailureKind.downloadFailed,
+  };
 
   Future<_AttachmentDownloadResult> _download({
     required StoredAccount account,

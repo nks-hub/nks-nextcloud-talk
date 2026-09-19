@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -261,6 +262,13 @@ final class _ExportSystem implements ChatAttachmentSystem {
     this.bytes = bytes;
     return result;
   }
+
+  @override
+  Future<ChatAttachmentSystemResult> saveFile({
+    required File source,
+    required String fileName,
+    required String contentType,
+  }) async => throw UnsupportedError('this export never writes a file first');
 
   @override
   Future<ChatAttachmentSystemResult> share({

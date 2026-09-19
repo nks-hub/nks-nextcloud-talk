@@ -17,10 +17,22 @@ import 'test_support.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  /// The exporter streams a download into a scratch directory before handing
+  /// it to the platform, and `path_provider` has no implementation in a unit
+  /// test, so every exporter here is given a real temporary directory.
+  Future<Directory> scratch() async {
+    final directory = await Directory.systemTemp.createTemp('exporter-test-');
+    addTearDown(() async {
+      if (await directory.exists()) await directory.delete(recursive: true);
+    });
+    return directory;
+  }
+
   test('save uses authenticated bytes, safe name, and received MIME', () async {
     late http.BaseRequest request;
     final system = _RecordingSystem();
     final exporter = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
       repository: _repository((sent) async {
         request = sent;
         return http.StreamedResponse(
@@ -46,11 +58,46 @@ void main() {
     expect(system.savedTypes.single, 'text/plain');
   });
 
+  test('an attachment far past the old in-memory ceiling still saves', () async {
+    // The limit used to be 64 MiB of buffered bytes, so a 117 MB build shared
+    // in a conversation could not be saved at all — and said so only after the
+    // download had already run. The bytes now go straight to disk.
+    const chunk = 1024 * 1024;
+    const chunks = 80;
+    final system = _RecordingSystem();
+    final exporter = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
+      repository: _repository(
+        (_) async => http.StreamedResponse(
+          Stream<List<int>>.fromIterable(
+            List<List<int>>.generate(chunks, (_) => Uint8List(chunk)),
+          ),
+          200,
+          contentLength: chunk * chunks,
+          headers: const {'content-type': 'application/vnd.android.package-archive'},
+        ),
+      ),
+      system: system,
+    );
+
+    final result = await exporter.save(
+      account: _account,
+      uri: _uri,
+      fileName: 'build.apk',
+      expectedContentType: 'application/vnd.android.package-archive',
+    );
+
+    expect(result, ChatAttachmentSaveResult.saved);
+    expect(system.savedBytes.single.length, chunk * chunks);
+    expect(system.savedNames.single, 'build.apk');
+  });
+
   test('save cancellation is not reported as a storage failure', () async {
     final system = _RecordingSystem(
       saveResult: ChatAttachmentSystemResult.cancelled,
     );
     final exporter = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
       repository: _successfulRepository(),
       system: system,
     );
@@ -69,18 +116,21 @@ void main() {
     'save keeps repository, permission, and storage failures distinct',
     () async {
       final downloadFailure = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
         repository: _repository(
           (_) async => http.StreamedResponse(const Stream.empty(), 503),
         ),
         system: _RecordingSystem(),
       );
       final permissionFailure = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
         repository: _successfulRepository(),
         system: _RecordingSystem(
           saveResult: ChatAttachmentSystemResult.permissionDenied,
         ),
       );
       final storageFailure = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
         repository: _successfulRepository(),
         system: _RecordingSystem(
           saveResult: ChatAttachmentSystemResult.storageFailed,
@@ -101,6 +151,7 @@ void main() {
       );
 
       final missingCredential = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
         repository: _repository(
           (_) async => throw StateError('must not request'),
           withCredential: false,
@@ -108,17 +159,21 @@ void main() {
         system: _RecordingSystem(),
       );
       final tooLarge = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
         repository: _repository(
           (_) async => http.StreamedResponse(
             const Stream.empty(),
             200,
-            contentLength: 64 * 1024 * 1024 + 1,
+            // Above the streamed-to-disk ceiling. A 117 MB build used to
+            // land here, which is exactly what the limit was raised for.
+            contentLength: 2 * 1024 * 1024 * 1024 + 1,
             headers: const {'content-type': 'text/plain'},
           ),
         ),
         system: _RecordingSystem(),
       );
       final invalid = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
         repository: _repository(
           (_) async => http.StreamedResponse(
             Stream<List<int>>.value(utf8.encode('<html>')),
@@ -141,6 +196,7 @@ void main() {
   test('share uses safe name and actual MIME from the DAV response', () async {
     final system = _RecordingSystem();
     final exporter = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
       repository: _successfulRepository(contentType: 'text/csv'),
       system: system,
     );
@@ -161,24 +217,28 @@ void main() {
     'share keeps cancel, download, permission, and sheet failure distinct',
     () async {
       final cancelled = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
         repository: _successfulRepository(),
         system: _RecordingSystem(
           shareResult: ChatAttachmentSystemResult.cancelled,
         ),
       );
       final downloadFailure = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
         repository: _repository(
           (_) async => http.StreamedResponse(const Stream.empty(), 404),
         ),
         system: _RecordingSystem(),
       );
       final permissionFailure = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
         repository: _successfulRepository(),
         system: _RecordingSystem(
           shareResult: ChatAttachmentSystemResult.permissionDenied,
         ),
       );
       final sheetFailure = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
         repository: _successfulRepository(),
         system: _RecordingSystem(
           shareResult: ChatAttachmentSystemResult.unavailable,
@@ -200,6 +260,7 @@ void main() {
 
   test('share keeps repository errors typed', () async {
     final missingCredential = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
       repository: _repository(
         (_) async => throw StateError('must not request'),
         withCredential: false,
@@ -207,6 +268,7 @@ void main() {
       system: _RecordingSystem(),
     );
     final tooLarge = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
       repository: _repository(
         (_) async => http.StreamedResponse(
           const Stream.empty(),
@@ -218,6 +280,7 @@ void main() {
       system: _RecordingSystem(),
     );
     final invalid = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
       repository: _successfulRepository(),
       system: _RecordingSystem(),
     );
@@ -355,6 +418,7 @@ void main() {
     expect(result, ChatAttachmentSystemResult.offered);
 
     final exporter = ChatAttachmentExporter(
+      temporaryDirectory: scratch,
       repository: _successfulRepository(),
       system: _RecordingSystem(shareResult: ChatAttachmentSystemResult.offered),
     );
@@ -593,6 +657,18 @@ final class _RecordingSystem implements ChatAttachmentSystem {
     required String contentType,
   }) async {
     savedBytes.add(List<int>.from(bytes));
+    savedNames.add(fileName);
+    savedTypes.add(contentType);
+    return saveResult;
+  }
+
+  @override
+  Future<ChatAttachmentSystemResult> saveFile({
+    required File source,
+    required String fileName,
+    required String contentType,
+  }) async {
+    savedBytes.add(await source.readAsBytes());
     savedNames.add(fileName);
     savedTypes.add(contentType);
     return saveResult;

@@ -1,3 +1,3 @@
-Opraveno: chybějící upozornění na zprávy, které přišly po zavření aplikace.
+Opraveno: ukládání a otevírání velkých příloh.
 
-Dokud máte konverzaci na obrazovce, aplikace serveru hlásí, že ji čtete — a Talk pak upozornění schválně neposílá. Tahle přítomnost se ale rušila se zpožděním, které zavřená aplikace na Androidu nestihla provést, takže server považoval uživatele za přítomného ještě desítky minut poté. Zprávy, které mezitím dorazily, neupozornily na žádném zařízení. Nově se přítomnost ruší ve chvíli, kdy aplikace zmizí z obrazovky.
+Příloha se celá načítala do paměti, takže cokoli nad 64 MB aplikace odmítla s hláškou, že je pro export příliš velká — a řekla to až po dlouhém stahování. Stotřicetimegabajtový soubor ze zprávy tak nešel uložit vůbec. Přílohy se teď stahují rovnou na disk, při ukládání i při otevírání, takže rozhoduje volné místo, ne paměť.

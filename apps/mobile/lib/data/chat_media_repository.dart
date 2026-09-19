@@ -85,6 +85,10 @@ final class ChatMediaRepository {
   static const int _maximumVoiceBytes = 32 * 1024 * 1024;
   static const int _maximumOriginalBytes = 64 * 1024 * 1024;
 
+  /// Ceiling for an attachment streamed to disk. Only a sanity bound: what
+  /// really limits this is the free space the write runs into.
+  static const int _maximumStoredFileBytes = 2 * 1024 * 1024 * 1024;
+
   final CredentialVault _credentials;
   final http.Client _client;
   final bool _ownsClient;
@@ -483,6 +487,120 @@ final class ChatMediaRepository {
       );
     }
     return ChatMediaFile(body: body, contentType: contentType);
+  }
+
+  /// Streams the original attachment straight into [target].
+  ///
+  /// The bytes never sit in memory as one buffer, so what can be saved is
+  /// bounded by the disk rather than by the heap: a 117 MB build shared in a
+  /// conversation used to be refused as "too large for export" after the
+  /// client had already spent the download proving it.
+  Future<String> downloadOriginalToFile({
+    required StoredAccount account,
+    required Uri uri,
+    required String expectedContentType,
+    required File target,
+    ChatDownloadProgress? onProgress,
+    int maximumBytes = _maximumStoredFileBytes,
+  }) async {
+    final server = ServerBase.parse(account.serverUrl);
+    final expected = _normalizedMediaType(expectedContentType);
+    if (!_isAllowedOriginalUri(server, account.loginName, uri)) {
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.invalidUri,
+      );
+    }
+    if (expected == null || _isHtmlMediaType(expected)) {
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.invalidResponse,
+      );
+    }
+    final appPassword = await _credentials.readAppPassword(account.id);
+    if (appPassword == null) {
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.credentialMissing,
+      );
+    }
+    final credentials = base64Encode(
+      utf8.encode('${account.loginName}:$appPassword'),
+    );
+    final request = http.Request('GET', uri)
+      ..followRedirects = false
+      ..maxRedirects = 0
+      ..headers.addAll({
+        'Accept': expected,
+        'OCS-APIRequest': 'true',
+        'Authorization': 'Basic $credentials',
+      });
+    final http.StreamedResponse response;
+    try {
+      response = await _client.send(request).timeout(requestTimeout);
+    } on Object {
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.unavailable,
+      );
+    }
+    if (response.statusCode != 200) {
+      await _discard(response);
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.unavailable,
+      );
+    }
+    if ((response.contentLength ?? 0) > maximumBytes) {
+      await _discard(response);
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.responseTooLarge,
+      );
+    }
+    final received = _normalizedMediaType(response.headers['content-type']);
+    final contentType = received == 'application/octet-stream'
+        ? expected
+        : received;
+    if (contentType == null ||
+        _isHtmlMediaType(contentType) ||
+        !_mediaTypesCompatible(expected, contentType)) {
+      await _discard(response);
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.invalidResponse,
+      );
+    }
+
+    final total = response.contentLength;
+    onProgress?.call(0, total);
+    final sink = target.openWrite();
+    var written = 0;
+    try {
+      await for (final chunk in response.stream) {
+        written += chunk.length;
+        if (written > maximumBytes) {
+          throw const ChatMediaRepositoryException(
+            ChatMediaRepositoryError.responseTooLarge,
+          );
+        }
+        sink.add(chunk);
+        onProgress?.call(written, total);
+      }
+      await sink.flush();
+    } on ChatMediaRepositoryException {
+      rethrow;
+    } on Object {
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.unavailable,
+      );
+    } finally {
+      try {
+        await sink.close();
+      } on Object {
+        // The write either landed or the caller is already being told it did
+        // not; a failing close must not mask the original cause.
+      }
+    }
+    if (written == 0) {
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.invalidResponse,
+      );
+    }
+    return contentType;
   }
 
   void close() {

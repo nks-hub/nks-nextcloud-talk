@@ -102,6 +102,13 @@ void main() {
   test(
     'preserves authentication, size, invalid, and storage failures',
     () async {
+      // The download now writes straight into the cache directory, so every
+      // opener here needs a real one; only the last case withholds it on
+      // purpose.
+      final root = await Directory.systemTemp.createTemp('opener-failures-');
+      addTearDown(() async {
+        if (await root.exists()) await root.delete(recursive: true);
+      });
       final missingCredential = ChatAttachmentOpener(
         repository: ChatMediaRepository(
           MemoryCredentialVault(),
@@ -109,6 +116,7 @@ void main() {
             (_) async => throw StateError('must not request'),
           ),
         ),
+        cacheDirectory: () async => root,
         launcher: _RecordingLauncher(),
       );
       final tooLarge = ChatAttachmentOpener(
@@ -116,10 +124,11 @@ void main() {
           (_) async => http.StreamedResponse(
             const Stream.empty(),
             200,
-            contentLength: 64 * 1024 * 1024 + 1,
+            contentLength: 2 * 1024 * 1024 * 1024 + 1,
             headers: const {'content-type': 'text/plain'},
           ),
         ),
+        cacheDirectory: () async => root,
         launcher: _RecordingLauncher(),
       );
       final invalid = ChatAttachmentOpener(
@@ -130,6 +139,7 @@ void main() {
             headers: const {'content-type': 'text/html'},
           ),
         ),
+        cacheDirectory: () async => root,
         launcher: _RecordingLauncher(),
       );
       final storage = ChatAttachmentOpener(

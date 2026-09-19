@@ -81,12 +81,35 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
     required String expectedContentType,
     ChatDownloadProgress? onProgress,
   }) async {
-    final ChatMediaFile attachment;
+    final File localFile;
+    final String contentType;
     try {
-      attachment = await _repository.loadOriginalFile(
+      final root = await _cacheDirectory();
+      final directory = chatAttachmentCacheAccountDirectory(
+        rootDirectory: root,
+        accountId: account.id,
+      );
+      await directory.create(recursive: true);
+      localFile = File(
+        '${directory.path}${Platform.pathSeparator}'
+        '${chatAttachmentFileName(fileName)}',
+      );
+    } on FileSystemException {
+      return ChatAttachmentOpenResult.storageFailed;
+    } on PlatformException {
+      return ChatAttachmentOpenResult.storageFailed;
+    } on MissingPluginException {
+      return ChatAttachmentOpenResult.storageFailed;
+    }
+
+    // Straight to disk: an attachment can be hundreds of megabytes, and the
+    // file is where it has to end up anyway.
+    try {
+      contentType = await _repository.downloadOriginalToFile(
         account: account,
         uri: uri,
         expectedContentType: expectedContentType,
+        target: localFile,
         onProgress: onProgress,
       );
     } on ChatMediaRepositoryException catch (error) {
@@ -101,35 +124,16 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
         ChatMediaRepositoryError.unavailable =>
           ChatAttachmentOpenResult.downloadFailed,
       };
+    } on FileSystemException {
+      return ChatAttachmentOpenResult.storageFailed;
     } on Object {
       // Credential vault backends can fail outside the repository error enum.
       return ChatAttachmentOpenResult.downloadFailed;
     }
 
-    final File localFile;
-    try {
-      final root = await _cacheDirectory();
-      final directory = chatAttachmentCacheAccountDirectory(
-        rootDirectory: root,
-        accountId: account.id,
-      );
-      await directory.create(recursive: true);
-      localFile = File(
-        '${directory.path}${Platform.pathSeparator}'
-        '${chatAttachmentFileName(fileName)}',
-      );
-      await localFile.writeAsBytes(attachment.body, flush: true);
-    } on FileSystemException {
-      return ChatAttachmentOpenResult.storageFailed;
-    } on PlatformException {
-      return ChatAttachmentOpenResult.storageFailed;
-    } on MissingPluginException {
-      return ChatAttachmentOpenResult.storageFailed;
-    }
-
     final opened = await _launcher.open(
       path: localFile.path,
-      contentType: attachment.contentType,
+      contentType: contentType,
     );
     return opened
         ? ChatAttachmentOpenResult.opened
