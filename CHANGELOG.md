@@ -10,6 +10,8 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+## 1.0.11 (77) — 19 September 2026
+
 - Fixed: no notification of a message that arrived after the app had been closed. While a conversation is on screen the client tells the server the user is present, and Talk deliberately withholds notifications from anyone it believes is reading — so that presence has to be given up the moment the app leaves the screen. It was given up two seconds later, by a timer, and Android freezes a stopped app long before that: on a phone measured on 19 September 2026 the app was closed at 11:38:41 and the server still counted the user as present at 12:02, so two messages that arrived in between reached no device at all. A window that only lost focus still keeps the grace period, but one the platform has stopped now releases presence in the same callback.
 
 ## 1.0.10 (76) — 18 September 2026
