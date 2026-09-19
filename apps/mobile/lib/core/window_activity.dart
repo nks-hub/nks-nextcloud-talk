@@ -107,11 +107,24 @@ final class WindowActivity extends ValueNotifier<bool>
       value = true;
       return;
     }
-    if (!value || _release != null) {
+    if (!value) {
       return;
     }
-    if (inactiveGrace == Duration.zero) {
+    // Only a window that merely lost focus gets the grace period. A window the
+    // platform has *stopped* must give up presence in this very callback:
+    // Android freezes a stopped process, so a timer set here may never run, the
+    // room is never left, and Talk goes on suppressing every message
+    // notification for a user it believes is reading. Measured on a Galaxy Fold
+    // on 19 September 2026: the app was closed at 11:38:41 and the session it
+    // held stayed claimed until 12:02:37 — two messages arrived in between and
+    // neither was pushed to any device.
+    if (state != AppLifecycleState.inactive || inactiveGrace == Duration.zero) {
+      _release?.cancel();
+      _release = null;
       value = false;
+      return;
+    }
+    if (_release != null) {
       return;
     }
     _release = Timer(inactiveGrace, () {

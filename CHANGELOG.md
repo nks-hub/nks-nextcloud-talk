@@ -10,6 +10,8 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+- Fixed: no notification of a message that arrived after the app had been closed. While a conversation is on screen the client tells the server the user is present, and Talk deliberately withholds notifications from anyone it believes is reading — so that presence has to be given up the moment the app leaves the screen. It was given up two seconds later, by a timer, and Android freezes a stopped app long before that: on a phone measured on 19 September 2026 the app was closed at 11:38:41 and the server still counted the user as present at 12:02, so two messages that arrived in between reached no device at all. A window that only lost focus still keeps the grace period, but one the platform has stopped now releases presence in the same callback.
+
 ## 1.0.10 (76) — 18 September 2026
 
 - Fixed: asking the server for two sizes of the same picture at once. The bubble asks for 1024 pixels, the opened picture for 2048, and a failed request was retried a second later while the first one could still be running. Measured against Nextcloud 34.0.3: two preview requests for the same freshly uploaded photo arriving together make the server answer one of them with an error, and that error can delete the full-size preview every other size is derived from while the database still records it — after which every size but the one that survived answers "not found" for good. That is what left two photos in a conversation unable to load. The server's race is not ours to fix, but supplying it was: this client now asks for one size of a picture at a time.

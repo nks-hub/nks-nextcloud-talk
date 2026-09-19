@@ -213,6 +213,34 @@ void main() {
     activity.dispose();
   });
 
+  testWidgets('a stopped app gives up presence in the same callback', (
+    tester,
+  ) async {
+    // Android freezes a process once the activity is stopped, so a timer armed
+    // here may never run. Whatever releases the room session has to happen
+    // before this callback returns, or the server keeps believing the user is
+    // in the room and withholds every message notification — measured at 24
+    // minutes on a real phone.
+    for (final stopped in <AppLifecycleState>[
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+      AppLifecycleState.detached,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final activity = WindowActivity(binding: tester.binding);
+      expect(activity.value, isTrue);
+
+      tester.binding.handleAppLifecycleStateChanged(stopped);
+
+      expect(
+        activity.value,
+        isFalse,
+        reason: '$stopped must not wait for a timer that may never fire',
+      );
+      activity.dispose();
+    }
+  });
+
   testWidgets('disposal stops the notifier observing the binding', (
     tester,
   ) async {
