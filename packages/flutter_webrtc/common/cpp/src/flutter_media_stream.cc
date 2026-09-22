@@ -53,10 +53,10 @@ void FlutterMediaStream::GetUserMedia(
     EncodableValue audio = it->second;
     if (TypeIs<bool>(audio)) {
       if (true == GetValue<bool>(audio)) {
-        GetUserAudio(constraints, stream, params);
+        if (!GetUserAudio(constraints, stream, params, result.get())) return;
       }
     } else if (TypeIs<EncodableMap>(audio)) {
-      GetUserAudio(constraints, stream, params);
+      if (!GetUserAudio(constraints, stream, params, result.get())) return;
     } else {
       params[EncodableValue("audioTracks")] = EncodableValue(EncodableList());
     }
@@ -170,9 +170,10 @@ std::string getDeviceIdConstraint(const EncodableMap& mediaConstraints) {
   return "";
 }
 
-void FlutterMediaStream::GetUserAudio(const EncodableMap& constraints,
+bool FlutterMediaStream::GetUserAudio(const EncodableMap& constraints,
                                       scoped_refptr<RTCMediaStream> stream,
-                                      EncodableMap& params) {
+                                      EncodableMap& params,
+                                      MethodResultProxy* result) {
   bool enable_audio = false;
   scoped_refptr<RTCMediaConstraints> audioConstraints;
   RTCAudioOptions audio_options;
@@ -216,35 +217,52 @@ void FlutterMediaStream::GetUserAudio(const EncodableMap& constraints,
   // deviceId
 
   if (enable_audio) {
-    char strRecordingName[256];
-    char strRecordingGuid[256];
+    char strRecordingName[256]{};
+    char strRecordingGuid[256]{};
     int playout_devices = base_->audio_device_->PlayoutDevices();
     int recording_devices = base_->audio_device_->RecordingDevices();
+    if (recording_devices <= 0) {
+      result->Error(recording_devices == 0 ? "NotFoundError" : "NotReadableError",
+                    "No audio input device is available.");
+      return false;
+    }
 
-    for (uint16_t i = 0; i < recording_devices; i++) {
-      base_->audio_device_->RecordingDeviceName(i, strRecordingName,
-                                                strRecordingGuid);
-      if (sourceId != "" &&
-          sourceId ==
-              SanitizeDeviceIdFromAudioBuffers(strRecordingName,
-                                               strRecordingGuid)) {
-        base_->audio_device_->SetRecordingDevice(i);
+    uint16_t selected_device = 0;
+    if (!sourceId.empty()) {
+      bool found = false;
+      for (uint16_t i = 0; i < recording_devices; i++) {
+        if (base_->audio_device_->RecordingDeviceName(
+                i, strRecordingName, strRecordingGuid) != 0) {
+          continue;
+        }
+        if (sourceId == SanitizeDeviceIdFromAudioBuffers(
+                            strRecordingName, strRecordingGuid)) {
+          selected_device = i;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        result->Error("NotFoundError", "The selected audio input is unavailable.");
+        return false;
       }
     }
-
-    if (sourceId == "") {
-      base_->audio_device_->RecordingDeviceName(0, strRecordingName,
-                                                strRecordingGuid);
-      sourceId = SanitizeDeviceIdFromAudioBuffers(strRecordingName,
-                                                  strRecordingGuid);
-      base_->audio_device_->SetRecordingDevice(0);
+    if (base_->audio_device_->RecordingDeviceName(
+            selected_device, strRecordingName, strRecordingGuid) != 0 ||
+        base_->audio_device_->SetRecordingDevice(selected_device) != 0) {
+      result->Error("NotReadableError", "The audio input could not be selected.");
+      return false;
     }
+    sourceId = SanitizeDeviceIdFromAudioBuffers(strRecordingName,
+                                               strRecordingGuid);
 
-    char strPlayoutName[256];
-    char strPlayoutGuid[256];
+    char strPlayoutName[256]{};
+    char strPlayoutGuid[256]{};
     for (uint16_t i = 0; i < playout_devices; i++) {
-      base_->audio_device_->PlayoutDeviceName(i, strPlayoutName,
-                                              strPlayoutGuid);
+      if (base_->audio_device_->PlayoutDeviceName(i, strPlayoutName,
+                                                 strPlayoutGuid) != 0) {
+        continue;
+      }
       if (deviceId != "" &&
           deviceId ==
               SanitizeDeviceIdFromAudioBuffers(strPlayoutName,
@@ -255,9 +273,17 @@ void FlutterMediaStream::GetUserAudio(const EncodableMap& constraints,
 
     scoped_refptr<RTCAudioSource> source = base_->factory_->CreateAudioSource(
         "audio_input", RTCAudioSource::SourceType::kMicrophone, audio_options);
+    if (source == nullptr) {
+      result->Error("NotReadableError", "The audio input could not be opened.");
+      return false;
+    }
     std::string uuid = base_->GenerateUUID();
     scoped_refptr<RTCAudioTrack> track =
         base_->factory_->CreateAudioTrack(source, uuid.c_str());
+    if (track == nullptr) {
+      result->Error("NotReadableError", "The audio track could not be created.");
+      return false;
+    }
 
     std::string track_id = track->id().std_string();
 
@@ -290,6 +316,7 @@ void FlutterMediaStream::GetUserAudio(const EncodableMap& constraints,
 
     base_->local_tracks_[track->id().std_string()] = track;
   }
+  return true;
 }
 
 std::string getFacingMode(const EncodableMap& mediaConstraints) {
