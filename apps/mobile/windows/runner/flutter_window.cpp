@@ -7,8 +7,11 @@
 #include "window_state.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project,
-                             DeepLinkDelivery* deep_links)
-    : project_(project), deep_links_(deep_links) {}
+                             DeepLinkDelivery* deep_links,
+                             bool persist_window_bounds)
+    : project_(project),
+      persist_window_bounds_(persist_window_bounds),
+      deep_links_(deep_links) {}
 
 FlutterWindow::~FlutterWindow() {}
 
@@ -19,7 +22,9 @@ bool FlutterWindow::OnCreate() {
 
   // Restore before the view controller is created so the first surface already
   // has the final size.
-  RestoreWindowBounds(GetHandle());
+  if (persist_window_bounds_) {
+    RestoreWindowBounds(GetHandle());
+  }
 
   RECT frame = GetClientArea();
 
@@ -107,7 +112,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       break;
     case WM_EXITSIZEMOVE:
     case WM_DESTROY:
-      SaveWindowBounds(hwnd);
+      if (persist_window_bounds_) {
+        SaveWindowBounds(hwnd);
+      }
       break;
     case ShellNotification::kActivationMessage:
       if (shell_notification_ != nullptr &&

@@ -20,7 +20,8 @@ class FlutterWindow : public Win32Window {
   // |deep_links| outlives the window; the runner owns it so a link that
   // arrives before the engine exists is not dropped.
   FlutterWindow(const flutter::DartProject& project,
-                DeepLinkDelivery* deep_links);
+                DeepLinkDelivery* deep_links,
+                bool persist_window_bounds = true);
   virtual ~FlutterWindow();
 
  protected:
@@ -41,6 +42,7 @@ class FlutterWindow : public Win32Window {
  private:
   // The project to run.
   flutter::DartProject project_;
+  const bool persist_window_bounds_;
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;

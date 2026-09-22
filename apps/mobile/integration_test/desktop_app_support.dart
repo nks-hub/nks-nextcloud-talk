@@ -122,14 +122,20 @@ final int Function(int) _setForegroundWindow = _user32
 
 int _window() {
   final className = 'FLUTTER_RUNNER_WIN32_WINDOW'.toNativeUtf16();
+  final title =
+      (Platform.environment['NKS_TALK_INTEGRATION_TEST'] == '1'
+              ? 'NKS Talk (integration test)'
+              : 'NKS Talk')
+          .toNativeUtf16();
   try {
-    final handle = _findWindow(className, nullptr);
+    final handle = _findWindow(className, title);
     if (handle == 0) {
       fail('the test window was not found');
     }
     return handle;
   } finally {
     malloc.free(className);
+    malloc.free(title);
   }
 }
 
