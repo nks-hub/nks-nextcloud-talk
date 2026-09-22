@@ -268,6 +268,7 @@ final class _ExportSystem implements ChatAttachmentSystem {
     required File source,
     required String fileName,
     required String contentType,
+    bool Function()? canExport,
   }) async => throw UnsupportedError('this export never writes a file first');
 
   @override

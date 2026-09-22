@@ -80,6 +80,7 @@ abstract interface class ChatAttachmentSystem {
     required File source,
     required String fileName,
     required String contentType,
+    bool Function()? canExport,
   });
 
   Future<ChatAttachmentSystemResult> share({
@@ -153,10 +154,14 @@ final class PlatformChatAttachmentSystem implements ChatAttachmentSystem {
     required File source,
     required String fileName,
     required String contentType,
+    bool Function()? canExport,
   }) async {
     try {
       if (!await source.exists() || await source.length() == 0) {
         return ChatAttachmentSystemResult.invalid;
+      }
+      if (canExport?.call() == false) {
+        return ChatAttachmentSystemResult.cancelled;
       }
       if (_mobilePlatform) {
         final result = await _mobileSaver.save(
@@ -173,6 +178,9 @@ final class PlatformChatAttachmentSystem implements ChatAttachmentSystem {
       }
       final destination = await _saveLocationPicker(suggestedName: fileName);
       if (destination == null) {
+        return ChatAttachmentSystemResult.cancelled;
+      }
+      if (canExport?.call() == false) {
         return ChatAttachmentSystemResult.cancelled;
       }
       await source.copy(destination.path);
@@ -393,10 +401,14 @@ final class ChatAttachmentExporter implements ChatAttachmentExportAction {
           _AttachmentDownloadFailureKind.downloadFailed,
         );
       }
+      if (!_repository.isAccountActive(account.id)) {
+        return ChatAttachmentSaveResult.reauthenticationRequired;
+      }
       result = await _system.saveFile(
         source: source,
         fileName: name,
         contentType: contentType,
+        canExport: () => _repository.isAccountActive(account.id),
       );
     } on FileSystemException {
       return ChatAttachmentSaveResult.storageFailed;
@@ -438,6 +450,9 @@ final class ChatAttachmentExporter implements ChatAttachmentExportAction {
       return _shareDownloadFailure(failure);
     }
     final attachment = (download as _AttachmentDownloadSuccess).file;
+    if (!_repository.isAccountActive(account.id)) {
+      return ChatAttachmentShareResult.reauthenticationRequired;
+    }
     final result = await _system.share(
       bytes: attachment.body,
       fileName: chatAttachmentFileName(fileName),

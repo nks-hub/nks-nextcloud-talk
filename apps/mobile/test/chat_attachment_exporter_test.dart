@@ -74,7 +74,9 @@ void main() {
           ),
           200,
           contentLength: chunk * chunks,
-          headers: const {'content-type': 'application/vnd.android.package-archive'},
+          headers: const {
+            'content-type': 'application/vnd.android.package-archive',
+          },
         ),
       ),
       system: system,
@@ -116,21 +118,21 @@ void main() {
     'save keeps repository, permission, and storage failures distinct',
     () async {
       final downloadFailure = ChatAttachmentExporter(
-      temporaryDirectory: scratch,
+        temporaryDirectory: scratch,
         repository: _repository(
           (_) async => http.StreamedResponse(const Stream.empty(), 503),
         ),
         system: _RecordingSystem(),
       );
       final permissionFailure = ChatAttachmentExporter(
-      temporaryDirectory: scratch,
+        temporaryDirectory: scratch,
         repository: _successfulRepository(),
         system: _RecordingSystem(
           saveResult: ChatAttachmentSystemResult.permissionDenied,
         ),
       );
       final storageFailure = ChatAttachmentExporter(
-      temporaryDirectory: scratch,
+        temporaryDirectory: scratch,
         repository: _successfulRepository(),
         system: _RecordingSystem(
           saveResult: ChatAttachmentSystemResult.storageFailed,
@@ -151,7 +153,7 @@ void main() {
       );
 
       final missingCredential = ChatAttachmentExporter(
-      temporaryDirectory: scratch,
+        temporaryDirectory: scratch,
         repository: _repository(
           (_) async => throw StateError('must not request'),
           withCredential: false,
@@ -159,7 +161,7 @@ void main() {
         system: _RecordingSystem(),
       );
       final tooLarge = ChatAttachmentExporter(
-      temporaryDirectory: scratch,
+        temporaryDirectory: scratch,
         repository: _repository(
           (_) async => http.StreamedResponse(
             const Stream.empty(),
@@ -173,7 +175,7 @@ void main() {
         system: _RecordingSystem(),
       );
       final invalid = ChatAttachmentExporter(
-      temporaryDirectory: scratch,
+        temporaryDirectory: scratch,
         repository: _repository(
           (_) async => http.StreamedResponse(
             Stream<List<int>>.value(utf8.encode('<html>')),
@@ -217,28 +219,28 @@ void main() {
     'share keeps cancel, download, permission, and sheet failure distinct',
     () async {
       final cancelled = ChatAttachmentExporter(
-      temporaryDirectory: scratch,
+        temporaryDirectory: scratch,
         repository: _successfulRepository(),
         system: _RecordingSystem(
           shareResult: ChatAttachmentSystemResult.cancelled,
         ),
       );
       final downloadFailure = ChatAttachmentExporter(
-      temporaryDirectory: scratch,
+        temporaryDirectory: scratch,
         repository: _repository(
           (_) async => http.StreamedResponse(const Stream.empty(), 404),
         ),
         system: _RecordingSystem(),
       );
       final permissionFailure = ChatAttachmentExporter(
-      temporaryDirectory: scratch,
+        temporaryDirectory: scratch,
         repository: _successfulRepository(),
         system: _RecordingSystem(
           shareResult: ChatAttachmentSystemResult.permissionDenied,
         ),
       );
       final sheetFailure = ChatAttachmentExporter(
-      temporaryDirectory: scratch,
+        temporaryDirectory: scratch,
         repository: _successfulRepository(),
         system: _RecordingSystem(
           shareResult: ChatAttachmentSystemResult.unavailable,
@@ -667,6 +669,7 @@ final class _RecordingSystem implements ChatAttachmentSystem {
     required File source,
     required String fileName,
     required String contentType,
+    bool Function()? canExport,
   }) async {
     savedBytes.add(await source.readAsBytes());
     savedNames.add(fileName);

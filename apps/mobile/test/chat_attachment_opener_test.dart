@@ -148,6 +148,11 @@ void main() {
     );
 
     expect(result, ChatAttachmentOpenResult.openFailed);
+    final accountDirectory = chatAttachmentCacheAccountDirectory(
+      rootDirectory: root,
+      accountId: _account.id,
+    );
+    expect(await accountDirectory.list().toList(), isEmpty);
   });
 
   test(

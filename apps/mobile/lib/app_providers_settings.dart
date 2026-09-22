@@ -34,6 +34,7 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
     onRemovalStarted: (accountId) async {
       final attachment = ref.read(attachmentServiceProvider.future);
       await Future.wait<void>(<Future<void>>[
+        ref.read(chatMediaRepositoryProvider).suspendAccount(accountId),
         ref.read(callSignalingCoordinatorProvider).shutdownAccount(accountId),
         ref.read(chatServiceProvider).suspendAccount(accountId),
         attachment.then(
@@ -51,7 +52,8 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
       final webPushRevoked =
           webPush == null || await webPush.revokeAccount(accountId);
       final proxy = ref.read(androidPushRegistrationCoordinatorProvider);
-      final proxyRevoked = proxy == null || await proxy.revokeAccount(accountId);
+      final proxyRevoked =
+          proxy == null || await proxy.revokeAccount(accountId);
       return webPushRevoked && proxyRevoked;
     },
   );

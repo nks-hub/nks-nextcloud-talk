@@ -104,7 +104,7 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
       return ChatAttachmentOpenResult.storageFailed;
     }
 
-    var downloaded = false;
+    var opened = false;
     try {
       contentType = await _repository.downloadOriginalToFile(
         account: account,
@@ -113,7 +113,16 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
         target: localFile,
         onProgress: onProgress,
       );
-      downloaded = true;
+      if (!_repository.isAccountActive(account.id)) {
+        return ChatAttachmentOpenResult.reauthenticationRequired;
+      }
+      opened = await _launcher.open(
+        path: localFile.path,
+        contentType: contentType,
+      );
+      return opened
+          ? ChatAttachmentOpenResult.opened
+          : ChatAttachmentOpenResult.openFailed;
     } on ChatMediaRepositoryException catch (error) {
       return switch (error.code) {
         ChatMediaRepositoryError.credentialMissing =>
@@ -132,7 +141,7 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
       // Credential vault backends can fail outside the repository error enum.
       return ChatAttachmentOpenResult.downloadFailed;
     } finally {
-      if (!downloaded) {
+      if (!opened) {
         try {
           await downloadDirectory.delete(recursive: true);
         } on FileSystemException {
@@ -140,14 +149,6 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
         }
       }
     }
-
-    final opened = await _launcher.open(
-      path: localFile.path,
-      contentType: contentType,
-    );
-    return opened
-        ? ChatAttachmentOpenResult.opened
-        : ChatAttachmentOpenResult.openFailed;
   }
 }
 

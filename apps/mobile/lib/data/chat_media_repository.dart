@@ -9,6 +9,8 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'app_database.dart';
 import 'credential_vault.dart';
 
+part 'chat_media_repository_download.dart';
+
 /// Bytes received so far and, when the server declared one, the total length.
 /// A null total means the caller can only show that something is moving.
 typedef ChatDownloadProgress = void Function(int received, int? total);
@@ -92,6 +94,46 @@ final class ChatMediaRepository {
   final CredentialVault _credentials;
   final http.Client _client;
   final bool _ownsClient;
+  final _suspendedAccounts = <String>{};
+  final _requests = <String, Set<_MediaRequest>>{};
+  bool _closed = false;
+
+  bool isAccountActive(String accountId) =>
+      !_closed && !_suspendedAccounts.contains(accountId);
+
+  /// Stops this account's IO before its files and credentials are removed.
+  Future<void> suspendAccount(String accountId) async {
+    _suspendedAccounts.add(accountId);
+    final pending = _requests[accountId]?.toList() ?? <_MediaRequest>[];
+    for (final request in pending) {
+      request.cancel();
+    }
+    await Future.wait(pending.map((request) => request.done.future));
+  }
+
+  Future<T> _runForAccount<T>(
+    String accountId,
+    Future<T> Function(_MediaRequest request) action,
+  ) async {
+    if (!isAccountActive(accountId)) {
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.credentialMissing,
+      );
+    }
+    final request = _MediaRequest();
+    (_requests[accountId] ??= {}).add(request);
+    try {
+      final result = await action(request);
+      request.checkActive();
+      return result;
+    } finally {
+      request.finishTransport();
+      final requests = _requests[accountId];
+      requests?.remove(request);
+      if (requests?.isEmpty == true) _requests.remove(accountId);
+      request.done.complete();
+    }
+  }
 
   /// One preview request per file at a time, keyed by account and file id.
   ///
@@ -123,7 +165,7 @@ final class ChatMediaRepository {
     required Uri uri,
     required Directory directory,
     required String cacheKey,
-  }) async {
+  }) => _runForAccount(account.id, (operation) async {
     final server = ServerBase.parse(account.serverUrl);
     if (!server.hasSameOrigin(uri) ||
         uri.userInfo.isNotEmpty ||
@@ -132,7 +174,10 @@ final class ChatMediaRepository {
         ChatMediaRepositoryError.invalidUri,
       );
     }
-    final appPassword = await _credentials.readAppPassword(account.id);
+    final appPassword = await operation.wait(
+      _credentials.readAppPassword(account.id),
+    );
+    operation.checkActive();
     if (appPassword == null) {
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.credentialMissing,
@@ -141,30 +186,33 @@ final class ChatMediaRepository {
     final credentials = base64Encode(
       utf8.encode('${account.loginName}:$appPassword'),
     );
-    final request = http.Request('GET', uri)
-      ..followRedirects = false
-      ..maxRedirects = 0
-      ..headers.addAll({
-        'Accept': 'audio/*',
-        'OCS-APIRequest': 'true',
-        'Authorization': 'Basic $credentials',
-      });
+    final request =
+        http.AbortableRequest('GET', uri, abortTrigger: operation.aborted)
+          ..followRedirects = false
+          ..maxRedirects = 0
+          ..headers.addAll({
+            'Accept': 'audio/*',
+            'OCS-APIRequest': 'true',
+            'Authorization': 'Basic $credentials',
+          });
     final http.StreamedResponse response;
     try {
-      response = await _client.send(request).timeout(requestTimeout);
+      response = await operation.wait(
+        _client.send(request).timeout(requestTimeout),
+      );
     } on Object {
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.unavailable,
       );
     }
     if (response.statusCode != 200) {
-      await _discard(response);
+      await _discard(response, operation);
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.unavailable,
       );
     }
     if ((response.contentLength ?? 0) > _maximumVoiceBytes) {
-      await _discard(response);
+      await _discard(response, operation);
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.responseTooLarge,
       );
@@ -175,7 +223,7 @@ final class ChatMediaRepository {
         .trim()
         .toLowerCase();
     if (contentType == null || !contentType.startsWith('audio/')) {
-      await _discard(response);
+      await _discard(response, operation);
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.invalidResponse,
       );
@@ -186,7 +234,7 @@ final class ChatMediaRepository {
     final iterator = StreamIterator<List<int>>(response.stream);
     try {
       await (() async {
-        while (await iterator.moveNext()) {
+        while (await operation.wait(iterator.moveNext())) {
           length += iterator.current.length;
           if (length > _maximumVoiceBytes) {
             throw const ChatMediaRepositoryException(
@@ -215,11 +263,13 @@ final class ChatMediaRepository {
         ChatMediaRepositoryError.invalidResponse,
       );
     }
+    operation.checkActive();
     await directory.create(recursive: true);
+    operation.checkActive();
     final file = File('${directory.path}${Platform.pathSeparator}$cacheKey');
     await file.writeAsBytes(body, flush: true);
     return ChatVoiceFile(path: file.path, contentType: contentType);
-  }
+  });
 
   /// A picture somebody just posted has no preview on the server yet. Measured
   /// against the reference instance on 9 September 2026: the endpoint answers
@@ -307,8 +357,11 @@ final class ChatMediaRepository {
   Future<ChatMediaImage?> _loadImage({
     required StoredAccount account,
     required Uri uri,
-  }) async {
-    final appPassword = await _credentials.readAppPassword(account.id);
+  }) => _runForAccount(account.id, (operation) async {
+    final appPassword = await operation.wait(
+      _credentials.readAppPassword(account.id),
+    );
+    operation.checkActive();
     if (appPassword == null) {
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.credentialMissing,
@@ -318,34 +371,37 @@ final class ChatMediaRepository {
     final credentials = base64Encode(
       utf8.encode('${account.loginName}:$appPassword'),
     );
-    final request = http.Request('GET', uri)
-      ..followRedirects = false
-      ..maxRedirects = 0
-      ..headers.addAll({
-        'Accept': 'image/png,image/jpeg,image/webp,image/gif',
-        'OCS-APIRequest': 'true',
-        'Authorization': 'Basic $credentials',
-      });
+    final request =
+        http.AbortableRequest('GET', uri, abortTrigger: operation.aborted)
+          ..followRedirects = false
+          ..maxRedirects = 0
+          ..headers.addAll({
+            'Accept': 'image/png,image/jpeg,image/webp,image/gif',
+            'OCS-APIRequest': 'true',
+            'Authorization': 'Basic $credentials',
+          });
     final http.StreamedResponse response;
     try {
-      response = await _client.send(request).timeout(requestTimeout);
+      response = await operation.wait(
+        _client.send(request).timeout(requestTimeout),
+      );
     } on Object {
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.unavailable,
       );
     }
     if (response.statusCode == 404) {
-      await _discard(response);
+      await _discard(response, operation);
       return null;
     }
     if (response.statusCode != 200) {
-      await _discard(response);
+      await _discard(response, operation);
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.unavailable,
       );
     }
     if ((response.contentLength ?? 0) > _maximumPreviewBytes) {
-      await _discard(response);
+      await _discard(response, operation);
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.responseTooLarge,
       );
@@ -356,7 +412,7 @@ final class ChatMediaRepository {
     final iterator = StreamIterator<List<int>>(response.stream);
     try {
       await (() async {
-        while (await iterator.moveNext()) {
+        while (await operation.wait(iterator.moveNext())) {
           final chunk = iterator.current;
           length += chunk.length;
           if (length > _maximumPreviewBytes) {
@@ -395,7 +451,7 @@ final class ChatMediaRepository {
       );
     }
     return ChatMediaImage(body: body, contentType: contentType);
-  }
+  });
 
   /// Downloads the original attachment from this account's WebDAV tree.
   ///
@@ -408,7 +464,7 @@ final class ChatMediaRepository {
     required String expectedContentType,
     ChatDownloadProgress? onProgress,
     int? maximumBytes,
-  }) async {
+  }) => _runForAccount(account.id, (operation) async {
     final limit = maximumBytes ?? _maximumOriginalBytes;
     final server = ServerBase.parse(account.serverUrl);
     final expected = _normalizedMediaType(expectedContentType);
@@ -422,7 +478,10 @@ final class ChatMediaRepository {
         ChatMediaRepositoryError.invalidResponse,
       );
     }
-    final appPassword = await _credentials.readAppPassword(account.id);
+    final appPassword = await operation.wait(
+      _credentials.readAppPassword(account.id),
+    );
+    operation.checkActive();
     if (appPassword == null) {
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.credentialMissing,
@@ -431,30 +490,33 @@ final class ChatMediaRepository {
     final credentials = base64Encode(
       utf8.encode('${account.loginName}:$appPassword'),
     );
-    final request = http.Request('GET', uri)
-      ..followRedirects = false
-      ..maxRedirects = 0
-      ..headers.addAll({
-        'Accept': expected,
-        'OCS-APIRequest': 'true',
-        'Authorization': 'Basic $credentials',
-      });
+    final request =
+        http.AbortableRequest('GET', uri, abortTrigger: operation.aborted)
+          ..followRedirects = false
+          ..maxRedirects = 0
+          ..headers.addAll({
+            'Accept': expected,
+            'OCS-APIRequest': 'true',
+            'Authorization': 'Basic $credentials',
+          });
     final http.StreamedResponse response;
     try {
-      response = await _client.send(request).timeout(requestTimeout);
+      response = await operation.wait(
+        _client.send(request).timeout(requestTimeout),
+      );
     } on Object {
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.unavailable,
       );
     }
     if (response.statusCode != 200) {
-      await _discard(response);
+      await _discard(response, operation);
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.unavailable,
       );
     }
     if ((response.contentLength ?? 0) > limit) {
-      await _discard(response);
+      await _discard(response, operation);
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.responseTooLarge,
       );
@@ -466,7 +528,7 @@ final class ChatMediaRepository {
     if (contentType == null ||
         _isHtmlMediaType(contentType) ||
         !_mediaTypesCompatible(expected, contentType)) {
-      await _discard(response);
+      await _discard(response, operation);
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.invalidResponse,
       );
@@ -476,6 +538,7 @@ final class ChatMediaRepository {
     final body = await _readBoundedBody(
       response,
       maximumBytes: limit,
+      operation: operation,
       onProgress: onProgress,
       total: response.contentLength,
     );
@@ -487,155 +550,41 @@ final class ChatMediaRepository {
       );
     }
     return ChatMediaFile(body: body, contentType: contentType);
-  }
-
-  /// Streams an attachment to disk, waiting for each write before reading on.
-  Future<String> downloadOriginalToFile({
-    required StoredAccount account,
-    required Uri uri,
-    required String expectedContentType,
-    required File target,
-    ChatDownloadProgress? onProgress,
-    int maximumBytes = _maximumStoredFileBytes,
-  }) async {
-    final server = ServerBase.parse(account.serverUrl);
-    final expected = _normalizedMediaType(expectedContentType);
-    if (!_isAllowedOriginalUri(server, account.loginName, uri)) {
-      throw const ChatMediaRepositoryException(
-        ChatMediaRepositoryError.invalidUri,
-      );
-    }
-    if (expected == null || _isHtmlMediaType(expected)) {
-      throw const ChatMediaRepositoryException(
-        ChatMediaRepositoryError.invalidResponse,
-      );
-    }
-    final appPassword = await _credentials.readAppPassword(account.id);
-    if (appPassword == null) {
-      throw const ChatMediaRepositoryException(
-        ChatMediaRepositoryError.credentialMissing,
-      );
-    }
-    final credentials = base64Encode(
-      utf8.encode('${account.loginName}:$appPassword'),
-    );
-    final abort = Completer<void>();
-    final request =
-        http.AbortableRequest('GET', uri, abortTrigger: abort.future)
-          ..followRedirects = false
-          ..maxRedirects = 0
-          ..headers.addAll({
-            'Accept': expected,
-            'OCS-APIRequest': 'true',
-            'Authorization': 'Basic $credentials',
-          });
-    StreamIterator<List<int>>? chunks;
-    RandomAccessFile? output;
-    var created = false;
-    var completed = false;
-    try {
-      final response = await _client.send(request).timeout(requestTimeout);
-      chunks = StreamIterator(response.stream);
-      if (response.statusCode != 200) {
-        throw const ChatMediaRepositoryException(
-          ChatMediaRepositoryError.unavailable,
-        );
-      }
-      // IOClient keeps the compressed Content-Length after decoding gzip.
-      final encoding = response.headers['content-encoding']?.toLowerCase();
-      final total = encoding == null || encoding == 'identity'
-          ? response.contentLength
-          : null;
-      if ((total ?? 0) > maximumBytes) {
-        throw const ChatMediaRepositoryException(
-          ChatMediaRepositoryError.responseTooLarge,
-        );
-      }
-      final received = _normalizedMediaType(response.headers['content-type']);
-      final contentType = received == 'application/octet-stream'
-          ? expected
-          : received;
-      if (contentType == null ||
-          _isHtmlMediaType(contentType) ||
-          !_mediaTypesCompatible(expected, contentType)) {
-        throw const ChatMediaRepositoryException(
-          ChatMediaRepositoryError.invalidResponse,
-        );
-      }
-      output = await target.open(mode: FileMode.write);
-      created = true;
-      var written = 0;
-      onProgress?.call(0, total);
-      // The timeout measures a stalled network read, not the whole download.
-      while (await chunks.moveNext().timeout(requestTimeout)) {
-        final chunk = chunks.current;
-        written += chunk.length;
-        if (written > maximumBytes) {
-          throw const ChatMediaRepositoryException(
-            ChatMediaRepositoryError.responseTooLarge,
-          );
-        }
-        await output.writeFrom(chunk);
-        onProgress?.call(written, total);
-      }
-      if (written == 0 || (total != null && total != written)) {
-        throw const ChatMediaRepositoryException(
-          ChatMediaRepositoryError.invalidResponse,
-        );
-      }
-      await output.flush();
-      await output.close();
-      output = null;
-      completed = true;
-      return contentType;
-    } on ChatMediaRepositoryException {
-      rethrow;
-    } on FileSystemException {
-      rethrow;
-    } on Object {
-      throw const ChatMediaRepositoryException(
-        ChatMediaRepositoryError.unavailable,
-      );
-    } finally {
-      abort.complete();
-      try {
-        await chunks?.cancel().timeout(requestTimeout);
-      } on Object {
-        // A failed transport must not hide the download or storage error.
-      }
-      try {
-        await output?.close();
-      } on FileSystemException {
-        // Keep the original storage error while cleaning up the partial file.
-      }
-      if (created && !completed) {
-        try {
-          await target.delete();
-        } on FileSystemException {
-          // Account removal or a disconnected drive may have removed it.
-        }
-      }
-    }
-  }
+  });
 
   void close() {
+    _closed = true;
+    for (final requests in _requests.values) {
+      for (final request in requests) {
+        request.cancel();
+      }
+    }
     if (_ownsClient) {
       _client.close();
     }
   }
 
-  Future<void> _discard(http.StreamedResponse response) async {
+  Future<void> _discard(
+    http.StreamedResponse response,
+    _MediaRequest operation,
+  ) async {
+    final subscription = response.stream.listen(null);
     try {
-      await response.stream.drain<void>().timeout(requestTimeout);
+      await operation
+          .wait(subscription.asFuture<void>())
+          .timeout(requestTimeout);
     } on Object {
       // The response is already unusable. The bounded drain only gives the
       // client a chance to reuse its connection without delaying the UI.
+    } finally {
+      await subscription.cancel().timeout(requestTimeout);
     }
   }
 
   Future<Uint8List> _readBoundedBody(
     http.StreamedResponse response, {
     required int maximumBytes,
+    required _MediaRequest operation,
     ChatDownloadProgress? onProgress,
     int? total,
   }) async {
@@ -644,7 +593,7 @@ final class ChatMediaRepository {
     final iterator = StreamIterator<List<int>>(response.stream);
     try {
       await (() async {
-        while (await iterator.moveNext()) {
+        while (await operation.wait(iterator.moveNext())) {
           length += iterator.current.length;
           if (length > maximumBytes) {
             throw const ChatMediaRepositoryException(
@@ -669,6 +618,49 @@ final class ChatMediaRepository {
       }
     }
     return builder.takeBytes();
+  }
+}
+
+final class _MediaRequest {
+  final _abort = Completer<void>();
+  final done = Completer<void>();
+  final _waiters = <void Function()>{};
+  bool _cancelled = false;
+
+  Future<void> get aborted => _abort.future;
+
+  void checkActive() {
+    if (_cancelled) {
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.credentialMissing,
+      );
+    }
+  }
+
+  Future<T> wait<T>(Future<T> pending) {
+    final stopped = Completer<T>();
+    void stop() => stopped.completeError(
+      const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.credentialMissing,
+      ),
+    );
+    _waiters.add(stop);
+    final result = Future.any([pending, stopped.future]);
+    if (_cancelled) stop();
+    return result.whenComplete(() => _waiters.remove(stop));
+  }
+
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    finishTransport();
+    for (final stop in _waiters.toList()) {
+      stop();
+    }
+  }
+
+  void finishTransport() {
+    if (!_abort.isCompleted) _abort.complete();
   }
 }
 
