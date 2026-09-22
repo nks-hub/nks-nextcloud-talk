@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 
 struct AppleIncomingShare: Codable, Equatable {
@@ -84,7 +85,7 @@ final class AppleIncomingShareInbox {
       withIntermediateDirectories: true,
       attributes: nil
     )
-    removeInterruptedWrites()
+    try withExclusiveLock { removeInterruptedWrites() }
   }
 
   func capture(
@@ -93,6 +94,21 @@ final class AppleIncomingShareInbox {
     mimeType rawMimeType: String?,
     displayName rawDisplayName: String?,
     cancelled: () -> Bool = { false }
+  ) throws -> AppleIncomingShareCapture {
+    try withExclusiveLock {
+      try captureLocked(
+        text: rawText, fileURL: fileURL, mimeType: rawMimeType,
+        displayName: rawDisplayName, cancelled: cancelled
+      )
+    }
+  }
+
+  private func captureLocked(
+    text rawText: String?,
+    fileURL: URL?,
+    mimeType rawMimeType: String?,
+    displayName rawDisplayName: String?,
+    cancelled: () -> Bool
   ) throws -> AppleIncomingShareCapture {
     let text = normalizedText(rawText)
     if fileURL == nil, text == nil {
@@ -104,7 +120,7 @@ final class AppleIncomingShareInbox {
     if fileURL != nil, let text, text.utf16.count > Self.maximumCaptionLength {
       throw AppleIncomingShareError.invalidCaption
     }
-    let existingShares = pending()
+    let existingShares = pendingLocked()
     let id = makeID()
     guard UUID(uuidString: id) != nil else {
       throw AppleIncomingShareError.invalidFile
@@ -167,6 +183,10 @@ final class AppleIncomingShareInbox {
   /// is older than `maximumPendingAgeMillis` instead of being offered again at
   /// every later start.
   func pending() -> [AppleIncomingShare] {
+    (try? withExclusiveLock { pendingLocked() }) ?? []
+  }
+
+  private func pendingLocked() -> [AppleIncomingShare] {
     guard let files = try? fileManager.contentsOfDirectory(
       at: root,
       includingPropertiesForKeys: nil,
@@ -181,7 +201,7 @@ final class AppleIncomingShareInbox {
       .compactMap(readMetadata)
       .filter { share in
         guard share.createdAtMillis < oldestAccepted else { return true }
-        complete(id: share.id)
+        completeLocked(id: share.id)
         return false
       }
       .sorted { $0.createdAtMillis < $1.createdAtMillis }
@@ -191,6 +211,11 @@ final class AppleIncomingShareInbox {
 
   @discardableResult
   func complete(id: String) -> Bool {
+    (try? withExclusiveLock { completeLocked(id: id) }) ?? false
+  }
+
+  @discardableResult
+  private func completeLocked(id: String) -> Bool {
     guard UUID(uuidString: id) != nil else { return false }
     let existed = fileManager.fileExists(atPath: metadataURL(for: id).path)
     try? fileManager.removeItem(at: payloadTemporaryURL(for: id))
@@ -381,6 +406,23 @@ final class AppleIncomingShareInbox {
     for file in files where file.pathExtension == "tmp" {
       try? fileManager.removeItem(at: file)
     }
+  }
+
+  /// The Runner and share extension must use the same lock inode.
+  private func withExclusiveLock<T>(_ operation: () throws -> T) throws -> T {
+    let lockURL = root.appendingPathComponent(".inbox.lock")
+    let descriptor = open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+    guard descriptor >= 0 else {
+      throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+    }
+    defer { close(descriptor) }
+    while flock(descriptor, LOCK_EX) != 0 {
+      guard errno == EINTR else {
+        throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+      }
+    }
+    defer { flock(descriptor, LOCK_UN) }
+    return try operation()
   }
 
   private func payloadURL(for id: String) -> URL {

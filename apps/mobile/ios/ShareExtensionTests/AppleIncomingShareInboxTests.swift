@@ -46,7 +46,11 @@ final class AppleIncomingShareInboxTests: XCTestCase {
     XCTAssertEqual(first.id, id)
     XCTAssertEqual(first.text, "Hello")
     XCTAssertEqual(duplicateCapture.share.id, id)
-    XCTAssertEqual(try AppleIncomingShareInbox(rootDirectory: root).pending(), [first])
+    let reopened = try AppleIncomingShareInbox(
+      rootDirectory: root,
+      now: { Date(timeIntervalSince1970: 1_700_000_000) }
+    )
+    XCTAssertEqual(reopened.pending(), [first])
     XCTAssertTrue(inbox.complete(id: id))
     XCTAssertTrue(inbox.pending().isEmpty)
   }
@@ -170,8 +174,68 @@ final class AppleIncomingShareInboxTests: XCTestCase {
     }
     XCTAssertTrue(inbox.pending().isEmpty)
     let leftovers = try FileManager.default.contentsOfDirectory(atPath: root.path)
-      .filter { $0 != "large.bin" }
+      .filter { $0 != "large.bin" && $0 != ".inbox.lock" }
     XCTAssertTrue(leftovers.isEmpty)
+  }
+
+  func testAnotherInboxCannotRemoveAnActiveCopy() throws {
+    let directory = try XCTUnwrap(root)
+    let source = directory.appendingPathComponent("source.bin")
+    let bytes = Data(repeating: 7, count: 128 * 1_024)
+    try bytes.write(to: source)
+    let first = try AppleIncomingShareInbox(rootDirectory: directory)
+    let copying = expectation(description: "copy holds the inbox lock")
+    let copied = expectation(description: "copy completed")
+    let opened = DispatchSemaphore(value: 0)
+    let releaseCopy = DispatchSemaphore(value: 0)
+    let attemptedOpen = DispatchSemaphore(value: 0)
+    defer { releaseCopy.signal() }
+
+    DispatchQueue.global().async {
+      do {
+        var paused = false
+        _ = try first.capture(
+          text: nil, fileURL: source, mimeType: "application/octet-stream",
+          displayName: "source.bin",
+          cancelled: {
+            if !paused {
+              paused = true
+              copying.fulfill()
+              if releaseCopy.wait(timeout: .now() + 5) == .timedOut {
+                return true
+              }
+            }
+            return false
+          }
+        )
+      } catch {
+        XCTFail("Copy failed: \(error)")
+      }
+      copied.fulfill()
+    }
+    wait(for: [copying], timeout: 2)
+    DispatchQueue.global().async {
+      attemptedOpen.signal()
+      do {
+        let second = try AppleIncomingShareInbox(rootDirectory: directory)
+        let pending = second.pending()
+        XCTAssertEqual(pending.count, 1)
+        if let filePath = pending.first?.filePath {
+          XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: filePath)), bytes)
+        }
+      } catch {
+        XCTFail("Opening the second inbox failed: \(error)")
+      }
+      opened.signal()
+    }
+    XCTAssertEqual(attemptedOpen.wait(timeout: .now() + 2), .success)
+    // The second process must wait instead of deleting the live .tmp file.
+    XCTAssertEqual(opened.wait(timeout: .now() + 0.1), .timedOut)
+    releaseCopy.signal()
+    wait(for: [copied], timeout: 3)
+    XCTAssertEqual(opened.wait(timeout: .now() + 3), .success)
+    let contents = first.pending()
+    XCTAssertEqual(contents.count, 1)
   }
 
 }

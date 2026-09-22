@@ -1,18 +1,26 @@
 import Flutter
 import Foundation
 
-@MainActor
 final class AppleIncomingShareChannel {
   static let name = "com.nkshub.nextcloudtalk/share"
 
   private let channel: FlutterMethodChannel
-  private let inbox: AppleIncomingShareInbox?
+  private let queue = DispatchQueue(label: "com.nkshub.nextcloudtalk.share")
+  private var inbox: AppleIncomingShareInbox?
 
   init(messenger: FlutterBinaryMessenger) {
     channel = FlutterMethodChannel(name: Self.name, binaryMessenger: messenger)
-    inbox = try? AppleIncomingShareInbox()
     channel.setMethodCallHandler { [weak self] call, result in
-      self?.handle(call, result: result)
+      guard let self else {
+        result(nil)
+        return
+      }
+      // A share extension can hold the file lock while copying a large file.
+      self.queue.async {
+        self.handle(call) { value in
+          DispatchQueue.main.async { result(value) }
+        }
+      }
     }
   }
 
@@ -21,6 +29,9 @@ final class AppleIncomingShareChannel {
   }
 
   private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    if inbox == nil {
+      inbox = try? AppleIncomingShareInbox()
+    }
     switch call.method {
     case "getLaunchShare":
       result(inbox?.pending().first?.methodChannelValue)
