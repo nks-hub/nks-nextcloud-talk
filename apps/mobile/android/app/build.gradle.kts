@@ -153,6 +153,8 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.16.1")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
+    // ActivityScenario helpers need the same APK as integration_test's monitor classes.
+    debugImplementation("androidx.test:core:1.7.0")
     constraints {
         // Flutter integration_test exports an older runner; both debug APKs must agree.
         add("debugImplementation", "androidx.test:runner:1.7.0")
