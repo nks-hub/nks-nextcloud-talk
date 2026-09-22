@@ -489,12 +489,7 @@ final class ChatMediaRepository {
     return ChatMediaFile(body: body, contentType: contentType);
   }
 
-  /// Streams the original attachment straight into [target].
-  ///
-  /// The bytes never sit in memory as one buffer, so what can be saved is
-  /// bounded by the disk rather than by the heap: a 117 MB build shared in a
-  /// conversation used to be refused as "too large for export" after the
-  /// client had already spent the download proving it.
+  /// Streams an attachment to disk, waiting for each write before reading on.
   Future<String> downloadOriginalToFile({
     required StoredAccount account,
     required Uri uri,
@@ -524,83 +519,99 @@ final class ChatMediaRepository {
     final credentials = base64Encode(
       utf8.encode('${account.loginName}:$appPassword'),
     );
-    final request = http.Request('GET', uri)
-      ..followRedirects = false
-      ..maxRedirects = 0
-      ..headers.addAll({
-        'Accept': expected,
-        'OCS-APIRequest': 'true',
-        'Authorization': 'Basic $credentials',
-      });
-    final http.StreamedResponse response;
+    final abort = Completer<void>();
+    final request =
+        http.AbortableRequest('GET', uri, abortTrigger: abort.future)
+          ..followRedirects = false
+          ..maxRedirects = 0
+          ..headers.addAll({
+            'Accept': expected,
+            'OCS-APIRequest': 'true',
+            'Authorization': 'Basic $credentials',
+          });
+    StreamIterator<List<int>>? chunks;
+    RandomAccessFile? output;
+    var created = false;
+    var completed = false;
     try {
-      response = await _client.send(request).timeout(requestTimeout);
-    } on Object {
-      throw const ChatMediaRepositoryException(
-        ChatMediaRepositoryError.unavailable,
-      );
-    }
-    if (response.statusCode != 200) {
-      await _discard(response);
-      throw const ChatMediaRepositoryException(
-        ChatMediaRepositoryError.unavailable,
-      );
-    }
-    if ((response.contentLength ?? 0) > maximumBytes) {
-      await _discard(response);
-      throw const ChatMediaRepositoryException(
-        ChatMediaRepositoryError.responseTooLarge,
-      );
-    }
-    final received = _normalizedMediaType(response.headers['content-type']);
-    final contentType = received == 'application/octet-stream'
-        ? expected
-        : received;
-    if (contentType == null ||
-        _isHtmlMediaType(contentType) ||
-        !_mediaTypesCompatible(expected, contentType)) {
-      await _discard(response);
-      throw const ChatMediaRepositoryException(
-        ChatMediaRepositoryError.invalidResponse,
-      );
-    }
-
-    final total = response.contentLength;
-    onProgress?.call(0, total);
-    final sink = target.openWrite();
-    var written = 0;
-    try {
-      await for (final chunk in response.stream) {
+      final response = await _client.send(request).timeout(requestTimeout);
+      chunks = StreamIterator(response.stream);
+      if (response.statusCode != 200) {
+        throw const ChatMediaRepositoryException(
+          ChatMediaRepositoryError.unavailable,
+        );
+      }
+      final total = response.contentLength;
+      if ((total ?? 0) > maximumBytes) {
+        throw const ChatMediaRepositoryException(
+          ChatMediaRepositoryError.responseTooLarge,
+        );
+      }
+      final received = _normalizedMediaType(response.headers['content-type']);
+      final contentType = received == 'application/octet-stream'
+          ? expected
+          : received;
+      if (contentType == null ||
+          _isHtmlMediaType(contentType) ||
+          !_mediaTypesCompatible(expected, contentType)) {
+        throw const ChatMediaRepositoryException(
+          ChatMediaRepositoryError.invalidResponse,
+        );
+      }
+      output = await target.open(mode: FileMode.write);
+      created = true;
+      var written = 0;
+      onProgress?.call(0, total);
+      // The timeout measures a stalled network read, not the whole download.
+      while (await chunks.moveNext().timeout(requestTimeout)) {
+        final chunk = chunks.current;
         written += chunk.length;
         if (written > maximumBytes) {
           throw const ChatMediaRepositoryException(
             ChatMediaRepositoryError.responseTooLarge,
           );
         }
-        sink.add(chunk);
+        await output.writeFrom(chunk);
         onProgress?.call(written, total);
       }
-      await sink.flush();
+      if (written == 0 || (total != null && total != written)) {
+        throw const ChatMediaRepositoryException(
+          ChatMediaRepositoryError.invalidResponse,
+        );
+      }
+      await output.flush();
+      await output.close();
+      output = null;
+      completed = true;
+      return contentType;
     } on ChatMediaRepositoryException {
+      rethrow;
+    } on FileSystemException {
       rethrow;
     } on Object {
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.unavailable,
       );
     } finally {
+      abort.complete();
       try {
-        await sink.close();
+        await chunks?.cancel().timeout(requestTimeout);
       } on Object {
-        // The write either landed or the caller is already being told it did
-        // not; a failing close must not mask the original cause.
+        // A failed transport must not hide the download or storage error.
+      }
+      try {
+        await output?.close();
+      } on FileSystemException {
+        // Keep the original storage error while cleaning up the partial file.
+      }
+      if (created && !completed) {
+        try {
+          await target.delete();
+        } on FileSystemException {
+          // Account removal or a disconnected drive may have removed it.
+        }
       }
     }
-    if (written == 0) {
-      throw const ChatMediaRepositoryException(
-        ChatMediaRepositoryError.invalidResponse,
-      );
-    }
-    return contentType;
   }
 
   void close() {

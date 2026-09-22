@@ -386,6 +386,8 @@ final class ChatAttachmentExporter implements ChatAttachmentExportAction {
         );
       } on ChatMediaRepositoryException catch (error) {
         return _saveDownloadFailure(_downloadFailureKind(error));
+      } on FileSystemException {
+        return ChatAttachmentSaveResult.storageFailed;
       } on Object {
         return _saveDownloadFailure(
           _AttachmentDownloadFailureKind.downloadFailed,
