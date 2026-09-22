@@ -13,10 +13,9 @@ import 'package:flutter/foundation.dart';
 /// to exit first.
 ///
 /// The script is deliberately boring: rename the old directory aside, rename
-/// the new one into its place, start it again, and only then delete what was
-/// renamed aside. Every step is a rename within one filesystem, so a step that
-/// fails leaves the previous build exactly where it was, and the script puts
-/// it back before giving up.
+/// the new one into its place, and start it again. The previous build stays
+/// available until another update is requested from the running replacement.
+/// A direct launch failure restores the old build.
 
 /// Which directory a platform replaces, and what it starts afterwards.
 @immutable
@@ -117,7 +116,24 @@ String buildSwapScript({
   final backup = shellQuote('${swap.currentDirectory}$bundleBackupSuffix');
   final staging = shellQuote(stagingDirectory);
   final attempts = waitSeconds * 2;
-  final start = useOpen ? r'open -n "$relaunch"' : r'"$relaunch" &';
+  final start = useOpen
+      ? <String>[
+          r'if ! open -n "$relaunch"; then',
+          '  rollback',
+          '  exit 1',
+          'fi',
+        ]
+      : <String>[
+          r'"$relaunch" &',
+          r'launched=$!',
+          'sleep 1',
+          r'if ! kill -0 "$launched" 2>/dev/null; then',
+          r'  if ! wait "$launched"; then',
+          '    rollback',
+          '    exit 1',
+          '  fi',
+          'fi',
+        ];
   final lines = <String>[
     'current=$current',
     'replacement=$replacement',
@@ -150,9 +166,18 @@ String buildSwapScript({
     '  exit 1',
     'fi',
     '',
-    start,
+    'rollback() {',
+    r'  mv -- "$current" "$replacement" || return 1',
+    r'  if ! mv -- "$backup" "$current"; then',
+    r'    mv -- "$replacement" "$current"',
+    '    return 1',
+    '  fi',
+    useOpen ? r'  open -n "$relaunch"' : r'  "$relaunch" &',
+    '}',
     '',
-    r'rm -r -- "$backup"',
+    ...start,
+    '',
+    '# Keep the previous build: a launched process may still fail during startup.',
     r'rm -r -- "$staging"',
     '',
   ];
