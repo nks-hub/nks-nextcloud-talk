@@ -153,6 +153,10 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.16.1")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
+    constraints {
+        // Flutter integration_test exports an older runner; both debug APKs must agree.
+        add("debugImplementation", "androidx.test:runner:1.7.0")
+    }
 }
 
 data class ReleaseLicenseEntry(
