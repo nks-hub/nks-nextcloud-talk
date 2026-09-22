@@ -26,6 +26,49 @@ const Set<int> _pushRegistrationStatusCodes = <int>{
 /// to the proxy itself, so this just hands the raw status/body to the
 /// protocol's own decoder rather than pre-filtering what counts as success.
 mixin _NextcloudApiPush on _HttpNextcloudApiBase {
+  /// Null means the notification app is disabled; errors remain errors.
+  Future<List<Map<String, Object?>>?> getDesktopNotifications({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _authenticatedOcsRequest(
+      'GET',
+      server.uri.replace(
+        path:
+            '${server.basePath}/ocs/v2.php/apps/notifications/api/v2/notifications',
+        queryParameters: const {'format': 'json'},
+      ),
+      loginName: loginName,
+      appPassword: appPassword,
+      abortTrigger: abortTrigger,
+    );
+    final payload = await _sendJson(
+      request,
+      allowedStatusCodes: const {200, 204, 404},
+      maximumBytes: 2 * 1024 * 1024,
+      parseBodyForStatusCodes: const {200},
+    );
+    if (payload.statusCode != 200) return null;
+    final root = payload.json;
+    final ocs = root is Map<String, Object?> ? root['ocs'] : null;
+    final data = ocs is Map<String, Object?> ? ocs['data'] : null;
+    final meta = ocs is Map<String, Object?> ? ocs['meta'] : null;
+    if (meta is! Map<String, Object?> ||
+        meta['status'] != 'ok' ||
+        meta['statuscode'] != 200 ||
+        data is! List ||
+        data.any((item) => item is! Map<String, Object?>)) {
+      throw const NextcloudApiException(NextcloudApiError.invalidJson);
+    }
+    final muted = payload.headers['x-nextcloud-user-status'] == 'dnd';
+    return [
+      for (final item in data.cast<Map<String, Object?>>())
+        if (muted) {...item, 'shouldNotify': false} else item,
+    ];
+  }
+
   /// Message a chat notification is about, or null when the server no longer
   /// has the notification (read, dismissed, or the message was deleted).
   ///

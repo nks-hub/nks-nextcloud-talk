@@ -1,10 +1,10 @@
 // ignore_for_file: prefer_initializing_formals
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../data/account_repository.dart';
 import '../../data/app_database.dart';
@@ -148,63 +148,125 @@ final class WindowsNotificationOpen {
   final String roomToken;
 }
 
-/// Turns a rise in an account's unread counts into notifications.
-///
-/// The content comes from the conversation rows a sync has already written —
-/// the same rows the conversation list renders — so nothing is fetched twice.
-/// It is also why no `app == "spreed"` filter is needed here the way it is on
-/// Android: these rows only ever hold Talk conversations, so a Deck card can
-/// never reach this path in the first place.
+/// Displays only notifications approved by the server, not unread counts.
 final class WindowsNotificationService {
   WindowsNotificationService({
     required AccountRepository accounts,
     required WindowsNotificationChannel channel,
+    required Future<List<Map<String, Object?>>?> Function(
+      String accountId,
+      Future<void> abortTrigger,
+    )
+    fetchNotifications,
   }) : _accounts = accounts,
-       _channel = channel;
+       _channel = channel,
+       _fetchNotifications = fetchNotifications;
 
   final AccountRepository _accounts;
   final WindowsNotificationChannel _channel;
-  final Map<String, StreamSubscription<List<CachedConversation>>> _watched = {};
-  final Map<String, Map<String, int>> _seenUnread = {};
+  final Future<List<Map<String, Object?>>?> Function(
+    String accountId,
+    Future<void> abortTrigger,
+  )
+  _fetchNotifications;
+  final Map<String, _DesktopNotificationAccount> _watched = {};
 
   WindowsNotificationChannel get channel => _channel;
 
-  /// Starts notifying for [accountId] on [serverUrl].
-  ///
-  /// The first emission only records the current counts. Announcing them would
-  /// mean a burst of notifications for everything unread at startup.
-  ///
-  /// The future completes once that first emission has been recorded - the
-  /// point from which a rise counts as new. Drift delivers on wall-clock time,
-  /// so this is the only way a caller can tell a silent start from one that
-  /// has not read anything yet.
   Future<void> follow(String accountId) {
-    if (_watched.containsKey(accountId)) {
-      return Future<void>.value();
-    }
-    final baseline = Completer<void>();
-    void recordBaseline() {
-      if (!baseline.isCompleted) {
-        baseline.complete();
-      }
-    }
-
-    _watched[accountId] = _accounts
+    if (_watched.containsKey(accountId)) return refresh(accountId);
+    final account = _DesktopNotificationAccount();
+    _watched[accountId] = account;
+    account.subscription = _accounts
         .watchConversations(accountId)
         .listen(
-          (conversations) {
-            _apply(accountId, conversations);
-            recordBaseline();
-          },
-          onError: (Object _, StackTrace _) => recordBaseline(),
-          onDone: recordBaseline,
+          (_) => unawaited(refresh(accountId)),
+          onError: (Object _, StackTrace _) {},
         );
-    return baseline.future;
+    // A room sync can arrive before the server stores its notification.
+    account.timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      unawaited(refresh(accountId));
+    });
+    return refresh(accountId);
+  }
+
+  Future<void> refresh(String accountId) {
+    final account = _watched[accountId];
+    if (account == null) return Future<void>.value();
+    return account.refreshing ??= _refresh(accountId, account).whenComplete(() {
+      account.refreshing = null;
+    });
+  }
+
+  Future<void> _refresh(
+    String accountId,
+    _DesktopNotificationAccount account,
+  ) async {
+    try {
+      final notifications = await _fetchNotifications(
+        accountId,
+        account.cancelled.future,
+      );
+      if (!identical(_watched[accountId], account) || notifications == null) {
+        return;
+      }
+      final previous = account.highestId;
+      var highest = previous ?? 0;
+      for (final notification in notifications) {
+        final id = notification['notification_id'];
+        if (id is int && id > highest) highest = id;
+      }
+      account.highestId = highest;
+      // The first successful fetch records old notifications without showing them.
+      if (previous == null) return;
+      final seen = <int>{};
+      for (final notification in notifications.reversed) {
+        if (!identical(_watched[accountId], account)) return;
+        final id = notification['notification_id'];
+        if (id is! int ||
+            id <= previous ||
+            !seen.add(id) ||
+            notification['app'] != 'spreed' ||
+            notification['object_type'] != 'chat' ||
+            notification['shouldNotify'] == false) {
+          continue;
+        }
+        final objectId = notification['object_id'];
+        final title = notification['subject'];
+        final body = notification['message'];
+        if (objectId is! String || title is! String || body is! String) {
+          continue;
+        }
+        final parts = objectId.split('/');
+        final String roomToken;
+        try {
+          roomToken = ConversationToken.parse(
+            parts.first,
+            path: 'notification.object_id',
+          ).value;
+        } on TalkProtocolException {
+          continue;
+        }
+        final messageId = parts.length > 1 ? int.tryParse(parts[1]) : null;
+        await _channel.show(
+          accountId: accountId,
+          roomToken: roomToken,
+          title: title,
+          body: body,
+          messageId: messageId != null && messageId > 0 ? messageId : null,
+        );
+      }
+    } on Object {
+      // Failed requests never fall back to unread counts. The next sync retries.
+    }
   }
 
   Future<void> unfollow(String accountId) async {
-    _seenUnread.remove(accountId);
-    await _watched.remove(accountId)?.cancel();
+    final account = _watched.remove(accountId);
+    if (account == null) return;
+    account.cancelled.complete();
+    account.timer?.cancel();
+    await account.subscription?.cancel();
   }
 
   Future<void> dispose() async {
@@ -213,50 +275,12 @@ final class WindowsNotificationService {
     }
     await _channel.dispose();
   }
+}
 
-  void _apply(String accountId, List<CachedConversation> conversations) {
-    final previous = _seenUnread[accountId];
-    _seenUnread[accountId] = <String, int>{
-      for (final conversation in conversations)
-        conversation.token: conversation.unreadMessages,
-    };
-    if (previous == null) {
-      return;
-    }
-    for (final conversation in conversations) {
-      final was = previous[conversation.token];
-      if (was == null || conversation.unreadMessages <= was) {
-        continue;
-      }
-      final body = conversation.lastMessageText;
-      if (body == null || body.isEmpty) {
-        continue;
-      }
-      unawaited(
-        _channel
-            .show(
-              accountId: accountId,
-              roomToken: conversation.token,
-              title: conversation.displayName,
-              body: body,
-              messageId: _lastMessageId(conversation),
-            )
-            .catchError((Object _) {}),
-      );
-    }
-  }
-
-  /// Id of the message the notification shows, so a reply can quote it. The
-  /// cached row keeps the room's raw JSON; anything unexpected is simply no
-  /// quote.
-  static int? _lastMessageId(CachedConversation conversation) {
-    try {
-      final room = jsonDecode(conversation.rawJson);
-      final last = room is Map<String, Object?> ? room['lastMessage'] : null;
-      final id = last is Map<String, Object?> ? last['id'] : null;
-      return id is int && id > 0 ? id : null;
-    } on FormatException {
-      return null;
-    }
-  }
+final class _DesktopNotificationAccount {
+  final cancelled = Completer<void>();
+  StreamSubscription<List<CachedConversation>>? subscription;
+  Timer? timer;
+  Future<void>? refreshing;
+  int? highestId;
 }

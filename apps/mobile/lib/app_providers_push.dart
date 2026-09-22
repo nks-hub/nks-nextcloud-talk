@@ -326,6 +326,24 @@ final windowsNotificationServiceProvider =
       }
       final service = WindowsNotificationService(
         accounts: ref.watch(accountRepositoryProvider),
+        fetchNotifications: (accountId, abortTrigger) async {
+          final account = await ref
+              .read(accountRepositoryProvider)
+              .getAccount(accountId);
+          if (account == null) return null;
+          final password = await ref
+              .read(credentialVaultProvider)
+              .readAppPassword(accountId);
+          if (password == null) return null;
+          return ref
+              .read(nextcloudApiProvider)
+              .getDesktopNotifications(
+                server: ServerBase.parse(account.serverUrl),
+                loginName: account.loginName,
+                appPassword: password,
+                abortTrigger: abortTrigger,
+              );
+        },
         channel: WindowsNotificationChannel(
           onNotificationAction:
               ({

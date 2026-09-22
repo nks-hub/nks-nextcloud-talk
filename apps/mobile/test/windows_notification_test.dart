@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
@@ -9,17 +11,31 @@ import 'test_support.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
   late AppDatabase database;
   late AccountRepository accounts;
   late List<Map<Object?, Object?>> shown;
-
+  late Map<String, List<Map<String, Object?>>> responses;
   const channel = MethodChannel(WindowsNotificationChannel.channelName);
+
+  Map<String, Object?> notification(
+    int id, {
+    bool shouldNotify = true,
+    String app = 'spreed',
+  }) => {
+    'notification_id': id,
+    'app': app,
+    'object_type': 'chat',
+    'object_id': 'roomtoken1/4711',
+    'subject': 'Room title',
+    'message': 'New message',
+    'shouldNotify': shouldNotify,
+  };
 
   setUp(() async {
     database = openTestDatabase();
     accounts = AccountRepository(database);
     shown = [];
+    responses = {'account-a': [], 'account-b': []};
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           if (call.method == 'show') {
@@ -27,13 +43,15 @@ void main() {
           }
           return true;
         });
-    await accounts.upsertAccount(
-      accountId: 'account-a',
-      serverUrl: 'https://cloud.example.invalid',
-      loginName: 'tester',
-      serverProductName: 'Nextcloud',
-      createdAt: DateTime.utc(2026),
-    );
+    for (final id in responses.keys) {
+      await accounts.upsertAccount(
+        accountId: id,
+        serverUrl: 'https://cloud.example.invalid',
+        loginName: id,
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026),
+      );
+    }
   });
 
   tearDown(() async {
@@ -42,141 +60,107 @@ void main() {
     await database.close();
   });
 
-  Future<void> store({
-    required String token,
-    required int unread,
-    String? lastMessage = 'hello',
-    int? lastMessageId,
+  Future<WindowsNotificationService> build({
+    Future<List<Map<String, Object?>>?> Function(String, Future<void>)? fetch,
   }) async {
-    await database
-        .into(database.cachedConversations)
-        .insertOnConflictUpdate(
-          CachedConversationsCompanion.insert(
-            accountId: 'account-a',
-            token: token,
-            displayName: 'Room $token',
-            description: '',
-            lastActivity: 20,
-            unreadMessages: unread,
-            favorite: false,
-            lastMessageText: Value(lastMessage),
-            lastMessageTimestamp: const Value(20),
-            rawJson: lastMessageId == null
-                ? '{}'
-                : '{"lastMessage":{"id":$lastMessageId}}',
-          ),
-        );
-  }
-
-  Future<WindowsNotificationService> build() async {
     final service = WindowsNotificationService(
       accounts: accounts,
-      // Named explicitly: the default resolves to the shared apple_push
-      // channel on a macOS host, and the mock below listens on the Windows
-      // one, so the test would watch a channel nothing ever posts to.
       channel: WindowsNotificationChannel(channel: channel),
+      fetchNotifications: fetch ?? (id, _) async => responses[id],
     );
-    addTearDown(() async => service.dispose());
-    // Awaited: until the first emission is recorded the service cannot tell a
-    // rise from a startup count, so asserting anything before that only says
-    // the query has not come back yet.
+    addTearDown(service.dispose);
     await service.follow('account-a');
     return service;
   }
 
-  // Waits for the conversation stream to go quiet instead of sleeping a fixed
-  // 30 ms. Drift delivers on wall-clock time, so a loaded runner can still be
-  // mid-query when the old budget ran out - `shown` was empty on a macOS CI
-  // machine and full on every developer machine.
-  Future<void> settle() async {
-    var stable = 0;
-    var last = shown.length;
-    for (var round = 0; round < 400 && stable < 6; round++) {
-      await Future<void>.delayed(const Duration(milliseconds: 5));
-      if (shown.length == last) {
-        stable++;
-      } else {
-        last = shown.length;
-        stable = 0;
-      }
-    }
-  }
-
-  // Waits for the notification itself rather than for a stretch of quiet: an
-  // empty `shown` looks identical whether nothing was announced or the query
-  // has not landed yet, and `settle` returns happily on the second reading.
-  Future<void> waitForNotifications(int count) async {
-    for (var round = 0; round < 400 && shown.length < count; round++) {
-      await Future<void>.delayed(const Duration(milliseconds: 5));
-    }
-    expect(shown, hasLength(count));
-  }
-
-  test('the first read is silent, a later rise is not', () async {
-    await store(token: 'roomtoken1', unread: 3);
-    await build();
-
-    // Announcing what was already unread at startup would be a burst of
-    // notifications for messages the user has had all along.
+  test('startup is silent and server notifications are shown once', () async {
+    responses['account-a'] = [notification(7)];
+    final service = await build();
     expect(shown, isEmpty);
-
-    await store(
-      token: 'roomtoken1',
-      unread: 4,
-      lastMessage: 'a new one',
-      lastMessageId: 4711,
-    );
-    await waitForNotifications(1);
-
+    responses['account-a'] = [notification(8), notification(7)];
+    await service.refresh('account-a');
+    await service.refresh('account-a');
     expect(shown, hasLength(1));
-    expect(shown.single['body'], 'a new one');
-    expect(shown.single['messageId'], 4711);
-    expect(shown.single['title'], 'Room roomtoken1');
-    expect(shown.single['accountId'], 'account-a');
-    expect(shown.single['roomToken'], 'roomtoken1');
-    expect(shown.single, isNot(contains('url')));
+    expect(shown.single, containsPair('messageId', 4711));
+    expect(shown.single, containsPair('body', 'New message'));
+    expect(shown.single, containsPair('accountId', 'account-a'));
+    expect(shown.single, containsPair('roomToken', 'roomtoken1'));
   });
 
-  test('an unchanged or falling count says nothing', () async {
-    await store(token: 'roomtoken1', unread: 2);
-    await build();
+  test(
+    'unread messages without an eligible server notification stay silent',
+    () async {
+      final service = await build();
+      await database
+          .into(database.cachedConversations)
+          .insert(
+            CachedConversationsCompanion.insert(
+              accountId: 'account-a',
+              token: 'roomtoken1',
+              displayName: 'Muted',
+              description: '',
+              lastActivity: 20,
+              unreadMessages: 5,
+              favorite: false,
+              lastMessageText: const Value('Do not announce'),
+              rawJson: '{"notificationLevel":3}',
+            ),
+          );
+      await service.refresh('account-a');
+      responses['account-a'] = [
+        notification(1, shouldNotify: false),
+        notification(2, app: 'other'),
+      ];
+      await service.refresh('account-a');
+      expect(shown, isEmpty);
+      responses['account-a'] = [notification(1), notification(3)];
+      await service.refresh('account-a');
+      expect(
+        shown,
+        hasLength(1),
+        reason: 'Suppressed messages must not replay later',
+      );
+    },
+  );
 
-    await store(token: 'roomtoken1', unread: 2);
-    await settle();
-    await store(token: 'roomtoken1', unread: 0);
-    await settle();
-
-    expect(shown, isEmpty);
-    // Proves the silence was a decision and not a query that never landed:
-    // a rise after it has to come through, and it has to be the only one.
-    await store(
-      token: 'roomtoken1',
-      unread: 1,
-      lastMessage: 'after the quiet',
-      lastMessageId: 99,
-    );
-    await waitForNotifications(1);
-    expect(shown.single['body'], 'after the quiet');
+  test('notification IDs and baselines are isolated per account', () async {
+    final service = await build();
+    await service.follow('account-b');
+    responses['account-a'] = [notification(10)];
+    responses['account-b'] = [notification(10)];
+    await service.refresh('account-a');
+    await service.refresh('account-b');
+    expect(shown.map((n) => n['accountId']), ['account-a', 'account-b']);
   });
 
-  test('a rise without any text to show is skipped', () async {
-    await store(token: 'roomtoken1', unread: 1);
-    await build();
-
-    await store(token: 'roomtoken1', unread: 2, lastMessage: null);
-    await settle();
-
-    expect(shown, isEmpty);
-    // Same barrier as above: the textless rise has to be skipped for lack of
-    // text, not because the stream never delivered it.
-    await store(
-      token: 'roomtoken1',
-      unread: 3,
-      lastMessage: 'now there is text',
-      lastMessageId: 77,
+  test('late responses from an unfollowed account cannot notify', () async {
+    Completer<List<Map<String, Object?>>?>? pending;
+    final service = await build(
+      fetch: (_, _) => pending?.future ?? Future.value([]),
     );
-    await waitForNotifications(1);
-    expect(shown.single['body'], 'now there is text');
+    pending = Completer();
+    final refresh = service.refresh('account-a');
+    await service.unfollow('account-a');
+    pending.complete([notification(10)]);
+    await refresh;
+    expect(shown, isEmpty);
+  });
+
+  test('a failed fetch neither notifies nor advances the baseline', () async {
+    var fail = false;
+    final service = await build(
+      fetch: (id, _) async {
+        if (fail) throw StateError('offline');
+        return responses[id];
+      },
+    );
+    responses['account-a'] = [notification(10)];
+    fail = true;
+    await service.refresh('account-a');
+    expect(shown, isEmpty);
+    fail = false;
+    await service.refresh('account-a');
+    expect(shown, hasLength(1));
   });
 
   test('native open preserves the exact account and room route', () async {
