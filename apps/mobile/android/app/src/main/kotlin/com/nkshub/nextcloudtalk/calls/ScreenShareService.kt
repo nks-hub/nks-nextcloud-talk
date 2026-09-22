@@ -32,7 +32,12 @@ class ScreenShareService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         ensureChannel(manager)
-        val notification = Notification.Builder(this, CHANNEL_ID)
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, CHANNEL_ID)
+        } else {
+            Notification.Builder(this)
+        }
+        val notification = builder
             .setContentTitle("Sharing your screen")
             .setContentText("Your screen is visible to everyone in the call.")
             .setSmallIcon(android.R.drawable.ic_menu_share)
