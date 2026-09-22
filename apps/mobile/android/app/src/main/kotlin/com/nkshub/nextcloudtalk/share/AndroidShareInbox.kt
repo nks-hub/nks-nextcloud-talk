@@ -89,7 +89,7 @@ internal class AndroidShareInbox(
         if (uri == null && text == null) {
             return AndroidShareCaptureResult.Rejected("share-empty")
         }
-        if (uri != null && uri.scheme != "content") {
+        if (uri != null && (uri.scheme != "content" || isOwnProvider(uri))) {
             return AndroidShareCaptureResult.Rejected("share-uri-unsupported")
         }
         val sourceFingerprint = sourceFingerprint(source.type, text, uri)
@@ -135,7 +135,17 @@ internal class AndroidShareInbox(
         } catch (_: java.io.IOException) {
             removeFiles(id)
             AndroidShareCaptureResult.Rejected("share-copy-failed")
+        } catch (_: RuntimeException) {
+            // Content providers can fail while opening or describing a shared file.
+            removeFiles(id)
+            AndroidShareCaptureResult.Rejected("share-copy-failed")
         }
+    }
+
+    private fun isOwnProvider(uri: Uri): Boolean {
+        val authority = uri.authority?.substringAfterLast('@') ?: return true
+        val provider = appContext.packageManager.resolveContentProvider(authority, 0)
+        return provider?.applicationInfo?.uid == appContext.applicationInfo.uid
     }
 
     /**

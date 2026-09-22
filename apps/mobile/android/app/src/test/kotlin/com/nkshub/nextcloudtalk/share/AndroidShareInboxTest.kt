@@ -5,6 +5,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ProviderInfo
+import android.content.pm.ApplicationInfo
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
@@ -24,6 +25,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.shadows.ShadowContentResolver
+import org.robolectric.Shadows.shadowOf
 
 @RunWith(RobolectricTestRunner::class)
 class AndroidShareInboxTest {
@@ -41,6 +43,15 @@ class AndroidShareInboxTest {
             ProviderInfo().apply { authority = AUTHORITY },
         )
         ShadowContentResolver.registerProviderInternal(AUTHORITY, provider)
+        shadowOf(context.packageManager).addOrUpdateProvider(ProviderInfo().apply {
+            name = ShareTestProvider::class.java.name
+            authority = AUTHORITY
+            packageName = "example.share.source"
+            applicationInfo = ApplicationInfo().apply {
+                packageName = "example.share.source"
+                uid = context.applicationInfo.uid + 1
+            }
+        })
     }
 
     @After
@@ -217,6 +228,41 @@ class AndroidShareInboxTest {
         assertTrue(inbox.pending().isEmpty())
     }
 
+    @Test
+    fun ownProviderCannotSupplyAnIncomingShare() {
+        val uri = provider.put("private.txt", "text/plain", byteArrayOf(1, 2, 3))
+        shadowOf(context.packageManager).addOrUpdateProvider(ProviderInfo().apply {
+            name = ShareTestProvider::class.java.name
+            authority = AUTHORITY
+            packageName = context.packageName
+            applicationInfo = context.applicationInfo
+        })
+
+        for (authority in listOf(AUTHORITY, "0@$AUTHORITY")) {
+            val result = inbox().capture(
+                Intent(Intent.ACTION_SEND).putExtra(
+                    Intent.EXTRA_STREAM,
+                    uri.buildUpon().encodedAuthority(authority).build(),
+                ),
+            )
+            assertEquals("share-uri-unsupported", (result as AndroidShareCaptureResult.Rejected).reason)
+        }
+        assertTrue(File(context.noBackupFilesDir, "share-inbox-v1").listFiles().isNullOrEmpty())
+    }
+
+    @Test
+    fun providerFailureAfterCopyLeavesNoPayload() {
+        val uri = provider.put("broken.txt", "text/plain", byteArrayOf(1, 2, 3))
+        provider.failMetadata = true
+
+        val result = inbox().capture(
+            Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uri),
+        )
+
+        assertEquals("share-copy-failed", (result as AndroidShareCaptureResult.Rejected).reason)
+        assertTrue(File(context.noBackupFilesDir, "share-inbox-v1").listFiles().isNullOrEmpty())
+    }
+
     private fun inbox(maximumBytes: Long = 512L * 1024 * 1024) = AndroidShareInbox(
         context = context,
         maximumBytes = maximumBytes,
@@ -274,6 +320,7 @@ class AndroidShareDeliveryTest {
 
 private class ShareTestProvider : ContentProvider() {
     private val files = mutableMapOf<Uri, Entry>()
+    var failMetadata = false
 
     fun put(name: String, mimeType: String, bytes: ByteArray): Uri {
         val uri = Uri.parse("content://com.nkshub.nextcloudtalk.share.test/$name")
@@ -296,6 +343,7 @@ private class ShareTestProvider : ContentProvider() {
         selectionArgs: Array<out String>?,
         sortOrder: String?,
     ): Cursor {
+        if (failMetadata) throw IllegalArgumentException("Invalid provider metadata")
         val entry = files[uri] ?: throw FileNotFoundException(uri.toString())
         return MatrixCursor(arrayOf(OpenableColumns.DISPLAY_NAME)).apply {
             addRow(arrayOf(entry.name))
