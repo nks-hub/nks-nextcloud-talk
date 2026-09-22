@@ -541,7 +541,11 @@ final class ChatMediaRepository {
           ChatMediaRepositoryError.unavailable,
         );
       }
-      final total = response.contentLength;
+      // IOClient keeps the compressed Content-Length after decoding gzip.
+      final encoding = response.headers['content-encoding']?.toLowerCase();
+      final total = encoding == null || encoding == 'identity'
+          ? response.contentLength
+          : null;
       if ((total ?? 0) > maximumBytes) {
         throw const ChatMediaRepositoryException(
           ChatMediaRepositoryError.responseTooLarge,

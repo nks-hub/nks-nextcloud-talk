@@ -111,6 +111,33 @@ void main() {
     );
     expect(await directory.exists(), isTrue);
   });
+
+  test(
+    'decoded gzip bytes are not compared to the compressed length',
+    () async {
+      final totals = <int?>[];
+      final repository = ChatMediaRepository(
+        MemoryCredentialVault()..values[_account.id] = 'fixture-app-password',
+        client: _StreamingClient(
+          http.StreamedResponse(
+            Stream.value(List<int>.filled(1024, 65)),
+            200,
+            contentLength: 29,
+            headers: {'content-type': 'text/plain', 'content-encoding': 'gzip'},
+          ),
+        ),
+      );
+      await repository.downloadOriginalToFile(
+        account: _account,
+        uri: _uri,
+        expectedContentType: 'text/plain',
+        target: target,
+        onProgress: (_, total) => totals.add(total),
+      );
+      expect(await target.length(), 1024);
+      expect(totals, everyElement(isNull));
+    },
+  );
 }
 
 Future<String> _download(ChatMediaRepository repository, File target) =>
