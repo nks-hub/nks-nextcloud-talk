@@ -208,8 +208,8 @@ final callKitChannelProvider = Provider<CallKitChannel?>((ref) {
   }
   final channel = CallKitChannel(onVoipToken: registration.installVoipToken);
   ref.onDispose(channel.dispose);
-  unawaited(channel.checkLaunchVoipToken());
   bindSystemCallActions(ref, channel);
+  unawaited(channel.start());
   return channel;
 });
 
@@ -257,7 +257,11 @@ void bindSystemCallActions(Ref ref, SystemCallScreen<SystemCallRing> channel) {
   });
   final ended = channel.ended.listen((ring) {
     if (ring == null) {
+      final activeRooms = rings.keys.toList();
       rings.clear();
+      for (final key in activeRooms) {
+        unawaited(ref.read(callJoinControllerProvider(key).notifier).leave());
+      }
       for (final listener in listeners.values) {
         listener.close();
       }

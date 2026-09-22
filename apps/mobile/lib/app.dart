@@ -58,6 +58,7 @@ final class _NextcloudTalkAppState extends ConsumerState<NextcloudTalkApp> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(callKitChannelProvider);
     final serverSeed = AppTheme.seedFromServerHex(
       ref.watch(selectedAccountThemeColorProvider).valueOrNull,
     );

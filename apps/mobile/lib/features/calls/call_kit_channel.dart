@@ -69,6 +69,7 @@ final class CallKitChannel implements SystemCallScreen<CallKitRing> {
 
   final MethodChannel _channel;
   final void Function(String)? _onVoipToken;
+  bool _disposed = false;
   final StreamController<CallKitRing> _answered =
       StreamController<CallKitRing>.broadcast();
   final StreamController<CallKitRing?> _ended =
@@ -83,6 +84,19 @@ final class CallKitChannel implements SystemCallScreen<CallKitRing> {
   @override
   Stream<CallKitRing?> get ended => _ended.stream;
 
+  /// Starts native delivery after the call lifecycle listeners are attached.
+  Future<void> start() async {
+    await checkLaunchVoipToken();
+    if (_disposed) return;
+    try {
+      await _channel.invokeMethod<void>('ready');
+    } on MissingPluginException {
+      return;
+    } on PlatformException {
+      return;
+    }
+  }
+
   /// Collects the token that arrived before this side existed. Safe to call
   /// on every platform and at any point in the launch.
   Future<void> checkLaunchVoipToken() async {
@@ -94,7 +108,7 @@ final class CallKitChannel implements SystemCallScreen<CallKitRing> {
     } on PlatformException {
       return;
     }
-    if (token != null && token.isNotEmpty) {
+    if (!_disposed && token != null && token.isNotEmpty) {
       _onVoipToken?.call(token);
     }
   }
@@ -141,6 +155,7 @@ final class CallKitChannel implements SystemCallScreen<CallKitRing> {
   }
 
   void dispose() {
+    _disposed = true;
     _channel.setMethodCallHandler(null);
     unawaited(_answered.close());
     unawaited(_ended.close());

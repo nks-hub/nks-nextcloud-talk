@@ -61,6 +61,32 @@ void main() {
     expect(tokens, isEmpty);
   });
 
+  test(
+    'start collects the token before releasing queued native actions',
+    () async {
+      final answered = <CallKitRing>[];
+      bridge.answered.listen(answered.add);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            if (call.method == 'getVoipToken') return 'ab12';
+            if (call.method == 'ready') {
+              expect(tokens, ['ab12']);
+              await fromNative('callAnswered', <String, Object?>{
+                'accountId': 'acc-1',
+                'roomToken': 'room-1',
+                'callId': '11111111-1111-1111-1111-111111111111',
+              });
+            }
+            return null;
+          });
+      await bridge.start();
+      await Future<void>.delayed(Duration.zero);
+      expect(calls.map((call) => call.method), ['getVoipToken', 'ready']);
+      expect(answered.single.roomToken, 'room-1');
+    },
+  );
+
   test('a later token replaces the launch one', () async {
     await fromNative('voipTokenChanged', <String, Object?>{'token': 'cd34'});
 

@@ -8,6 +8,52 @@ import PushKit
   import WebRTC
 #endif
 
+/// Keeps call actions until Dart has attached its lifecycle listeners.
+final class CallKitActionDelivery {
+  private var ready = false
+  private var pending: [(String, [String: Any])] = []
+  private var emit: ((String, [String: Any]) -> Void)?
+
+  func attach(_ emit: @escaping (String, [String: Any]) -> Void) {
+    ready = false
+    self.emit = emit
+  }
+
+  func detach() {
+    ready = false
+    emit = nil
+  }
+
+  func markReady() {
+    ready = true
+    let queued = pending
+    pending.removeAll()
+    for (method, arguments) in queued {
+      emit?(method, arguments)
+    }
+  }
+
+  func enqueue(_ method: String, _ arguments: [String: Any]) {
+    if ready, let emit {
+      emit(method, arguments)
+      return
+    }
+    if method == "callEnded" {
+      guard let callId = arguments["callId"] as? String else {
+        pending.removeAll()
+        pending.append((method, arguments))
+        return
+      }
+      let unanswered = pending.contains {
+        $0.0 == "callAnswered" && $0.1["callId"] as? String == callId
+      }
+      pending.removeAll { $0.1["callId"] as? String == callId }
+      if unanswered { return }
+    }
+    pending.append((method, arguments))
+  }
+}
+
 /// PushKit and CallKit: an incoming Talk call rings the system's own call UI
 /// even when the app is not running at all.
 ///
@@ -31,6 +77,7 @@ final class CallPushKit: NSObject {
   private let provider: CXProvider
   private let callController = CXCallController()
   private var channel: FlutterMethodChannel?
+  private let actions = CallKitActionDelivery()
 
   private var launchToken: String?
   private var launchTokenWasTaken = false
@@ -65,6 +112,9 @@ final class CallPushKit: NSObject {
       switch call.method {
       case "getVoipToken":
         result(self.takeLaunchToken())
+      case "ready":
+        self.actions.markReady()
+        result(nil)
       case "endCall":
         self.endCall(call.arguments)
         result(nil)
@@ -73,18 +123,20 @@ final class CallPushKit: NSObject {
       }
     }
     self.channel = channel
+    actions.attach { [weak channel] method, arguments in
+      channel?.invokeMethod(method, arguments: arguments)
+    }
   }
 
   func dispose() {
     channel?.setMethodCallHandler(nil)
     channel = nil
+    actions.detach()
   }
 
   private func takeLaunchToken() -> String? {
     launchTokenWasTaken = true
-    let token = launchToken
-    launchToken = nil
-    return token
+    return launchToken
   }
 
   /// Dart asking for the ringing call to stop — the user hung up in the app,
@@ -119,10 +171,9 @@ extension CallPushKit: PKPushRegistryDelegate {
       return
     }
     let hex = ApplePushDelivery.hexString(from: credentials.token)
+    launchToken = hex
     if launchTokenWasTaken {
       emit("voipTokenChanged", ["token": hex])
-    } else {
-      launchToken = hex
     }
   }
 
@@ -215,7 +266,7 @@ extension CallPushKit: PKPushRegistryDelegate {
 extension CallPushKit: CXProviderDelegate {
   func providerDidReset(_ provider: CXProvider) {
     routes.removeAll()
-    emit("callEnded", [:])
+    actions.enqueue("callEnded", [:])
   }
 
   func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
@@ -226,13 +277,13 @@ extension CallPushKit: CXProviderDelegate {
       action.fail()
       return
     }
-    emit("callAnswered", route)
+    actions.enqueue("callAnswered", route)
     action.fulfill()
   }
 
   func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
     let route = routes.removeValue(forKey: action.callUUID) ?? [:]
-    emit("callEnded", route)
+    actions.enqueue("callEnded", route)
     action.fulfill()
   }
 

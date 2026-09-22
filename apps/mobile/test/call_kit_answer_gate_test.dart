@@ -104,6 +104,28 @@ void main() {
     expect(controller.wasDisposed, isFalse);
   });
 
+  test('a provider reset leaves calls still held by an open screen', () async {
+    final screen = container.listen(callJoinControllerProvider(key), (_, _) {});
+    addTearDown(screen.close);
+    controller.accept = true;
+    await answer('11111111-1111-1111-1111-111111111111');
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .handlePlatformMessage(
+          CallKitChannel.channelName,
+          const StandardMethodCodec().encodeMethodCall(
+            const MethodCall('callEnded', <String, Object?>{}),
+          ),
+          (_) {},
+        );
+    await pumpEventQueue();
+    expect(controller.wasDisposed, isFalse);
+    expect(controller.leaves, 1);
+    expect(
+      container.read(callJoinControllerProvider(key)).phase,
+      CallJoinPhase.idle,
+    );
+  });
+
   test('an unexpected join error still releases the native ring', () async {
     controller.joinError = StateError('join failed');
     await answer('11111111-1111-1111-1111-111111111111');
