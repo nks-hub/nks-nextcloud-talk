@@ -8,6 +8,7 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_attachment_exporter.dart';
+import 'package:nextcloudtalk/features/chat/media/chat_attachment_opener.dart';
 
 import 'test_support.dart';
 
@@ -123,7 +124,11 @@ void main() {
       );
       expect(result, isNot(ChatAttachmentSaveResult.saved));
       expect(dialogs, 0);
-      expect(await root.list().toList(), isEmpty);
+      final accountDirectory = chatAttachmentCacheAccountDirectory(
+        rootDirectory: root,
+        accountId: _account.id,
+      );
+      expect(await accountDirectory.list().toList(), isEmpty);
     },
   );
 

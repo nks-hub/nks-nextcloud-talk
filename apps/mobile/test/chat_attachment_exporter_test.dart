@@ -9,6 +9,7 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_attachment_exporter.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_attachment_mobile_saver.dart';
+import 'package:nextcloudtalk/features/chat/media/chat_attachment_opener.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -57,6 +58,63 @@ void main() {
     expect(system.savedNames.single, 'report_final_.txt');
     expect(system.savedTypes.single, 'text/plain');
   });
+
+  test(
+    'account wipe removes a source waiting in the mobile picker only for that account',
+    () async {
+      final root = await scratch();
+      final delayed = _DelayedMobileSaver();
+      final other = _RecordingMobileSaver();
+      final repository = ChatMediaRepository(
+        MemoryCredentialVault()
+          ..values[_account.id] = 'password-a'
+          ..values['account-b'] = 'password-b',
+        client: _StreamingClient(
+          (_) async => http.StreamedResponse(
+            Stream.value(utf8.encode('private attachment')),
+            200,
+            headers: {'content-type': 'text/plain'},
+          ),
+        ),
+      );
+      ChatAttachmentExporter exporter(ChatAttachmentMobileSaver saver) =>
+          ChatAttachmentExporter(
+            repository: repository,
+            temporaryDirectory: () async => root,
+            system: PlatformChatAttachmentSystem(
+              mobilePlatform: true,
+              mobileSaver: saver,
+            ),
+          );
+      final pending = exporter(delayed).save(
+        account: _account,
+        uri: _uri,
+        fileName: 'report.txt',
+        expectedContentType: 'text/plain',
+      );
+      final source = await delayed.opened.future;
+      expect(await File(source).exists(), isTrue);
+      await repository.suspendAccount(_account.id);
+      await evictChatAttachmentFiles(
+        rootDirectory: root,
+        accountId: _account.id,
+      );
+      expect(await File(source).exists(), isFalse);
+
+      final otherResult = await exporter(other).save(
+        account: _account.copyWith(id: 'account-b'),
+        uri: _uri,
+        fileName: 'report.txt',
+        expectedContentType: 'text/plain',
+      );
+      expect(otherResult, ChatAttachmentSaveResult.saved);
+      expect(other.bytes.single, utf8.encode('private attachment'));
+
+      delayed.destinationChosen.complete();
+      expect(await pending, ChatAttachmentSaveResult.storageFailed);
+      expect(delayed.copied, isFalse);
+    },
+  );
 
   test('an attachment far past the old in-memory ceiling still saves', () async {
     // The limit used to be 64 MiB of buffered bytes, so a 117 MB build shared
@@ -635,6 +693,25 @@ final class _RecordingMobileSaver implements ChatAttachmentMobileSaver {
       throw ChatAttachmentMobileSaveException(failure);
     }
     return result;
+  }
+}
+
+final class _DelayedMobileSaver implements ChatAttachmentMobileSaver {
+  final opened = Completer<String>();
+  final destinationChosen = Completer<void>();
+  bool copied = false;
+
+  @override
+  Future<ChatAttachmentMobileSaveResult> save({
+    required String sourcePath,
+    required String fileName,
+    required String contentType,
+  }) async {
+    opened.complete(sourcePath);
+    await destinationChosen.future;
+    await File(sourcePath).readAsBytes();
+    copied = true;
+    return ChatAttachmentMobileSaveResult.saved;
   }
 }
 

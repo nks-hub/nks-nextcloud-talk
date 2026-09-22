@@ -380,8 +380,12 @@ final class ChatAttachmentExporter implements ChatAttachmentExportAction {
     final ChatAttachmentSystemResult result;
     try {
       final root = await _temporaryDirectory();
-      await root.create(recursive: true);
-      scratch = await root.createTemp('chat-attachment-download-');
+      final accountDirectory = chatAttachmentCacheAccountDirectory(
+        rootDirectory: root,
+        accountId: account.id,
+      );
+      await accountDirectory.create(recursive: true);
+      scratch = await accountDirectory.createTemp('download-');
       final source = File('${scratch.path}${Platform.pathSeparator}$name');
       final String contentType;
       try {
