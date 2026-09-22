@@ -82,6 +82,7 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
     ChatDownloadProgress? onProgress,
   }) async {
     final File localFile;
+    final Directory downloadDirectory;
     final String contentType;
     try {
       final root = await _cacheDirectory();
@@ -90,8 +91,9 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
         accountId: account.id,
       );
       await directory.create(recursive: true);
+      downloadDirectory = await directory.createTemp('download-');
       localFile = File(
-        '${directory.path}${Platform.pathSeparator}'
+        '${downloadDirectory.path}${Platform.pathSeparator}'
         '${chatAttachmentFileName(fileName)}',
       );
     } on FileSystemException {
@@ -102,8 +104,7 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
       return ChatAttachmentOpenResult.storageFailed;
     }
 
-    // Straight to disk: an attachment can be hundreds of megabytes, and the
-    // file is where it has to end up anyway.
+    var downloaded = false;
     try {
       contentType = await _repository.downloadOriginalToFile(
         account: account,
@@ -112,6 +113,7 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
         target: localFile,
         onProgress: onProgress,
       );
+      downloaded = true;
     } on ChatMediaRepositoryException catch (error) {
       return switch (error.code) {
         ChatMediaRepositoryError.credentialMissing =>
@@ -129,6 +131,14 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
     } on Object {
       // Credential vault backends can fail outside the repository error enum.
       return ChatAttachmentOpenResult.downloadFailed;
+    } finally {
+      if (!downloaded) {
+        try {
+          await downloadDirectory.delete(recursive: true);
+        } on FileSystemException {
+          // Account removal may have already cleared this directory.
+        }
+      }
     }
 
     final opened = await _launcher.open(

@@ -11,6 +11,52 @@ import 'test_support.dart';
 
 void main() {
   test(
+    'concurrent attachments with the same name keep separate files',
+    () async {
+      final root = await Directory.systemTemp.createTemp('attachment-names-');
+      addTearDown(() => root.delete(recursive: true));
+      final launcher = _RecordingLauncher();
+      final opener = ChatAttachmentOpener(
+        repository: _repository(
+          (request) async => http.StreamedResponse(
+            Stream.value(utf8.encode(request.url.pathSegments.last)),
+            200,
+            headers: {'content-type': 'text/plain'},
+          ),
+        ),
+        cacheDirectory: () async => root,
+        launcher: launcher,
+      );
+
+      final results = await Future.wait([
+        for (final name in ['first.txt', 'second.txt'])
+          opener.open(
+            account: _account,
+            uri: _uri.resolve(name),
+            fileName: 'report.txt',
+            expectedContentType: 'text/plain',
+          ),
+      ]);
+
+      expect(results, everyElement(ChatAttachmentOpenResult.opened));
+      expect(launcher.paths.toSet(), hasLength(2));
+      expect(
+        await Future.wait(
+          launcher.paths.map((path) => File(path).readAsString()),
+        ),
+        unorderedEquals(['first.txt', 'second.txt']),
+      );
+      await evictChatAttachmentFiles(
+        rootDirectory: root,
+        accountId: _account.id,
+      );
+      for (final path in launcher.paths) {
+        expect(await File(path).exists(), isFalse);
+      }
+    },
+  );
+
+  test(
     'downloads exact authenticated bytes before opening a safe local file',
     () async {
       final root = await Directory.systemTemp.createTemp('attachment-open-');
@@ -71,6 +117,11 @@ void main() {
 
       expect(result, ChatAttachmentOpenResult.downloadFailed);
       expect(launcher.paths, isEmpty);
+      final accountDirectory = chatAttachmentCacheAccountDirectory(
+        rootDirectory: root,
+        accountId: _account.id,
+      );
+      expect(await accountDirectory.list().toList(), isEmpty);
     },
   );
 
