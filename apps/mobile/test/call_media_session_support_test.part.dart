@@ -75,11 +75,13 @@ final class _FakeEngine implements CallMediaEngine {
   int microphoneOpens = 0;
   CallMediaError? connectionError;
   CallMediaError? microphoneError;
+  Completer<void>? microphoneStartup;
   final List<_FakeAudio> audio = <_FakeAudio>[];
   final List<_FakeConnection> connections = <_FakeConnection>[];
 
   @override
   Future<CallLocalAudio> openMicrophone() async {
+    await microphoneStartup?.future;
     final error = microphoneError;
     if (error != null) {
       throw CallMediaException(error);

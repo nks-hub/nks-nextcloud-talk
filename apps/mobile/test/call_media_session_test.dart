@@ -592,6 +592,41 @@ final class _MediaSessionTests {
     );
 
     test(
+      'an interruption during microphone startup is applied before publishing',
+      () async {
+        final interruptions =
+            StreamController<CallAudioInterruption>.broadcast();
+        addTearDown(interruptions.close);
+        engine.microphoneStartup = Completer<void>();
+        final media = CallMediaSession(
+          initial: _update(
+            localPeerId: _local,
+            participants: [_participant(_remote)],
+          ),
+          updates: updates.stream,
+          sendMessage: (message) async {
+            sent.add(message);
+            return true;
+          },
+          engine: engine,
+          interruptions: _FakeInterruptions(interruptions.stream),
+        );
+        addTearDown(media.dispose);
+        final starting = media.start();
+        await pumpEventQueue();
+        interruptions.add(CallAudioInterruption.began);
+        await pumpEventQueue();
+        engine.microphoneStartup!.complete();
+        await starting;
+
+        expect(engine.audio.single.muted, isTrue);
+        interruptions.add(CallAudioInterruption.ended);
+        await pumpEventQueue();
+        expect(engine.audio.single.muted, isFalse);
+      },
+    );
+
+    test(
       'an interruption mutes the microphone and giving it back unmutes',
       () async {
         final interruptions =

@@ -27,17 +27,20 @@ internal class CallAudioModeWatcher(
     private var interrupted = false
 
     private val listener =
-        AudioManager.OnModeChangedListener { mode ->
-            val now = callAudioModeInterrupts(mode)
-            if (now != interrupted) {
-                interrupted = now
-                onInterruptionChanged(now)
-            }
+        AudioManager.OnModeChangedListener(::reportMode)
+
+    private fun reportMode(mode: Int) {
+        val now = callAudioModeInterrupts(mode)
+        if (now != interrupted) {
+            interrupted = now
+            onInterruptionChanged(now)
         }
+    }
 
     fun start(post: (Runnable) -> Unit) {
         interrupted = false
         audioManager.addOnModeChangedListener({ post(it) }, listener)
+        reportMode(audioManager.mode)
     }
 
     fun stop() {

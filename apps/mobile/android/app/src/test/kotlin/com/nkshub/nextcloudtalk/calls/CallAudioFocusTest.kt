@@ -25,6 +25,26 @@ import org.robolectric.shadows.ShadowLooper
 @Config(sdk = [29])
 class CallAudioFocusTest {
     @Test
+    @Config(sdk = [29, 31])
+    fun anExistingTelephoneCallIsReportedOnSubscription() {
+        val context = RuntimeEnvironment.getApplication()
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        audio.mode = AudioManager.MODE_IN_CALL
+        val events = mutableListOf<Any?>()
+        val focus = CallAudioFocus(context)
+        try {
+            focus.onListen(null, recordingSink(events))
+            ShadowLooper.idleMainLooper()
+            assertEquals(listOf<Any?>("began"), events)
+            audio.mode = AudioManager.MODE_NORMAL
+            advanceOnePoll()
+            assertEquals(listOf<Any?>("began", "ended"), events)
+        } finally {
+            focus.onCancel(null)
+        }
+    }
+
+    @Test
     fun aTelephoneCallBelowApi31IsReportedAndSoIsItsEnd() {
         val context = RuntimeEnvironment.getApplication()
         val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager

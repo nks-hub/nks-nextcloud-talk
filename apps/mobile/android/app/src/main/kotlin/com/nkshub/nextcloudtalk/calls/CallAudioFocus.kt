@@ -82,6 +82,7 @@ class CallAudioFocus(context: Context) : EventChannel.StreamHandler {
         sink = events
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             polled = callAudioModeInterrupts(audioManager.mode)
+            if (polled) sink?.success(BEGAN)
             handler.postDelayed(poll, POLL_INTERVAL_MS)
             return
         }

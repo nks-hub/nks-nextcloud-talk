@@ -182,6 +182,7 @@ final class CallMediaSession {
       _interruptionEvents = _interruptions.events.listen(_onInterruption);
       try {
         _audio = await _engine.openMicrophone();
+        if (_interrupted || _userMuted) await _applyMicrophone();
         _routeChanges ??= _audio!.routeChanges.listen(
           (_) => unawaited(_enqueue(_refreshAudioRoutes)),
         );
