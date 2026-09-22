@@ -178,6 +178,19 @@ final class AppleIncomingShareInboxTests: XCTestCase {
     XCTAssertTrue(leftovers.isEmpty)
   }
 
+  func testCancelledTextShareIsNotStored() throws {
+    let inbox = try AppleIncomingShareInbox(rootDirectory: root)
+    XCTAssertThrowsError(
+      try inbox.capture(
+        text: "cancelled text", fileURL: nil, mimeType: nil, displayName: nil,
+        cancelled: { true }
+      )
+    ) { error in
+      XCTAssertTrue(error is CancellationError)
+    }
+    XCTAssertTrue(inbox.pending().isEmpty)
+  }
+
   func testAnotherInboxCannotRemoveAnActiveCopy() throws {
     let directory = try XCTUnwrap(root)
     let source = directory.appendingPathComponent("source.bin")

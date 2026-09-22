@@ -66,17 +66,12 @@ final class ShareViewController: UIViewController {
       let providers = items.flatMap { $0.attachments ?? [] }
       let fileProvider = try singleFileProvider(in: providers)
       let text = try await sharedText(from: items, providers: providers, excluding: fileProvider)
-      let inbox = try AppleIncomingShareInbox()
+      let inbox = try await ShareInboxWork.run { try AppleIncomingShareInbox() }
       capturedInbox = inbox
       if let provider = fileProvider {
         capturedShare = try await captureFile(provider, text: text, inbox: inbox)
       } else {
-        capturedShare = try inbox.capture(
-          text: text,
-          fileURL: nil,
-          mimeType: nil,
-          displayName: nil
-        )
+        capturedShare = try await captureText(text, inbox: inbox)
       }
       try Task.checkCancellation()
       processingTask = nil
@@ -89,19 +84,31 @@ final class ShareViewController: UIViewController {
         for: .normal
       )
     } catch is CancellationError {
-      if let capturedShare {
-        if capturedShare.inserted {
-          _ = capturedInbox?.complete(id: capturedShare.share.id)
-        }
-      }
+      await discard(capturedShare, from: capturedInbox)
       return
     } catch {
-      if let capturedShare {
-        if capturedShare.inserted {
-          _ = capturedInbox?.complete(id: capturedShare.share.id)
-        }
+      await discard(capturedShare, from: capturedInbox)
+      if !cancellation.isCancelled {
+        showFailure()
       }
-      showFailure()
+    }
+  }
+
+  private func discard(_ capture: AppleIncomingShareCapture?, from inbox: AppleIncomingShareInbox?) async {
+    guard let capture, capture.inserted else { return }
+    _ = try? await ShareInboxWork.run { inbox?.complete(id: capture.share.id) }
+  }
+
+  func captureText(_ text: String?, inbox: AppleIncomingShareInbox) async throws
+    -> AppleIncomingShareCapture
+  {
+    let cancellation = cancellation
+    return try await ShareInboxWork.run {
+      guard !cancellation.isCancelled else { throw CancellationError() }
+      return try inbox.capture(
+        text: text, fileURL: nil, mimeType: nil, displayName: nil,
+        cancelled: { cancellation.isCancelled }
+      )
     }
   }
 
@@ -193,22 +200,27 @@ final class ShareViewController: UIViewController {
     mimeType: String?,
     inbox: AppleIncomingShareInbox
   ) async throws -> AppleIncomingShareCapture {
-    try await withCheckedThrowingContinuation { continuation in
-      provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, error in
-        do {
-          if let error { throw error }
-          guard let url else { throw AppleIncomingShareError.invalidFile }
-          continuation.resume(
-            returning: try inbox.capture(
-              text: text,
-              fileURL: url,
-              mimeType: mimeType,
-              displayName: provider.suggestedName ?? url.lastPathComponent,
-              cancelled: { [cancellation = self.cancellation] in cancellation.isCancelled }
-            )
-          )
-        } catch {
-          continuation.resume(throwing: error)
+    let cancellation = cancellation
+    let suggestedName = provider.suggestedName
+    return try await withCheckedThrowingContinuation { continuation in
+      DispatchQueue.global(qos: .userInitiated).async {
+        provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, error in
+          do {
+            if let error { throw error }
+            guard let url else { throw AppleIncomingShareError.invalidFile }
+            // The provider's temporary URL expires when this callback returns.
+            let capture = try ShareInboxWork.queue.sync {
+              guard !cancellation.isCancelled else { throw CancellationError() }
+              return try inbox.capture(
+                text: text, fileURL: url, mimeType: mimeType,
+                displayName: suggestedName ?? url.lastPathComponent,
+                cancelled: { cancellation.isCancelled }
+              )
+            }
+            continuation.resume(returning: capture)
+          } catch {
+            continuation.resume(throwing: error)
+          }
         }
       }
     }
@@ -232,38 +244,43 @@ final class ShareViewController: UIViewController {
         }
       }
     }
-    if let url = item as? URL {
+    let cancellation = cancellation
+    let suggestedName = provider.suggestedName
+    return try await ShareInboxWork.run {
+      guard !cancellation.isCancelled else { throw CancellationError() }
+      if let url = item as? URL {
+        return try inbox.capture(
+          text: text,
+          fileURL: url,
+          mimeType: mimeType,
+          displayName: suggestedName ?? url.lastPathComponent,
+          cancelled: { cancellation.isCancelled }
+        )
+      }
+      let data: Data
+      if let value = item as? Data {
+        data = value
+      } else if let image = item as? UIImage, let value = image.pngData() {
+        data = value
+      } else {
+        throw AppleIncomingShareError.invalidFile
+      }
+      guard !cancellation.isCancelled else { throw CancellationError() }
+      let type = UTType(typeIdentifier)
+      let suffix = type?.preferredFilenameExtension ?? "bin"
+      let temporary = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString)
+        .appendingPathExtension(suffix)
+      try data.write(to: temporary, options: [.atomic])
+      defer { try? FileManager.default.removeItem(at: temporary) }
       return try inbox.capture(
         text: text,
-        fileURL: url,
-        mimeType: mimeType,
-        displayName: provider.suggestedName ?? url.lastPathComponent,
-        cancelled: { [cancellation = self.cancellation] in cancellation.isCancelled }
+        fileURL: temporary,
+        mimeType: item is UIImage ? "image/png" : mimeType,
+        displayName: suggestedName ?? "shared-file.\(suffix)",
+        cancelled: { cancellation.isCancelled }
       )
     }
-    let data: Data
-    if let value = item as? Data {
-      data = value
-    } else if let image = item as? UIImage, let value = image.pngData() {
-      data = value
-    } else {
-      throw AppleIncomingShareError.invalidFile
-    }
-    guard !cancellation.isCancelled else { throw CancellationError() }
-    let type = UTType(typeIdentifier)
-    let suffix = type?.preferredFilenameExtension ?? "bin"
-    let temporary = FileManager.default.temporaryDirectory
-      .appendingPathComponent(UUID().uuidString)
-      .appendingPathExtension(suffix)
-    try data.write(to: temporary, options: [.atomic])
-    defer { try? FileManager.default.removeItem(at: temporary) }
-    return try inbox.capture(
-      text: text,
-      fileURL: temporary,
-      mimeType: item is UIImage ? "image/png" : mimeType,
-      displayName: provider.suggestedName ?? "shared-file.\(suffix)",
-      cancelled: { [cancellation = self.cancellation] in cancellation.isCancelled }
-    )
   }
 
   private func isFileProvider(_ provider: NSItemProvider) -> Bool {
@@ -311,5 +328,21 @@ private final class ShareCancellation: @unchecked Sendable {
     lock.lock()
     cancelled = true
     lock.unlock()
+  }
+}
+
+private enum ShareInboxWork {
+  static let queue = DispatchQueue(label: "com.nkshub.nextcloudtalk.share.capture")
+
+  static func run<T>(_ operation: @escaping () throws -> T) async throws -> T {
+    try await withCheckedThrowingContinuation { continuation in
+      queue.async {
+        do {
+          continuation.resume(returning: try operation())
+        } catch {
+          continuation.resume(throwing: error)
+        }
+      }
+    }
   }
 }

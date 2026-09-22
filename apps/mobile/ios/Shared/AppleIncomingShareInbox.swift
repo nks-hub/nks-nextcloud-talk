@@ -110,6 +110,7 @@ final class AppleIncomingShareInbox {
     displayName rawDisplayName: String?,
     cancelled: () -> Bool
   ) throws -> AppleIncomingShareCapture {
+    if cancelled() { throw CancellationError() }
     let text = normalizedText(rawText)
     if fileURL == nil, text == nil {
       throw AppleIncomingShareError.empty
@@ -167,7 +168,9 @@ final class AppleIncomingShareInbox {
         sourceFingerprint: fingerprint,
         createdAtMillis: createdAtMillis
       )
+      if cancelled() { throw CancellationError() }
       try writeMetadata(share)
+      if cancelled() { throw CancellationError() }
       return AppleIncomingShareCapture(share: share, inserted: true)
     } catch {
       try? fileManager.removeItem(at: payloadTemporaryURL)

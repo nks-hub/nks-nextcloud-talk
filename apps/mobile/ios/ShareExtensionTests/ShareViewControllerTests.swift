@@ -56,8 +56,19 @@ final class ShareViewControllerTests: XCTestCase {
 
   private func makeInbox() throws -> AppleIncomingShareInbox {
     try AppleIncomingShareInbox(
-      rootDirectory: root.appendingPathComponent("inbox", isDirectory: true)
+      rootDirectory: root.appendingPathComponent("inbox", isDirectory: true),
+      makeID: {
+        XCTAssertFalse(Thread.isMainThread)
+        return UUID().uuidString.lowercased()
+      }
     )
+  }
+
+  func testTextCaptureRunsAwayFromTheMainThread() async throws {
+    let inbox = try makeInbox()
+    let capture = try await controller.captureText("shared text", inbox: inbox)
+    XCTAssertEqual(capture.share.text, "shared text")
+    XCTAssertEqual(inbox.pending(), [capture.share])
   }
 
   private func digest(_ data: Data) -> String {
