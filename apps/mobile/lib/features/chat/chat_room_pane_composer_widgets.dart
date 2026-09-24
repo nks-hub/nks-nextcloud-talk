@@ -339,10 +339,23 @@ final class _ChatComposer extends ConsumerWidget {
   }
 
   KeyEventResult _handleKey(KeyEvent event, {required bool sendsOnEnter}) {
-    if (event is! KeyDownEvent) {
+    final key = event.logicalKey;
+    final isEnter =
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter;
+    // Enter is judged on a repeat as well as on a press. When the release of
+    // an earlier Enter is lost — fast typing, the window losing focus between
+    // press and release — the embedder reports the next press as a repeat.
+    // Ignoring it handed the key to the multiline field, so Enter suddenly
+    // broke the line instead of sending until the Send button was clicked.
+    // A genuinely held Enter is harmless: after the first send the field is
+    // empty or the send is in flight, and both swallow the key.
+    if (event is! KeyDownEvent && !(isEnter && event is KeyRepeatEvent)) {
       return KeyEventResult.ignored;
     }
-    final key = event.logicalKey;
+    // Before Shift is read for Enter and before the shortcuts above this
+    // field match Ctrl+V: both go wrong on a modifier that is stuck down.
+    staleModifierRepair.repair();
     // Escape backs out of the reply, on every platform with a keyboard: the
     // banner's own close button is a mouse target, and nothing else here
     // wants the key. With no reply open it is left alone, so it can still
@@ -366,9 +379,6 @@ final class _ChatComposer extends ConsumerWidget {
       unawaited(_pasteImageFromClipboard());
       return KeyEventResult.ignored;
     }
-    final isEnter =
-        key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.numpadEnter;
     if (!isEnter || !sendsOnEnter) {
       return KeyEventResult.ignored;
     }

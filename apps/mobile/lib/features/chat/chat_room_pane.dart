@@ -13,6 +13,7 @@ import 'package:flutter/services.dart'
         HardwareKeyboard,
         KeyDownEvent,
         KeyEvent,
+        KeyRepeatEvent,
         KeyboardInsertedContent,
         LogicalKeyboardKey;
 import 'package:pasteboard/pasteboard.dart';
@@ -24,6 +25,7 @@ import '../../app_providers.dart';
 import '../../core/desktop_metrics.dart';
 import '../../core/foreground_sync_loop.dart';
 import '../../core/giphy_reference.dart';
+import '../../core/stale_modifier_repair.dart';
 import '../../data/app_database.dart';
 import '../../data/chat_repository.dart';
 import '../../l10n/generated/app_localizations.dart';
