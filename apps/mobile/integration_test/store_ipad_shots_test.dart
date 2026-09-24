@@ -106,5 +106,11 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('open-format-menu')));
     await shoot(tester, 'ipad13-2-format');
+
+    // `flutter test` uninstalls the app, documents and all, as soon as the
+    // test returns; this leaves time to copy the pictures off the simulator.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(seconds: 30)),
+    );
   });
 }
