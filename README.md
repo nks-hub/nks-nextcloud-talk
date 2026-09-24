@@ -6,6 +6,18 @@ It is an independent client, not an app from Nextcloud GmbH. Until version 1.0.1
 
 The code is ours and licensed under [`GPL-3.0-or-later`](LICENSE). The official Android and iOS apps are the reference we compare behaviour against, not a template for the UI. The Czech emoji names in `apps/mobile/lib/features/chat/composer/emoji_czech_names.g.dart` come from the Unicode CLDR annotations and fall under the [Unicode license](https://www.unicode.org/license.txt).
 
+![OwnTalk on a desktop: conversation list and an open chat](docs/screenshots/desktop-chat.png)
+
+<p>
+  <img src="docs/screenshots/phone-conversations.png" width="260" alt="Conversation list on a phone">
+  <img src="docs/screenshots/phone-chat.png" width="260" alt="Chat on a phone">
+  <img src="docs/screenshots/phone-details.png" width="260" alt="Conversation settings on a phone">
+</p>
+
+![Conversation details and the account menu on a desktop](docs/screenshots/desktop-details.png)
+
+The people, rooms and server in these pictures are invented. They come from `tool/store_screenshot_server.py`, a stand-in Talk server used only for screenshots, so no real account ever appears in them.
+
 ## Where to get it
 
 Android builds go to Google Play closed testing; testers opt in at <https://play.google.com/apps/testing/com.nkshub.nextcloudtalk>. Production access on Google Play was requested on 24 September 2026 and is waiting for Google's review.
