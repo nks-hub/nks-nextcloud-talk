@@ -1,39 +1,46 @@
 # OwnTalk
 
-Chat and calls for your own Nextcloud Talk server — one Flutter codebase for Android, iOS, Windows, macOS and Linux. A single install can sign in to several accounts on several Nextcloud servers at once.
+OwnTalk is a chat and calling app for Nextcloud Talk. It runs on Android, iOS, Windows, macOS and Linux from one Flutter codebase, and one install can be signed in to several accounts on several Nextcloud servers at the same time.
 
-OwnTalk is an independent client, not an official Nextcloud app. It was called **NKS Talk** until version 1.0.13; only the name changed, so an update keeps every account and conversation. The UI, the data model and the implementation are our own and licensed under [`GPL-3.0-or-later`](LICENSE). The upstream Android and iOS apps serve as the reference for behaviour and compatibility. The Czech emoji names in `apps/mobile/lib/features/chat/composer/emoji_czech_names.g.dart` are derived from the Unicode CLDR annotations under the Unicode license (https://www.unicode.org/license.txt).
+It is an independent client, not an app from Nextcloud GmbH. Until version 1.0.13 it was called NKS Talk. Only the name changed: package ids, data folders and settings stayed where they were, so an update keeps every account and conversation.
 
-## Get it
+The code is ours and licensed under [`GPL-3.0-or-later`](LICENSE). The official Android and iOS apps are the reference we compare behaviour against, not a template for the UI. The Czech emoji names in `apps/mobile/lib/features/chat/composer/emoji_czech_names.g.dart` come from the Unicode CLDR annotations and fall under the [Unicode license](https://www.unicode.org/license.txt).
 
-- **Android** — Google Play closed testing: <https://play.google.com/apps/testing/com.nkshub.nextcloudtalk>
-- **iOS** — TestFlight, on invitation
-- **Windows, macOS, Linux** — installers in [Releases](https://github.com/nks-hub/nks-nextcloud-talk/releases). The macOS build is signed with Developer ID and notarized; the Windows installer is not code-signed yet, so SmartScreen asks once. The desktop app checks the same page for updates and installs them itself.
+## Where to get it
 
-The supported server line starts at Talk 22 (Nextcloud 32).
+Android builds go to Google Play closed testing; testers opt in at <https://play.google.com/apps/testing/com.nkshub.nextcloudtalk>. Production access on Google Play was requested on 24 September 2026 and is waiting for Google's review.
 
-## What it does
+iOS builds go to TestFlight, by invitation.
 
-- **Chat** — messages, replies, threads, reactions, mentions with suggestions, editing and deleting, pinned messages, reminders, silent and scheduled messages, Markdown with a formatting menu (bold, italic, strikethrough, inline code, code blocks).
-- **Attachments** — photos, files, voice messages, polls, location, contacts and GIFs; a paste too long for one message goes out as a `.md` or `.txt` file.
-- **Calls** — audio and video, group calls, screen sharing, over the Talk high-performance backend or the internal signaling, with TURN.
-- **Notifications** — on Android and iOS even with the app closed, through our own push gateway with no per-server rebuild (see below); on desktop while the app runs, and it can start at sign-in and wait in the tray.
-- **Offline first** — the conversation list and history come from a local database; a message written without a signal waits in an ordered outbox and is sent once the connection returns.
-- **Everywhere** — phone layout, an adaptive three-pane layout on tablet and desktop, keyboard control on desktop, app lock with biometrics, Czech and English, light and dark theme, large text and screen readers.
+Windows, macOS and Linux builds are attached to each tagged [release](https://github.com/nks-hub/nks-nextcloud-talk/releases). The macOS app is signed with a Developer ID and notarized by Apple. The Windows installer is not code-signed, so SmartScreen warns once on the first run. The desktop app checks the releases page for a newer build and can install it itself.
+
+The server needs Talk 22 (Nextcloud 32) or newer.
+
+## What works today
+
+Chat covers what a Talk room offers: replies, threads, reactions, mentions with suggestions, editing and deleting, pinned messages, reminders, silent and scheduled sending. Messages render Markdown, and the composer has a formatting menu for bold, italic, strikethrough, inline code and code blocks.
+
+You can attach photos and files, record voice messages, and send polls, your location, contacts and GIFs. A paste longer than the 32,000 characters a message can hold is sent as a `.md` or `.txt` file instead of being cut short.
+
+Calls work with audio and video, in groups, with screen sharing, over the Talk high-performance backend or Talk's internal signalling, and through TURN when a direct path fails.
+
+On Android and iOS a notification arrives even when the app is closed. On Windows, macOS and Linux it arrives only while the app runs; the app can start when you sign in and keep running in the tray.
+
+The conversation list and the history load from a local database first and then update from the server. A message written without a connection waits in an ordered outbox and goes out when the connection returns.
+
+Phones get a single-pane layout, tablets and desktops a two- or three-pane one. On a desktop the app can be driven by keyboard. It has an app lock with biometrics, Czech and English, light and dark themes, and it is tested with large text and screen readers.
 
 ## Building
 
-The app lives in [`apps/mobile`](apps/mobile); the pure Dart protocol package [`talk_protocol`](packages/talk_protocol) implements and tests the Talk wire models the app uses.
+The app is in [`apps/mobile`](apps/mobile). The Talk wire models it uses live in the pure Dart package [`talk_protocol`](packages/talk_protocol).
 
-The Windows build additionally needs a JDK and a configured `JAVA_HOME`. This is not because of Android: `sentry_flutter` depends on the `jni` package, which registers itself as an FFI plugin on Windows too, and its `find_package(JNI)` without a JDK fails CMake with a `FindJNI.cmake` message that never mentions Java.
+Windows builds need a JDK and `JAVA_HOME`, even though Android is not involved: `sentry_flutter` depends on the `jni` package, which registers itself as an FFI plugin on Windows too. Without a JDK its `find_package(JNI)` stops CMake with a `FindJNI.cmake` error that never mentions Java.
 
-The Linux build needs the same JDK plus four packages beyond Flutter's official list — measured on 3 September 2026 on a clean Linux Mint installation where the build failed on each of them in turn: `libgstreamer1.0-dev` and `libgstreamer-plugins-base1.0-dev` (because of `audioplayers_linux`), `libcurl4-openssl-dev` (sentry-native) and `default-jdk-headless` (the same `jni` package). An extra trap: after a failed configure, `CMAKE_INSTALL_PREFIX=/usr/local` stays in the CMake cache and the next attempt fails on `Permission denied` during install — `flutter clean` fixes that, not an edit of `linux/CMakeLists.txt`.
+Linux builds need the same JDK and four packages that Flutter's own list leaves out. On a clean Linux Mint installation (3 September 2026) the build failed on each of them in turn: `libgstreamer1.0-dev` and `libgstreamer-plugins-base1.0-dev` for `audioplayers_linux`, `libcurl4-openssl-dev` for sentry-native, and `default-jdk-headless` for `jni`. After a failed configure, CMake keeps `CMAKE_INSTALL_PREFIX=/usr/local` in its cache and the next attempt fails with `Permission denied` during install. `flutter clean` fixes it; editing `linux/CMakeLists.txt` does not.
 
-## Running the tests
+## Tests
 
-Measured on 24 September 2026: `flutter analyze` reports no findings and `apps/mobile` passes 2761 tests with 7 skipped.
-
-From the repository root:
+On 24 September 2026 `flutter analyze` reported no findings and `apps/mobile` passed 2,761 tests with 7 skipped.
 
 ```sh
 cd apps/mobile
@@ -41,16 +48,15 @@ flutter analyze
 flutter test
 cd ../../packages/talk_protocol
 dart test
-cd ../..
 ```
 
-**`talk_protocol` needs `dart test`, not `flutter test`.** It is a pure Dart package, and seven of its tests compile a probe with `Platform.resolvedExecutable … compile exe`. Under `flutter test` that executable is the Flutter tester rather than the Dart VM, so the compilation never returns and all seven die on the 30-second timeout — a red suite that looks like a defect and is only the wrong runner.
+Run `talk_protocol` with `dart test`, not `flutter test`. Seven of its tests compile a probe through `Platform.resolvedExecutable … compile exe`. Under `flutter test` that executable is the Flutter tester instead of the Dart VM, the compilation never returns, and all seven time out after 30 seconds. The suite then looks broken when only the runner is wrong.
 
-Among the skipped tests are live smokes against a real Nextcloud. They run when `NEXTCLOUD_TALK_ORIGIN`, `NEXTCLOUD_TALK_USERNAME` and `NEXTCLOUD_TALK_APP_PASSWORD` are set, and the room-scoped search additionally wants `NEXTCLOUD_TALK_TEST_ROOM_TOKEN` pointing at a conversation that has messages — against an empty room its assertion holds without proving anything. `NEXTCLOUD_TALK_SEARCH_TERM` overrides the search term, which defaults to `a`.
+Some of the skipped tests are live checks against a real Nextcloud. They run when `NEXTCLOUD_TALK_ORIGIN`, `NEXTCLOUD_TALK_USERNAME` and `NEXTCLOUD_TALK_APP_PASSWORD` are set. The room-scoped search also needs `NEXTCLOUD_TALK_TEST_ROOM_TOKEN` pointing at a conversation with messages; in an empty room its assertion passes without proving anything. `NEXTCLOUD_TALK_SEARCH_TERM` changes the search term, which defaults to `a`.
 
-The macOS native suite has 17 tests, verified on 7 September 2026. Its host requires Apple Development signing: macOS refuses an ad-hoc signature with the app's APNs and shared-keychain entitlements before any test can start. Keep those entitlements and use a development identity in the login keychain.
+`apps/mobile/integration_test/desktop_composer_keys_test.dart` drives the real Windows app with keys sent through `SendInput`, because `tester.sendKeyEvent` bypasses the part of the engine where keyboard bugs live. Run it with `NKS_TALK_INTEGRATION_TEST=1`. It refuses to send a key unless the test window is in the foreground, since `SendInput` types into whatever window is in front.
 
-For API-based provisioning, set `APPLE_TEAM_ID`, `ASC_KEY_PATH`, `ASC_KEY_ID` and `ASC_ISSUER_ID` to your team's credentials, then run from `apps/mobile`:
+The macOS native suite (17 tests, last run 7 September 2026) needs Apple Development signing. macOS refuses an ad-hoc signature on an app with APNs and shared-keychain entitlements before any test starts. With your team's values in `APPLE_TEAM_ID`, `ASC_KEY_PATH`, `ASC_KEY_ID` and `ASC_ISSUER_ID`, run from `apps/mobile`:
 
 ```sh
 xcodebuild test -workspace macos/Runner.xcworkspace -scheme Runner \
@@ -63,23 +69,21 @@ xcodebuild test -workspace macos/Runner.xcworkspace -scheme Runner \
   -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 ```
 
-The provisioning flags register this Mac and create development profiles if needed. An Xcode account with existing profiles can replace the API arguments. This command runs tests locally; it does not publish an Apple build.
+The provisioning flags register the Mac and create development profiles when needed; an Xcode account with existing profiles can replace the API arguments. The command only runs tests and publishes nothing.
 
-For the Ubuntu CI checks without packaging new artifacts, run `gh workflow run build.yml --ref main -f tests_only=true`. The default manual run still builds Android, Linux and Windows, including native Windows checks; publishing remains restricted to release tags. Apple tests run on a Mac.
+`gh workflow run build.yml --ref main -f tests_only=true` runs the CI checks without building packages. A manual run without that flag builds Android, Linux and Windows. Publishing happens only for release tags, and Apple builds are made on a Mac, not in CI.
 
-## Push without a per-server rebuild
+## How notifications reach a phone
 
-The supported server line starts at Talk 22 (Nextcloud 32), see D-047.
+Android and iOS register Nextcloud push v2 against our own gateway, `nks-talk-notify`, which sends through FCM v1 and APNs (decision D-038, in place since 27 August 2026). The client picks the gateway address when it registers the device, so no server administrator has to configure anything and nobody has to rebuild the app per server. The Firebase configuration, `google-services.json`, is kept out of the repository.
 
-Since 27 August 2026 the default Android path is our **own push proxy** — see D-038. Both Android and Apple register push-v2 against `nks-talk-notify`, which holds the sending branch to FCM v1 and to APNs. The project therefore DOES have a publisher Firebase project and its own gateway; `google-services.json` is gitignored. The per-server rebuild still goes away, because the proxy address is chosen by the client at registration time, not by the server administrator.
+Nextcloud 34 and newer can also deliver through Web Push, over the UnifiedPush connector and an embedded FCM distributor. It is a fallback you can switch to in Settings → Push notifications without a new build, and the only path that needs neither our Firebase project nor our gateway: the VAPID key and the subscription are negotiated with each server at runtime.
 
-Web Push over the UnifiedPush connector and the embedded FCM distributor remains a **switchable fallback** for Nextcloud 34+, controllable in Settings → Push notifications at runtime without a new build. This fallback branch, and only this one, works without a publisher Firebase project and an own gateway; in it the VAPID key and the Web Push subscription are negotiated at runtime with the specific server.
+While the app runs, every platform also listens on Nextcloud Client Push (`notify_push`), a websocket the server advertises in its capabilities. That is what delivers messages instantly on the desktop.
 
-On top of that, **Nextcloud Client Push** (`notify_push`) runs on every platform — a websocket that Nextcloud itself advertises in capabilities. It delivers a message immediately for as long as the app is running, and needs nothing else.
+iOS cannot do without a gateway. Nextcloud does not talk to APNs; `apps/notifications/lib/Push.php` only posts notifications to the proxy address stored with each device. The official Talk app uses `push-notifications.nextcloud.com`, which signs with Nextcloud GmbH's Apple certificate for their bundle id, so nothing a third-party app sends gets through it. That address is not part of a self-hosted Nextcloud and cannot be set in its administration; the client supplies its own through the `proxyServer` parameter when it registers.
 
-iOS is a different platform boundary and it is worth saying exactly why. Nextcloud cannot talk to APNs; `apps/notifications/lib/Push.php` only groups notifications by the `proxyserver` column and posts them to that address. Delivery to APNs is done by that address. The official Talk app points at `push-notifications.nextcloud.com`, a Nextcloud GmbH service signing with **their** Apple certificate for **their** bundle id — nothing gets through it to a third-party client. That address therefore **is not part of a self-hosted Nextcloud** and is not configured in its administration; the client picks it at device registration through the `proxyServer` parameter.
-
-A full description of all three channels, of the contract with Nextcloud and of what is fixed by the platform is in the [notifications document](docs/architecture/notifications.md). The older analysis is in the push analysis in the maintainer notes.
+The [notifications document](docs/architecture/notifications.md) describes all three channels, the contract with Nextcloud, and what each platform fixes in place.
 
 ## Documentation
 
@@ -91,4 +95,4 @@ A full description of all three channels, of the contract with Nextcloud and of 
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) — in particular the public repository policy: nothing that names the operator's hosts, machines, accounts or identifiers is committed here.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) first, especially the public repository policy: nothing that names the operator's hosts, machines, accounts or identifiers goes into this repository.
