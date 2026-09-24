@@ -75,7 +75,7 @@ The provisioning flags register the Mac and create development profiles when nee
 
 ## How notifications reach a phone
 
-Android and iOS register Nextcloud push v2 against our own gateway, `nks-talk-notify`, which sends through FCM v1 and APNs (decision D-038, in place since 27 August 2026). The client picks the gateway address when it registers the device, so no server administrator has to configure anything and nobody has to rebuild the app per server. The Firebase configuration, `google-services.json`, is kept out of the repository.
+Android and iOS register Nextcloud push v2 against our own gateway, [`nks-talk-notify`](https://github.com/nks-hub/nks-talk-notify), which sends through FCM v1 and APNs (decision D-038, in place since 27 August 2026). The client picks the gateway address when it registers the device, so nobody has to rebuild the app per server. The gateway only accepts deliveries from servers whose subscription key it knows, so a Nextcloud administrator sets `subscription_aware_server` to the gateway once; its README explains that step. The Firebase configuration, `google-services.json`, is kept out of the repository.
 
 Nextcloud 34 and newer can also deliver through Web Push, over the UnifiedPush connector and an embedded FCM distributor. It is a fallback you can switch to in Settings → Push notifications without a new build, and the only path that needs neither our Firebase project nor our gateway: the VAPID key and the subscription are negotiated with each server at runtime.
 
