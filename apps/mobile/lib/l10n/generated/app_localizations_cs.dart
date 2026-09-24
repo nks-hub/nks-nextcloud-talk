@@ -298,6 +298,28 @@ class AppLocalizationsCs extends AppLocalizations {
   String get openEmojiPicker => 'Otevřít výběr emoji';
 
   @override
+  String get pastedTextAttachFailed =>
+      'Dlouhý text se nepodařilo přiložit jako soubor.';
+
+  @override
+  String get formatMenuTooltip => 'Formátování textu';
+
+  @override
+  String get formatBold => 'Tučně';
+
+  @override
+  String get formatItalic => 'Kurzíva';
+
+  @override
+  String get formatStrikethrough => 'Přeškrtnutí';
+
+  @override
+  String get formatInlineCode => 'Kód v řádku';
+
+  @override
+  String get formatCodeBlock => 'Blok kódu';
+
+  @override
   String get emojiPickerTitle => 'Emoji';
 
   @override

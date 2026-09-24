@@ -295,6 +295,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openEmojiPicker => 'Open emoji picker';
 
   @override
+  String get pastedTextAttachFailed =>
+      'The long text could not be attached as a file.';
+
+  @override
+  String get formatMenuTooltip => 'Text formatting';
+
+  @override
+  String get formatBold => 'Bold';
+
+  @override
+  String get formatItalic => 'Italic';
+
+  @override
+  String get formatStrikethrough => 'Strikethrough';
+
+  @override
+  String get formatInlineCode => 'Inline code';
+
+  @override
+  String get formatCodeBlock => 'Code block';
+
+  @override
   String get emojiPickerTitle => 'Emoji';
 
   @override

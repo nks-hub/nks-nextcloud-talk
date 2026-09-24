@@ -553,6 +553,43 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     }
   }
 
+  /// Sends a paste that does not fit in one message as a text file waiting
+  /// in the composer, `.md` when it reads as Markdown.
+  void _attachOversizedPaste(String text) {
+    final file = pastedTextFile(text);
+    final now = DateTime.now();
+    String two(int value) => value.toString().padLeft(2, '0');
+    final name =
+        'text-${now.year}${two(now.month)}${two(now.day)}'
+        '-${two(now.hour)}${two(now.minute)}${two(now.second)}'
+        '.${file.extension}';
+    unawaited(() async {
+      final attached = await _mediaComposerController.attachImageBytes(
+        Uint8List.fromList(utf8.encode(text)),
+        mimeType: file.mimeType,
+        displayName: name,
+      );
+      if (!attached && mounted) {
+        _showLocationSnackBar(
+          AppLocalizations.of(context).pastedTextAttachFailed,
+        );
+      }
+    }());
+  }
+
+  void _applyComposerFormat(ComposerFormat format) {
+    if (!mounted || _isReadOnlyNow()) {
+      return;
+    }
+    final next = formatComposerSelection(_composer.value, format);
+    if (next.text.characters.length > composerMaximumCharacters) {
+      _showComposerLimitError();
+      return;
+    }
+    _composer.value = next;
+    _composerFocusNode.requestFocus();
+  }
+
   EmojiPickerLabels _emojiPickerLabels(AppLocalizations strings) {
     return EmojiPickerLabels(
       title: strings.emojiPickerTitle,

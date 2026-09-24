@@ -596,6 +596,48 @@ abstract class AppLocalizations {
   /// **'Open emoji picker'**
   String get openEmojiPicker;
 
+  /// No description provided for @pastedTextAttachFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The long text could not be attached as a file.'**
+  String get pastedTextAttachFailed;
+
+  /// No description provided for @formatMenuTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Text formatting'**
+  String get formatMenuTooltip;
+
+  /// No description provided for @formatBold.
+  ///
+  /// In en, this message translates to:
+  /// **'Bold'**
+  String get formatBold;
+
+  /// No description provided for @formatItalic.
+  ///
+  /// In en, this message translates to:
+  /// **'Italic'**
+  String get formatItalic;
+
+  /// No description provided for @formatStrikethrough.
+  ///
+  /// In en, this message translates to:
+  /// **'Strikethrough'**
+  String get formatStrikethrough;
+
+  /// No description provided for @formatInlineCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Inline code'**
+  String get formatInlineCode;
+
+  /// No description provided for @formatCodeBlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Code block'**
+  String get formatCodeBlock;
+
   /// No description provided for @emojiPickerTitle.
   ///
   /// In en, this message translates to:

@@ -712,6 +712,39 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
               )
             : const Icon(Icons.gif_box_outlined),
       ),
+      PopupMenuButton<ComposerFormat>(
+        key: const Key('open-format-menu'),
+        enabled: !_sending && !readOnly,
+        tooltip: strings.formatMenuTooltip,
+        icon: const Icon(Icons.text_format_rounded),
+        onSelected: _applyComposerFormat,
+        itemBuilder: (context) => [
+          for (final (format, label, icon) in [
+            (ComposerFormat.bold, strings.formatBold, Icons.format_bold),
+            (ComposerFormat.italic, strings.formatItalic, Icons.format_italic),
+            (
+              ComposerFormat.strikethrough,
+              strings.formatStrikethrough,
+              Icons.format_strikethrough,
+            ),
+            (ComposerFormat.inlineCode, strings.formatInlineCode, Icons.code),
+            (
+              ComposerFormat.codeBlock,
+              strings.formatCodeBlock,
+              Icons.data_object,
+            ),
+          ])
+            PopupMenuItem(
+              key: Key('format-${format.name}'),
+              value: format,
+              child: ListTile(
+                leading: Icon(icon),
+                title: Text(label),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+        ],
+      ),
       IconButton(
         key: const Key('open-emoji-picker'),
         onPressed: _sending ? null : _toggleEmojiPicker,
@@ -866,6 +899,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
               mimeType: image.mimeType,
               displayName: image.displayName,
             ),
+            onOversizedPaste: _attachOversizedPaste,
+            canDivertPaste: () => _mediaComposerController.canAttachBytes,
             postingBlock: postingAccess.block,
             mentionSource: mentionSource?.valueOrNull,
             mediaComposer: attachmentDependencies == null

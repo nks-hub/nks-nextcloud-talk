@@ -276,6 +276,8 @@ final class _ChatComposer extends ConsumerWidget {
     required this.mentionSource,
     required this.onSubmit,
     required this.onPasteImage,
+    required this.onOversizedPaste,
+    required this.canDivertPaste,
     required this.hasAttachment,
   });
 
@@ -286,6 +288,14 @@ final class _ChatComposer extends ConsumerWidget {
   /// on the clipboard, or content a mobile keyboard inserted — so it can wait
   /// in the composer like a picked file.
   final Future<bool> Function(PastedImage image) onPasteImage;
+
+  /// Receives a paste too long to send as a message, so it can go out as a
+  /// file instead of being cut at the length limit.
+  final void Function(String text) onOversizedPaste;
+
+  /// Whether such a paste can go out as a file right now; when it cannot,
+  /// the field keeps its old behaviour and cuts it at the limit.
+  final bool Function() canDivertPaste;
 
   /// Whether the field should claim focus the moment it is built.
   final bool autofocus;
@@ -465,7 +475,13 @@ final class _ChatComposer extends ConsumerWidget {
                         autofocus: autofocus,
                         minLines: 1,
                         maxLines: 5,
-                        maxLength: 32000,
+                        maxLength: composerMaximumCharacters,
+                        inputFormatters: [
+                          OversizedPasteFormatter(
+                            onOversizedPaste,
+                            canDivert: canDivertPaste,
+                          ),
+                        ],
                         buildCounter:
                             (
                               _, {

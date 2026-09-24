@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 enum ComposerInsertionMode { inline, separatedToken }
@@ -57,8 +58,163 @@ ComposerEnterAction composerEnterAction({
   return ComposerEnterAction.send;
 }
 
+/// Markdown the composer's format menu can put around the selection. Talk
+/// renders all of these in its own clients.
+enum ComposerFormat {
+  bold('**'),
+  italic('*'),
+  strikethrough('~~'),
+  inlineCode('`'),
+  codeBlock('```');
+
+  const ComposerFormat(this.marker);
+
+  final String marker;
+}
+
+/// Wraps the selection of [value] in [format], or opens an empty pair at the
+/// caret with the caret between the markers.
+///
+/// A code block is fenced on lines of its own, since a fence that shares a
+/// line with other text is not a fence. The selection is kept on the wrapped
+/// text, so the next format or the next keystroke acts on what was selected.
+TextEditingValue formatComposerSelection(
+  TextEditingValue value,
+  ComposerFormat format,
+) {
+  final text = value.text;
+  final selection = value.selection;
+  final valid =
+      selection.isValid &&
+      selection.start >= 0 &&
+      selection.end <= text.length;
+  final start = valid ? selection.start : text.length;
+  final end = valid ? selection.end : text.length;
+  final inner = text.substring(start, end);
+
+  final String before;
+  final String after;
+  if (format == ComposerFormat.codeBlock) {
+    final needsLeadingBreak = start > 0 && text[start - 1] != '\n';
+    final needsTrailingBreak = end < text.length && text[end] != '\n';
+    before = '${needsLeadingBreak ? '\n' : ''}```\n';
+    after = '${inner.endsWith('\n') ? '' : '\n'}```'
+        '${needsTrailingBreak ? '\n' : ''}';
+  } else {
+    before = format.marker;
+    after = format.marker;
+  }
+
+  return TextEditingValue(
+    text: text.replaceRange(start, end, '$before$inner$after'),
+    selection: TextSelection(
+      baseOffset: start + before.length,
+      extentOffset: start + before.length + inner.length,
+    ),
+  );
+}
+
 /// What the server accepts in one message.
 const int composerMaximumCharacters = 32000;
+
+/// Hands text that was pasted or inserted in one go, and would push the
+/// message past what the server accepts, to [onOversized] instead of the
+/// field. The field keeps what it held before.
+///
+/// Without it the field's own length limit cut the paste at 32,000 characters
+/// without a word, and the tail of a log or a document was simply gone. Typing
+/// is left to that limit: only an insertion of more than one character counts
+/// as a paste. So is anything the formatter cannot take whole — when
+/// [canDivert] says no file can be attached right now, or while an input
+/// method is still composing, the insertion goes to the field as before.
+final class OversizedPasteFormatter extends TextInputFormatter {
+  OversizedPasteFormatter(
+    this.onOversized, {
+    required this.canDivert,
+    this.maximumCharacters = composerMaximumCharacters,
+  });
+
+  final void Function(String text) onOversized;
+  final bool Function() canDivert;
+  final int maximumCharacters;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // Code units never undercount characters, so the cheap length settles
+    // every ordinary keystroke before the grapheme count is paid for.
+    if (newValue.text.length <= maximumCharacters ||
+        newValue.text.characters.length <= maximumCharacters ||
+        (newValue.composing.isValid && !newValue.composing.isCollapsed)) {
+      return newValue;
+    }
+    final inserted = _insertedText(oldValue, newValue);
+    if (inserted == null || inserted.characters.length < 2 || !canDivert()) {
+      return newValue;
+    }
+    onOversized(inserted);
+    return oldValue;
+  }
+
+  /// What replaced the old selection, read from where the selection was and
+  /// where the caret landed. Comparing the two texts from both ends instead
+  /// is ambiguous when the paste begins with the character after the caret:
+  /// the text handed over came out shifted by that character.
+  static String? _insertedText(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final before = oldValue.selection;
+    final after = newValue.selection;
+    if (!before.isValid || !after.isValid || !after.isCollapsed) {
+      return null;
+    }
+    final start = before.start;
+    final end = after.end;
+    final removed = before.end - before.start;
+    if (start < 0 ||
+        end < start ||
+        end > newValue.text.length ||
+        newValue.text.length - (end - start) !=
+            oldValue.text.length - removed ||
+        newValue.text.substring(0, start) !=
+            oldValue.text.substring(0, start) ||
+        newValue.text.substring(end) != oldValue.text.substring(before.end)) {
+      return null;
+    }
+    return newValue.text.substring(start, end);
+  }
+}
+
+/// The file a long paste is sent as.
+typedef PastedTextFile = ({String extension, String mimeType});
+
+final RegExp _markdownStrong = RegExp(
+  r'^```|^#{1,6} \S|^\|.*\|\s*$\n^\|?\s*:?-{3,}',
+  multiLine: true,
+);
+final RegExp _markdownList = RegExp(r'^\s*(?:[-*+]|\d+\.) \S', multiLine: true);
+final RegExp _markdownLink = RegExp(r'\[[^\]\n]+\]\([^)\s]+\)');
+final RegExp _markdownEmphasis = RegExp(r'\*\*[^*\n]+\*\*|`[^`\n]+`');
+
+/// `.md` when [text] reads as Markdown, `.txt` otherwise.
+///
+/// A fence, a heading or a table is enough on its own. Lists, links and
+/// emphasis each turn up in plain logs and prose too, so two of them are
+/// needed together before the text counts as Markdown.
+PastedTextFile pastedTextFile(String text) {
+  final weak = [
+    _markdownList,
+    _markdownLink,
+    _markdownEmphasis,
+  ].where((pattern) => pattern.hasMatch(text)).length;
+  final markdown = _markdownStrong.hasMatch(text) || weak >= 2;
+  return markdown
+      ? (extension: 'md', mimeType: 'text/markdown')
+      : (extension: 'txt', mimeType: 'text/plain');
+}
 
 bool insertComposerText(
   TextEditingController controller,

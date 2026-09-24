@@ -11,6 +11,8 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 ## Unreleased
 
 - Fixed (Windows): Enter suddenly only broke the line and Ctrl+V did nothing until the app was restarted. A Shift whose release never reached the app stayed "held" in Flutter's own record of the keyboard, so Enter read as Shift+Enter and Ctrl+V as Ctrl+Shift+V; pressing Shift again did not clear it. The composer now checks the modifiers against what Windows reports and releases one that has been "held" for a while but is not actually down. Enter is also judged on a key repeat, which is how the next press arrives after a lost release.
+- Added: a formatting menu in the composer — bold, italic, strikethrough, inline code and a code block — that wraps the selected text, or opens an empty pair at the caret.
+- Added: a paste too long for one message goes out as a file instead of being cut at 32,000 characters without a word. It waits in the composer as `text-<date>.md` when it reads as Markdown and `.txt` otherwise.
 - Fixed: saving or opening a large attachment. The whole file was read into memory first, so anything over 64 MB was refused as too large for export — and the refusal came only after the download had already spent minutes proving it. A 117 MB build shared in a conversation could not be saved at all. Attachments are now streamed straight to disk, both when saving and when opening, so what fits is decided by free space rather than by memory, and nothing is buffered twice.
 
 ## 1.0.12 (78) — 19 September 2026

@@ -112,6 +112,7 @@ final class ChatMediaComposerController {
   Future<bool> Function(AttachmentPickerSource source)? _pickAttachment;
   Future<bool> Function()? _pickContact;
   bool Function()? _hasPreparedAttachment;
+  bool Function()? _canAttachBytes;
   Future<bool> Function()? _sendPreparedAttachment;
   Future<bool> Function(Uint8List bytes, String mimeType, String displayName)?
   _attachImageBytes;
@@ -129,6 +130,10 @@ final class ChatMediaComposerController {
 
   /// True while a picked file waits in the composer for the send button.
   bool get hasPreparedAttachment => _hasPreparedAttachment?.call() ?? false;
+
+  /// Whether [attachImageBytes] can take a file right now: the room accepts
+  /// attachments and no other file is waiting or being prepared.
+  bool get canAttachBytes => _canAttachBytes?.call() ?? false;
 
   /// Uploads the waiting file with whatever the message field holds as its
   /// caption. Returns false when nothing was waiting.
@@ -158,6 +163,7 @@ final class ChatMediaComposerController {
     Future<bool> Function(AttachmentPickerSource source) pickAttachment,
     Future<bool> Function() pickContact, {
     required bool Function() hasPreparedAttachment,
+    required bool Function() canAttachBytes,
     required Future<bool> Function() sendPreparedAttachment,
     required Future<bool> Function(Uint8List, String, String) attachImageBytes,
   }) {
@@ -166,6 +172,7 @@ final class ChatMediaComposerController {
     _pickAttachment = pickAttachment;
     _pickContact = pickContact;
     _hasPreparedAttachment = hasPreparedAttachment;
+    _canAttachBytes = canAttachBytes;
     _sendPreparedAttachment = sendPreparedAttachment;
     _attachImageBytes = attachImageBytes;
   }
@@ -179,6 +186,7 @@ final class ChatMediaComposerController {
     _pickAttachment = null;
     _pickContact = null;
     _hasPreparedAttachment = null;
+    _canAttachBytes = null;
     _sendPreparedAttachment = null;
     _attachImageBytes = null;
   }
@@ -389,6 +397,8 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       _pickAttachment,
       _pickContact,
       hasPreparedAttachment: () => _imageController.state.isPrepared,
+      canAttachBytes: () =>
+          !_disposed && _imageSupported && !_imageController.state.isActive,
       sendPreparedAttachment: _sendPreparedAttachment,
       attachImageBytes: _attachImageBytes,
     );
@@ -417,6 +427,8 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         _pickAttachment,
         _pickContact,
         hasPreparedAttachment: () => _imageController.state.isPrepared,
+        canAttachBytes: () =>
+            !_disposed && _imageSupported && !_imageController.state.isActive,
         sendPreparedAttachment: _sendPreparedAttachment,
         attachImageBytes: _attachImageBytes,
       );
