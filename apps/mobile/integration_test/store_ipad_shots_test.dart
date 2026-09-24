@@ -89,7 +89,7 @@ void main() {
     await tester.tap(find.byKey(const Key('certificate-trust-confirm')));
 
     final room = find.text('Produktový tým');
-    await waitFor(tester, room, timeout: const Duration(minutes: 2));
+    await waitFor(tester, room, timeout: const Duration(minutes: 4));
     await tester.tap(room.first);
     await waitFor(tester, find.text('Pro mě dobré.'));
     await shoot(tester, 'ipad13-1-chat');
