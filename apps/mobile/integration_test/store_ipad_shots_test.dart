@@ -21,8 +21,8 @@ import 'package:path_provider/path_provider.dart';
 ///     python3 tool/store_screenshot_server.py --language cs --port 443
 ///
 /// then run this on an iPad simulator. The pictures are taken inside the
-/// engine at the store's exact size, 2064 x 2752, written to the app's
-/// documents folder, and their paths printed after `STORE-SHOT`.
+/// engine at the store's exact size, 2064 x 2752, written to
+/// `~/nctalk-shots` on the Mac, and their paths printed after `STORE-SHOT`.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -59,7 +59,13 @@ void main() {
     final layer = view.debugLayer! as OffsetLayer;
     final image = await layer.toImage(view.paintBounds, pixelRatio: 1);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    final directory = await getApplicationDocumentsDirectory();
+    // On a simulator the host's home folder is writable; the app's own
+    // folder is not a good place, because `flutter test` uninstalls the app
+    // and its documents with it the moment the test ends.
+    final host = Platform.environment['SIMULATOR_HOST_HOME'];
+    final directory = host != null
+        ? await Directory('$host/nctalk-shots').create(recursive: true)
+        : await getApplicationDocumentsDirectory();
     final file = File('${directory.path}/$name.png');
     await file.writeAsBytes(bytes!.buffer.asUint8List());
     debugPrint('STORE-SHOT ${image.width}x${image.height} ${file.path}');
