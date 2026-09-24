@@ -1,3 +1,5 @@
-Opraveno: ukládání a otevírání velkých příloh.
+Aplikace se teď jmenuje OwnTalk. Účty a konverzace zůstávají.
 
-Příloha se celá načítala do paměti, takže cokoli nad 64 MB aplikace odmítla s hláškou, že je pro export příliš velká — a řekla to až po dlouhém stahování. Stotřicetimegabajtový soubor ze zprávy tak nešel uložit vůbec. Přílohy se teď stahují rovnou na disk, při ukládání i při otevírání, takže rozhoduje volné místo, ne paměť.
+Nové: menu formátování (tučně, kurzíva, přeškrtnutí, kód, blok kódu). Text delší, než se vejde do jedné zprávy, se odešle jako soubor .md nebo .txt.
+
+Opraveno: velké přílohy se ukládají a otevírají rovnou z disku, takže už je nezastaví limit paměti.

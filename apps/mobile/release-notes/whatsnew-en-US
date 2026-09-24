@@ -1,3 +1,5 @@
-Fixed: saving and opening large attachments.
+The app is now called OwnTalk. Your accounts and conversations stay.
 
-An attachment was read into memory as a whole, so anything over 64 MB was refused as too large for export — and the refusal arrived only after a long download. A 117 MB file shared in a conversation could not be saved at all. Attachments now stream straight to disk, both when saving and when opening, so free space decides what fits, not memory.
+New: a formatting menu (bold, italic, strikethrough, code, code block). Text too long for one message is sent as a .md or .txt file.
+
+Fixed: large attachments are saved and opened straight from disk, so memory no longer limits them.
