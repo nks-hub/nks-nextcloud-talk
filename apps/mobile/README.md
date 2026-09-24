@@ -1,4 +1,4 @@
-# NKS Talk Flutter client
+# OwnTalk Flutter client
 
 An original multi-server and multi-account Flutter client compatible with Nextcloud Talk. One source tree builds the application for Android, iOS, Windows, macOS and Linux under the identity `com.nkshub.nextcloudtalk`.
 
