@@ -24,13 +24,17 @@
 
 [Setup]
 AppId={{{#AppGuid}}
-AppName=NKS Talk
+AppName=OwnTalk
 AppVersion={#AppVersion}
-AppVerName=NKS Talk {#AppVersion}
+AppVerName=OwnTalk {#AppVersion}
 AppPublisher=NKS Hub
 DefaultDirName={localappdata}\Programs\NKS Talk
-DefaultGroupName=NKS Talk
+DefaultGroupName=OwnTalk
 DisableProgramGroupPage=yes
+; The app was called NKS Talk until build 79. The folder and the registry
+; keys keep that name so an upgrade lands on the same installation; only
+; what a person sees moves, and the old shortcuts go with it.
+UsePreviousGroup=no
 AllowNoIcons=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=commandline
@@ -41,11 +45,11 @@ OutputBaseFilename=NKS-Talk-{#SafeVersion}-windows-x64-setup
 SetupIconFile={#RepoRoot}\apps\mobile\windows\runner\resources\app_icon.ico
 LicenseFile={#RepoRoot}\LICENSE
 UninstallDisplayIcon={app}\nextcloudtalk.exe
-UninstallDisplayName=NKS Talk
+UninstallDisplayName=OwnTalk
 VersionInfoVersion={#NumericVersion}
 VersionInfoCompany=NKS Hub
-VersionInfoDescription=NKS Talk installer
-VersionInfoProductName=NKS Talk
+VersionInfoDescription=OwnTalk installer
+VersionInfoProductName=OwnTalk
 VersionInfoProductVersion={#NumericVersion}
 Compression=lzma2/max
 SolidCompression=yes
@@ -61,8 +65,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "czech"; MessagesFile: "compiler:Languages\Czech.isl"
 
 [CustomMessages]
-english.NewerVersionInstalled=A newer version of NKS Talk is already installed.
-czech.NewerVersionInstalled=Je již nainstalována novější verze NKS Talk.
+english.NewerVersionInstalled=A newer version of OwnTalk is already installed.
+czech.NewerVersionInstalled=Je již nainstalována novější verze OwnTalk.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -72,12 +76,17 @@ Source: "{#BundleDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 Source: "{#BundleManifest}"; DestDir: "{app}"; DestName: "bundle-manifest.json"; Flags: ignoreversion
 Source: "{#RepoRoot}\LICENSE"; DestDir: "{app}\licenses"; DestName: "GPL-3.0-or-later.txt"; Flags: ignoreversion
 
+[InstallDelete]
+Type: files; Name: "{userprograms}\NKS Talk\NKS Talk.lnk"
+Type: dirifempty; Name: "{userprograms}\NKS Talk"
+Type: files; Name: "{userdesktop}\NKS Talk.lnk"
+
 [Icons]
-Name: "{group}\NKS Talk"; Filename: "{app}\nextcloudtalk.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\NKS Talk"; Filename: "{app}\nextcloudtalk.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\OwnTalk"; Filename: "{app}\nextcloudtalk.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\OwnTalk"; Filename: "{app}\nextcloudtalk.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\nextcloudtalk.exe"; Description: "{cm:LaunchProgram,NKS Talk}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\nextcloudtalk.exe"; Description: "{cm:LaunchProgram,OwnTalk}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 
 [Registry]
 Root: HKCU; Subkey: "Software\NKS Hub\NKS Talk"; ValueType: string; ValueName: "InstallLocation"; ValueData: "{app}"; Flags: uninsdeletevalue uninsdeletekeyifempty
@@ -86,7 +95,7 @@ Root: HKCU; Subkey: "Software\NKS Hub\NKS Talk"; ValueType: string; ValueName: "
 ; The `nctalk:` protocol, without which Windows has no idea a Talk link is
 ; ours and the app can never be opened from a browser. Registered per user
 ; under HKCU because the installer itself is per user.
-Root: HKCU; Subkey: "Software\Classes\nctalk"; ValueType: string; ValueName: ""; ValueData: "URL:NKS Talk"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\nctalk"; ValueType: string; ValueName: ""; ValueData: "URL:OwnTalk"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\nctalk"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Flags: uninsdeletevalue
 Root: HKCU; Subkey: "Software\Classes\nctalk\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\nextcloudtalk.exe,0"
 Root: HKCU; Subkey: "Software\Classes\nctalk\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\nextcloudtalk.exe"" ""%1"""

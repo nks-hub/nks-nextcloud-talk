@@ -102,11 +102,16 @@ void main() {
     });
 
     test('two lighter signals together are Markdown too', () {
-      expect(pastedTextFile('- one\n- two\nsee [docs](https://x.y)').extension, 'md');
+      expect(
+        pastedTextFile('- one\n- two\nsee [docs](https://x.y)').extension,
+        'md',
+      );
     });
 
     test('a plain log or prose is a text file', () {
-      final file = pastedTextFile('2026-09-24 12:00 INFO started\n- not a list');
+      final file = pastedTextFile(
+        '2026-09-24 12:00 INFO started\n- not a list',
+      );
       expect(file.extension, 'txt');
       expect(file.mimeType, 'text/plain');
     });

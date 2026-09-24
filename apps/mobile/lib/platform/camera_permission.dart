@@ -28,9 +28,8 @@ Future<bool> ensureCameraPermission() async {
 
 Future<String?> _status(String method) async {
   try {
-    final response = await cameraPermissionChannel.invokeMapMethod<String, String>(
-      method,
-    );
+    final response = await cameraPermissionChannel
+        .invokeMapMethod<String, String>(method);
     return response?['status'];
   } on PlatformException {
     return null;

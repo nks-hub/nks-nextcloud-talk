@@ -29,64 +29,66 @@ void main() {
   final attendee = Platform.environment['NKS_RING_ATTENDEE'];
   final journal = DesktopJournal(Platform.environment['NKS_CALL_JOURNAL']);
 
-  testWidgets('an absent participant can be rung from a joined call', (
-    tester,
-  ) async {
-    expect(roomToken, isNotNull, reason: 'set NKS_CALL_ROOM');
-    expect(attendee, isNotNull, reason: 'set NKS_RING_ATTENDEE');
-    journal.note('start');
+  testWidgets(
+    'an absent participant can be rung from a joined call',
+    (tester) async {
+      expect(roomToken, isNotNull, reason: 'set NKS_CALL_ROOM');
+      expect(attendee, isNotNull, reason: 'set NKS_RING_ATTENDEE');
+      journal.note('start');
 
-    await tester.pumpWidget(const ProviderScope(child: NextcloudTalkApp()));
-    await settle(tester, const Duration(seconds: 5));
+      await tester.pumpWidget(const ProviderScope(child: NextcloudTalkApp()));
+      await settle(tester, const Duration(seconds: 5));
 
-    final tile = find.byKey(Key('conversation-tile-$roomToken'));
-    await waitFor(tester, tile, what: 'the conversation tile');
-    await tester.tap(tile);
+      final tile = find.byKey(Key('conversation-tile-$roomToken'));
+      await waitFor(tester, tile, what: 'the conversation tile');
+      await tester.tap(tile);
 
-    final startCall = find.byKey(const Key('start-call-audio'));
-    await waitFor(tester, startCall, what: 'the audio call button');
-    await tester.tap(startCall);
+      final startCall = find.byKey(const Key('start-call-audio'));
+      await waitFor(tester, startCall, what: 'the audio call button');
+      await tester.tap(startCall);
 
-    final callScreen = find.byKey(const Key('call-screen'));
-    await waitFor(
-      tester,
-      callScreen,
-      what: 'the call screen',
-      timeout: const Duration(seconds: 60),
-    );
-    journal.note('joined');
+      final callScreen = find.byKey(const Key('call-screen'));
+      await waitFor(
+        tester,
+        callScreen,
+        what: 'the call screen',
+        timeout: const Duration(seconds: 60),
+      );
+      journal.note('joined');
 
-    // The ring lives in the participant sheet, and the sheet opens from the
-    // chat's own call banner - so the call VIEW has to go away first while the
-    // call itself stays up.
-    final navigator = Navigator.of(tester.element(callScreen));
-    navigator.pop();
-    await settle(tester, const Duration(seconds: 2));
+      // The ring lives in the participant sheet, and the sheet opens from the
+      // chat's own call banner - so the call VIEW has to go away first while the
+      // call itself stays up.
+      final navigator = Navigator.of(tester.element(callScreen));
+      navigator.pop();
+      await settle(tester, const Duration(seconds: 2));
 
-    final banner = find.byKey(const Key('call-banner-participants'));
-    await waitFor(tester, banner, what: 'the call banner');
-    await tester.tap(banner);
-    await settle(tester, const Duration(seconds: 2));
-    journal.note('participant sheet open');
+      final banner = find.byKey(const Key('call-banner-participants'));
+      await waitFor(tester, banner, what: 'the call banner');
+      await tester.tap(banner);
+      await settle(tester, const Duration(seconds: 2));
+      journal.note('participant sheet open');
 
-    final ring = find.byKey(Key('call-ring-button-$attendee'));
-    await waitFor(
-      tester,
-      ring,
-      what: 'the ring button for attendee $attendee',
-      timeout: const Duration(seconds: 20),
-    );
-    await tester.tap(ring);
-    await settle(tester, const Duration(seconds: 3));
-    journal.note('rang $attendee');
+      final ring = find.byKey(Key('call-ring-button-$attendee'));
+      await waitFor(
+        tester,
+        ring,
+        what: 'the ring button for attendee $attendee',
+        timeout: const Duration(seconds: 20),
+      );
+      await tester.tap(ring);
+      await settle(tester, const Duration(seconds: 3));
+      journal.note('rang $attendee');
 
-    // Long enough to look at the other device.
-    await settle(tester, const Duration(seconds: 45));
-    journal.note('held after ringing');
+      // Long enough to look at the other device.
+      await settle(tester, const Duration(seconds: 45));
+      journal.note('held after ringing');
 
-    // The same control joins and leaves; in a joined call it leaves.
-    await tester.tap(find.byKey(const Key('call-banner-join')));
-    await settle(tester, const Duration(seconds: 15));
-    journal.note('left');
-  }, timeout: const Timeout(Duration(minutes: 6)));
+      // The same control joins and leaves; in a joined call it leaves.
+      await tester.tap(find.byKey(const Key('call-banner-join')));
+      await settle(tester, const Duration(seconds: 15));
+      journal.note('left');
+    },
+    timeout: const Timeout(Duration(minutes: 6)),
+  );
 }

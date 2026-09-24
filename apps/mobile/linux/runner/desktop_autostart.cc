@@ -113,7 +113,7 @@ gboolean SetEnabled(gboolean enabled, GError** error) {
   g_key_file_set_string(entry, G_KEY_FILE_DESKTOP_GROUP,
                         G_KEY_FILE_DESKTOP_KEY_VERSION, "1.0");
   g_key_file_set_string(entry, G_KEY_FILE_DESKTOP_GROUP,
-                        G_KEY_FILE_DESKTOP_KEY_NAME, "NKS Talk");
+                        G_KEY_FILE_DESKTOP_KEY_NAME, "OwnTalk");
   g_key_file_set_string(entry, G_KEY_FILE_DESKTOP_GROUP,
                         G_KEY_FILE_DESKTOP_KEY_EXEC, exec);
   g_key_file_set_boolean(entry, G_KEY_FILE_DESKTOP_GROUP,

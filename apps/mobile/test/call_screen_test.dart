@@ -337,7 +337,9 @@ void main() {
         expanded.height,
         greaterThan(
           body.height -
-              tester.getRect(find.byKey(const Key('call-screen-leave'))).height -
+              tester
+                  .getRect(find.byKey(const Key('call-screen-leave')))
+                  .height -
               120,
         ),
       );
@@ -355,8 +357,8 @@ void main() {
   ) async {
     await _pumpCallScreen(tester, screenTrackId: 'screen-track');
     final media = ProviderScope.containerOf(
-          tester.element(find.byType(CallScreen)),
-        ).read(callJoinControllerProvider(_key)).media;
+      tester.element(find.byType(CallScreen)),
+    ).read(callJoinControllerProvider(_key)).media;
     final camera = media.participants.first.video! as _FakeRemoteVideo;
     final share = media.participants[1].screen! as _FakeRemoteVideo;
     expect(camera.fits, isNotEmpty);
@@ -704,7 +706,6 @@ void main() {
     );
   });
 
-
   // Reported twice: the round button beside Raise hand does nothing, and
   // reactions do nothing. Neither reproduced on the S9+, and the tests that
   // existed only asserted the button was PRESENT - none of them ever pressed
@@ -731,7 +732,9 @@ void main() {
       );
     }
 
-    await tester.tap(find.byKey(Key('call-screen-react-${callReactions.first}')));
+    await tester.tap(
+      find.byKey(Key('call-screen-react-${callReactions.first}')),
+    );
     await tester.pumpAndSettle();
 
     expect(controller.reactions, <String>[callReactions.first]);
@@ -757,7 +760,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(Key('call-screen-react-${callReactions.first}')), findsNothing);
+    expect(
+      find.byKey(Key('call-screen-react-${callReactions.first}')),
+      findsNothing,
+    );
     expect(controller.reactions, isEmpty);
   });
   // The densest safety-critical screen in the app: mute, camera, screen share,

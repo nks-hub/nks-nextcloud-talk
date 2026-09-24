@@ -68,22 +68,22 @@ void main() {
 
     expect(
       czech['NSLocationWhenInUseUsageDescription'],
-      'NKS Talk použije vaši aktuální polohu pouze tehdy, když ji sami sdílíte '
+      'OwnTalk použije vaši aktuální polohu pouze tehdy, když ji sami sdílíte '
       'v konverzaci.',
     );
     expect(
       english['NSLocationWhenInUseUsageDescription'],
-      'NKS Talk uses your current location only when you choose to share it in '
+      'OwnTalk uses your current location only when you choose to share it in '
       'a conversation.',
     );
     expect(
       czech['NSFaceIDUsageDescription'],
-      'NKS Talk používá Face ID k odemknutí vašich konverzací, když je zapnutý '
+      'OwnTalk používá Face ID k odemknutí vašich konverzací, když je zapnutý '
       'zámek aplikace.',
     );
     expect(
       english['NSFaceIDUsageDescription'],
-      'NKS Talk uses Face ID to unlock your conversations when app lock is '
+      'OwnTalk uses Face ID to unlock your conversations when app lock is '
       'enabled.',
     );
 

@@ -50,13 +50,12 @@ const _linuxExecutableName = 'nextcloudtalk';
 /// it does not appear in a file manager while it exists.
 const _stagingPrefix = '.nks-talk-update-';
 
-UpdateInstallKind? _installKind(TargetPlatform platform) =>
-    switch (platform) {
-      TargetPlatform.windows => UpdateInstallKind.runInstaller,
-      TargetPlatform.macOS ||
-      TargetPlatform.linux => UpdateInstallKind.replaceBundle,
-      _ => null,
-    };
+UpdateInstallKind? _installKind(TargetPlatform platform) => switch (platform) {
+  TargetPlatform.windows => UpdateInstallKind.runInstaller,
+  TargetPlatform.macOS ||
+  TargetPlatform.linux => UpdateInstallKind.replaceBundle,
+  _ => null,
+};
 
 /// Hosts a real GitHub release asset may live on. `browser_download_url`
 /// always starts on `github.com`, which then answers with a redirect to the
@@ -573,7 +572,7 @@ final class UpdateInstallerService {
             uri,
             abortTrigger: cancellation._abortTrigger,
           )
-          ..headers['User-Agent'] = 'NKS-Talk/$appVersionName'
+          ..headers['User-Agent'] = 'OwnTalk/$appVersionName'
           ..followRedirects = false
           ..maxRedirects = 0;
     // IOClient may still be awaiting openUrl when its client is closed.

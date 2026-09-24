@@ -17,34 +17,63 @@ const _access = PollManagementAccess(
 );
 
 void main() {
-  testWidgets('a large draft stays lazy and preserves its existing vote limit', (tester) async {
-    final options = List.generate(30, (index) => 'Option $index');
-    final draft = pollFixture(id: 17, status: PollStatus.draft, options: options, maxVotes: 2);
-    final sender = FakePollSender(access: _access)..drafts = [draft];
-    await tester.pumpWidget(localizedTestApp(home: Scaffold(body: PollComposerDialog(
-      sender: sender, roomKey: _key, draftToEdit: draft,
-    ))));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('poll-option-29')), findsNothing);
-    await tester.enterText(find.byKey(const Key('poll-question')), 'Updated question');
-    await tester.tap(find.byKey(const Key('poll-create-submit')));
-    await tester.pumpAndSettle();
-    expect(sender.editedMaxVotes, 2);
-    expect(sender.editedOptions, options);
-    expect(sender.editDraftCalls, 1);
-  });
+  testWidgets(
+    'a large draft stays lazy and preserves its existing vote limit',
+    (tester) async {
+      final options = List.generate(30, (index) => 'Option $index');
+      final draft = pollFixture(
+        id: 17,
+        status: PollStatus.draft,
+        options: options,
+        maxVotes: 2,
+      );
+      final sender = FakePollSender(access: _access)..drafts = [draft];
+      await tester.pumpWidget(
+        localizedTestApp(
+          home: Scaffold(
+            body: PollComposerDialog(
+              sender: sender,
+              roomKey: _key,
+              draftToEdit: draft,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('poll-option-29')), findsNothing);
+      await tester.enterText(
+        find.byKey(const Key('poll-question')),
+        'Updated question',
+      );
+      await tester.tap(find.byKey(const Key('poll-create-submit')));
+      await tester.pumpAndSettle();
+      expect(sender.editedMaxVotes, 2);
+      expect(sender.editedOptions, options);
+      expect(sender.editDraftCalls, 1);
+    },
+  );
 
-  testWidgets('a draft with no editable actions remains readable without an empty menu', (tester) async {
-    final sender = FakePollSender(access: const PollManagementAccess(canListDrafts: true))
-      ..drafts = [pollFixture(id: 17, status: PollStatus.draft)];
-    await tester.pumpWidget(localizedTestApp(home: Scaffold(body: PollDraftsDialog(sender: sender, roomKey: _key))));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('poll-draft-actions-17')), findsNothing);
-    await tester.tap(find.byKey(const Key('poll-draft-17')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('poll-viewer-dialog')), findsOneWidget);
-    expect(find.byKey(const Key('poll-viewer-vote')), findsNothing);
-  });
+  testWidgets(
+    'a draft with no editable actions remains readable without an empty menu',
+    (tester) async {
+      final sender = FakePollSender(
+        access: const PollManagementAccess(canListDrafts: true),
+      )..drafts = [pollFixture(id: 17, status: PollStatus.draft)];
+      await tester.pumpWidget(
+        localizedTestApp(
+          home: Scaffold(
+            body: PollDraftsDialog(sender: sender, roomKey: _key),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('poll-draft-actions-17')), findsNothing);
+      await tester.tap(find.byKey(const Key('poll-draft-17')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('poll-viewer-dialog')), findsOneWidget);
+      expect(find.byKey(const Key('poll-viewer-vote')), findsNothing);
+    },
+  );
   testWidgets(
     'draft list remains usable at double text size on a narrow phone',
     (tester) async {

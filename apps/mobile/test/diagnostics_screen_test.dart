@@ -701,7 +701,7 @@ void main() {
       findsOneWidget,
       reason: 'the notices have to be readable, not merely bundled',
     );
-    expect(find.text('NKS Talk'), findsWidgets);
+    expect(find.text('OwnTalk'), findsWidgets);
   });
 
   testWidgets('reports the local state of exactly the requested account', (
@@ -1044,32 +1044,35 @@ void main() {
       );
     });
   }
-  testWidgets('a load that is still running says so instead of showing nothing',
-      (tester) async {
-    _useTallSurface(tester);
-    final stalled = Completer<LocalDiagnostics>();
-    addTearDown(() {
-      if (!stalled.isCompleted) {
-        stalled.completeError(StateError('abandoned'));
-      }
-    });
+  testWidgets(
+    'a load that is still running says so instead of showing nothing',
+    (tester) async {
+      _useTallSurface(tester);
+      final stalled = Completer<LocalDiagnostics>();
+      addTearDown(() {
+        if (!stalled.isCompleted) {
+          stalled.completeError(StateError('abandoned'));
+        }
+      });
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          localDiagnosticsProvider.overrideWith((ref, accountId) => stalled.future),
-        ],
-        child: localizedTestApp(
-          home: const DiagnosticsScreen(accountId: 'account-a'),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            localDiagnosticsProvider.overrideWith(
+              (ref, accountId) => stalled.future,
+            ),
+          ],
+          child: localizedTestApp(
+            home: const DiagnosticsScreen(accountId: 'account-a'),
+          ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    // Naming the operating system took 1.6 seconds on Windows, and for all
-    // that time this screen was an empty page nobody could tell from a broken
-    // one.
-    expect(find.byKey(const Key('diagnostics-loading')), findsOneWidget);
-  });
-
+      // Naming the operating system took 1.6 seconds on Windows, and for all
+      // that time this screen was an empty page nobody could tell from a broken
+      // one.
+      expect(find.byKey(const Key('diagnostics-loading')), findsOneWidget);
+    },
+  );
 }

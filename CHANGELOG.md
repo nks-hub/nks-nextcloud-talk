@@ -10,6 +10,7 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+- Changed: the app is now called OwnTalk. Only the name people see moved — the package, the data folder, the Windows install folder and every setting stay where they were, so an update lands on the existing installation with accounts and conversations intact.
 - Fixed (Windows): Enter suddenly only broke the line and Ctrl+V did nothing until the app was restarted. A Shift whose release never reached the app stayed "held" in Flutter's own record of the keyboard, so Enter read as Shift+Enter and Ctrl+V as Ctrl+Shift+V; pressing Shift again did not clear it. The composer now checks the modifiers against what Windows reports and releases one that has been "held" for a while but is not actually down. Enter is also judged on a key repeat, which is how the next press arrives after a lost release.
 - Added: a formatting menu in the composer — bold, italic, strikethrough, inline code and a code block — that wraps the selected text, or opens an empty pair at the caret.
 - Added: a paste too long for one message goes out as a file instead of being cut at 32,000 characters without a word. It waits in the composer as `text-<date>.md` when it reads as Markdown and `.txt` otherwise.

@@ -24,7 +24,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
       let socket = SocketConnection(
         filePath: container.appendingPathComponent(SampleHandler.socketFileName).path)
     else {
-      finish(reason: "The screen could not be shared with NKS Talk.")
+      finish(reason: "The screen could not be shared with OwnTalk.")
       return
     }
 
@@ -35,7 +35,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
     }
 
     guard socket.open() else {
-      finish(reason: "Start sharing from a call in NKS Talk.")
+      finish(reason: "Start sharing from a call in OwnTalk.")
       return
     }
 

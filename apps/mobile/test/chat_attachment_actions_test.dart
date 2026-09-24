@@ -242,7 +242,9 @@ void main() {
     // not know, and every download of it fails. The message is re-read once
     // and the download repeated against the address it then carries — so the
     // person taps once, not twice, and never sees the failure at all.
-    final opener = _RecordingOpener(result: ChatAttachmentOpenResult.downloadFailed);
+    final opener = _RecordingOpener(
+      result: ChatAttachmentOpenResult.downloadFailed,
+    );
     final repaired = Uri.parse(
       'https://cloud.example.invalid/remote.php/dav/files/alice/Talk/room/report.pdf',
     );
@@ -433,13 +435,15 @@ final class _RecordingExporter implements ChatAttachmentExportAction {
 
 /// No corrected address exists for this attachment, so a failed download stays
 /// failed and the person is told.
-final _noRepair = attachmentUriRepairProvider.overrideWithValue(({
-  required account,
-  required roomToken,
-  required messageId,
-  required index,
-  required failedUri,
-}) async => null);
+final _noRepair = attachmentUriRepairProvider.overrideWithValue(
+  ({
+    required account,
+    required roomToken,
+    required messageId,
+    required index,
+    required failedUri,
+  }) async => null,
+);
 
 final class _RecordingOpener implements ChatAttachmentOpenAction {
   _RecordingOpener({this.result = ChatAttachmentOpenResult.opened});

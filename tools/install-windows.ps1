@@ -132,7 +132,7 @@ $SearchRoot = @($SearchRoot | Where-Object { $_ -and (Test-Path -LiteralPath $_)
 $shell = New-Object -ComObject WScript.Shell
 $startMenu = [Environment]::GetFolderPath('StartMenu')
 if (-not $PSBoundParameters.ContainsKey('StartMenuShortcut')) {
-    $StartMenuShortcut = if ($startMenu) { Join-Path $startMenu 'Programs\NKS Talk.lnk' } else { $null }
+    $StartMenuShortcut = if ($startMenu) { Join-Path $startMenu 'Programs\OwnTalk.lnk' } else { $null }
 }
 $shortcutInstallation = $null
 if ($StartMenuShortcut -and (Test-Path -LiteralPath $StartMenuShortcut)) {
@@ -276,7 +276,7 @@ public static class NksAumid {
 # Measured on a machine where the relay client runs as SYSTEM.
 $desktop = [Environment]::GetFolderPath('Desktop')
 $shortcuts = @(
-    $(if ($desktop) { Join-Path $desktop 'NKS Talk.lnk' }),
+    $(if ($desktop) { Join-Path $desktop 'OwnTalk.lnk' }),
     $StartMenuShortcut
 ) | Where-Object { $_ }
 foreach ($shortcutPath in $shortcuts) {
@@ -299,7 +299,7 @@ if ($StartMenuShortcut) {
 # that is already running; without this key nothing ever calls it.
 $protocolRoot = 'HKCU:\Software\Classes\nctalk'
 New-Item -Path $protocolRoot -Force | Out-Null
-Set-ItemProperty -Path $protocolRoot -Name '(default)' -Value 'URL:NKS Talk Protocol'
+Set-ItemProperty -Path $protocolRoot -Name '(default)' -Value 'URL:OwnTalk Protocol'
 Set-ItemProperty -Path $protocolRoot -Name 'URL Protocol' -Value ''
 New-Item -Path "$protocolRoot\DefaultIcon" -Force | Out-Null
 Set-ItemProperty -Path "$protocolRoot\DefaultIcon" -Name '(default)' -Value "`"$destinationExe`",0"

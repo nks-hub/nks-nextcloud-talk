@@ -148,8 +148,10 @@ bool EnsureNotificationShortcut() {
                                     &programs))) {
     return false;
   }
-  const std::wstring shortcut_path =
-      std::wstring(programs) + L"\\NKS Talk.lnk";
+  // Windows names the toast after this shortcut. The app was called NKS Talk
+  // until build 79; that shortcut is removed so the old name stops showing.
+  const std::wstring shortcut_path = std::wstring(programs) + L"\\OwnTalk.lnk";
+  ::DeleteFileW((std::wstring(programs) + L"\\NKS Talk.lnk").c_str());
   ::CoTaskMemFree(programs);
 
   const auto executable = ExecutablePath();

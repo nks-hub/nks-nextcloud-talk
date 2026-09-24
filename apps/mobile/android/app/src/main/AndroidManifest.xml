@@ -88,7 +88,7 @@
     <application
         android:allowBackup="false"
         android:enableOnBackInvokedCallback="true"
-        android:label="NKS Talk"
+        android:label="OwnTalk"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

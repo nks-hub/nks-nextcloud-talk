@@ -62,12 +62,12 @@ final class NotificationService: UNNotificationServiceExtension {
     //
     // Matches Android's AndroidWebPushNotifier.kt exactly (own app: the
     // display name; anything else: the raw app id) so the two platforms
-    // never show different text for the same push. "NKS Talk" duplicates
+    // never show different text for the same push. "OwnTalk" duplicates
     // Runner's Info.plist CFBundleDisplayName — this extension has its own
     // bundle (CFBundleDisplayName "NotificationService"), so Bundle.main
     // here can't read Runner's; update both if the app is ever renamed.
     if let app = payload["app"] as? String {
-      content.title = app == "spreed" ? "NKS Talk" : app
+      content.title = app == "spreed" ? "OwnTalk" : app
     }
 
     // Chat pushes carry the room token as `id` (push-v2.md:

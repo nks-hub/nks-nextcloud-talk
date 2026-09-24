@@ -153,8 +153,8 @@ final class PhaseRecorder {
     try {
       return await step();
     } finally {
-      _spent[phase] = (_spent[phase] ?? Duration.zero) +
-          _clock().difference(started);
+      _spent[phase] =
+          (_spent[phase] ?? Duration.zero) + _clock().difference(started);
     }
   }
 }

@@ -250,8 +250,11 @@ void main() {
     expect(sent['message'], 'Back soon.');
     expect(sent['firstDay'], matches(r'^\d{4}-\d{2}-\d{2}$'));
     expect(sent['lastDay'], sent['firstDay']);
-    expect(sent.containsKey('replacementUserId'), isFalse,
-        reason: 'an empty colleague field is not a colleague');
+    expect(
+      sent.containsKey('replacementUserId'),
+      isFalse,
+      reason: 'an empty colleague field is not a colleague',
+    );
 
     await tester.scrollUntilVisible(
       find.byKey(const Key('profile-absence-clear')),

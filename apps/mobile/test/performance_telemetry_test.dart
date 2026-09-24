@@ -234,8 +234,7 @@ void main() {
       });
     });
 
-    test('a step that fails slowly is still timed, and still throws',
-        () async {
+    test('a step that fails slowly is still timed, and still throws', () async {
       var now = DateTime.utc(2026);
       final recorder = PhaseRecorder(clock: () => now);
 
@@ -278,5 +277,4 @@ void main() {
       expect(reported.single.tags['phase.fetch'], '<10s');
     });
   });
-
 }

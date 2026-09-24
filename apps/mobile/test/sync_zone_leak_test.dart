@@ -74,86 +74,91 @@ void main() {
     expect(unhandled, isEmpty);
   });
 
-  test('a request that fails after its timeout stays out of the zone', () async {
-    // `Future.timeout` stops waiting; it does not cancel the request. Once
-    // this side has given up, the send is a future nobody listens to any
-    // more, so a late failure on it — a dropped connection, a socket reset —
-    // went straight to the platform handler, as a crash for a request the app
-    // had already reported as a timeout and moved on from.
-    final client = _StalledClient();
-    final api = HttpNextcloudApi(
-      client: client,
-      requestTimeout: const Duration(milliseconds: 20),
-    );
-    addTearDown(api.close);
-
-    final read = api.getAuthenticatedCapabilities(
-      server: ServerBase.parse('https://cloud.example.invalid'),
-      loginName: 'tester',
-      appPassword: 'app-password',
-    );
-    await client.entered.future;
-    Object? seen;
-    try {
-      await read;
-    } on Object catch (error) {
-      seen = error;
-    }
-    expect(
-      seen,
-      isA<NextcloudApiException>().having(
-        (e) => e.code,
-        'error',
-        NextcloudApiError.timeout,
-      ),
-      reason: 'the caller is told it timed out and moves on',
-    );
-
-    // Only now does the abandoned request fail. Nothing is waiting for it any
-    // more, which is exactly the case that used to end the application.
-    final unhandled = <Object>[];
-    await runZonedGuarded(() async {
-      client.pending.completeError(
-        http.ClientException('Connection closed while receiving data'),
-        StackTrace.current,
+  test(
+    'a request that fails after its timeout stays out of the zone',
+    () async {
+      // `Future.timeout` stops waiting; it does not cancel the request. Once
+      // this side has given up, the send is a future nobody listens to any
+      // more, so a late failure on it — a dropped connection, a socket reset —
+      // went straight to the platform handler, as a crash for a request the app
+      // had already reported as a timeout and moved on from.
+      final client = _StalledClient();
+      final api = HttpNextcloudApi(
+        client: client,
+        requestTimeout: const Duration(milliseconds: 20),
       );
+      addTearDown(api.close);
+
+      final read = api.getAuthenticatedCapabilities(
+        server: ServerBase.parse('https://cloud.example.invalid'),
+        loginName: 'tester',
+        appPassword: 'app-password',
+      );
+      await client.entered.future;
+      Object? seen;
+      try {
+        await read;
+      } on Object catch (error) {
+        seen = error;
+      }
+      expect(
+        seen,
+        isA<NextcloudApiException>().having(
+          (e) => e.code,
+          'error',
+          NextcloudApiError.timeout,
+        ),
+        reason: 'the caller is told it timed out and moves on',
+      );
+
+      // Only now does the abandoned request fail. Nothing is waiting for it any
+      // more, which is exactly the case that used to end the application.
+      final unhandled = <Object>[];
+      await runZonedGuarded(() async {
+        client.pending.completeError(
+          http.ClientException('Connection closed while receiving data'),
+          StackTrace.current,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }, (error, stack) => unhandled.add(error));
+
+      expect(unhandled, isEmpty);
+    },
+  );
+
+  test(
+    'a response that arrives after the timeout is drained, not leaked',
+    () async {
+      // The same abandoned send, succeeding late: its body must be consumed or
+      // the socket stays held for as long as the client lives.
+      final client = _StalledClient();
+      final api = HttpNextcloudApi(
+        client: client,
+        requestTimeout: const Duration(milliseconds: 20),
+      );
+      addTearDown(api.close);
+
+      final read = api.getAuthenticatedCapabilities(
+        server: ServerBase.parse('https://cloud.example.invalid'),
+        loginName: 'tester',
+        appPassword: 'app-password',
+      );
+      await client.entered.future;
+      await expectLater(read, throwsA(isA<NextcloudApiException>()));
+
+      var listened = false;
+      final body = StreamController<List<int>>();
+      body.onListen = () {
+        listened = true;
+        body.add(const [1, 2, 3]);
+        unawaited(body.close());
+      };
+      client.pending.complete(http.StreamedResponse(body.stream, 200));
       await Future<void>.delayed(const Duration(milliseconds: 50));
-    }, (error, stack) => unhandled.add(error));
 
-    expect(unhandled, isEmpty);
-  });
-
-  test('a response that arrives after the timeout is drained, not leaked',
-      () async {
-    // The same abandoned send, succeeding late: its body must be consumed or
-    // the socket stays held for as long as the client lives.
-    final client = _StalledClient();
-    final api = HttpNextcloudApi(
-      client: client,
-      requestTimeout: const Duration(milliseconds: 20),
-    );
-    addTearDown(api.close);
-
-    final read = api.getAuthenticatedCapabilities(
-      server: ServerBase.parse('https://cloud.example.invalid'),
-      loginName: 'tester',
-      appPassword: 'app-password',
-    );
-    await client.entered.future;
-    await expectLater(read, throwsA(isA<NextcloudApiException>()));
-
-    var listened = false;
-    final body = StreamController<List<int>>();
-    body.onListen = () {
-      listened = true;
-      body.add(const [1, 2, 3]);
-      unawaited(body.close());
-    };
-    client.pending.complete(http.StreamedResponse(body.stream, 200));
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-
-    // Nobody else has any reason to read this body: if the transport had not
-    // drained it, the stream would never be listened to at all.
-    expect(listened, isTrue);
-  });
+      // Nobody else has any reason to read this body: if the transport had not
+      // drained it, the stream would never be listened to at all.
+      expect(listened, isTrue);
+    },
+  );
 }

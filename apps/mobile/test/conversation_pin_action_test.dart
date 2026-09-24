@@ -41,9 +41,7 @@ final class _FakeLauncher {
           }
         });
     addTearDown(
-      () => TestDefaultBinaryMessengerBinding
-          .instance
-          .defaultBinaryMessenger
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(_channel, null),
     );
   }
@@ -109,7 +107,9 @@ void main() {
             rawJson: '{}',
           ),
         );
-    conversation = await database.select(database.cachedConversations).getSingle();
+    conversation = await database
+        .select(database.cachedConversations)
+        .getSingle();
   });
 
   tearDown(() => database.close());
@@ -123,10 +123,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const Key('pin-conversation-to-launcher')),
-      findsNothing,
-    );
+    expect(find.byKey(const Key('pin-conversation-to-launcher')), findsNothing);
   });
 
   testWidgets('pinning asks the launcher with the conversation link', (

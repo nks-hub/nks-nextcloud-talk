@@ -76,7 +76,7 @@ final class ShareViewController: UIViewController {
       try Task.checkCancellation()
       processingTask = nil
       statusLabel.text = NSLocalizedString(
-        "Ready. Open NKS Talk to choose a conversation.",
+        "Ready. Open OwnTalk to choose a conversation.",
         comment: "Share extension completion"
       )
       actionButton.setTitle(

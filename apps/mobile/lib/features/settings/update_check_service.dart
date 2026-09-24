@@ -151,7 +151,7 @@ final class UpdateCheckService {
         'X-GitHub-Api-Version': '2022-11-28',
         // The REST API refuses a request without one, and naming the app is
         // more honest than hiding behind the default.
-        'User-Agent': 'NKS-Talk/$appVersionName',
+        'User-Agent': 'OwnTalk/$appVersionName',
       })
       ..followRedirects = false
       ..maxRedirects = 0;

@@ -49,10 +49,9 @@ void _registerNonBlockingComposerTests() {
       for (var attempt = 0; attempt < 600 && queued.length < 2; attempt++) {
         await tester.pump(const Duration(milliseconds: 10));
         queued = (await tester.runAsync(
-          () =>
-              (harness.database.select(harness.database.textSendOperations)
-                    ..orderBy([(row) => OrderingTerm.asc(row.enqueueSequence)]))
-                  .get(),
+          () => (harness.database.select(
+            harness.database.textSendOperations,
+          )..orderBy([(row) => OrderingTerm.asc(row.enqueueSequence)])).get(),
         ))!;
       }
       expect(queued.map((row) => row.message), ['first line', 'second line']);
@@ -105,7 +104,10 @@ void _registerNonBlockingComposerTests() {
       await _pumpUntil(tester, () => controller.hasPreparedAttachment);
       await _pumpUntil(tester, () => _sendButtonEnabled(tester));
       await tester.tap(find.byKey(const Key('send-message-gesture')));
-      await _pumpUntil(tester, () => harness.attachmentUploadStarted.isNotEmpty);
+      await _pumpUntil(
+        tester,
+        () => harness.attachmentUploadStarted.isNotEmpty,
+      );
 
       // The upload is on the wire and unfinished. Text typed now goes out on
       // its own queue rather than waiting for the file, and it keeps its place

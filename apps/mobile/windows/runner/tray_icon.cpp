@@ -116,7 +116,7 @@ bool TrayIcon::Notify(DWORD message) {
 
   // Czech unread counts would need three plural forms, so the tooltip states
   // the number instead of agreeing with it.
-  std::wstring tip = L"NKS Talk";
+  std::wstring tip = L"OwnTalk";
   if (unread_ > 0) {
     tip += UseCzech() ? L" — nepřečtené: "
                       : L" — unread: ";
@@ -143,7 +143,7 @@ void TrayIcon::ShowMenu() {
   }
   const bool czech = UseCzech();
   ::AppendMenuW(menu, MF_STRING, kMenuOpen,
-                czech ? L"Otevřít NKS Talk" : L"Open NKS Talk");
+                czech ? L"Otevřít OwnTalk" : L"Open OwnTalk");
   ::AppendMenuW(menu, MF_STRING, kMenuHide,
                 czech ? L"Skrýt do oznamovací oblasti"
                       : L"Hide to notification area");

@@ -20,8 +20,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// A file the test writes its phases into, so a run can be lined up against
 /// what a server or a log recorded at the same second.
 final class DesktopJournal {
-  DesktopJournal(String? path)
-    : _file = File(path ?? 'desktop-journal.txt') {
+  DesktopJournal(String? path) : _file = File(path ?? 'desktop-journal.txt') {
     _file.writeAsStringSync('');
   }
 
@@ -124,8 +123,8 @@ int _window() {
   final className = 'FLUTTER_RUNNER_WIN32_WINDOW'.toNativeUtf16();
   final title =
       (Platform.environment['NKS_TALK_INTEGRATION_TEST'] == '1'
-              ? 'NKS Talk (integration test)'
-              : 'NKS Talk')
+              ? 'OwnTalk (integration test)'
+              : 'OwnTalk')
           .toNativeUtf16();
   try {
     final handle = _findWindow(className, title);

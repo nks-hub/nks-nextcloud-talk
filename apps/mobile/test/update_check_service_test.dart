@@ -72,7 +72,7 @@ void main() {
     );
     expect(sent.url, defaultLatestReleaseUri);
     expect(sent.followRedirects, isFalse);
-    expect(sent.headers['User-Agent'], startsWith('NKS-Talk/'));
+    expect(sent.headers['User-Agent'], startsWith('OwnTalk/'));
   });
 
   test('the same build is up to date', () async {
@@ -207,65 +207,77 @@ void main() {
     );
   });
 
-  test('each desktop is offered its own file out of the same release', () async {
-    const base =
-        'https://github.com/nks-hub/nks-nextcloud-talk/releases/download/'
-        'v1.0.4%2B70';
-    final wholeRelease = <Map<String, Object?>>[
-      asset('NKS-Talk-1.0.4-70-windows-x64-setup.exe',
-          '$base/NKS-Talk-1.0.4-70-windows-x64-setup.exe'),
-      asset('nks-talk-macos-1.0.4-70.zip', '$base/nks-talk-macos-1.0.4-70.zip'),
-      asset('nks-talk-linux-x64.tar.gz', '$base/nks-talk-linux-x64.tar.gz'),
-      asset('app-release.apk', '$base/app-release.apk'),
-      asset('SHA256SUMS', '$base/SHA256SUMS'),
-    ];
-    const expected = <TargetPlatform, String>{
-      TargetPlatform.windows: 'NKS-Talk-1.0.4-70-windows-x64-setup.exe',
-      TargetPlatform.macOS: 'nks-talk-macos-1.0.4-70.zip',
-      TargetPlatform.linux: 'nks-talk-linux-x64.tar.gz',
-    };
-    for (final entry in expected.entries) {
-      final result = await service(
-        MockClient((_) async => release('v1.0.4+70', assets: wholeRelease)),
-        assetPlatform: entry.key,
-      ).check();
-      final available = result as UpdateAvailable;
-      expect(
-        available.installerAssetUri.toString(),
-        '$base/${entry.value}',
-        reason: 'wrong file offered on ${entry.key}',
-      );
-      expect(available.sha256SumsAssetUri.toString(), '$base/SHA256SUMS');
-    }
-  });
-
-  test('a phone is offered no file at all, whatever the release carries',
-      () async {
-    const base =
-        'https://github.com/nks-hub/nks-nextcloud-talk/releases/download/'
-        'v1.0.4%2B70';
-    for (final platform in const <TargetPlatform>[
-      TargetPlatform.android,
-      TargetPlatform.iOS,
-    ]) {
-      final result = await service(
-        MockClient(
-          (_) async => release(
-            'v1.0.4+70',
-            assets: [
-              asset('app-release.apk', '$base/app-release.apk'),
-              asset('NKS-Talk-1.0.4-70-windows-x64-setup.exe',
-                  '$base/NKS-Talk-1.0.4-70-windows-x64-setup.exe'),
-              asset('SHA256SUMS', '$base/SHA256SUMS'),
-            ],
-          ),
+  test(
+    'each desktop is offered its own file out of the same release',
+    () async {
+      const base =
+          'https://github.com/nks-hub/nks-nextcloud-talk/releases/download/'
+          'v1.0.4%2B70';
+      final wholeRelease = <Map<String, Object?>>[
+        asset(
+          'NKS-Talk-1.0.4-70-windows-x64-setup.exe',
+          '$base/NKS-Talk-1.0.4-70-windows-x64-setup.exe',
         ),
-        assetPlatform: platform,
-      ).check();
-      final available = result as UpdateAvailable;
-      expect(available.installerAssetUri, isNull, reason: '$platform');
-    }
-  });
+        asset(
+          'nks-talk-macos-1.0.4-70.zip',
+          '$base/nks-talk-macos-1.0.4-70.zip',
+        ),
+        asset('nks-talk-linux-x64.tar.gz', '$base/nks-talk-linux-x64.tar.gz'),
+        asset('app-release.apk', '$base/app-release.apk'),
+        asset('SHA256SUMS', '$base/SHA256SUMS'),
+      ];
+      const expected = <TargetPlatform, String>{
+        TargetPlatform.windows: 'NKS-Talk-1.0.4-70-windows-x64-setup.exe',
+        TargetPlatform.macOS: 'nks-talk-macos-1.0.4-70.zip',
+        TargetPlatform.linux: 'nks-talk-linux-x64.tar.gz',
+      };
+      for (final entry in expected.entries) {
+        final result = await service(
+          MockClient((_) async => release('v1.0.4+70', assets: wholeRelease)),
+          assetPlatform: entry.key,
+        ).check();
+        final available = result as UpdateAvailable;
+        expect(
+          available.installerAssetUri.toString(),
+          '$base/${entry.value}',
+          reason: 'wrong file offered on ${entry.key}',
+        );
+        expect(available.sha256SumsAssetUri.toString(), '$base/SHA256SUMS');
+      }
+    },
+  );
+
+  test(
+    'a phone is offered no file at all, whatever the release carries',
+    () async {
+      const base =
+          'https://github.com/nks-hub/nks-nextcloud-talk/releases/download/'
+          'v1.0.4%2B70';
+      for (final platform in const <TargetPlatform>[
+        TargetPlatform.android,
+        TargetPlatform.iOS,
+      ]) {
+        final result = await service(
+          MockClient(
+            (_) async => release(
+              'v1.0.4+70',
+              assets: [
+                asset('app-release.apk', '$base/app-release.apk'),
+                asset(
+                  'NKS-Talk-1.0.4-70-windows-x64-setup.exe',
+                  '$base/NKS-Talk-1.0.4-70-windows-x64-setup.exe',
+                ),
+                asset('SHA256SUMS', '$base/SHA256SUMS'),
+              ],
+            ),
+          ),
+          assetPlatform: platform,
+        ).check();
+        final available = result as UpdateAvailable;
+        expect(available.installerAssetUri, isNull, reason: '$platform');
+      }
+    },
+  );
 
   test('no assets means no installer to offer, not a broken check', () async {
     final result = await service(

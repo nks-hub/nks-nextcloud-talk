@@ -20,7 +20,7 @@ class MainFlutterWindow: NSWindow {
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
     self.minSize = NSSize(width: minimumWindowWidth, height: minimumWindowHeight)
-    self.title = "NKS Talk"
+    self.title = "OwnTalk"
     // Remember where the window was left. AppKit stores the frame under this
     // name in the user's defaults and restores it on the next launch, which
     // is what the Windows runner does through its own saved bounds; without

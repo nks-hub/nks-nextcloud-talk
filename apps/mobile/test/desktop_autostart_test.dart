@@ -151,7 +151,7 @@ void main() {
     );
     expect(updated.value, isTrue);
     expect(
-      find.text('NKS Talk opens automatically after you sign in.'),
+      find.text('OwnTalk opens automatically after you sign in.'),
       findsOneWidget,
     );
   });

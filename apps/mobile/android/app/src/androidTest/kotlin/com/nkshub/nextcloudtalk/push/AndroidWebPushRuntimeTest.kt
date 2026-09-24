@@ -307,7 +307,7 @@ class AndroidWebPushRuntimeTest {
             UnifiedPush.register(
                 context,
                 instance,
-                "NKS Talk instrumentation",
+                "OwnTalk instrumentation",
                 TEST_VAPID,
             )
             assertTrue(eventAvailable.await(45, TimeUnit.SECONDS))

@@ -113,7 +113,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'NKS Talk'**
+  /// **'OwnTalk'**
   String get appTitle;
 
   /// No description provided for @onboardingTitle.
@@ -2363,7 +2363,7 @@ abstract class AppLocalizations {
   /// No description provided for @appLockAuthenticationReason.
   ///
   /// In en, this message translates to:
-  /// **'Unlock your NKS Talk conversations'**
+  /// **'Unlock your OwnTalk conversations'**
   String get appLockAuthenticationReason;
 
   /// No description provided for @appLockAuthenticationCancelled.
@@ -2375,7 +2375,7 @@ abstract class AppLocalizations {
   /// No description provided for @appLockLockedTitle.
   ///
   /// In en, this message translates to:
-  /// **'NKS Talk is locked'**
+  /// **'OwnTalk is locked'**
   String get appLockLockedTitle;
 
   /// No description provided for @appLockLockedMessage.
@@ -2423,7 +2423,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsDesktopAutostart.
   ///
   /// In en, this message translates to:
-  /// **'Open NKS Talk when I sign in'**
+  /// **'Open OwnTalk when I sign in'**
   String get settingsDesktopAutostart;
 
   /// No description provided for @settingsDesktopAutostartChecking.
@@ -2435,13 +2435,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsDesktopAutostartOnSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'NKS Talk opens automatically after you sign in.'**
+  /// **'OwnTalk opens automatically after you sign in.'**
   String get settingsDesktopAutostartOnSubtitle;
 
   /// No description provided for @settingsDesktopAutostartOffSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'NKS Talk stays closed until you open it.'**
+  /// **'OwnTalk stays closed until you open it.'**
   String get settingsDesktopAutostartOffSubtitle;
 
   /// No description provided for @settingsDesktopAutostartFailed.
@@ -2597,7 +2597,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsUpdateCheckInstallConfirmBody.
   ///
   /// In en, this message translates to:
-  /// **'This installs the new build. NKS Talk closes to finish and opens again by itself.'**
+  /// **'This installs the new build. OwnTalk closes to finish and opens again by itself.'**
   String get settingsUpdateCheckInstallConfirmBody;
 
   /// No description provided for @settingsUpdateCheckInstallConfirmAction.
@@ -2615,7 +2615,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsUpdateCheckInstallStarted.
   ///
   /// In en, this message translates to:
-  /// **'Installing. NKS Talk will close and open again.'**
+  /// **'Installing. OwnTalk will close and open again.'**
   String get settingsUpdateCheckInstallStarted;
 
   /// No description provided for @settingsUpdateCheckInstallStartFailed.
@@ -2765,7 +2765,7 @@ abstract class AppLocalizations {
   /// No description provided for @diagnosticsLicensesLegalese.
   ///
   /// In en, this message translates to:
-  /// **'NKS Talk is free software under the GNU GPL-3.0-or-later. It ships the UnifiedPush embedded FCM distributor (LGPL-2.1) as part of this GPL work under LGPL section 3. The complete corresponding source of this build is available to every recipient on request from whoever distributed it to you.'**
+  /// **'OwnTalk is free software under the GNU GPL-3.0-or-later. It ships the UnifiedPush embedded FCM distributor (LGPL-2.1) as part of this GPL work under LGPL section 3. The complete corresponding source of this build is available to every recipient on request from whoever distributed it to you.'**
   String get diagnosticsLicensesLegalese;
 
   /// No description provided for @diagnosticsAppVersion.

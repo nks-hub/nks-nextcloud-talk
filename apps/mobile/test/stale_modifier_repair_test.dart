@@ -3,12 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/core/stale_modifier_repair.dart';
 
 void main() {
-  KeyDownEvent press(PhysicalKeyboardKey physical, LogicalKeyboardKey logical) =>
-      KeyDownEvent(
-        physicalKey: physical,
-        logicalKey: logical,
-        timeStamp: Duration.zero,
-      );
+  KeyDownEvent press(
+    PhysicalKeyboardKey physical,
+    LogicalKeyboardKey logical,
+  ) => KeyDownEvent(
+    physicalKey: physical,
+    logicalKey: logical,
+    timeStamp: Duration.zero,
+  );
 
   late HardwareKeyboard keyboard;
   late DateTime now;
@@ -38,18 +40,21 @@ void main() {
     expect(keyboard.physicalKeysPressed, isEmpty);
   });
 
-  test('a Ctrl pressed a moment ago is kept even if Windows already let go', () {
-    // A quick Ctrl+V: by the time V is looked at, Windows may report the Ctrl
-    // as released. Releasing it here would turn the paste into a plain V.
-    keyboard.handleKeyEvent(
-      press(PhysicalKeyboardKey.controlLeft, LogicalKeyboardKey.controlLeft),
-    );
-    now = now.add(const Duration(milliseconds: 20));
+  test(
+    'a Ctrl pressed a moment ago is kept even if Windows already let go',
+    () {
+      // A quick Ctrl+V: by the time V is looked at, Windows may report the Ctrl
+      // as released. Releasing it here would turn the paste into a plain V.
+      keyboard.handleKeyEvent(
+        press(PhysicalKeyboardKey.controlLeft, LogicalKeyboardKey.controlLeft),
+      );
+      now = now.add(const Duration(milliseconds: 20));
 
-    repair.repair();
+      repair.repair();
 
-    expect(keyboard.isControlPressed, isTrue);
-  });
+      expect(keyboard.isControlPressed, isTrue);
+    },
+  );
 
   test('a modifier that is really held stays pressed', () {
     osDown = true;

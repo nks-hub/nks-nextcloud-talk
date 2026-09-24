@@ -66,7 +66,7 @@ bool ForwardToRunningInstance(const std::wstring& url) {
     if (attempt > 0) {
       ::Sleep(kWindowWaitStepMs);
     }
-    window = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"NKS Talk");
+    window = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"OwnTalk");
   }
   if (window == nullptr) {
     return false;
@@ -137,7 +137,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
   const wchar_t* title =
-      integration_test ? L"NKS Talk (integration test)" : L"NKS Talk";
+      integration_test ? L"OwnTalk (integration test)" : L"OwnTalk";
   if (!window.Create(title, origin, size)) {
     return EXIT_FAILURE;
   }

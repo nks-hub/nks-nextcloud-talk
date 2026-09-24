@@ -85,9 +85,7 @@ TextEditingValue formatComposerSelection(
   final text = value.text;
   final selection = value.selection;
   final valid =
-      selection.isValid &&
-      selection.start >= 0 &&
-      selection.end <= text.length;
+      selection.isValid && selection.start >= 0 && selection.end <= text.length;
   final start = valid ? selection.start : text.length;
   final end = valid ? selection.end : text.length;
   final inner = text.substring(start, end);
@@ -98,7 +96,8 @@ TextEditingValue formatComposerSelection(
     final needsLeadingBreak = start > 0 && text[start - 1] != '\n';
     final needsTrailingBreak = end < text.length && text[end] != '\n';
     before = '${needsLeadingBreak ? '\n' : ''}```\n';
-    after = '${inner.endsWith('\n') ? '' : '\n'}```'
+    after =
+        '${inner.endsWith('\n') ? '' : '\n'}```'
         '${needsTrailingBreak ? '\n' : ''}';
   } else {
     before = format.marker;

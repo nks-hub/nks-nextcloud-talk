@@ -90,11 +90,14 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.nkshub" "\0"
-            VALUE "FileDescription", "NKS Talk" "\0"
+            VALUE "FileDescription", "OwnTalk" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "nextcloudtalk" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.nkshub. All rights reserved." "\0"
             VALUE "OriginalFilename", "nextcloudtalk.exe" "\0"
+            // Stays NKS Talk: path_provider builds the data folder from
+            // CompanyName\ProductName, so renaming it would orphan every
+            // account and conversation on upgrade.
             VALUE "ProductName", "NKS Talk" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

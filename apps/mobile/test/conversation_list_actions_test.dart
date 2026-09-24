@@ -214,7 +214,8 @@ void main() {
     expect(
       list.padding,
       const EdgeInsets.only(bottom: 88),
-      reason: 'the room the button covers has to be scrollable out from under it',
+      reason:
+          'the room the button covers has to be scrollable out from under it',
     );
     expect(tester.takeException(), isNull);
   });

@@ -100,7 +100,8 @@ List<ConversationShortcut> conversationShortcuts({
     } on TalkProtocolException {
       continue;
     }
-    for (final room in conversations[account.id] ?? const <CachedConversation>[]) {
+    for (final room
+        in conversations[account.id] ?? const <CachedConversation>[]) {
       if (room.isArchived || room.token.isEmpty) {
         continue;
       }
@@ -119,7 +120,9 @@ List<ConversationShortcut> conversationShortcuts({
   }
   ranked.sort((a, b) {
     final byActivity = b.lastActivity.compareTo(a.lastActivity);
-    return byActivity != 0 ? byActivity : a.shortcut.id.compareTo(b.shortcut.id);
+    return byActivity != 0
+        ? byActivity
+        : a.shortcut.id.compareTo(b.shortcut.id);
   });
   return <ConversationShortcut>[
     for (final entry in ranked.take(limit < 0 ? 0 : limit)) entry.shortcut,

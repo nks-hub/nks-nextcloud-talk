@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleDisplayName</key>
-	<string>NKS Talk</string>
+	<string>OwnTalk</string>
 	<key>CFBundleIconFile</key>
 	<string></string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>NKS Talk</string>
+	<string>OwnTalk</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -40,11 +40,11 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSCameraUsageDescription</key>
-	<string>NKS Talk needs camera access to send your video in a call.</string>
+	<string>OwnTalk needs camera access to send your video in a call.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>NKS Talk needs microphone access to record voice messages.</string>
+	<string>OwnTalk needs microphone access to record voice messages.</string>
 	<key>NSLocationUsageDescription</key>
-	<string>NKS Talk uses your current location only when you choose to share it in a conversation.</string>
+	<string>OwnTalk uses your current location only when you choose to share it in a conversation.</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>

@@ -381,21 +381,17 @@ void main() {
     // the presenter seam: pushing the real room drags its timers and its
     // network work into a test about a list, and that is what made the earlier
     // version of this test hang.
-    testWidgets('opening a row selects the row account first', (
-      tester,
-    ) async {
+    testWidgets('opening a row selects the row account first', (tester) async {
       final seen = <String>[];
       await tester.pumpWidget(
         fixture.app(
           presentMessage:
               (
-                context,
-                {
-                  required account,
-                  required conversation,
-                  required messageId,
-                }
-              ) async {
+                context, {
+                required account,
+                required conversation,
+                required messageId,
+              }) async {
                 seen.add('${account.id}|${conversation.token}|$messageId');
               },
         ),

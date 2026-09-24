@@ -18,11 +18,11 @@ import 'test_support.dart';
 /// not be loaded although the file itself downloads fine, so the attachment
 /// stands in for the preview the server never made.
 void main() {
-  test('a file the server has no preview of is shown from the original',
-      () async {
-    final requested = <Uri>[];
-    final container = _container(
-      (request) async {
+  test(
+    'a file the server has no preview of is shown from the original',
+    () async {
+      final requested = <Uri>[];
+      final container = _container((request) async {
         requested.add(request.url);
         if (request.url.path.endsWith('/core/preview')) {
           return http.StreamedResponse(const Stream.empty(), 404);
@@ -32,54 +32,56 @@ void main() {
           200,
           headers: {'content-type': 'image/jpeg'},
         );
-      },
-    );
-    addTearDown(container.dispose);
+      });
+      addTearDown(container.dispose);
 
-    final image = await container.read(
-      chatMediaProvider(
-        ChatMediaProviderKey(
-          account: _account,
-          uri: _previewUri,
-          originalUri: _originalUri,
-          originalContentType: 'image/jpeg',
-        ),
-      ).future,
-    );
-
-    expect(image, isNotNull);
-    expect(image!.contentType, 'image/jpeg');
-    expect(image.body, _jpeg);
-    expect(requested.map((uri) => uri.path), [
-      '/index.php/core/preview',
-      _originalUri.path,
-    ]);
-  });
-
-  test('two sizes of the same picture never reach the server together',
-      () async {
-    var inFlight = 0;
-    var overlaps = 0;
-    final repository = _repository((request) async {
-      inFlight++;
-      if (inFlight > 1) overlaps++;
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      inFlight--;
-      return http.StreamedResponse(
-        Stream.value(_jpeg),
-        200,
-        headers: {'content-type': 'image/jpeg'},
+      final image = await container.read(
+        chatMediaProvider(
+          ChatMediaProviderKey(
+            account: _account,
+            uri: _previewUri,
+            originalUri: _originalUri,
+            originalContentType: 'image/jpeg',
+          ),
+        ).future,
       );
-    });
 
-    await Future.wait([
-      repository.loadPreview(account: _account, uri: _previewUri),
-      repository.loadPreview(account: _account, uri: _fullScreenUri),
-      repository.loadPreview(account: _account, uri: _previewUri),
-    ]);
+      expect(image, isNotNull);
+      expect(image!.contentType, 'image/jpeg');
+      expect(image.body, _jpeg);
+      expect(requested.map((uri) => uri.path), [
+        '/index.php/core/preview',
+        _originalUri.path,
+      ]);
+    },
+  );
 
-    expect(overlaps, 0);
-  });
+  test(
+    'two sizes of the same picture never reach the server together',
+    () async {
+      var inFlight = 0;
+      var overlaps = 0;
+      final repository = _repository((request) async {
+        inFlight++;
+        if (inFlight > 1) overlaps++;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        inFlight--;
+        return http.StreamedResponse(
+          Stream.value(_jpeg),
+          200,
+          headers: {'content-type': 'image/jpeg'},
+        );
+      });
+
+      await Future.wait([
+        repository.loadPreview(account: _account, uri: _previewUri),
+        repository.loadPreview(account: _account, uri: _fullScreenUri),
+        repository.loadPreview(account: _account, uri: _previewUri),
+      ]);
+
+      expect(overlaps, 0);
+    },
+  );
 
   test('pictures that are not the same file still load side by side', () async {
     var peak = 0;

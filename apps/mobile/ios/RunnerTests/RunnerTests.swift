@@ -987,7 +987,7 @@ final class ConversationIdentityTests: XCTestCase {
   /// takes a real push to see.
   func testIOSAcceptsTheIntentAndKeepsTheMessage() throws {
     let content = UNMutableNotificationContent()
-    content.title = "NKS Talk"
+    content.title = "OwnTalk"
     content.body = "Ahoj"
 
     let updated = try XCTUnwrap(

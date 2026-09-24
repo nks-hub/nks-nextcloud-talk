@@ -57,17 +57,20 @@ void main() {
 
     // A Keychain that refuses to write leaves the ordinary notification in
     // place; it must not take a conversation sync down with it.
-    test('a refusing platform is not an error the caller has to handle', () async {
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, (call) async {
-            throw PlatformException(code: 'keychain');
-          });
+    test(
+      'a refusing platform is not an error the caller has to handle',
+      () async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (call) async {
+              throw PlatformException(code: 'keychain');
+            });
 
-      expect(
-        await coordinator.recordConversationNames('account-a', {'t': 'Room'}),
-        isNull,
-      );
-    });
+        expect(
+          await coordinator.recordConversationNames('account-a', {'t': 'Room'}),
+          isNull,
+        );
+      },
+    );
 
     test('a platform without the channel answers nothing', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

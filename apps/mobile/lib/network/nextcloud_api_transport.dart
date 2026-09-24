@@ -360,18 +360,15 @@ abstract class _HttpNextcloudApiBase {
       var abandoned = false;
       final sending = _client.send(request);
       unawaited(
-        sending.then(
-          (late) {
-            if (abandoned) {
-              unawaited(
-                late.stream.drain<void>().catchError((Object _, StackTrace _) {
-                  return null;
-                }),
-              );
-            }
-          },
-          onError: (Object _, StackTrace _) {},
-        ),
+        sending.then((late) {
+          if (abandoned) {
+            unawaited(
+              late.stream.drain<void>().catchError((Object _, StackTrace _) {
+                return null;
+              }),
+            );
+          }
+        }, onError: (Object _, StackTrace _) {}),
       );
       final response = await sending.timeout(
         effectiveTimeout,

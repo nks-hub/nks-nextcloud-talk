@@ -15,7 +15,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get dateHeaderYesterday => 'Včera';
 
   @override
-  String get appTitle => 'NKS Talk';
+  String get appTitle => 'OwnTalk';
 
   @override
   String get onboardingTitle => 'Všechny konverzace v jedné aplikaci';
@@ -1277,14 +1277,14 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get appLockAuthenticationReason =>
-      'Odemkněte své konverzace v NKS Talk';
+      'Odemkněte své konverzace v OwnTalk';
 
   @override
   String get appLockAuthenticationCancelled =>
       'Ověření zařízením bylo zrušeno.';
 
   @override
-  String get appLockLockedTitle => 'NKS Talk je zamčený';
+  String get appLockLockedTitle => 'OwnTalk je zamčený';
 
   @override
   String get appLockLockedMessage =>
@@ -1310,7 +1310,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get settingsDesktopSection => 'Počítač';
 
   @override
-  String get settingsDesktopAutostart => 'Otevřít NKS Talk po přihlášení';
+  String get settingsDesktopAutostart => 'Otevřít OwnTalk po přihlášení';
 
   @override
   String get settingsDesktopAutostartChecking =>
@@ -1318,11 +1318,11 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get settingsDesktopAutostartOnSubtitle =>
-      'NKS Talk se po přihlášení otevře automaticky.';
+      'OwnTalk se po přihlášení otevře automaticky.';
 
   @override
   String get settingsDesktopAutostartOffSubtitle =>
-      'NKS Talk zůstane zavřený, dokud ho neotevřete.';
+      'OwnTalk zůstane zavřený, dokud ho neotevřete.';
 
   @override
   String get settingsDesktopAutostartFailed =>
@@ -1414,7 +1414,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get settingsUpdateCheckInstallConfirmBody =>
-      'Nainstaluje se nová verze. NKS Talk se kvůli dokončení zavře a sám se zase otevře.';
+      'Nainstaluje se nová verze. OwnTalk se kvůli dokončení zavře a sám se zase otevře.';
 
   @override
   String get settingsUpdateCheckInstallConfirmAction => 'Nainstalovat';
@@ -1424,7 +1424,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get settingsUpdateCheckInstallStarted =>
-      'Instaluje se. NKS Talk se zavře a zase otevře.';
+      'Instaluje se. OwnTalk se zavře a zase otevře.';
 
   @override
   String get settingsUpdateCheckInstallStartFailed =>
@@ -1506,7 +1506,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get diagnosticsLicensesLegalese =>
-      'NKS Talk je svobodný software pod licencí GNU GPL-3.0-or-later. Obsahuje UnifiedPush embedded FCM distributor (LGPL-2.1) jako součást tohoto GPL díla podle LGPL, oddíl 3. Úplný odpovídající zdrojový kód tohoto sestavení dostane každý příjemce na vyžádání od toho, kdo mu sestavení předal.';
+      'OwnTalk je svobodný software pod licencí GNU GPL-3.0-or-later. Obsahuje UnifiedPush embedded FCM distributor (LGPL-2.1) jako součást tohoto GPL díla podle LGPL, oddíl 3. Úplný odpovídající zdrojový kód tohoto sestavení dostane každý příjemce na vyžádání od toho, kdo mu sestavení předal.';
 
   @override
   String get diagnosticsAppVersion => 'Verze';

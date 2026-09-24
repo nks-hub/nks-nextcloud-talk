@@ -346,7 +346,7 @@ final int Function(Pointer<Utf16>, Pointer<Utf16>) _findWindow = _user32
 
 int _testWindow() {
   final className = 'FLUTTER_RUNNER_WIN32_WINDOW'.toNativeUtf16();
-  final title = 'NKS Talk (integration test)'.toNativeUtf16();
+  final title = 'OwnTalk (integration test)'.toNativeUtf16();
   try {
     return _findWindow(className, title);
   } finally {
@@ -420,7 +420,10 @@ void _send(List<(int, bool)> strokes) {
   }
   final buffer = calloc<Uint8>(_inputSize * strokes.length);
   try {
-    final data = buffer.asTypedList(_inputSize * strokes.length).buffer.asByteData();
+    final data = buffer
+        .asTypedList(_inputSize * strokes.length)
+        .buffer
+        .asByteData();
     for (var i = 0; i < strokes.length; i++) {
       final (vk, up) = strokes[i];
       final base = i * _inputSize;

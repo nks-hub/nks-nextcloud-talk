@@ -94,7 +94,10 @@ void main() {
     final withoutTurn =
         (cases.first! as Map<String, Object?>)['data']! as Map<String, Object?>;
 
-    expect(await offered(MockClient((_) async => ocs(withoutTurn, 200))), isFalse);
+    expect(
+      await offered(MockClient((_) async => ocs(withoutTurn, 200))),
+      isFalse,
+    );
   });
 
   test('a server that cannot be asked keeps the switch', () async {

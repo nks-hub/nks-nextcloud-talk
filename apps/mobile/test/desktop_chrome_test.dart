@@ -131,7 +131,6 @@ void main() {
     );
     await tester.drag(splitter, const Offset(60, 0));
     expect(dragged, before.width + 60);
-
   });
 
   testWidgets('a cramped window keeps the list until a room is open', (

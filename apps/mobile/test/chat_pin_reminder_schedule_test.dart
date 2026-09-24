@@ -106,7 +106,9 @@ void main() {
       // the past hides the banner here rather than waiting to be told.
       final conversation = await insertRoom(lastPinnedId: 10);
       await insertMessage(
-        pinnedUntil: DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
+        pinnedUntil: DateTime.now().toUtc().subtract(
+          const Duration(minutes: 1),
+        ),
       );
       await tester.pumpWidget(
         wrap(

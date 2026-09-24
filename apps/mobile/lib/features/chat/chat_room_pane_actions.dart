@@ -443,10 +443,7 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
     await _pinMessage(message, until: chosen.$2);
   }
 
-  Future<void> _pinMessage(
-    CachedChatMessage message, {
-    DateTime? until,
-  }) async {
+  Future<void> _pinMessage(CachedChatMessage message, {DateTime? until}) async {
     final targetKey = _key;
     try {
       await ref

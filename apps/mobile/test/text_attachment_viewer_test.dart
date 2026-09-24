@@ -16,18 +16,18 @@ final Uri _uri = Uri.parse(
   'https://cloud.example.invalid/remote.php/dav/files/fixture-user/Talk/notes.md',
 );
 
-ChatMediaRepository _repository(List<int> body, {String type = 'text/markdown'}) {
+ChatMediaRepository _repository(
+  List<int> body, {
+  String type = 'text/markdown',
+}) {
   final vault = MemoryCredentialVault()
     ..values['account-a'] = 'fixture-app-password';
   return ChatMediaRepository(
     vault,
     wait: (_) async {},
     client: MockClient(
-      (request) async => http.Response.bytes(
-        body,
-        200,
-        headers: {'content-type': type},
-      ),
+      (request) async =>
+          http.Response.bytes(body, 200, headers: {'content-type': type}),
     ),
   );
 }
@@ -94,7 +94,9 @@ void main() {
 
     expect(find.byKey(const Key('text-attachment-viewer')), findsOneWidget);
     final shown = tester
-        .widget<SelectableText>(find.byKey(const Key('text-attachment-content')))
+        .widget<SelectableText>(
+          find.byKey(const Key('text-attachment-content')),
+        )
         .data;
     expect(shown, source);
     expect(
@@ -138,7 +140,9 @@ void main() {
     await _pump(tester, account, repository, type: 'text/plain');
 
     final shown = tester
-        .widget<SelectableText>(find.byKey(const Key('text-attachment-content')))
+        .widget<SelectableText>(
+          find.byKey(const Key('text-attachment-content')),
+        )
         .data!;
     expect(shown, startsWith('before '));
     expect(shown, endsWith(' after'));
@@ -193,7 +197,9 @@ void main() {
       SystemChannels.platform,
       (call) async {
         if (call.method == 'Clipboard.setData') {
-          copied.add((call.arguments as Map<Object?, Object?>)['text'] as String);
+          copied.add(
+            (call.arguments as Map<Object?, Object?>)['text'] as String,
+          );
         }
         return null;
       },
@@ -262,9 +268,7 @@ void main() {
       onOpenExternally: () => opened++,
     );
 
-    await tester.tap(
-      find.byKey(const Key('text-attachment-open-externally')),
-    );
+    await tester.tap(find.byKey(const Key('text-attachment-open-externally')));
     await tester.pump();
 
     expect(opened, 1);

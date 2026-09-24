@@ -15,7 +15,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dateHeaderYesterday => 'Yesterday';
 
   @override
-  String get appTitle => 'NKS Talk';
+  String get appTitle => 'OwnTalk';
 
   @override
   String get onboardingTitle => 'Your conversations, one app';
@@ -1275,15 +1275,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'The app lock setting could not be changed.';
 
   @override
-  String get appLockAuthenticationReason =>
-      'Unlock your NKS Talk conversations';
+  String get appLockAuthenticationReason => 'Unlock your OwnTalk conversations';
 
   @override
   String get appLockAuthenticationCancelled =>
       'Device authentication was cancelled.';
 
   @override
-  String get appLockLockedTitle => 'NKS Talk is locked';
+  String get appLockLockedTitle => 'OwnTalk is locked';
 
   @override
   String get appLockLockedMessage =>
@@ -1309,7 +1308,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsDesktopSection => 'Desktop';
 
   @override
-  String get settingsDesktopAutostart => 'Open NKS Talk when I sign in';
+  String get settingsDesktopAutostart => 'Open OwnTalk when I sign in';
 
   @override
   String get settingsDesktopAutostartChecking =>
@@ -1317,11 +1316,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsDesktopAutostartOnSubtitle =>
-      'NKS Talk opens automatically after you sign in.';
+      'OwnTalk opens automatically after you sign in.';
 
   @override
   String get settingsDesktopAutostartOffSubtitle =>
-      'NKS Talk stays closed until you open it.';
+      'OwnTalk stays closed until you open it.';
 
   @override
   String get settingsDesktopAutostartFailed =>
@@ -1414,7 +1413,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsUpdateCheckInstallConfirmBody =>
-      'This installs the new build. NKS Talk closes to finish and opens again by itself.';
+      'This installs the new build. OwnTalk closes to finish and opens again by itself.';
 
   @override
   String get settingsUpdateCheckInstallConfirmAction => 'Install';
@@ -1424,7 +1423,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsUpdateCheckInstallStarted =>
-      'Installing. NKS Talk will close and open again.';
+      'Installing. OwnTalk will close and open again.';
 
   @override
   String get settingsUpdateCheckInstallStartFailed =>
@@ -1507,7 +1506,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diagnosticsLicensesLegalese =>
-      'NKS Talk is free software under the GNU GPL-3.0-or-later. It ships the UnifiedPush embedded FCM distributor (LGPL-2.1) as part of this GPL work under LGPL section 3. The complete corresponding source of this build is available to every recipient on request from whoever distributed it to you.';
+      'OwnTalk is free software under the GNU GPL-3.0-or-later. It ships the UnifiedPush embedded FCM distributor (LGPL-2.1) as part of this GPL work under LGPL section 3. The complete corresponding source of this build is available to every recipient on request from whoever distributed it to you.';
 
   @override
   String get diagnosticsAppVersion => 'Version';

@@ -316,10 +316,7 @@ Future<List<Map<String, Object?>>> _pushed(
 String? _pythonExecutable() {
   for (final candidate in ['python3', 'python']) {
     try {
-      final result = Process.runSync(candidate, [
-        '-c',
-        'import cryptography',
-      ]);
+      final result = Process.runSync(candidate, ['-c', 'import cryptography']);
       if (result.exitCode == 0) {
         return candidate;
       }

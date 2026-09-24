@@ -199,10 +199,7 @@ void main() {
   });
 
   test('the phones never download, even with a valid file published', () async {
-    for (final platform in const [
-      TargetPlatform.android,
-      TargetPlatform.iOS,
-    ]) {
+    for (final platform in const [TargetPlatform.android, TargetPlatform.iOS]) {
       forcePlatform(platform);
       final asked = <Uri>[];
       final result = await service(
@@ -225,26 +222,31 @@ void main() {
     }
   });
 
-  test('every desktop does download, and verifies before handing it over', () async {
-    for (final platform in const [
-      TargetPlatform.windows,
-      TargetPlatform.macOS,
-      TargetPlatform.linux,
-    ]) {
-      forcePlatform(platform);
-      final result = await service(
-        MockClient(
-          (request) async =>
-              respondTo(request, sumsBody: '$installerHash  $installerName\n'),
-        ),
-      ).downloadAndVerify(release: release());
+  test(
+    'every desktop does download, and verifies before handing it over',
+    () async {
+      for (final platform in const [
+        TargetPlatform.windows,
+        TargetPlatform.macOS,
+        TargetPlatform.linux,
+      ]) {
+        forcePlatform(platform);
+        final result = await service(
+          MockClient(
+            (request) async => respondTo(
+              request,
+              sumsBody: '$installerHash  $installerName\n',
+            ),
+          ),
+        ).downloadAndVerify(release: release());
 
-      expect(result, isA<UpdateInstallReady>(), reason: '$platform');
-      final ready = result as UpdateInstallReady;
-      addTearDown(() => ready.installerFile.parent.delete(recursive: true));
-      expect(await ready.installerFile.exists(), isTrue, reason: '$platform');
-    }
-  });
+        expect(result, isA<UpdateInstallReady>(), reason: '$platform');
+        final ready = result as UpdateInstallReady;
+        addTearDown(() => ready.installerFile.parent.delete(recursive: true));
+        expect(await ready.installerFile.exists(), isTrue, reason: '$platform');
+      }
+    },
+  );
 
   test('starting a file that is not a real installer fails cleanly', () async {
     // Windows is the platform that runs the download rather than unpacking it,

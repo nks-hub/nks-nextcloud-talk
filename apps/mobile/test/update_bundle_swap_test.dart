@@ -57,7 +57,10 @@ void main() {
 
   group('quoting', () {
     test('carries a path with a space through the shell', () {
-      expect(shellQuote('/Applications/NKS Talk.app'), "'/Applications/NKS Talk.app'");
+      expect(
+        shellQuote('/Applications/NKS Talk.app'),
+        "'/Applications/NKS Talk.app'",
+      );
     });
 
     test('carries a path holding a single quote', () {

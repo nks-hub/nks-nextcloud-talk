@@ -239,7 +239,7 @@ internal class AndroidWebPushChannel(
         private val CONNECTOR_LOCK = Any()
         private val VAPID_REGEX = Regex("^[A-Za-z0-9_-]{87}$")
 
-        private const val DISTRIBUTOR_LABEL = "NKS Talk"
+        private const val DISTRIBUTOR_LABEL = "OwnTalk"
         private const val MAX_VAPID_LENGTH = 87
         private const val MAX_EVENT_ID_LENGTH = 128
         private const val MAX_ACCOUNT_ID_LENGTH = 256

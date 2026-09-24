@@ -36,66 +36,68 @@ void main() {
     seconds: int.tryParse(Platform.environment['NKS_JOIN_WAIT'] ?? '') ?? 45,
   );
 
-  testWidgets('a call shares a chosen screen and then a chosen window', (
-    tester,
-  ) async {
-    expect(roomToken, isNotNull, reason: 'set NKS_CALL_ROOM');
-    journal.note('start');
+  testWidgets(
+    'a call shares a chosen screen and then a chosen window',
+    (tester) async {
+      expect(roomToken, isNotNull, reason: 'set NKS_CALL_ROOM');
+      journal.note('start');
 
-    await tester.pumpWidget(const ProviderScope(child: NextcloudTalkApp()));
-    await settle(tester, const Duration(seconds: 5));
+      await tester.pumpWidget(const ProviderScope(child: NextcloudTalkApp()));
+      await settle(tester, const Duration(seconds: 5));
 
-    final tile = find.byKey(Key('conversation-tile-$roomToken'));
-    await waitFor(tester, tile, what: 'the conversation tile');
-    await tester.tap(tile);
+      final tile = find.byKey(Key('conversation-tile-$roomToken'));
+      await waitFor(tester, tile, what: 'the conversation tile');
+      await tester.tap(tile);
 
-    final startCall = find.byKey(const Key('start-call-audio'));
-    await waitFor(tester, startCall, what: 'the audio call button');
-    await tester.tap(startCall);
+      final startCall = find.byKey(const Key('start-call-audio'));
+      await waitFor(tester, startCall, what: 'the audio call button');
+      await tester.tap(startCall);
 
-    final callScreen = find.byKey(const Key('call-screen'));
-    await waitFor(
-      tester,
-      callScreen,
-      what: 'the call screen',
-      timeout: const Duration(seconds: 60),
-    );
-    journal.note('joined');
+      final callScreen = find.byKey(const Key('call-screen'));
+      await waitFor(
+        tester,
+        callScreen,
+        what: 'the call screen',
+        timeout: const Duration(seconds: 60),
+      );
+      journal.note('joined');
 
-    // Time for the other client to answer, so the share has an audience.
-    await settle(tester, joinWait);
-    journal.note('waited for the other side');
+      // Time for the other client to answer, so the share has an audience.
+      await settle(tester, joinWait);
+      journal.note('waited for the other side');
 
-    await _share(
-      tester,
-      journal,
-      pickLast: false,
-      stopFirst: false,
-      windowMark: windowMark,
-    );
-    await settle(tester, const Duration(seconds: 60));
-    journal.note('screen shared, holding');
+      await _share(
+        tester,
+        journal,
+        pickLast: false,
+        stopFirst: false,
+        windowMark: windowMark,
+      );
+      await settle(tester, const Duration(seconds: 60));
+      journal.note('screen shared, holding');
 
-    // The same control stops a running share, so a second choice needs two
-    // presses: one to stop, one to ask again. Learned from a run where the
-    // second press found no picker at all.
-    await _share(
-      tester,
-      journal,
-      pickLast: true,
-      stopFirst: true,
-      windowMark: windowMark,
-    );
-    await settle(tester, const Duration(seconds: 60));
-    journal.note('window shared, holding');
+      // The same control stops a running share, so a second choice needs two
+      // presses: one to stop, one to ask again. Learned from a run where the
+      // second press found no picker at all.
+      await _share(
+        tester,
+        journal,
+        pickLast: true,
+        stopFirst: true,
+        windowMark: windowMark,
+      );
+      await settle(tester, const Duration(seconds: 60));
+      journal.note('window shared, holding');
 
-    final leave = find.byKey(const Key('call-screen-leave'));
-    await waitFor(tester, leave, what: 'the leave button');
-    await tester.tap(leave);
-    await waitUntilGone(tester, callScreen, what: 'the call screen');
-    await settle(tester, const Duration(seconds: 15));
-    journal.note('left');
-  }, timeout: const Timeout(Duration(minutes: 10)));
+      final leave = find.byKey(const Key('call-screen-leave'));
+      await waitFor(tester, leave, what: 'the leave button');
+      await tester.tap(leave);
+      await waitUntilGone(tester, callScreen, what: 'the call screen');
+      await settle(tester, const Duration(seconds: 15));
+      journal.note('left');
+    },
+    timeout: const Timeout(Duration(minutes: 10)),
+  );
 }
 
 /// Opens the picker and shares one source, writing down which one it chose so

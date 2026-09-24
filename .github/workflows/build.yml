@@ -470,7 +470,7 @@ jobs:
           find artifacts -type f \( -name '*.apk' -o -name '*.aab' \
             -o -name '*.tar.gz' -o -name '*.exe' \) -exec cp {} release/ \;
           version=$(sed -n 's/^version: *//p' apps/mobile/pubspec.yaml)
-          echo "RELEASE_NAME=NKS Talk ${version%+*} (${version#*+})" >> "$GITHUB_ENV"
+          echo "RELEASE_NAME=OwnTalk ${version%+*} (${version#*+})" >> "$GITHUB_ENV"
           # The changelog keeps SHA-256 for every artefact, so the release
           # carries the same list rather than a different one.
           ( cd release && sha256sum * > SHA256SUMS && cat SHA256SUMS )

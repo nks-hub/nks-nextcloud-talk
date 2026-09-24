@@ -24,8 +24,9 @@ const Set<String> readableTextTypes = <String>{
 /// only in the file itself.
 const int maximumReadableTextBytes = 1024 * 1024;
 
-bool isReadableText(String contentType) =>
-    readableTextTypes.contains(contentType.split(';').first.trim().toLowerCase());
+bool isReadableText(String contentType) => readableTextTypes.contains(
+  contentType.split(';').first.trim().toLowerCase(),
+);
 
 /// Opens a text or Markdown attachment inside the app.
 Future<void> showTextAttachmentViewer(
@@ -100,7 +101,10 @@ final class _TextAttachmentViewerState extends State<TextAttachmentViewer> {
     // A chat attachment is somebody else's file: it can be in any encoding or
     // in none. Malformed bytes become replacement characters instead of an
     // exception, so a mostly readable file stays readable.
-    return (text: utf8.decode(bytes, allowMalformed: true), truncated: truncated);
+    return (
+      text: utf8.decode(bytes, allowMalformed: true),
+      truncated: truncated,
+    );
   }
 
   @override

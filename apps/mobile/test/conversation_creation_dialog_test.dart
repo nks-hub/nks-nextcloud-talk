@@ -78,9 +78,7 @@ void main() {
         isTrue,
       );
       expect(
-        find.text(
-          'Participant permissions (set by the server): Send messages',
-        ),
+        find.text('Participant permissions (set by the server): Send messages'),
         findsOneWidget,
       );
       expect(find.text('Recording consent: Required'), findsOneWidget);

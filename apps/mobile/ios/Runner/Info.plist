@@ -11,7 +11,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>NKS Talk</string>
+	<string>OwnTalk</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIconName</key>
@@ -21,7 +21,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>NKS Talk</string>
+	<string>OwnTalk</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -50,19 +50,19 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>NKS Talk needs camera access to attach a photo you take to a message.</string>
+	<string>OwnTalk needs camera access to attach a photo you take to a message.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>NKS Talk uses Face ID to unlock your conversations when app lock is enabled.</string>
+	<string>OwnTalk uses Face ID to unlock your conversations when app lock is enabled.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>NKS Talk needs microphone access to record voice messages.</string>
+	<string>OwnTalk needs microphone access to record voice messages.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>NKS Talk needs photo library access to attach a picture you pick to a message.</string>
+	<string>OwnTalk needs photo library access to attach a picture you pick to a message.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>NKS Talk saves pictures from your conversations to your photo library.</string>
+	<string>OwnTalk saves pictures from your conversations to your photo library.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>NKS Talk uses on-device speech recognition to transcribe a voice message you choose.</string>
+	<string>OwnTalk uses on-device speech recognition to transcribe a voice message you choose.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>NKS Talk uses your current location only when you choose to share it in a conversation.</string>
+	<string>OwnTalk uses your current location only when you choose to share it in a conversation.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

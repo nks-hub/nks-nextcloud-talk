@@ -14,21 +14,32 @@ void main() {
       ComposerFormat.bold,
     );
     expect(result.text, 'say **hello** now');
-    expect(result.selection, const TextSelection(baseOffset: 6, extentOffset: 11));
+    expect(
+      result.selection,
+      const TextSelection(baseOffset: 6, extentOffset: 11),
+    );
 
     expect(
-      formatComposerSelection(_value('x', 0, 1), ComposerFormat.inlineCode).text,
+      formatComposerSelection(
+        _value('x', 0, 1),
+        ComposerFormat.inlineCode,
+      ).text,
       '`x`',
     );
     expect(
-      formatComposerSelection(_value('x', 0, 1), ComposerFormat.strikethrough)
-          .text,
+      formatComposerSelection(
+        _value('x', 0, 1),
+        ComposerFormat.strikethrough,
+      ).text,
       '~~x~~',
     );
   });
 
   test('an empty selection opens a pair with the caret inside', () {
-    final result = formatComposerSelection(_value('a ', 2), ComposerFormat.italic);
+    final result = formatComposerSelection(
+      _value('a ', 2),
+      ComposerFormat.italic,
+    );
     expect(result.text, 'a **');
     expect(result.selection, const TextSelection.collapsed(offset: 3));
   });
@@ -43,7 +54,10 @@ void main() {
   });
 
   test('a code block at an empty caret leaves the caret on the inner line', () {
-    final result = formatComposerSelection(_value('', 0), ComposerFormat.codeBlock);
+    final result = formatComposerSelection(
+      _value('', 0),
+      ComposerFormat.codeBlock,
+    );
     expect(result.text, '```\n\n```');
     expect(result.selection, const TextSelection.collapsed(offset: 4));
   });

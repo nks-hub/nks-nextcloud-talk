@@ -201,7 +201,7 @@ final class _DiagnosticsList extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right_rounded),
           onTap: () => showLicensePage(
             context: context,
-            applicationName: 'NKS Talk',
+            applicationName: 'OwnTalk',
             applicationVersion: '$appVersionName ($appBuildNumber)',
             // The written offer LGPL-2.1 §3 / GPL-3 §6 ask for: the repo is
             // private, so recipients of a build must be told where the

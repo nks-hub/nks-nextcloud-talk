@@ -79,9 +79,7 @@ void _registerOverviewAndModerationTests() {
       // menu first. What this asserts either way is that a user can get there.
       final infoButton = find.byKey(const Key('open-room-details'));
       if (infoButton.evaluate().isEmpty) {
-        await tester.tap(
-          find.byKey(const Key('conversation-header-overflow')),
-        );
+        await tester.tap(find.byKey(const Key('conversation-header-overflow')));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
       }
@@ -134,7 +132,8 @@ void _registerOverviewAndModerationTests() {
       );
       await _pumpUntil(
         tester,
-        () => find.byKey(const Key('room-details-participants'))
+        () => find
+            .byKey(const Key('room-details-participants'))
             .evaluate()
             .isNotEmpty,
       );
@@ -142,7 +141,8 @@ void _registerOverviewAndModerationTests() {
       expect(
         find.byKey(const Key('room-details-add-participant')),
         room.value.offered ? findsOneWidget : findsNothing,
-        reason: 'the server decides this by room type, so the button has to '
+        reason:
+            'the server decides this by room type, so the button has to '
             'as well',
       );
       expect(tester.takeException(), isNull);

@@ -24,14 +24,12 @@ Map<String, Object?> _room(String token) {
           as Map<String, Object?>;
   final ocs = root['ocs']! as Map<String, Object?>;
   final rooms = ocs['data']! as List<Object?>;
-  final room = Map<String, Object?>.from(
-    rooms.first! as Map<String, Object?>,
-  )..['token'] = token;
+  final room = Map<String, Object?>.from(rooms.first! as Map<String, Object?>)
+    ..['token'] = token;
   // The decoder refuses a preview whose token does not name its own room.
   final preview = room['lastMessage'];
   if (preview is Map<String, Object?>) {
-    room['lastMessage'] = Map<String, Object?>.from(preview)
-      ..['token'] = token;
+    room['lastMessage'] = Map<String, Object?>.from(preview)..['token'] = token;
   }
   return room;
 }
@@ -135,10 +133,6 @@ void main() {
       throwsA(isA<RoomSettingsException>()),
     );
 
-    expect(await cachedTokens(), <String>{
-      'parent01',
-      'child001',
-      'child002',
-    });
+    expect(await cachedTokens(), <String>{'parent01', 'child001', 'child002'});
   });
 }

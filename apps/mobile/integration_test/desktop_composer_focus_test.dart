@@ -31,81 +31,83 @@ void main() {
   final roomToken = Platform.environment['NKS_CALL_ROOM'];
   final journal = DesktopJournal(Platform.environment['NKS_CALL_JOURNAL']);
 
-  testWidgets('the composer takes focus back when the window returns', (
-    tester,
-  ) async {
-    expect(roomToken, isNotNull, reason: 'set NKS_CALL_ROOM');
-    journal.note('start');
+  testWidgets(
+    'the composer takes focus back when the window returns',
+    (tester) async {
+      expect(roomToken, isNotNull, reason: 'set NKS_CALL_ROOM');
+      journal.note('start');
 
-    // What Windows actually tells the app is the whole question here, so the
-    // states are written down as they arrive.
-    final lifecycle = <AppLifecycleState>[];
-    final listener = AppLifecycleListener(
-      onStateChange: (state) {
-        lifecycle.add(state);
-        journal.note('lifecycle $state');
-      },
-    );
-    addTearDown(listener.dispose);
+      // What Windows actually tells the app is the whole question here, so the
+      // states are written down as they arrive.
+      final lifecycle = <AppLifecycleState>[];
+      final listener = AppLifecycleListener(
+        onStateChange: (state) {
+          lifecycle.add(state);
+          journal.note('lifecycle $state');
+        },
+      );
+      addTearDown(listener.dispose);
 
-    await tester.pumpWidget(const ProviderScope(child: NextcloudTalkApp()));
-    await settle(tester, const Duration(seconds: 5));
+      await tester.pumpWidget(const ProviderScope(child: NextcloudTalkApp()));
+      await settle(tester, const Duration(seconds: 5));
 
-    final tile = find.byKey(Key('conversation-tile-$roomToken'));
-    await waitFor(tester, tile, what: 'the conversation tile');
-    await tester.tap(tile);
+      final tile = find.byKey(Key('conversation-tile-$roomToken'));
+      await waitFor(tester, tile, what: 'the conversation tile');
+      await tester.tap(tile);
 
-    final composer = find.byKey(const Key('chat-composer'));
-    await waitFor(tester, composer, what: 'the composer');
-    await settle(tester, const Duration(seconds: 2));
-    journal.note('room open');
+      final composer = find.byKey(const Key('chat-composer'));
+      await waitFor(tester, composer, what: 'the composer');
+      await settle(tester, const Duration(seconds: 2));
+      journal.note('room open');
 
-    // Start from somewhere the restore has to actually move the focus from.
-    FocusManager.instance.primaryFocus?.unfocus();
-    await settle(tester, const Duration(seconds: 1));
-    expect(
-      _hasFocus(tester, composer),
-      isFalse,
-      reason: 'the composer should have let go of the focus',
-    );
-    journal.note('composer unfocused');
+      // Start from somewhere the restore has to actually move the focus from.
+      FocusManager.instance.primaryFocus?.unfocus();
+      await settle(tester, const Duration(seconds: 1));
+      expect(
+        _hasFocus(tester, composer),
+        isFalse,
+        reason: 'the composer should have let go of the focus',
+      );
+      journal.note('composer unfocused');
 
-    showWindow(minimize: true);
-    await holdWithoutFrames(tester, const Duration(seconds: 5));
-    expect(isIconic(), isTrue, reason: 'the window did not minimize');
-    journal.note('minimized');
+      showWindow(minimize: true);
+      await holdWithoutFrames(tester, const Duration(seconds: 5));
+      expect(isIconic(), isTrue, reason: 'the window did not minimize');
+      journal.note('minimized');
 
-    showWindow(minimize: false);
-    journal.note('restore asked');
-    await settle(tester, const Duration(seconds: 2));
-    journal.note(
-      'binding lifecycle=${WidgetsBinding.instance.lifecycleState} '
-      'seen=$lifecycle',
-    );
-    await waitUntil(
-      tester,
-      () => _hasFocus(tester, composer),
-      what: 'the composer to take the focus back',
-      timeout: const Duration(seconds: 20),
-    );
-    expect(isIconic(), isFalse);
-    journal.note('focus restored');
+      showWindow(minimize: false);
+      journal.note('restore asked');
+      await settle(tester, const Duration(seconds: 2));
+      journal.note(
+        'binding lifecycle=${WidgetsBinding.instance.lifecycleState} '
+        'seen=$lifecycle',
+      );
+      await waitUntil(
+        tester,
+        () => _hasFocus(tester, composer),
+        what: 'the composer to take the focus back',
+        timeout: const Duration(seconds: 20),
+      );
+      expect(isIconic(), isFalse);
+      journal.note('focus restored');
 
-    // And it is a real editor, not just a focused node: typing arrives.
-    await tester.enterText(composer, 'restored');
-    await settle(tester, const Duration(seconds: 1));
-    expect(
-      tester.widget<TextField>(composer).controller?.text,
-      'restored',
-      reason: 'the restored focus did not accept typing',
-    );
-    journal.note('typed');
+      // And it is a real editor, not just a focused node: typing arrives.
+      await tester.enterText(composer, 'restored');
+      await settle(tester, const Duration(seconds: 1));
+      expect(
+        tester.widget<TextField>(composer).controller?.text,
+        'restored',
+        reason: 'the restored focus did not accept typing',
+      );
+      journal.note('typed');
 
-    // Leave no draft behind on a real account.
-    await tester.enterText(composer, '');
-    await settle(tester, const Duration(seconds: 3));
-    journal.note('cleared');
-  }, timeout: const Timeout(Duration(minutes: 4)));
+      // Leave no draft behind on a real account.
+      await tester.enterText(composer, '');
+      await settle(tester, const Duration(seconds: 3));
+      journal.note('cleared');
+    },
+    timeout: const Timeout(Duration(minutes: 4)),
+  );
 }
 
 bool _hasFocus(WidgetTester tester, Finder composer) =>

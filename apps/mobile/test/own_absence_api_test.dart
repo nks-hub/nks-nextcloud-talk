@@ -23,13 +23,17 @@ final ServerBase _server = ServerBase.parse(
   'https://cloud.example.invalid/nextcloud',
 );
 
-const String _path = '/nextcloud/ocs/v2.php/apps/dav/api/v1/outOfOffice/'
+const String _path =
+    '/nextcloud/ocs/v2.php/apps/dav/api/v1/outOfOffice/'
     'fixture-user';
 
 http.Response _ocs(int status, Object? data) => http.Response(
   jsonEncode({
     'ocs': {
-      'meta': {'status': status == 200 ? 'ok' : 'failure', 'statuscode': status},
+      'meta': {
+        'status': status == 200 ? 'ok' : 'failure',
+        'statuscode': status,
+      },
       'data': data,
     },
   }),
@@ -207,25 +211,28 @@ void main() {
     }
   });
 
-  test('clearing an absence sends DELETE and accepts an empty answer', () async {
-    var deletes = 0;
-    final api = HttpNextcloudApi(
-      client: MockClient((request) async {
-        expect(request.method, 'DELETE');
-        expect(request.url.path, _path);
-        deletes++;
-        return _ocs(200, null);
-      }),
-    );
-    addTearDown(api.close);
+  test(
+    'clearing an absence sends DELETE and accepts an empty answer',
+    () async {
+      var deletes = 0;
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          expect(request.method, 'DELETE');
+          expect(request.url.path, _path);
+          deletes++;
+          return _ocs(200, null);
+        }),
+      );
+      addTearDown(api.close);
 
-    await api.clearOwnOutOfOffice(
-      server: _server,
-      loginName: 'fixture-user',
-      appPassword: 'fixture-password',
-      userId: 'fixture-user',
-    );
+      await api.clearOwnOutOfOffice(
+        server: _server,
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+        userId: 'fixture-user',
+      );
 
-    expect(deletes, 1);
-  });
+      expect(deletes, 1);
+    },
+  );
 }

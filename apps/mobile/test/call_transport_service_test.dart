@@ -86,9 +86,9 @@ void main() {
           readFixtureJson('signaling/fixtures/settings.cases.json')
               as List<Object?>;
       final external =
-          cases
-                  .cast<Map<String, Object?>>()
-                  .firstWhere((c) => c['id'] == 'external-v1')['data']!
+          cases.cast<Map<String, Object?>>().firstWhere(
+                (c) => c['id'] == 'external-v1',
+              )['data']!
               as Map<String, Object?>;
 
       final transport = await service(
@@ -104,7 +104,8 @@ void main() {
         readFixtureJson('signaling/fixtures/settings.cases.json')
             as List<Object?>;
     Map<String, Object?> data(int index) =>
-        (cases[index]! as Map<String, Object?>)['data']! as Map<String, Object?>;
+        (cases[index]! as Map<String, Object?>)['data']!
+            as Map<String, Object?>;
 
     // Case 1 carries a TURN server, case 0 lists none — a Nextcloud whose
     // administrator configured no relay, which is the ordinary small install.

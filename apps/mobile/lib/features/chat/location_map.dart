@@ -10,7 +10,7 @@ typedef LocationTileClientFactory = http.Client Function(String accountId);
 
 /// Identifies this client to the OpenStreetMap infrastructure, which requires
 /// a User-Agent naming the application.
-const String locationMapUserAgent = 'NKS Talk/0.1 (com.nkshub.nextcloudtalk)';
+const String locationMapUserAgent = 'OwnTalk/0.1 (com.nkshub.nextcloudtalk)';
 
 /// Shown wherever OpenStreetMap data reaches the screen, as ODbL requires.
 const String locationMapAttribution = '© OpenStreetMap contributors';

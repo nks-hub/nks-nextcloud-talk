@@ -38,7 +38,8 @@ void main() {
       expect(
         read(platform),
         isA<SilentCallAudioInterruptions>(),
-        reason: '$platform has no handler for '
+        reason:
+            '$platform has no handler for '
             '${PlatformCallAudioInterruptions.channelName}',
       );
     }

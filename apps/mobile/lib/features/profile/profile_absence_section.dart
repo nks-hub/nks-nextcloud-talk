@@ -65,10 +65,7 @@ final class ProfileAbsenceSection extends StatelessWidget {
                 key: const Key('profile-absence-range'),
               ),
               if (absence.status.isNotEmpty)
-                Text(
-                  absence.status,
-                  key: const Key('profile-absence-status'),
-                ),
+                Text(absence.status, key: const Key('profile-absence-status')),
               if (absence.message.isNotEmpty)
                 Text(
                   absence.message,

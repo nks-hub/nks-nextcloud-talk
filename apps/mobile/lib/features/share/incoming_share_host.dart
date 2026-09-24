@@ -514,8 +514,7 @@ final class _IncomingShareTargetDialogState
   }
 
   Widget _roomTile(IncomingShareAccount account, IncomingShareRoom room) {
-    final selected =
-        _room?.token == room.token && _account?.id == account.id;
+    final selected = _room?.token == room.token && _account?.id == account.id;
     final subtitle = room.subtitle;
     return ListTile(
       key: Key('incoming-share-room-${account.id}-${room.token}'),

@@ -12,11 +12,7 @@ void main() {
   group('reading a package name', () {
     test('a shop that keeps its builds up to date is recognised', () {
       for (final shop in storeInstallerPackages) {
-        expect(
-          classifyInstaller(shop),
-          AppInstallSource.store,
-          reason: shop,
-        );
+        expect(classifyInstaller(shop), AppInstallSource.store, reason: shop);
       }
     });
 
@@ -25,7 +21,10 @@ void main() {
         classifyInstaller('com.google.android.packageinstaller'),
         AppInstallSource.sideloaded,
       );
-      expect(classifyInstaller('com.example.sideloader'), AppInstallSource.sideloaded);
+      expect(
+        classifyInstaller('com.example.sideloader'),
+        AppInstallSource.sideloaded,
+      );
     });
 
     test('no answer stays unknown rather than being guessed at', () {
@@ -40,9 +39,7 @@ void main() {
     final calls = <MethodCall>[];
 
     void answer(Object? Function() reply) {
-      TestDefaultBinaryMessengerBinding
-          .instance
-          .defaultBinaryMessenger
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
             calls.add(call);
             return reply();

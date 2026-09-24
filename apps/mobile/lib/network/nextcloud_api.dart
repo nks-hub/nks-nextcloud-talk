@@ -416,7 +416,7 @@ final class PendingLogin {
 /// User-Agent. Without this the server stores the bare Dart default, so the
 /// account owner sees a meaningless entry under security settings and cannot
 /// tell which device to revoke.
-const String loginFlowUserAgent = 'NKS Talk';
+const String loginFlowUserAgent = 'OwnTalk';
 
 /// User-Agent for the OCS push registration route.
 ///

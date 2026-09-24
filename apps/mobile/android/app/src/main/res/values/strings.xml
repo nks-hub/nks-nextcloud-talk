@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="push_notification_app_name">NKS Talk</string>
+    <string name="push_notification_app_name">OwnTalk</string>
     <string name="push_action_reply">Reply</string>
     <string name="push_action_mark_read">Mark as read</string>
     <string name="push_action_reply_queued">Sending the reply…</string>

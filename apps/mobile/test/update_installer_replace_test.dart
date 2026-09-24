@@ -135,18 +135,20 @@ void main() {
     expect(harness.quits, isEmpty);
   });
 
-  test('a build whose location cannot be worked out installs nothing',
-      () async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
-    final archive = await linuxArchive();
-    final harness = service(null);
+  test(
+    'a build whose location cannot be worked out installs nothing',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      final archive = await linuxArchive();
+      final harness = service(null);
 
-    expect(
-      await harness.service.runInstaller(UpdateInstallReady(archive)),
-      isFalse,
-    );
-    expect(harness.quits, isEmpty);
-  });
+      expect(
+        await harness.service.runInstaller(UpdateInstallReady(archive)),
+        isFalse,
+      );
+      expect(harness.quits, isEmpty);
+    },
+  );
 
   test('a macOS bundle nobody signed is refused', () async {
     if (!Platform.isMacOS) {
@@ -263,5 +265,4 @@ void main() {
     expect(stale.existsSync(), isFalse, reason: 'the leftover has to go');
     expect(neighbour.existsSync(), isTrue, reason: 'and nothing else may');
   });
-
 }

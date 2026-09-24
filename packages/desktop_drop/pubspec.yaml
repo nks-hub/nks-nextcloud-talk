@@ -1,5 +1,5 @@
 name: desktop_drop
-description: Desktop-only file drop plugin vendored for the NKS Talk client.
+description: Desktop-only file drop plugin vendored for the OwnTalk client.
 version: 0.8.3+nks.1
 publish_to: none
 

@@ -20,55 +20,50 @@ void main() {
     );
   }
 
-  testWidgets(
-    'the recording control appears for a moderator on a server that '
-    'advertises recording-v1',
-    (tester) async {
-      await tester.pumpWidget(
-        controls(
-          const CallJoinState(
-            phase: CallJoinPhase.joined,
-            canManageRecording: true,
-          ),
+  testWidgets('the recording control appears for a moderator on a server that '
+      'advertises recording-v1', (tester) async {
+    await tester.pumpWidget(
+      controls(
+        const CallJoinState(
+          phase: CallJoinPhase.joined,
+          canManageRecording: true,
         ),
-      );
-      await tester.pump();
+      ),
+    );
+    await tester.pump();
 
-      expect(find.byKey(recordingKey), findsOneWidget);
-    },
-  );
+    expect(find.byKey(recordingKey), findsOneWidget);
+  });
 
-  testWidgets(
-    'the recording control is absent for a plain participant',
-    (tester) async {
-      await tester.pumpWidget(
-        controls(const CallJoinState(phase: CallJoinPhase.joined)),
-      );
-      await tester.pump();
+  testWidgets('the recording control is absent for a plain participant', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      controls(const CallJoinState(phase: CallJoinPhase.joined)),
+    );
+    await tester.pump();
 
-      expect(find.byKey(recordingKey), findsNothing);
-    },
-  );
+    expect(find.byKey(recordingKey), findsNothing);
+  });
 
-  testWidgets(
-    'an active recording shows the stop label and a selected icon',
-    (tester) async {
-      await tester.pumpWidget(
-        controls(
-          const CallJoinState(
-            phase: CallJoinPhase.joined,
-            canManageRecording: true,
-            recordingActive: true,
-          ),
+  testWidgets('an active recording shows the stop label and a selected icon', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      controls(
+        const CallJoinState(
+          phase: CallJoinPhase.joined,
+          canManageRecording: true,
+          recordingActive: true,
         ),
-      );
-      await tester.pump();
+      ),
+    );
+    await tester.pump();
 
-      final button = tester.widget<IconButton>(find.byKey(recordingKey));
-      expect(button.isSelected, isTrue);
-      expect(button.tooltip, 'Stop recording');
-    },
-  );
+    final button = tester.widget<IconButton>(find.byKey(recordingKey));
+    expect(button.isSelected, isTrue);
+    expect(button.tooltip, 'Stop recording');
+  });
 
   testWidgets(
     'an inactive recording shows the start label and an unselected icon',

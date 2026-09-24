@@ -84,7 +84,10 @@ void main() {
     expect(temporaryDirectories().difference(before), isEmpty);
     final retry = await service.downloadAndVerify(release: release);
     expect(retry, isA<UpdateInstallReady>());
-    expect(await (retry as UpdateInstallReady).installerFile.readAsBytes(), bytes);
+    expect(
+      await (retry as UpdateInstallReady).installerFile.readAsBytes(),
+      bytes,
+    );
   });
 
   for (final stop in ['cancel', 'deadline', 'close']) {
