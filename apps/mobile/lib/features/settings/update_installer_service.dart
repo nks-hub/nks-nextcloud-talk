@@ -127,10 +127,26 @@ final class UpdateInstallUnavailable extends UpdateInstallResult {
   const UpdateInstallUnavailable();
 }
 
-/// Downloads the Windows installer for a release [UpdateAvailable] found,
-/// verifies it against the release's `SHA256SUMS` before anything is allowed
-/// to run, and starts it once — never silently, always at the caller's
-/// explicit request.
+final class UpdateInstallStartFailed extends UpdateInstallResult {
+  const UpdateInstallStartFailed();
+}
+
+Future<void> _runInstallerProcess(
+  String executable,
+  List<String> arguments,
+) async {
+  final result = await Process.run(executable, arguments);
+  if (result.exitCode != 0) {
+    throw ProcessException(
+      executable,
+      arguments,
+      'Installer failed',
+      result.exitCode,
+    );
+  }
+}
+
+/// Verifies a release against `SHA256SUMS` before installing it on request.
 ///
 /// Every network hop is bounded the same way [UpdateCheckService] bounds its
 /// own request: a deadline, a byte ceiling, and a host allow-list a redirect
@@ -141,16 +157,23 @@ final class UpdateInstallerService {
     this.downloadTimeout = const Duration(minutes: 5),
     this.maximumInstallerBytes = 128 * 1024 * 1024,
     this.maximumSha256SumsBytes = 16 * 1024,
+    this.temporaryDirectory,
     this.exitDelay = const Duration(seconds: 2),
     void Function()? quit,
+    Future<void> Function(String executable, List<String> arguments)?
+    startProcess,
     this.bundleDirectory = runningBundleDirectory,
   }) : _clientFactory = clientFactory ?? http.Client.new,
-       quit = quit ?? _exitProcess;
+       quit = quit ?? _exitProcess,
+       _startProcess = startProcess ?? _runInstallerProcess;
 
   final http.Client Function() _clientFactory;
+  final Future<void> Function(String executable, List<String> arguments)
+  _startProcess;
   final Duration downloadTimeout;
   final int maximumInstallerBytes;
   final int maximumSha256SumsBytes;
+  final Directory? temporaryDirectory;
 
   /// How long the window stays up after the swap script is started, so the
   /// person sees that the update began rather than the app simply vanishing.
@@ -248,11 +271,12 @@ final class UpdateInstallerService {
 
   Future<bool> _startInstaller(File installer) async {
     try {
-      await Process.start(
-        installer.path,
-        const <String>[],
-        mode: ProcessStartMode.detached,
-      );
+      await _startProcess(installer.path, const [
+        '/VERYSILENT',
+        '/SUPPRESSMSGBOXES',
+        '/NORESTART',
+        '/AUTORESTART=1',
+      ]);
       return true;
     } on Object {
       return false;
@@ -506,7 +530,9 @@ final class UpdateInstallerService {
     required void Function(int receivedBytes, int? totalBytes)? onProgress,
     required DownloadCancellation cancellation,
   }) async {
-    final dir = await Directory.systemTemp.createTemp('nks-talk-update-');
+    final dir = await (temporaryDirectory ?? Directory.systemTemp).createTemp(
+      'nks-talk-update-',
+    );
     final file = File('${dir.path}${Platform.pathSeparator}$fileName');
     try {
       final response = await _open(client, installerUri, cancellation);

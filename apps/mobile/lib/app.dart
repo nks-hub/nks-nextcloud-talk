@@ -9,6 +9,7 @@ import 'features/conversations/conversation_shell.dart';
 import 'features/conversations/conversation_shortcuts.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/settings/app_lock/app_lock_gate.dart';
+import 'features/settings/desktop_update_banner.dart';
 import 'features/share/incoming_share_host.dart';
 import 'l10n/generated/app_localizations.dart';
 
@@ -77,6 +78,7 @@ final class _NextcloudTalkAppState extends ConsumerState<NextcloudTalkApp> {
       ],
       supportedLocales: AppLocalizations.supportedLocales,
       navigatorObservers: ref.watch(telemetryNavigatorObserversProvider),
+      builder: (context, child) => DesktopUpdateBanner(child: child!),
       home: const ConversationShortcutsHost(
         // The share host is ABOVE the lock gate on purpose: the gate replaces
         // its child while the app is locked, and an unmounted host

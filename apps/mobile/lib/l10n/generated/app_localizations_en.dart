@@ -1337,7 +1337,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsUpdateCheckSubtitle =>
-      'Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent. On Windows, macOS and Linux you can then choose to download the new build and have it checked before anything is installed; nothing downloads or installs without you saying so, twice.';
+      'New versions are checked automatically. The app offers updates directly; one click downloads, verifies and installs the update, then restarts OwnTalk.';
 
   @override
   String settingsUpdateCheckCurrentBuild(Object build) {
@@ -1367,7 +1367,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'The release page could not be opened.';
 
   @override
-  String get settingsUpdateCheckDownloadInstall => 'Download and install';
+  String get settingsUpdateCheckDownloadInstall => 'Update and restart';
 
   @override
   String get settingsUpdateCheckDownloadConfirmTitle =>

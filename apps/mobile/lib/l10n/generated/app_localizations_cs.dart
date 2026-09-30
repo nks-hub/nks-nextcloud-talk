@@ -1339,7 +1339,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get settingsUpdateCheckSubtitle =>
-      'Zapnuté hlídání se GitHubu zeptá, které sestavení je nejnovější — tím mu prozradí, že tato instalace existuje. Nic o vás, vašem účtu ani konverzacích se neposílá. Ve Windows, macOS i Linuxu si pak můžete vyžádat stažení nové verze a její ověření, než se cokoliv nainstaluje; nic se nestáhne ani nenainstaluje bez vašeho dvojího potvrzení.';
+      'Nové verze se kontrolují automaticky. Aktualizaci nabídneme přímo v aplikaci; jedním kliknutím se stáhne, ověří a nainstaluje. Poté se OwnTalk restartuje.';
 
   @override
   String settingsUpdateCheckCurrentBuild(Object build) {
@@ -1369,7 +1369,7 @@ class AppLocalizationsCs extends AppLocalizations {
       'Stránku vydání se nepodařilo otevřít.';
 
   @override
-  String get settingsUpdateCheckDownloadInstall => 'Stáhnout a nainstalovat';
+  String get settingsUpdateCheckDownloadInstall => 'Aktualizovat a restartovat';
 
   @override
   String get settingsUpdateCheckDownloadConfirmTitle => 'Stáhnout novou verzi?';

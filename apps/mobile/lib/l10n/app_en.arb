@@ -483,7 +483,7 @@
   "@settingsUpdateMark": {
     "description": "Spoken for the mark on the way into settings when a newer build is published."
   },
-  "settingsUpdateCheckSubtitle": "Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent. On Windows, macOS and Linux you can then choose to download the new build and have it checked before anything is installed; nothing downloads or installs without you saying so, twice.",
+  "settingsUpdateCheckSubtitle": "New versions are checked automatically. The app offers updates directly; one click downloads, verifies and installs the update, then restarts OwnTalk.",
   "settingsUpdateCheckCurrentBuild": "This build is {build}",
   "settingsUpdateCheckChecking": "Asking GitHub…",
   "settingsUpdateCheckUpToDate": "Nothing newer has been published.",
@@ -491,7 +491,7 @@
   "settingsUpdateCheckFailed": "GitHub could not be asked. Try again later.",
   "settingsUpdateCheckOpen": "Open release",
   "settingsUpdateCheckOpenFailed": "The release page could not be opened.",
-  "settingsUpdateCheckDownloadInstall": "Download and install",
+  "settingsUpdateCheckDownloadInstall": "Update and restart",
   "settingsUpdateCheckDownloadConfirmTitle": "Download the new build?",
   "settingsUpdateCheckDownloadConfirmBody": "This downloads the new build from GitHub into a temporary folder and checks it against the checksum GitHub published for it. Nothing is installed yet.",
   "settingsUpdateCheckDownloadConfirmAction": "Download",

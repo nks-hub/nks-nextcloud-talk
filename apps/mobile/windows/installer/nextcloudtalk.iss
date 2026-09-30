@@ -87,6 +87,7 @@ Name: "{autodesktop}\OwnTalk"; Filename: "{app}\nextcloudtalk.exe"; WorkingDir: 
 
 [Run]
 Filename: "{app}\nextcloudtalk.exe"; Description: "{cm:LaunchProgram,OwnTalk}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\nextcloudtalk.exe"; WorkingDir: "{app}"; Flags: nowait skipifnotsilent; Check: IsAutoUpdate
 
 [Registry]
 Root: HKCU; Subkey: "Software\NKS Hub\NKS Talk"; ValueType: string; ValueName: "InstallLocation"; ValueData: "{app}"; Flags: uninsdeletevalue uninsdeletekeyifempty
@@ -103,6 +104,11 @@ Root: HKCU; Subkey: "Software\Classes\nctalk\shell\open\command"; ValueType: str
 [Code]
 var
   DowngradeBlocked: Boolean;
+
+function IsAutoUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:AUTORESTART|0}') = '1';
+end;
 
 function NextVersionPart(var Version: String): Integer;
 var

@@ -469,7 +469,7 @@
   "@settingsUpdateMark": {
     "description": "Spoken for the mark on the way into settings when a newer build is published."
   },
-  "settingsUpdateCheckSubtitle": "Zapnuté hlídání se GitHubu zeptá, které sestavení je nejnovější — tím mu prozradí, že tato instalace existuje. Nic o vás, vašem účtu ani konverzacích se neposílá. Ve Windows, macOS i Linuxu si pak můžete vyžádat stažení nové verze a její ověření, než se cokoliv nainstaluje; nic se nestáhne ani nenainstaluje bez vašeho dvojího potvrzení.",
+  "settingsUpdateCheckSubtitle": "Nové verze se kontrolují automaticky. Aktualizaci nabídneme přímo v aplikaci; jedním kliknutím se stáhne, ověří a nainstaluje. Poté se OwnTalk restartuje.",
   "settingsUpdateCheckCurrentBuild": "Toto sestavení je {build}",
   "settingsUpdateCheckChecking": "Dotaz na GitHub…",
   "settingsUpdateCheckUpToDate": "Nic novějšího zatím nevyšlo.",
@@ -477,7 +477,7 @@
   "settingsUpdateCheckFailed": "GitHubu se nepodařilo zeptat. Zkuste to prosím později.",
   "settingsUpdateCheckOpen": "Otevřít vydání",
   "settingsUpdateCheckOpenFailed": "Stránku vydání se nepodařilo otevřít.",
-  "settingsUpdateCheckDownloadInstall": "Stáhnout a nainstalovat",
+  "settingsUpdateCheckDownloadInstall": "Aktualizovat a restartovat",
   "settingsUpdateCheckDownloadConfirmTitle": "Stáhnout novou verzi?",
   "settingsUpdateCheckDownloadConfirmBody": "Stáhne se nová verze z GitHubu do dočasné složky a ověří se proti kontrolnímu součtu, který k ní GitHub zveřejnil. Zatím se nic nenainstaluje.",
   "settingsUpdateCheckDownloadConfirmAction": "Stáhnout",

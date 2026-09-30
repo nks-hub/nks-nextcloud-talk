@@ -249,8 +249,7 @@ final updateCheckServiceProvider = Provider<UpdateCheckService>((ref) {
   return service;
 });
 
-/// Whether the app may ask GitHub about newer builds. Off until the stored
-/// choice says otherwise, so a start that cannot read the file asks nothing.
+/// Waits for the saved choice before making the first update request.
 final updateCheckEnabledProvider =
     NotifierProvider<UpdateCheckController, bool>(UpdateCheckController.new);
 
@@ -326,8 +325,11 @@ final class UpdateInstallDownloading extends UpdateInstallState {
   final int? totalBytes;
 }
 
-/// Downloaded, checksum verified, waiting on the second confirmation before
-/// [UpdateInstallStateController.runInstaller] is ever allowed to run it.
+final class UpdateInstallInstalling extends UpdateInstallState {
+  const UpdateInstallInstalling();
+}
+
+/// Downloaded and checksum verified, ready to install.
 final class UpdateInstallReadyState extends UpdateInstallState {
   const UpdateInstallReadyState(this.installerFile);
 
@@ -345,10 +347,25 @@ base class UpdateInstallStateController extends Notifier<UpdateInstallState> {
   @override
   UpdateInstallState build() => const UpdateInstallIdle();
 
-  /// Downloads and verifies the Windows installer for [release]. The result
-  /// is both returned (so the caller can show a one-off message for a
-  /// failure) and reflected in [state] (so the tile can show progress and,
-  /// once verified, the second "install now" step).
+  Future<UpdateInstallResult?> downloadAndInstall(
+    UpdateAvailable release,
+  ) async {
+    if (state is UpdateInstallDownloading || state is UpdateInstallInstalling) {
+      return null;
+    }
+    final result = await download(release);
+    if (result is! UpdateInstallReady) return result;
+    final ready = state;
+    if (ready is! UpdateInstallReadyState ||
+        !identical(ready.installerFile, result.installerFile)) {
+      return const UpdateInstallCancelled();
+    }
+    return await runInstaller(ready)
+        ? result
+        : const UpdateInstallStartFailed();
+  }
+
+  /// Shares download progress between the desktop banner and settings.
   Future<UpdateInstallResult> download(UpdateAvailable release) async {
     final cancellation = DownloadCancellation();
     _cancellation = cancellation;
@@ -381,10 +398,11 @@ base class UpdateInstallStateController extends Notifier<UpdateInstallState> {
   /// [UpdateInstallReadyState], so nothing this controller exposes can run a
   /// file that never passed the checksum check.
   Future<bool> runInstaller(UpdateInstallReadyState ready) async {
+    state = const UpdateInstallInstalling();
     final started = await ref
         .read(updateInstallerServiceProvider)
         .runInstaller(UpdateInstallReady(ready.installerFile));
-    state = const UpdateInstallIdle();
+    if (!started) state = const UpdateInstallIdle();
     return started;
   }
 

@@ -2471,7 +2471,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsUpdateCheckSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent. On Windows, macOS and Linux you can then choose to download the new build and have it checked before anything is installed; nothing downloads or installs without you saying so, twice.'**
+  /// **'New versions are checked automatically. The app offers updates directly; one click downloads, verifies and installs the update, then restarts OwnTalk.'**
   String get settingsUpdateCheckSubtitle;
 
   /// No description provided for @settingsUpdateCheckCurrentBuild.
@@ -2519,7 +2519,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsUpdateCheckDownloadInstall.
   ///
   /// In en, this message translates to:
-  /// **'Download and install'**
+  /// **'Update and restart'**
   String get settingsUpdateCheckDownloadInstall;
 
   /// No description provided for @settingsUpdateCheckDownloadConfirmTitle.

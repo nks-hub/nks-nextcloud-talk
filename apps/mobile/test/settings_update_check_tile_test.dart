@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -158,7 +159,7 @@ void main() {
           await tester.pump();
 
           expect(
-            find.byKey(const Key('settings-update-check-download-row')),
+            find.byKey(const Key('settings-update-check-download')),
             findsOneWidget,
           );
           // The link every platform gets is still there beside it.
@@ -189,7 +190,7 @@ void main() {
           await tester.pump();
 
           expect(
-            find.byKey(const Key('settings-update-check-download-row')),
+            find.byKey(const Key('settings-update-check-download')),
             findsNothing,
           );
           expect(
@@ -203,52 +204,61 @@ void main() {
     );
   }
 
-  testWidgets('confirming the download verifies it and offers to install', (
-    tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
-
-    final bytes = utf8.encode('fake installer bytes for the tile test');
-    final hash = sha256.convert(bytes).toString();
-    final client = MockClient((request) async {
-      if (request.url.pathSegments.last == 'SHA256SUMS') {
-        return http.Response('$hash  $_installerName\n', 200);
-      }
-      return http.Response.bytes(
-        bytes,
-        200,
-        headers: {'content-length': '${bytes.length}'},
+  for (final outcome in ['verified', 'mismatch', 'start-failed']) {
+    testWidgets('one-click update handles $outcome', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      final validHash = outcome != 'mismatch';
+      final bytes = utf8.encode('installer fixture');
+      final hash = sha256.convert(validHash ? bytes : [0]).toString();
+      var launches = 0;
+      final client = MockClient((request) async {
+        if (request.url.pathSegments.last == 'SHA256SUMS') {
+          return http.Response('$hash  $_installerName\n', 200);
+        }
+        return http.Response.bytes(bytes, 200);
+      });
+      await tester.pumpWidget(
+        _tile(
+          store: _Store(enabled: true),
+          answer: () async => _releaseWithInstaller(),
+          installerClient: client,
+          startProcess: (path, arguments) async {
+            launches++;
+            expect(await File(path).readAsBytes(), bytes);
+            expect(arguments, [
+              '/VERYSILENT',
+              '/SUPPRESSMSGBOXES',
+              '/NORESTART',
+              '/AUTORESTART=1',
+            ]);
+            addTearDown(() => File(path).parent.delete(recursive: true));
+            if (outcome == 'start-failed') {
+              throw ProcessException(path, arguments);
+            }
+          },
+        ),
       );
+      await tester.pump();
+      await tester.pump();
+      final button = find.byKey(const Key('settings-update-check-download'));
+      await tester.tap(button);
+      await tester.tap(button);
+      final expected = switch (outcome) {
+        'verified' => 'Installing. OwnTalk will close and open again.',
+        'mismatch' =>
+          'The download did not match the checksum GitHub published for it, so it was refused and deleted.',
+        _ => 'The new build could not be installed.',
+      };
+      await pumpUntilCondition(
+        tester,
+        () => find.text(expected).evaluate().isNotEmpty,
+      );
+      expect(launches, validHash ? 1 : 0);
+      expect(find.byType(AlertDialog), findsNothing);
+      debugDefaultTargetPlatformOverride = null;
     });
+  }
 
-    await tester.pumpWidget(
-      _tile(
-        store: _Store(enabled: true),
-        answer: () async => _releaseWithInstaller(),
-        installerClient: client,
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-
-    await tester.tap(find.byKey(const Key('settings-update-check-download')));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const Key('settings-update-check-download-confirm')),
-    );
-
-    // The download does real dart:io work (a temp directory, a file
-    // write), so the fake clock plain pump() advances has nothing to wait
-    // on — the real event loop needs an actual turn between pumps.
-    await _pumpUntilFound(tester, const Key('settings-update-check-install'));
-
-    expect(
-      find.byKey(const Key('settings-update-check-install')),
-      findsOneWidget,
-      reason: 'a verified download must offer the second, install step',
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
   testWidgets('the way into settings is marked while a build is waiting', (
     tester,
   ) async {
@@ -300,17 +310,6 @@ void main() {
 
 final _switch = find.byKey(const Key('settings-update-check'));
 
-/// Waits for a widget keyed [key] to appear, interleaving a fake-clock
-/// [WidgetTester.pump] with a real, tiny [Future.delayed] each round — the
-/// real event loop needs an actual turn for the installer download's real
-/// dart:io work (a temp directory, a file write) to make progress at all.
-Future<void> _pumpUntilFound(WidgetTester tester, Key key) =>
-    pumpUntilCondition(
-      tester,
-      () => find.byKey(key).evaluate().isNotEmpty,
-      reason: '$key never appeared',
-    );
-
 const _installerName = 'NKS-Talk-0.1.0-63-windows-x64-setup.exe';
 
 UpdateAvailable _releaseWithInstaller() => UpdateAvailable(
@@ -334,6 +333,7 @@ Widget _tile({
   required Future<UpdateCheckResult> Function() answer,
   ReferenceUriLauncher? launcher,
   http.Client? installerClient,
+  Future<void> Function(String, List<String>)? startProcess,
   // The mark on the way into settings reads the same answer as the tile, so
   // it is worth pumping under the same overrides rather than a second set.
   Widget child = const UpdateCheckSettingsTile(),
@@ -355,7 +355,10 @@ Widget _tile({
       ),
       if (installerClient != null)
         updateInstallerServiceProvider.overrideWithValue(
-          UpdateInstallerService(clientFactory: () => installerClient),
+          UpdateInstallerService(
+            clientFactory: () => installerClient,
+            startProcess: startProcess,
+          ),
         ),
     ],
     child: localizedTestApp(home: Scaffold(body: child)),

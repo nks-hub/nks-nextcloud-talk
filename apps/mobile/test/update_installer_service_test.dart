@@ -11,6 +11,7 @@ import 'package:nextcloudtalk/features/settings/update_check_service.dart';
 import 'package:nextcloudtalk/features/settings/update_installer_service.dart';
 
 void main() {
+  late Directory temporaryDirectory;
   const installerName = 'NKS-Talk-0.1.0-63-windows-x64-setup.exe';
   final installerUri = Uri.parse(
     'https://github.com/nks-hub/nks-nextcloud-talk/releases/download/'
@@ -44,6 +45,7 @@ void main() {
       clientFactory: () => client,
       downloadTimeout: downloadTimeout,
       maximumInstallerBytes: maximumInstallerBytes,
+      temporaryDirectory: temporaryDirectory,
     );
     addTearDown(built.close);
     return built;
@@ -71,12 +73,18 @@ void main() {
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
   }
 
-  Iterable<Directory> leftoverTempDirs() => Directory.systemTemp
+  Iterable<Directory> leftoverTempDirs() => temporaryDirectory
       .listSync()
       .whereType<Directory>()
       .where((d) => d.path.contains('nks-talk-update-'));
 
-  setUp(() => forcePlatform(TargetPlatform.windows));
+  setUp(() async {
+    forcePlatform(TargetPlatform.windows);
+    temporaryDirectory = await Directory.systemTemp.createTemp(
+      'installer-service-test-',
+    );
+  });
+  tearDown(() => temporaryDirectory.delete(recursive: true));
 
   test('a good download is verified and offered to install', () async {
     final before = leftoverTempDirs().toList();
