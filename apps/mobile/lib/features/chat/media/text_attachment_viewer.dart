@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../../data/app_database.dart';
 import '../../../data/chat_media_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
+import '../chat_message_content.dart';
 
 /// Content types this app is willing to read out itself.
 ///
@@ -81,6 +83,7 @@ final class TextAttachmentViewer extends StatefulWidget {
 
 final class _TextAttachmentViewerState extends State<TextAttachmentViewer> {
   late Future<({String text, bool truncated})> _content;
+  RichChatDocument? _document;
 
   @override
   void initState() {
@@ -101,10 +104,28 @@ final class _TextAttachmentViewerState extends State<TextAttachmentViewer> {
     // A chat attachment is somebody else's file: it can be in any encoding or
     // in none. Malformed bytes become replacement characters instead of an
     // exception, so a mostly readable file stays readable.
-    return (
-      text: utf8.decode(bytes, allowMalformed: true),
-      truncated: truncated,
-    );
+    final text = utf8.decode(bytes, allowMalformed: true);
+    final type = widget.contentType.split(';').first.trim().toLowerCase();
+    final name = widget.fileName.toLowerCase();
+    final markdown =
+        type == 'text/markdown' ||
+        type == 'text/x-markdown' ||
+        name.endsWith('.md') ||
+        name.endsWith('.markdown');
+    if (markdown) {
+      try {
+        _document = renderRichChatMessage(
+          message: text,
+          markdownEnabled: true,
+          parameters: const {},
+          server: ServerBase.parse(widget.account.serverUrl),
+        );
+      } on TalkProtocolException {
+        // Documents exceeding the renderer's node/depth limits remain readable.
+        _document = null;
+      }
+    }
+    return (text: text, truncated: truncated);
   }
 
   @override
@@ -172,19 +193,24 @@ final class _TextAttachmentViewerState extends State<TextAttachmentViewer> {
                     ),
                   ),
                 ),
-              // Selectable and monospaced: the point of reading a log or a
-              // Markdown source in place is copying a line out of it. Nothing
-              // here interprets the text, so any markup in it stays visible
-              // rather than becoming something the app runs.
-              SelectableText(
-                content.text,
-                key: const Key('text-attachment-content'),
-                style: const TextStyle(fontFamily: 'monospace', height: 1.4),
-                contextMenuBuilder: (context, state) =>
-                    AdaptiveTextSelectionToolbar.editableText(
-                      editableTextState: state,
-                    ),
-              ),
+              if (_document case final document?)
+                SelectionArea(
+                  child: RichChatDocumentContent(
+                    key: const Key('text-attachment-content'),
+                    document: document,
+                    foregroundColor: Theme.of(context).colorScheme.onSurface,
+                  ),
+                )
+              else
+                SelectableText(
+                  content.text,
+                  key: const Key('text-attachment-content'),
+                  style: const TextStyle(fontFamily: 'monospace', height: 1.4),
+                  contextMenuBuilder: (context, state) =>
+                      AdaptiveTextSelectionToolbar.editableText(
+                        editableTextState: state,
+                      ),
+                ),
             ],
           );
         },

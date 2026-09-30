@@ -9,6 +9,7 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/features/chat/media/text_attachment_viewer.dart';
+import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
 
 import 'test_support.dart';
 
@@ -37,6 +38,7 @@ Future<void> _pump(
   StoredAccount account,
   ChatMediaRepository repository, {
   String type = 'text/markdown',
+  String? fileName,
   VoidCallback? onOpenExternally,
 }) async {
   await tester.pumpWidget(
@@ -44,7 +46,7 @@ Future<void> _pump(
       home: TextAttachmentViewer(
         account: account,
         uri: _uri,
-        fileName: 'notes.md',
+        fileName: fileName ?? (type == 'text/plain' ? 'notes.txt' : 'notes.md'),
         contentType: type,
         repository: repository,
         onOpenExternally: onOpenExternally,
@@ -83,7 +85,7 @@ void main() {
     expect(isReadableText('image/png'), isFalse);
   });
 
-  testWidgets('a Markdown attachment is shown as its own source', (
+  testWidgets('a Markdown attachment renders headings and emphasis', (
     tester,
   ) async {
     const source = '# Notes\n\nA line with **stars** and <b>markup</b>.';
@@ -93,18 +95,47 @@ void main() {
     await _pump(tester, account, repository);
 
     expect(find.byKey(const Key('text-attachment-viewer')), findsOneWidget);
-    final shown = tester
-        .widget<SelectableText>(
-          find.byKey(const Key('text-attachment-content')),
-        )
-        .data;
-    expect(shown, source);
-    expect(
-      shown,
-      contains('<b>markup</b>'),
-      reason: 'markup stays text; nothing here interprets it',
+    expect(find.byType(RichChatDocumentContent), findsOneWidget);
+    final heading = tester.widget<RichText>(
+      find.text('Notes', findRichText: true),
     );
+    expect(heading.text.style!.fontSize, greaterThan(16));
+    expect(find.textContaining('**stars**', findRichText: true), findsNothing);
+    expect(find.textContaining('stars', findRichText: true), findsOneWidget);
     expect(find.byKey(const Key('text-attachment-truncated')), findsNothing);
+  });
+
+  testWidgets('a Markdown filename is formatted when served as plain text', (
+    tester,
+  ) async {
+    final repository = _repository(utf8.encode('# Title'), type: 'text/plain');
+    addTearDown(repository.close);
+    await _pump(
+      tester,
+      account,
+      repository,
+      type: 'text/plain',
+      fileName: 'notes.md',
+    );
+    expect(find.byType(RichChatDocumentContent), findsOneWidget);
+    expect(find.text('Title', findRichText: true), findsOneWidget);
+  });
+
+  testWidgets('Markdown does not activate unsafe links or load remote images', (
+    tester,
+  ) async {
+    final repository = _repository(
+      utf8.encode(
+        '[unsafe](javascript:alert(1))\n\n![remote](https://example.invalid/image.png)',
+      ),
+    );
+    addTearDown(repository.close);
+    await _pump(tester, account, repository);
+    final content = tester.widget<RichChatDocumentContent>(
+      find.byType(RichChatDocumentContent),
+    );
+    expect(content.document.activeLinks, isEmpty);
+    expect(find.byType(Image), findsNothing);
   });
 
   testWidgets('a file too long to show says so and still shows the start', (
