@@ -10,6 +10,12 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+## 1.0.15 (81) — 30 September 2026
+
+- Starší výsledky hledání zobrazují vedle času také datum v místním časovém pásmu.
+- Desktop automaticky kontroluje nové verze a zobrazí viditelnou nabídku aktualizace. Výslovně vypnuté kontroly zůstávají vypnuté.
+- Jedno kliknutí stáhne, ověří a nainstaluje aktualizaci. Ve Windows proběhne instalace bez průvodce a aplikace se znovu otevře.
+
 ## 1.0.14 (80) — 30 September 2026
 
 - Opraven skok na nalezenou zprávu v konverzaci s různě vysokými zprávami.
