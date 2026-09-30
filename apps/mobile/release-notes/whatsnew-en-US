@@ -1,5 +1,3 @@
-The app is now called OwnTalk. Your accounts and conversations stay.
-
-New: a formatting menu (bold, italic, strikethrough, code, code block). Text too long for one message is sent as a .md or .txt file.
-
-Fixed: large attachments are saved and opened straight from disk, so memory no longer limits them.
+Fixed jumping to a message from search results.
+Pasted text over 4,000 characters or 40 lines becomes a .md or .txt attachment based on its content.
+Markdown attachments now display formatted text.

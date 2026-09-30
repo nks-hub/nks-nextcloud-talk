@@ -1,5 +1,3 @@
-Aplikace se teď jmenuje OwnTalk. Účty a konverzace zůstávají.
-
-Nové: menu formátování (tučně, kurzíva, přeškrtnutí, kód, blok kódu). Text delší, než se vejde do jedné zprávy, se odešle jako soubor .md nebo .txt.
-
-Opraveno: velké přílohy se ukládají a otevírají rovnou z disku, takže už je nezastaví limit paměti.
+Opraven skok na zprávu z výsledků hledání.
+Vložený text nad 4 000 znaků nebo 40 řádků se připraví jako příloha .md nebo .txt podle obsahu.
+Přílohy Markdown se nyní zobrazují formátovaně.

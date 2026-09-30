@@ -32,7 +32,7 @@ The server needs Talk 22 (Nextcloud 32) or newer.
 
 Chat covers what a Talk room offers: replies, threads, reactions, mentions with suggestions, editing and deleting, pinned messages, reminders, silent and scheduled sending. Messages render Markdown, and the composer has a formatting menu for bold, italic, strikethrough, inline code and code blocks.
 
-You can attach photos and files, record voice messages, and send polls, your location, contacts and GIFs. A paste longer than the 32,000 characters a message can hold is sent as a `.md` or `.txt` file instead of being cut short.
+You can attach photos and files, record voice messages, and send polls, your location, contacts and GIFs. A paste longer than 4,000 characters or 40 lines becomes a `.md` or `.txt` attachment that waits in the composer until you send it.
 
 Calls work with audio and video, in groups, with screen sharing, over the Talk high-performance backend or Talk's internal signalling, and through TURN when a direct path fails.
 

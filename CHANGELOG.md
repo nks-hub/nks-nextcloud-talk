@@ -10,6 +10,12 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+## 1.0.14 (80) — 30 September 2026
+
+- Opraven skok na nalezenou zprávu v konverzaci s různě vysokými zprávami.
+- Vložený text delší než 4 000 znaků nebo 40 řádků se připraví jako příloha `.md` nebo `.txt`. Rozepsaný text zůstane zachovaný.
+- Přílohy Markdown se zobrazují formátovaně, včetně souborů `.md`, které server označí jako prostý text.
+
 ## 1.0.13 (79) — 25 September 2026
 
 - Changed: the app is now called OwnTalk. Only the name people see moved — the package, the data folder, the Windows install folder and every setting stay where they were, so an update lands on the existing installation with accounts and conversations intact.
