@@ -94,6 +94,42 @@ void main() {
     });
   });
 
+  test('long pasted text becomes a file before the server limit', () {
+    final handed = <String>[];
+    final formatter = OversizedPasteFormatter(
+      handed.add,
+      canDivert: () => true,
+    );
+    final old = _at('caption');
+    final pasted = 'a' * 4001;
+    expect(formatter.formatEditUpdate(old, _at('caption$pasted')), old);
+    expect(handed, [pasted]);
+  });
+
+  test('a pasted document with many short lines becomes a file', () {
+    final handed = <String>[];
+    final formatter = OversizedPasteFormatter(
+      handed.add,
+      canDivert: () => true,
+    );
+    final old = _at('');
+    final pasted = List.filled(41, 'line').join('\n');
+    expect(formatter.formatEditUpdate(old, _at(pasted)), old);
+    expect(handed, [pasted]);
+  });
+
+  test('typing into a long draft does not turn it into an attachment', () {
+    final handed = <String>[];
+    final formatter = OversizedPasteFormatter(
+      handed.add,
+      canDivert: () => true,
+    );
+    final old = _at('a' * 4001);
+    final next = _at('${old.text}b');
+    expect(formatter.formatEditUpdate(old, next), next);
+    expect(handed, isEmpty);
+  });
+
   group('pastedTextFile', () {
     test('Markdown is recognised by a fence, a heading or a table', () {
       expect(pastedTextFile('```\ncode\n```').extension, 'md');

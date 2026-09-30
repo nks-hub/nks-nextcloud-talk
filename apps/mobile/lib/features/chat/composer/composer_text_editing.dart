@@ -116,16 +116,8 @@ TextEditingValue formatComposerSelection(
 /// What the server accepts in one message.
 const int composerMaximumCharacters = 32000;
 
-/// Hands text that was pasted or inserted in one go, and would push the
-/// message past what the server accepts, to [onOversized] instead of the
-/// field. The field keeps what it held before.
-///
-/// Without it the field's own length limit cut the paste at 32,000 characters
-/// without a word, and the tail of a log or a document was simply gone. Typing
-/// is left to that limit: only an insertion of more than one character counts
-/// as a paste. So is anything the formatter cannot take whole — when
-/// [canDivert] says no file can be attached right now, or while an input
-/// method is still composing, the insertion goes to the field as before.
+/// Diverts pastes over 4,000 characters, 40 lines, or the message limit.
+/// The existing draft stays in the field as the attachment's caption.
 final class OversizedPasteFormatter extends TextInputFormatter {
   OversizedPasteFormatter(
     this.onOversized, {
@@ -142,15 +134,16 @@ final class OversizedPasteFormatter extends TextInputFormatter {
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    // Code units never undercount characters, so the cheap length settles
-    // every ordinary keystroke before the grapheme count is paid for.
-    if (newValue.text.length <= maximumCharacters ||
-        newValue.text.characters.length <= maximumCharacters ||
-        (newValue.composing.isValid && !newValue.composing.isCollapsed)) {
+    if (newValue.composing.isValid && !newValue.composing.isCollapsed) {
       return newValue;
     }
     final inserted = _insertedText(oldValue, newValue);
     if (inserted == null || inserted.characters.length < 2 || !canDivert()) {
+      return newValue;
+    }
+    if (inserted.characters.length <= 4000 &&
+        '\n'.allMatches(inserted).length < 40 &&
+        newValue.text.characters.length <= maximumCharacters) {
       return newValue;
     }
     onOversized(inserted);

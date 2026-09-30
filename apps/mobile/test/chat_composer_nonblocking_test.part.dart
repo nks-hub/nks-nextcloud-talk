@@ -1,6 +1,49 @@
 part of 'chat_composer_integration_test.dart';
 
 void _registerNonBlockingComposerTests() {
+  for (final extension in ['md', 'txt']) {
+    testWidgets(
+      'long pasted $extension waits for send and preserves all bytes',
+      (tester) async {
+        final harness = (await tester.runAsync(_ComposerHarness.create))!;
+        _addHarnessTearDown(tester, harness);
+        await tester.pumpWidget(harness.app());
+        await _pumpUntil(tester, () {
+          final media = find.byType(ChatMediaComposer);
+          return media.evaluate().isNotEmpty &&
+              tester
+                  .widget<ChatMediaComposer>(media)
+                  .controller!
+                  .canAttachBytes;
+        });
+        final controller = tester
+            .widget<ChatMediaComposer>(find.byType(ChatMediaComposer))
+            .controller!;
+        final source =
+            '${extension == 'md' ? '# Notes\n\n' : ''}${'Příloha ' * 700}';
+        await tester.enterText(
+          find.byKey(const Key('chat-composer')),
+          'caption',
+        );
+        tester.testTextInput.updateEditingValue(
+          TextEditingValue(
+            text: 'caption$source',
+            selection: TextSelection.collapsed(offset: 7 + source.length),
+          ),
+        );
+        await _pumpUntil(tester, () => controller.hasPreparedAttachment);
+        expect(_composer(tester).text, 'caption');
+        expect(harness.uploadedAttachments, isEmpty);
+        await tester.tap(find.byKey(const Key('send-message-gesture')));
+        await _pumpUntil(tester, () => harness.finalizedFileNames.isNotEmpty);
+        expect(harness.finalizedFileNames.single, endsWith('.$extension'));
+        expect(utf8.decode(harness.uploadedAttachments.single), source);
+        expect(tester.takeException(), isNull);
+        await _unmountComposer(tester);
+      },
+    );
+  }
+
   testWidgets(
     'the composer is free again while the first line is still on the wire',
     (tester) async {
