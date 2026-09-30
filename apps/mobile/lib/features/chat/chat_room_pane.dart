@@ -148,6 +148,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   ChatRepository? _draftStore;
   CachedChatMessage? _replyTo;
   int _jumpGeneration = 0;
+  bool _jumpInProgress = false;
   int? _jumpTargetId;
   int? _highlightedMessageId;
   int? _pendingJumpMessageId;
@@ -295,6 +296,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _composerFocusGeneration++;
     _giphyGeneration++;
     _jumpGeneration++;
+    _jumpInProgress = false;
     _highlightTimer?.cancel();
     _highlightTimer = null;
     _jumpTargetId = null;

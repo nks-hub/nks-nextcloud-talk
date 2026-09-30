@@ -17,6 +17,38 @@ final class ChatScrollController extends ScrollController {
   ({_ChatScrollPosition position, double pixels, double viewport})?
   _nextSnapshot;
 
+  /// Estimates from the nearest laid-out row, not the whole sliver's extent.
+  double? offsetForMessage(int messageId, List<int> messageIds) {
+    final targetIndex = messageIds.indexOf(messageId);
+    if (targetIndex < 0) return null;
+    int? nearestIndex;
+    double? nearestOffset;
+    double? nearestHeight;
+    for (final entry in _rows.entries) {
+      final row = entry.value;
+      final node = row.node;
+      if (node == null ||
+          !node.attached ||
+          row.height == null ||
+          _rowTop(row) == null) {
+        continue;
+      }
+      final index = messageIds.indexOf(entry.key);
+      if (index < 0) continue;
+      if (nearestIndex == null ||
+          (index - targetIndex).abs() < (nearestIndex - targetIndex).abs()) {
+        nearestIndex = index;
+        nearestHeight = row.height;
+        nearestOffset = RenderAbstractViewport.of(
+          node,
+        ).getOffsetToReveal(node, 0.5).offset;
+      }
+    }
+    if (nearestIndex == null) return null;
+    // IDs increase chronologically; the scroll axis runs toward older rows.
+    return nearestOffset! + (nearestIndex - targetIndex) * nearestHeight!;
+  }
+
   @override
   ScrollPosition createScrollPosition(
     ScrollPhysics physics,

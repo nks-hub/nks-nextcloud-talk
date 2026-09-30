@@ -134,6 +134,60 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('reveals a message among rows with very different heights', (
+    tester,
+  ) async {
+    for (var id = 1; id <= 100; id++) {
+      await _insertMessage(
+        database,
+        account.id,
+        id,
+        text: id > 50 ? 'Long message\n' * 45 : 'Message $id',
+      );
+    }
+    await _insertScope(
+      database,
+      account.id,
+      historyCursor: '1',
+      futureCursor: '100',
+      hasHistory: false,
+      blocksJson: '[["1","100"]]',
+    );
+    final api = HttpNextcloudApi(client: MockClient(_convergedServer));
+    addTearDown(api.close);
+    await tester.pumpWidget(
+      _app(
+        database: database,
+        vault: vault,
+        api: api,
+        home: PresenceChatRoomScreen(
+          account: account,
+          conversation: conversation,
+          jumpToMessageId: 25,
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () =>
+          find
+              .byKey(const Key('chat-message-target-25'))
+              .evaluate()
+              .isNotEmpty ||
+          find.byKey(const Key('chat-jump-not-found')).evaluate().isNotEmpty,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chat-jump-not-found')), findsNothing);
+    final target = find.byKey(const Key('chat-message-target-25'));
+    expect(target, findsOneWidget);
+    final viewport = tester.getRect(find.byKey(const Key('chat-message-list')));
+    expect(viewport.contains(tester.getCenter(target)), isTrue);
+    expect(_highlightBorder(tester, 25), isNotNull);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('fetches an older page to reach a message outside the cache', (
     tester,
   ) async {
@@ -548,10 +602,11 @@ Future<void> _insertMessage(
   String accountId,
   int messageId, {
   Map<String, Object?>? parent,
+  String? text,
 }) {
   final wire = _messageJson(
     id: messageId,
-    message: 'Message $messageId',
+    message: text ?? 'Message $messageId',
     parent: parent,
   );
   return database

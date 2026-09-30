@@ -460,7 +460,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         _anchorMessageId = awayFromNewest ? _newestCachedMessageId() : null;
       });
     }
-    if (_loadingOlder) {
+    if (_loadingOlder || _jumpInProgress) {
       return;
     }
     if (position.pixels >= position.maxScrollExtent - 160) {
@@ -516,6 +516,19 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   Future<void> _jumpToMessage(int messageId) async {
     final generation = ++_jumpGeneration;
     final key = _key;
+    _jumpInProgress = true;
+    try {
+      await _resolveJump(messageId, key, generation);
+    } finally {
+      if (_isCurrentJump(key, generation)) _jumpInProgress = false;
+    }
+  }
+
+  Future<void> _resolveJump(
+    int messageId,
+    ChatRoomProviderKey key,
+    int generation,
+  ) async {
     final chat = ref.read(chatRepositoryProvider);
     for (var page = 0; page <= _ChatRoomPaneState._maximumJumpPages; page++) {
       final scope = await chat.getScope(
@@ -628,17 +641,14 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       return;
     }
     final messages = _visibleMessages();
-    final index = messages.indexWhere(
-      (message) => message.messageId == messageId,
+    final offset = _scrollController.offsetForMessage(
+      messageId,
+      messages.map((message) => message.messageId).toList(growable: false),
     );
-    if (index < 0 || messages.length < 2) {
+    if (offset == null) {
       return;
     }
     final position = _scrollController.position;
-    // The timeline is reversed: the newest message sits at offset zero and
-    // the oldest at the far end.
-    final fraction = (messages.length - 1 - index) / (messages.length - 1);
-    final offset = position.maxScrollExtent * fraction;
     _scrollController.jumpTo(
       offset.clamp(position.minScrollExtent, position.maxScrollExtent),
     );
