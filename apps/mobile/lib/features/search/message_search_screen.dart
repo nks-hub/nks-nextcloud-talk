@@ -204,7 +204,13 @@ class _MessageSearchResultTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final timestamp = result.timestamp;
+    final timestamp = result.timestamp?.toLocal();
+    final localizations = MaterialLocalizations.of(context);
+    final olderThanToday =
+        timestamp != null &&
+        DateUtils.dateOnly(
+          timestamp,
+        ).isBefore(DateUtils.dateOnly(DateTime.now()));
     return ListTile(
       onTap: onTap,
       title: Text(result.author, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -216,9 +222,13 @@ class _MessageSearchResultTile extends StatelessWidget {
       trailing: timestamp == null
           ? null
           : Text(
-              MaterialLocalizations.of(
-                context,
-              ).formatTimeOfDay(TimeOfDay.fromDateTime(timestamp.toLocal())),
+              [
+                if (olderThanToday) localizations.formatCompactDate(timestamp),
+                localizations.formatTimeOfDay(
+                  TimeOfDay.fromDateTime(timestamp),
+                ),
+              ].join('\n'),
+              textAlign: TextAlign.end,
               style: Theme.of(context).textTheme.labelSmall,
             ),
     );
