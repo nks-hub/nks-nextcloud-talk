@@ -49,6 +49,8 @@ Rybbit additionally adds the device model, the OS version, the application versi
 
 ## What is not sent
 
+Vlastní časování `performance-*` bylo odstraněno. Běžná otevření místností, synchronizace, starty aplikace, uploady a probuzení už nevytvářejí informační události v Sentry. Hlášení chyb, zamrznutí a problémů s přílohami zůstává. Stav paměti a aplikace se dál připojuje ke skutečným chybám.
+
 `sendDefaultPii`, `attachScreenshot` and performance tracing are all off. Message contents, conversation names, credentials, the push identity and the server address are not sent. `Rybbit.init` runs with `autoTrackErrors: false` — errors belong to Sentry, which scrubs them first, and Rybbit's own handler would additionally take over `FlutterError.onError` from under the Sentry integration.
 
 Neither SDK may bring down the application start: telemetry is diagnostics, not a feature the user asked for. A failure of `Rybbit.init` is swallowed and the app keeps running without analytics.

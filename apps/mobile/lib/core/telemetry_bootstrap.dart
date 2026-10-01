@@ -4,8 +4,6 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'app_version.dart';
 import 'attachment_upload_telemetry.dart';
-import 'performance_span_telemetry.dart';
-import 'performance_telemetry.dart';
 import 'runtime_health_telemetry.dart';
 import 'telemetry.dart';
 
@@ -20,7 +18,6 @@ Future<void> runWithTelemetry({
   required Widget Function(List<NavigatorObserver> observers) appBuilder,
   InstallationIdStore installationIds = const InstallationIdStore(),
 }) async {
-  final launchStarted = DateTime.now();
   WidgetsFlutterBinding.ensureInitialized();
 
   if (!config.crashReportingEnabled && !config.analyticsEnabled) {
@@ -55,21 +52,9 @@ Future<void> runWithTelemetry({
   }
 
   observers.add(SentryNavigatorObserver());
-  // Installed before the app runs, so the very first sync and the first room
-  // opened are measured instead of falling into the no-op sink.
-  installPerformanceTelemetry(reportPerformanceSpanToSentry);
   await SentryFlutter.init((options) {
     configureSentryOptions(options, config: config);
   }, appRunner: () => runApp(appBuilder(observers)));
-  // Measured to the first frame the app schedules, which is what a user calls
-  // "the app started" — not to the end of this function.
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    performanceTelemetry.record(
-      operation: TracedOperation.appStart,
-      started: launchStarted,
-      outcome: TracedOutcome.completed,
-    );
-  });
 
   if (installation != null) {
     await Sentry.configureScope(
@@ -108,13 +93,7 @@ void configureSentryOptions(
     // a room token or a server address is either off or scrubbed.
     ..sendDefaultPii = false
     ..attachScreenshot = false
-    // Stays off deliberately, and turning it on is not how this app reports
-    // performance. Sentry's own tracing auto-instruments HTTP and navigation,
-    // and those spans are DESCRIBED by the URL they hit and the route they
-    // opened — server address and room token, the two things this telemetry
-    // exists to keep on the device. Measurements go out through
-    // `performance_span_telemetry.dart` instead, as events built from a closed
-    // set of names, outcomes and duration buckets.
+    // Automatic tracing can expose server URLs and room tokens.
     ..tracesSampleRate = 0
     ..beforeBreadcrumb = scrubSentryBreadcrumb
     ..beforeSend = (event, hint) => scrubSentryEvent(event);
@@ -212,25 +191,14 @@ Future<void> configureTelemetryReleaseGateScope(
 
 const _scrubber = TelemetryScrubber();
 
-/// Loggers whose events must reach Sentry carrying nothing but their own tags.
-///
-/// Stripping here rather than at the call site is the only thing that works.
-/// Both of these build their event with empty breadcrumbs and capture it with
-/// a cleared scope, and the SDK repopulates them anyway: native and lifecycle
-/// breadcrumbs are merged after the scope is applied. Measured on the live
-/// server, not assumed — build 43's `performance-conversation.sync` arrived
-/// with three breadcrumbs (app lifecycle, battery, navigation) despite the
-/// cleared scope, which is exactly the mistake the attachment logger had
-/// already been fixed for.
-const _contentFreeLoggers = <String>{'attachment.upload', 'performance'};
-
 /// Removes URLs and credentials from everything an event carries as text.
 ///
 /// [SentryEvent.request] goes entirely: a Talk request URL names the server
 /// and the room, and the failing call is already identifiable from the stack.
 SentryEvent scrubSentryEvent(SentryEvent event) {
   event.request = null;
-  if (_contentFreeLoggers.contains(event.logger)) {
+  // Native breadcrumbs are merged after captureEvent applies its cleared scope.
+  if (event.logger == 'attachment.upload') {
     event
       ..user = null
       ..breadcrumbs = const <Breadcrumb>[];

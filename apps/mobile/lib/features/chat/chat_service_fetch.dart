@@ -13,11 +13,8 @@ extension _ChatServiceFetch on ChatService {
         '${_scopeSyncKey(accountId, roomToken, threadId)}/${automatic ? 'automatic' : 'explicit'}';
     final existing = _syncInFlight[key];
     if (joinExisting && existing != null) {
-      // Joining somebody else's sync is not this caller's wait; measuring it
-      // would report the tail of a request that started earlier.
       return existing;
     }
-    final started = DateTime.now();
     final read = _ChatReadAdmission(
       this,
       accountId,
@@ -56,21 +53,6 @@ extension _ChatServiceFetch on ChatService {
       },
     );
     if (joinExisting) _syncInFlight[key] = operation;
-    operation
-        .then(
-          (_) => performanceTelemetry.record(
-            operation: TracedOperation.roomOpen,
-            started: started,
-            outcome: TracedOutcome.completed,
-          ),
-          onError: (Object error, StackTrace stackTrace) =>
-              performanceTelemetry.record(
-                operation: TracedOperation.roomOpen,
-                started: started,
-                outcome: TracedOutcome.failed,
-              ),
-        )
-        .ignore();
     operation.whenComplete(() {
       read.close();
       if (identical(_syncInFlight[key], operation)) {

@@ -8,7 +8,6 @@ import 'package:flutter/foundation.dart'
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../core/performance_telemetry.dart';
 import '../../data/account_repository.dart';
 import '../../data/app_database.dart';
 import '../../data/chat_repository.dart';
