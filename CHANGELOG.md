@@ -10,6 +10,11 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+- Aktualizace macOS používají Sparkle a fungují se zapnutým sandboxem. Ověřuje se podpis balíčku i seznamu verzí. Z buildů 81 a 82 je nutné první opravenou verzi nainstalovat ručně.
+- Opraven souběh odběrů zvukových přerušení pro hovory a hlasové zprávy, který vyvolával chybu „No active stream to cancel“.
+- Odstraněna zbytečná měření `performance-*` a jejich pomocný kód. Hlášení chyb, zamrznutí, problémů s přílohami a údaje o paměti zůstávají.
+- Nativní chyba připojení „Bad file descriptor“ se zpracuje jako běžná síťová chyba, kterou lze opakovat.
+
 ## 1.0.16 (82) — 1 October 2026
 
 - Ctrl+V na desktopu vloží také soubory zkopírované do schránky. Vkládání textu a obrázků zůstává zachované.
@@ -37,6 +42,8 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 - Fixed: saving or opening a large attachment. The whole file was read into memory first, so anything over 64 MB was refused as too large for export — and the refusal came only after the download had already spent minutes proving it. A 117 MB build shared in a conversation could not be saved at all. Attachments are now streamed straight to disk, both when saving and when opening, so what fits is decided by free space rather than by memory, and nothing is buffered twice.
 
 ## 1.0.12 (78) — 19 September 2026
+
+- Velké přílohy se při ukládání a otevírání stahují přímo na disk. Odstraněn zbytečný limit 64 MB i načítání celého souboru do paměti před uložením.
 
 ## 1.0.11 (77) — 19 September 2026
 
@@ -867,214 +874,6 @@ On the preserved iPhone 16 Pro Max / iOS 18.6 an upgrade installation from the s
 - In the conversation detail a custom background colour of the messages can be set, or one can return to the application theme. The choice is separated by account and room, applies in threads too, and a contrast gate weakens it according to the light, the dark and the server theme so that the texts and the dividers stay readable.
 - An old upload waiting for manual handling after its automatic retries were exhausted no longer blocks a newly picked photo in the same conversation. A newer attachment can go through both the upload and the finalize; the original job and its file are preserved for a manual retry or a cleanup.
 
-## 0.1.0 (30) — 31 August 2026
+## Starší vydání
 
-Play: the AAB with Sentry and Rybbit enabled was uploaded through the Publishing API and committed into the closed alpha track; the track returns build 30 in the state `completed`. TestFlight: the build is `VALID`, without non-exempt encryption, from iOS 15.0 and in both the internal and the external group `IN_BETA_TESTING`; the beta review is `APPROVED`. The previous iOS build 29 was expired after the poll renderer was found and removed from both groups; it was not uploaded to Play.
-
-- The colour accent of the application follows the theme of the currently selected Nextcloud account. The colour is verified from the authenticated capabilities, is stored separately for each account and changes on an account switch without state being shared between servers.
-- The input line has the paperclip as the first action, with Giphy and emoji next to it. The microphone is directly before Send and the duplicate quick image button with `+` was removed; the gallery stays in the paperclip.
-- On a supported server, a poll can be created from the paperclip, one or more answers chosen and voted on right away. The client binds the mutations to the current account, room and thread and does not blindly repeat them on an unclear response.
-- A shared location shows a local preview with a marker directly in the message. It loads live OpenStreetMap tiles only after an explicit tap; it uses only validated coordinates and ignores the link supplied by the server.
-- When the system denies access to the camera, the photo gallery, saving an image or the microphone, the error state offers to open the application settings directly. Network, quota and server errors do not offer this action.
-- The Push notifications settings show the real system state of the permission. A first request can be made there, or the application settings opened after a denial; the state is refreshed automatically after the return.
-- The iOS gallery passed on a clean iOS 18.6 Simulator with a real asset: the durable copy, WebDAV/finalize and the server-side message all finished in 2.16 s. That evidence, however, did not contain an older exhausted upload preserved during a TestFlight update. A subsequent report from the physical build 29 therefore revealed a further blockage of the queue, which build 30 does not yet fix.
-
-## 0.1.0 (28) — 31 August 2026
-
-Play: uploaded and committed into the closed alpha track through the Publishing API; after the commit the track returns build 28 in the state `completed`. TestFlight: not released. The RemoteCmd/build-mac tool is not available in this session, so the Apple build is not pretended to be done.
-
-- The quick image button with `+` for a direct pick from the gallery returned into the main input line. The paperclip for the other sources and a separate GIF stay.
-- Android 13+ uses the system predictive-back branch instead of the deprecated callback. When access to the location is permanently denied, the error message offers to open the application settings directly.
-- After the first load, the Giphy picker reopens from a warm account-scoped cache without a further trending request and a full-screen spinner. The paperclip for attachments stays in the toolbar even during the initial Giphy check.
-- The Location was added to the paperclip. The application requests a foreground permission, finds the current coordinates, shows them before sending and shares them only on a server that supports this feature. It does not use background location tracking. If the server's response is lost after sending, the application warns about a possible success instead of blindly repeating and risking a duplicate message.
-
-## 0.1.0 (27) — 31 August 2026
-
-Play: uploaded and committed into the closed alpha track through the Publishing API; after the commit the track returns build 27 in the state `completed`. TestFlight: not released. The RemoteCmd tool is not available in this session and the last verified state of the build-mac relay rejects the stored tokens with a 401; the Apple build is therefore not pretended to be done.
-
-- A photo picked from the iOS Photos no longer starts the network part of the upload until the application really returns to the foreground after the picker is closed. The attachment therefore does not hang at "Waiting to upload"; if the return does not complete, the wait is bounded and offers a retry.
-- The paperclip in the input line groups the gallery, the camera and a file. The GIF stays as a quick icon next to the field. A long press of the Send button now offers a silent and, where the server supports it, also a scheduled send.
-- An ordinary chain of replies opened from the thread list no longer ends with a message that the thread is not available on the server. Such an item comes from the local history and now opens straight into the chat; the server-side detail stays only for genuinely named threads.
-- A message can be translated into one of the languages the connected Nextcloud offers. The application can have the source language detected, preserves the mentions and allows the result to be copied. The option is shown only on a server with an active translation provider.
-- In the detail of a supported conversation, shared files, images, recordings, locations, polls and other server-side categories are available. The list is paginated, an unsuccessful load can be retried in it and a tap opens the original message even inside a thread.
-- When switching conversations in a wide three-pane layout, the detail no longer carries over the controls and the permissions of the previous room.
-
-## 0.1.0 (26) — 31 August 2026
-
-Play: uploaded and committed into the closed alpha track through the Publishing API; after the commit the track returns build 26 in the state `completed`. TestFlight: the build is `VALID`, without non-exempt encryption, a minimum of iOS 15.0, in both the internal and the external group with Czech notes.
-
-- The local diagnostics shows the real stored as well as the expected version of the database, the state of the migration and the number of foreign key violations. Previously it showed only the number built into the application, so it did not recognize an old or a newer database.
-- The contract for creating a conversation rejects a group room with an invitation to a specific user. Talk does not support that combination; users are added into a group only through the participant endpoint.
-- The summary in the conversation detail aligns with the controls right after a change of the public access, the read-only mode or the picture. Previously it showed the original type, state and avatar after a change.
-
-## 0.1.0 (25) — 31 August 2026
-
-Play: uploaded and committed into the closed alpha track through the Publishing API; after the commit the track returns build 25 in the state `completed`. TestFlight: the build is `VALID`, without non-exempt encryption, a minimum of iOS 15.0, in both the internal and the external group with Czech notes.
-
-- When a voice recording does not start on iOS, the wait ends after 10 seconds with an error and the application stays usable. A further attempt no longer blocks the previous native recording.
-- The Czech error message of a voice message fits into the bottom bar together with all the actions. Previously it overflowed off-screen.
-- An empty group or public room can be created from the new-conversation screen without searching for and inviting the first participant.
-- A shared location is displayed in the chat with the name of the place and a map icon. A tap opens it in OpenStreetMap; invalid or planted coordinates stay safely inert.
-- In a private conversation, the current out-of-office of the other person is shown, including the period, the message and any substitute. A long text does not stretch the banner across the whole chat even with an enlarged system font.
-- Above the chat, the nearest calendar event that links to that conversation is recalled. The banner shows the name and the time and can be dismissed.
-- A shared contact in the vCard format is displayed as a contact instead of a general file. A tap safely downloads it and opens it in the system contact preview.
-- In an open conversation it is shown who is currently typing. Several people typing are merged into one row; the indicator disappears after the typing ends or after a connection outage and respects the privacy setting of Nextcloud Talk. One's own indicator is sent correctly after the signaling is restored too; an old non-empty draft does not restart it by itself.
-- A GIF received from a server without an active Giphy integration no longer offers a non-working retry. Instead it shows that GIFs are not available on the server; the link itself is not displayed.
-- The GIF picker remembers the thumbnails it has already downloaded within an account. It does not download them again when the same grid is reopened.
-- In the detail of a supported conversation, a moderator can turn on a phone and SIP connection with a personal PIN, without a PIN, or turn it off. The options are shown only when the server and the account really support them. After it is turned on, every participant sees the server-side instructions, the meeting ID and possibly their personal PIN.
-
-## 0.1.0 (23) — 30 August 2026
-
-Play: submitted for review. TestFlight: the build is `VALID`, both groups.
-
-- A crash was fixed that could happen when opening a conversation from a notification or a link at the moment when the main screen was closing. An unfinished navigation now ends safely.
-
-## 0.1.0 (22) — 30 August 2026
-
-Play: published 30 Aug 14:39, available to the testers, 177 countries. TestFlight: the build is `VALID`, both groups.
-
-- "Choose image" on iOS opens the Photos library. Previously this option mistakenly opened the document browser, so a screenshot stored only in Photos could not be attached to a message.
-
-## 0.1.0 (21) — 30 August 2026
-
-Play: published 30 Aug 13:36, available to the testers, 177 countries. TestFlight: the build is `VALID`, both groups.
-
-- When dragging an open conversation back, the real conversation list is now visible beneath it. Previously the chat moved correctly but uncovered only an empty background.
-
-## 0.1.0 (20) — 30 August 2026
-
-Play: published 30 Aug 8:51, available to the testers, 177 countries. TestFlight: the build is `VALID`, both groups.
-
-- An emoji as a conversation picture can be given a colour. A row of background colours was added to the emoji picker. By default the colour is not sent at all, so the background follows the light or the dark mode as it did until now.
-
-This build also brings everything from builds 17 to 19, which Play did not manage to approve and replaced with it:
-
-- Searching is possible within a single conversation too. A magnifier was added to its bar that searches only it; searching from the conversation list still goes across all of them.
-- The status can be cleared by itself: in 30 minutes, in an hour, in 4 hours, today or this week.
-- A message in a group can be replied to privately.
-
-## 0.1.0 (19) — 30 August 2026
-
-Play: submitted for review, replaced by build 20 before approval. TestFlight: skipped, build 20 replaced it.
-
-- Searching is possible within a single conversation too. A magnifier was added to its bar that searches only it; searching from the conversation list still goes across all of them. The application had always been able to do it, but there was nowhere to click for it.
-
-## 0.1.0 (18) — 30 August 2026
-
-Play: submitted for review, replaced by build 20 before approval. TestFlight: skipped, build 20 replaced it.
-
-- The status can be cleared by itself. A "Clear status" option was added next to the message field: in 30 minutes, in an hour, in 4 hours, today or this week. Until now the status could be set but not cancelled by time, so "I'm at lunch" hung by the name until the evening.
-- "Today" ends at midnight and "This week" on Sunday, both according to the time of your phone.
-
-## 0.1.0 (17) — 30 August 2026
-
-Play: submitted for review, replaced by build 18 before approval. TestFlight: skipped, build 20 replaced it.
-
-- A message in a group can be replied to privately. "Reply privately" was added to the menu of someone else's message: the written reply is sent into your private conversation with the author and carries a link to the original message with it, so the other side sees what it is about. The conversation is created by itself if it does not exist yet.
-- A private reply would, meanwhile, not have gone through at all until now. The application expected the server to name a private conversation with a list of both participants, whereas it sends the name of the other person. The verification therefore failed every time.
-
-## 0.1.0 (16) — 29 August 2026
-
-Play: published. TestFlight: the build is `VALID`, both groups.
-
-- The licenses of the libraries the application is made of were added to the settings. They are in the Local diagnostics. The application stands on 171 packages and their licenses require their text to travel with the program — until now there was nowhere in the application where it could be read.
-
-## 0.1.0 (15) — 29 August 2026
-
-Play: published. TestFlight: the build is `VALID`, both groups.
-
-- Written text is sent as the caption of an attachment. When you have something written and attach an image or a file, the text goes with it instead of staying in the field. An empty field sends no caption and a voice message does not take one.
-
-## 0.1.0 (14) — 29 August 2026
-
-Play: published. TestFlight: the build is `VALID`, both groups.
-
-- A lost connection to the notification channel stopped being reported as a crash of the application. When the system puts the phone to sleep and discards the connection, closing it fails — that is an ordinary end of a connection, not a crash.
-- The application also stopped freezing on it: the cleanup of that connection never finished in such a case.
-
-## 0.1.0 (13) — 29 August 2026
-
-Play: published. TestFlight: the build is `VALID`, both groups.
-
-- A moderator can delete a message they did not write too. The server has always allowed it, but the application offered deletion only for one's own messages, so a moderator could do nothing about an inappropriate post.
-
-## 0.1.0 (12) — 29 August 2026
-
-Play: published. TestFlight: the build is `VALID`, both groups.
-
-- A conversation you may not write into no longer offers an input field. Until now a message could be written and sent and only then came the refusal. It concerns two cases the application could not tell apart: a moderator took your right to write in the conversation, or the conversation has not started yet and you are waiting in the lobby. In place of the field there is now a lock that says which of the two it is.
-- A message cannot be forwarded into a conversation where you would not send it anyway.
-
-## 0.1.0 (11) — 29 August 2026
-
-Play: published. TestFlight: the build is `VALID`, both groups.
-
-- Threads in the list are named after the message they came from. A thread without a name was called just "Thread" until now, so two threads in one conversation could not be told apart.
-- The thread list no longer claims there are none before it asks the server. The loading was started only after the first render, so the screen answered before it had a chance to ask.
-- A network outage during a wake-up on a notification stopped being reported as a crash of the application. A sync will ordinarily fail at such a moment, because the device is only just connecting; the other wake-up route had always taken it that way.
-
-## 0.1.0 (10) — 29 August 2026
-
-Play: published. TestFlight: the build is `VALID`, both groups.
-
-- The thread list also shows the threads that came about by replying. The server reports only named threads in the list, so a conversation full of replies looked empty. The application now adds the ones it knows from its stored messages.
-
-## 0.1.0 (9) — 29 August 2026
-
-Play: submitted for review. TestFlight: the build is `VALID`, both groups.
-
-- A link to a conversation no longer brings the application down. The link arrived twice: once through our channel, which evaluates it against the signed-in accounts, and a second time as a named route from the system. The application had nothing to answer the second one with and crashed on every opened link. It was reported by telemetry from a real device.
-
-## 0.1.0 (8) — 29 August 2026
-
-Play: published 29 Aug 9:29. TestFlight: the build is `VALID`, both groups.
-
-- An empty thread list no longer confuses. A reply to a message does not create a thread, which the screen kept quiet about until now and it looked as though the application was hiding replies the user demonstrably had.
-
-## 0.1.0 (7) — 29 August 2026
-
-Play: published 29 Aug 6:36. TestFlight: the build is `VALID`, both groups.
-
-- Nothing interrupts reading the history any more. A message that arrives while you are deep in older messages leaves you exactly where you are. Until now it pushed you down by the height of its bubble. The timeline is now a `CustomScrollView` with a `center` key, so one end of the list does not reindex the other.
-- An animated GIF is decoded to the size it is really drawn at, instead of a hardcoded 1080 pixels.
-
-## 0.1.0 (6) — 29 August 2026
-
-Play: published. TestFlight: the build is `VALID`, both groups.
-
-- Dragging from the left edge takes you back to the conversation list. In the compact layout the conversation is not pushed as a route, so the system gesture had nothing to pop off the stack and did nothing.
-- A silent send applies to a written message too, not just to attachments. A server without `silent-send` rejects the request instead of sending it out loud.
-- Windows keeps a single instance and adds an icon to the system tray.
-
-## 0.1.0 (5) — 29 August 2026
-
-Play: published. TestFlight: the build is `VALID`, both groups.
-
-- The second tick on a read message is no longer lost after returning into the conversation. The aggregated read marker was enabled on no server, because the capability profile had it hardcoded off.
-- Other people's reactions reach an open conversation. Until now only the ones added from this device were visible.
-- A sent message disappears from the input field right away. When typing continued during the send, it stayed there and could be sent a second time by mistake.
-- A jump to the end of the conversation after going deep into the history.
-- A reply by dragging the bubble.
-- An emoji on its own in a message as well as in a reaction is rendered larger.
-
-## 0.1.0 (4) — 29 August 2026
-
-TestFlight only; this number did not reach Play, because Apple already had builds 1 to 3 taken and the numbers were being unified.
-
-- The same content as 0.1.0 (2) plus the telemetry compiled into the build.
-
-## 0.1.0 (3) — 28 August 2026
-
-TestFlight only, the build `VALID` from 28 Aug, assigned to both the internal and the external group. The first build that got Czech notes for the testers.
-
-## 0.1.0 (2) — 28 August 2026
-
-Play: published 28 Aug 23:10, the first release available to the testers.
-
-- Notifications reach a user who also has the official Talk application. The push device registration sends the correct User-Agent, by which the server determines the type of the application.
-- Images are not distorted, either in the preview or after being opened.
-- The bundle stopped asking for permissions to photos and videos that the application does not use.
-
-## 0.1.0 (1) — 27 August 2026
-
-TestFlight only, the build `VALID` from 27 Aug. The first build of the application that reached the testers at all. The route to it and the four blockers that fell along the way are described in `docs/architecture/apple-distribution.md`.
+- [Srpen 2026 (buildy 1–30)](docs/changelog/2026-08.md)

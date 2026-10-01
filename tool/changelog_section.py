@@ -62,11 +62,17 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         text = arguments.changelog.read_text(encoding="utf-8")
+        body = section(text, name, build)
+        if body is None:
+            archives = arguments.changelog.parent / "docs" / "changelog"
+            for archive in sorted(archives.glob("*.md")):
+                body = section(archive.read_text(encoding="utf-8"), name, build)
+                if body is not None:
+                    break
     except OSError as error:
         print(f"cannot read {arguments.changelog}: {error}", file=sys.stderr)
         return 2
 
-    body = section(text, name, build)
     if body is None:
         print(f"no changelog section for {name} ({build})", file=sys.stderr)
         return 1

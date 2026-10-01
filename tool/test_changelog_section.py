@@ -92,6 +92,18 @@ class MainTest(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertIn("no changelog section", errors.getvalue())
 
+    def test_reads_an_archived_release_when_missing_from_the_current_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._changelog(directory)
+            archive = path.parent / "docs" / "changelog" / "2026-08.md"
+            archive.parent.mkdir(parents=True)
+            archive.write_text("## 0.1.0 (30)\n\n- Archived release.\n", encoding="utf-8")
+            output = io.StringIO()
+            with redirect_stdout(output):
+                code = main(["0.1.0+30", "--changelog", str(path)])
+            self.assertEqual(code, 0)
+            self.assertEqual(output.getvalue(), "- Archived release.\n")
+
     def test_fails_on_an_unreadable_changelog(self):
         with tempfile.TemporaryDirectory() as directory:
             errors = io.StringIO()
