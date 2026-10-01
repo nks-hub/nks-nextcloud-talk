@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show OSError;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -21,6 +22,30 @@ final class _StalledClient extends http.BaseClient {
 }
 
 void main() {
+  test('a native connection failure is a retryable network error', () async {
+    final client = _StalledClient();
+    final api = HttpNextcloudApi(client: client);
+    addTearDown(api.close);
+    final read = api.getAuthenticatedCapabilities(
+      server: ServerBase.parse('https://cloud.example.invalid'),
+      loginName: 'tester',
+      appPassword: 'app-password',
+    );
+    final assertion = expectLater(
+      read,
+      throwsA(
+        isA<NextcloudApiException>().having(
+          (error) => error.code,
+          'code',
+          NextcloudApiError.network,
+        ),
+      ),
+    );
+    await client.entered.future;
+    client.pending.completeError(const OSError('Bad file descriptor', 9));
+    await assertion;
+  });
+
   test('a throwing error callback stays out of the zone', () async {
     // Same shape as NKS-TALK-8, one loop further out: the conversation sync
     // runs in a `ForegroundSyncLoop` that nothing awaits while the app is up,

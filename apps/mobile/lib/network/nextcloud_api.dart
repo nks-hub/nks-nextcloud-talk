@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Cookie, HttpException, Platform;
+import 'dart:io' show Cookie, HttpException, OSError, Platform;
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';

@@ -468,6 +468,9 @@ abstract class _HttpNextcloudApiBase {
       throw const NextcloudApiException(NextcloudApiError.timeout);
     } on http.ClientException {
       throw const NextcloudApiException(NextcloudApiError.network);
+    } on OSError {
+      // Native connection setup can fail before IOClient wraps the socket error.
+      throw const NextcloudApiException(NextcloudApiError.network);
     }
   }
 
