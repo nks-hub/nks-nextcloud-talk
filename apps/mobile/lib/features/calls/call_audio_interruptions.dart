@@ -42,26 +42,23 @@ abstract interface class CallAudioInterruptions {
 /// on a platform without a handler that is two unhandled errors per call.
 /// `callAudioInterruptionsProvider` is what makes that choice.
 final class PlatformCallAudioInterruptions implements CallAudioInterruptions {
-  const PlatformCallAudioInterruptions({
+  // EventChannel has one native sink. Calls and voice recordings must share it.
+  PlatformCallAudioInterruptions({
     EventChannel channel = const EventChannel(channelName),
-  }) : this._(channel);
-
-  const PlatformCallAudioInterruptions._(this._channel);
+  }) : events = channel
+           .receiveBroadcastStream()
+           .map(_parse)
+           .where((event) => event != null)
+           .cast<CallAudioInterruption>()
+           .handleError(
+             (Object _) {},
+             test: (error) => error is MissingPluginException,
+           );
 
   static const channelName = 'com.nkshub.nextcloudtalk/call_audio_focus';
 
-  final EventChannel _channel;
-
   @override
-  Stream<CallAudioInterruption> get events => _channel
-      .receiveBroadcastStream()
-      .map(_parse)
-      .where((event) => event != null)
-      .cast<CallAudioInterruption>()
-      .handleError(
-        (Object _) {},
-        test: (error) => error is MissingPluginException,
-      );
+  final Stream<CallAudioInterruption> events;
 
   static CallAudioInterruption? _parse(Object? event) => switch (event) {
     'began' => CallAudioInterruption.began,

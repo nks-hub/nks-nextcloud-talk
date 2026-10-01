@@ -138,7 +138,7 @@ final callMediaEngineProvider = Provider<CallMediaEngine>((ref) {
 final callAudioInterruptionsProvider = Provider<CallAudioInterruptions>((ref) {
   return switch (defaultTargetPlatform) {
     TargetPlatform.android ||
-    TargetPlatform.iOS => const PlatformCallAudioInterruptions(),
+    TargetPlatform.iOS => PlatformCallAudioInterruptions(),
     _ => const SilentCallAudioInterruptions(),
   };
 });
