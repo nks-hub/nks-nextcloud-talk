@@ -12,28 +12,28 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## 1.0.17 (83) — 1 October 2026
 
-- Aktualizace macOS používají Sparkle a fungují se zapnutým sandboxem. Ověřuje se podpis balíčku i seznamu verzí. Z buildů 81 a 82 je nutné první opravenou verzi nainstalovat ručně.
-- Opraven souběh odběrů zvukových přerušení pro hovory a hlasové zprávy, který vyvolával chybu „No active stream to cancel“.
-- Odstraněna zbytečná měření `performance-*` a jejich pomocný kód. Hlášení chyb, zamrznutí, problémů s přílohami a údaje o paměti zůstávají.
-- Nativní chyba připojení „Bad file descriptor“ se zpracuje jako běžná síťová chyba, kterou lze opakovat.
+- macOS updates now use Sparkle and work with App Sandbox enabled. Both the update archive and feed are signature-verified. Install this version manually once when upgrading from builds 81 or 82.
+- Fixed overlapping audio interruption subscriptions for calls and voice messages that caused "No active stream to cancel" errors.
+- Removed redundant `performance-*` measurements and their supporting code. Error, app-hang, attachment and memory diagnostics remain enabled.
+- Native "Bad file descriptor" connection failures are now handled as retryable network errors.
 
 ## 1.0.16 (82) — 1 October 2026
 
-- Ctrl+V na desktopu vloží také soubory zkopírované do schránky. Vkládání textu a obrázků zůstává zachované.
-- Do konverzace lze přetáhnout více příloh najednou i postupně. Každou lze před odesláním samostatně odebrat.
-- Opraveno chybné hlášení o nepodporovaném typu při přetažení více souborů, například PPTX a DOCX.
+- Ctrl+V on desktop now pastes files copied to the clipboard. Pasting text and images continues to work.
+- Multiple attachments can be dropped together or added one at a time. Each file can be removed before sending.
+- Fixed the incorrect unsupported file type error when dropping multiple files, including PPTX and DOCX files.
 
 ## 1.0.15 (81) — 30 September 2026
 
-- Starší výsledky hledání zobrazují vedle času také datum v místním časovém pásmu.
-- Desktop automaticky kontroluje nové verze a zobrazí viditelnou nabídku aktualizace. Výslovně vypnuté kontroly zůstávají vypnuté.
-- Jedno kliknutí stáhne, ověří a nainstaluje aktualizaci. Ve Windows proběhne instalace bez průvodce a aplikace se znovu otevře.
+- Older search results now show the date alongside the time in the local time zone.
+- Desktop clients automatically check for new versions and display an update prompt. An explicit opt-out is preserved.
+- One click downloads, verifies and installs the update. On Windows, installation runs without a wizard and restarts the app.
 
 ## 1.0.14 (80) — 30 September 2026
 
-- Opraven skok na nalezenou zprávu v konverzaci s různě vysokými zprávami.
-- Vložený text delší než 4 000 znaků nebo 40 řádků se připraví jako příloha `.md` nebo `.txt`. Rozepsaný text zůstane zachovaný.
-- Přílohy Markdown se zobrazují formátovaně, včetně souborů `.md`, které server označí jako prostý text.
+- Fixed jumping to a search result in conversations with messages of different heights.
+- Pasted text longer than 4,000 characters or 40 lines is prepared as a `.md` or `.txt` attachment. The existing draft is preserved.
+- Markdown attachments render with formatting, including `.md` files reported by the server as plain text.
 
 ## 1.0.13 (79) — 25 September 2026
 
@@ -45,7 +45,7 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## 1.0.12 (78) — 19 September 2026
 
-- Velké přílohy se při ukládání a otevírání stahují přímo na disk. Odstraněn zbytečný limit 64 MB i načítání celého souboru do paměti před uložením.
+- Large attachments are streamed directly to disk when saving or opening them. Removed the unnecessary 64 MB limit and buffering of the entire file in memory.
 
 ## 1.0.11 (77) — 19 September 2026
 
@@ -303,8 +303,8 @@ Twenty-six items, and most of them were found by reading rather than by using: t
 
 - Fixed: on a desktop window between roughly 720 and 920 points wide, the conversation list vanished the moment a conversation was opened and could not be brought back — the button for it flipped a setting the narrow window overruled again, so pressing it twice changed nothing and no other conversation could be picked. The list no longer folds itself; only the button folds it, and the button now always works. Reported on the desktop and found earlier on a 7-inch tablet in portrait.
 
-- Changed: the Czech progress messages no longer talk about themselves. Twenty-four of them said "Kontroluji server…", "Stahuji přílohu…", "Připojuji se k hovoru…"; they now name the action — "Kontrola serveru…", "Stahování přílohy…", "Připojování k hovoru…" — like the rest of the app.
-- Changed: four pairs of Czech words that meant the same thing now agree. Notifications are "oznámení" everywhere, the thing that takes a photo is a "fotoaparát" and only the one in a call is a "kamera", the waiting room is always a "čekárna", and breakout rooms are always "oddělené místnosti".
+- Changed: 24 Czech progress messages now name the action rather than speak in the first person, including server checks, attachment downloads and joining calls.
+- Changed: Czech terminology is now consistent for notifications, camera use, waiting rooms and breakout rooms. Photo capture and video-call cameras use distinct terms.
 
 - Added: the desktop application can now install an update it finds. It offers to download the Windows installer from the release, checks the file against the release's own SHA-256 list before anything is run, and asks a second time before starting it. A file whose checksum does not match is deleted and the update refused. macOS is deliberately left with the link alone — an update there has to be notarised, which a downloaded file is not. Off by default, as the check itself is.
 - Fixed: the screen share is offered on Windows, macOS and Linux. The button was drawn only on the two phones although the engine can capture a desktop screen, so on a desktop the feature simply was not there.
@@ -318,7 +318,7 @@ Twenty-six items, and most of them were found by reading rather than by using: t
 - Fixed: four failures that used to disappear without a word. The worst could empty the whole list of saved conversations and look like a server that returned nothing — it says how many it dropped and why now. A poll could also quietly vanish from the attachment menu after a passing glitch, and neither the log nor the crash reporter said anything at all.
 - Changed: every one of the 932 pieces of text in the app was read in both languages, and twenty-one were wrong. Four spoke about a woman as though she were a man. "Vlastní proxy" said the proxy was yours when it is the app's. One asked you to leave a call in a phrase Czech does not use that way, and one sentence was still on first-name terms with you while the rest of the app was not. The audit before this one had reported covering everything while reading about two thirds of it, which is why it was done again and counted out loud.
 - Fixed: the settings could tell you that removing an account is not supported yet. It has been supported for weeks.
-- Changed: the call banner stopped saying "transport". Seven messages used the word for what is really "where the call goes", and one of them read "Transport hovoru se nepodařilo zjistit", which tells nobody anything they can do. They now name the thing: this Nextcloud, or a separate call server, or that the connection to it dropped.
+- Changed: seven call banner messages now describe the connection instead of calling it a "transport". They say whether the call uses this Nextcloud or a separate call server, and when that connection drops.
 - Changed: the first screen a new person sees no longer says "cache". It said accounts, cache and background work stay strictly apart; it now says accounts, their stored data and background work. The word survives only where it names what will actually be deleted.
 - Changed: the English settled on one spelling. It had been mixing British and American — "colour" and "licences" beside "favorites" — and now reads British throughout.
 - Added: the app lock works on Windows and macOS. It was offered only on phones, and the desktops were never even asked whether they had Windows Hello or Touch ID — the plugins for both had been shipped and registered all along.
@@ -343,7 +343,7 @@ Twenty items, and all but three of them were found by USING the application — 
 - Fixed: "always use a relay server" is offered only where the server has one. A Nextcloud whose administrator set up no relay left the switch with nothing to use, and a call turned on with it could not connect at all. The setting is now hidden on such a server, and a call never forces a relay that is not there.
 - Changed: the notification setting no longer names an internal service. It said notifications go "through nks-talk-notify", which means nothing to anybody outside the project; it now says they go through the application's own notification service.
 - Fixed: the application could open on an empty screen with nothing to press — on a tablet, and on an ordinary phone turned sideways. In a window wide enough for two panes but too narrow to give a conversation room, the conversation list was hidden even though no conversation was open, leaving only "Select a conversation" and no way to select one. The list is now hidden only while a conversation is on screen.
-- Changed: the Czech diagnostics say "v mezipaměti" where they said "v cache". The rest of the Czech text already used the Czech word.
+- Changed: Czech diagnostics now use the localized term for cache consistently with the rest of the interface.
 - Fixed: the last conversation in the list is no longer left under the compose button. At 200 % text a short list does not scroll, so the last room's message could not be moved out from under it.
 - Changed: the pictures on the store page are new, and none of them shows a real person, a real conversation or a real server any more. They are taken from a server that exists only for that, so a picture cannot leak what it should not. The listing gained tablet pictures and an English version.
 - New: the desktop can tell you when a newer build has been published. It is off until you turn it on in the settings, because the check asks GitHub and that tells GitHub the installation exists; when it finds something newer it offers the release page. Nothing is downloaded or installed for you, and the setting does not exist on Android or iOS, where the store updates the app.
@@ -432,7 +432,7 @@ Android: the release APK 93,577,502 B, SHA-256 `381143f880260f74a82cd81093bd4953
 
 Windows: the installer `NKS-Talk-0.1.0-59-windows-x64-setup.exe` 35,492,620 B, SHA-256 `9f9f7fae0209d03eb6422eb3a1be9321f18affd3685612d14c76ddf760b9c401`, unsigned.
 
-iOS: the iPhone 16 Pro Max / iOS 18.6 simulator, the debug build 59 installed and launched, `Runner.app` about 227.7 MiB, the zip 72,533,511 B, SHA-256 `dcf3d7e8370d90eed508ddc8ee601f8b7df8b01cd71d11385a29e4383275fe41`, `CFBundleVersion` 59; the Czech onboarding rendered on the screen.
+iOS: the iPhone 16 Pro Max / iOS 18.6 simulator, the debug build 59 installed and launched, `Runner.app` about 227.7 MiB, the zip 72,533,511 B, SHA-256 `dcf3d7e8370d90eed508ddc8ee601f8b7df8b01cd71d11385a29e4383275fe41`, `CFBundleVersion` 59; the Czech onboarding rendered on screen, including the new button for loading a sign-in code. TestFlight was not uploaded (cadence, the latest is 51).
 
 macOS: `nextcloudtalk.app` about 176.4 MiB, the zip 55,588,774 B, SHA-256 `fb62d81fd43ca5eb7490129b4108b8f8f74797ab78eb56b55041edf07c8b7d2a`, an ad-hoc signature (`codesign --verify --strict` OK), it ran for 3 min 40 s. A screenshot could not be taken, because the Mac has a locked screen; the run is documented through the Dart VM service (a live isolate, a widget tree with the onboarding mounted, a `FlutterView` of 1040×672).
 
@@ -449,7 +449,7 @@ Android: the release APK 93,577,506 B, SHA-256 `f9a51f3b40568806f1490a2e6d478c9f
 
 Windows: the installer `NKS-Talk-0.1.0-58-windows-x64-setup.exe` 35,491,818 B, SHA-256 `f558c4141be8a243c5eec8c9fa113b2ba368c44fe00edabc4ee22352ccd94805`, unsigned. The installation on `win-test-1` DID NOT HAPPEN — the machine was disconnected at the time of the release (it is a live workstation).
 
-iOS: an iPhone / iOS 18.6 simulator, the debug build 58 installed and launched, `Runner.app` 228 MB, `CFBundleVersion` 58; the Czech onboarding rendered on the screen including the new button „Načíst přihlašovací kód". TestFlight was not uploaded (cadence, the latest is 51).
+iOS: an iPhone / iOS 18.6 simulator, the debug build 58 installed and launched, `Runner.app` 228 MB, `CFBundleVersion` 58; the Czech onboarding rendered on screen, including the new button for loading a sign-in code. TestFlight was not uploaded (cadence, the latest is 51).
 
 macOS: `nextcloudtalk.app` 177 MB, the zip 55,593,797 B, SHA-256 `e35327ce4535f440a1e1eab0c5041720e842db55b6f8289f6a38617ee1a5af30`, an ad-hoc signature (`codesign --verify --strict` OK for the Designated Requirement too), it ran for 1:19 on build-mac. A notarized Developer ID package was not made for this build.
 
@@ -800,7 +800,7 @@ Released from the source `0a388e63263d8e9aa47cd75652611cd37235b324`.
 
 Play (closed testing, the alpha track): the release `(37) 0.1.0` is `completed` with version code 37. The AAB has 83,952,784 B and the SHA-256 `8c969f7d4c8369ab1b4458a92ef2495b1ea7a1df6d889f1443aa954eb1b65566`, is signed with the upload key `CN=NKS Talk` and `jarsigner` reports `jar verified`. The release notes in all six languages match the source file character by character after the upload. The Sentry and Rybbit hosts are set in the package.
 
-TestFlight: the IPA has 30,166,266 B and the SHA-256 `f33f82aedc252f61ff055c4466f0b7a11872622d8511b4c96667c35340fd4cbc`. Both the delivery UUID and the App Store Connect build record are `aebb5664-02d5-4c24-b0c0-5e6458d865e8`. App Store Connect returns `VALID`, a minimum of iOS 15.0, encryption `false` and Czech notes. The group Testeři is `IN_BETA_TESTING`; Externí testeři were submitted to a beta review, which is pending at the time of writing.
+TestFlight: the IPA has 30,166,266 B and the SHA-256 `f33f82aedc252f61ff055c4466f0b7a11872622d8511b4c96667c35340fd4cbc`. Both the delivery UUID and the App Store Connect build record are `aebb5664-02d5-4c24-b0c0-5e6458d865e8`. App Store Connect returns `VALID`, a minimum of iOS 15.0, encryption `false` and Czech notes. The internal tester group is `IN_BETA_TESTING`; The external tester group was submitted to a beta review, which is pending at the time of writing.
 
 - An attachment held back by the ordering in the room no longer stops the whole queue. Previously one older job waiting for a confirmation was enough and every further image in the same conversation stayed at "Waiting to upload" forever, without an error and without a way to get it going. A rejected plan now means only skipping that one job; a parked confirmation additionally does not prevent the finalization of later attachments, because it itself moves only on an explicit retry. Outstanding attachments finish by themselves, even after the application restarts.
 - Background network jobs no longer stay unattended when their owner is gone. Client Push cancels the capability request, the connecting, the handshake, the event stream and the backoff; it closes a socket connected late and with several accounts signals the cancellation to all of them at once. The public boundary of the conversation synchronization converts transport errors into a typed sync state and preserves the force-full retry after a failure of a weaker incremental flight.
@@ -876,6 +876,6 @@ On the preserved iPhone 16 Pro Max / iOS 18.6 an upgrade installation from the s
 - In the conversation detail a custom background colour of the messages can be set, or one can return to the application theme. The choice is separated by account and room, applies in threads too, and a contrast gate weakens it according to the light, the dark and the server theme so that the texts and the dividers stay readable.
 - An old upload waiting for manual handling after its automatic retries were exhausted no longer blocks a newly picked photo in the same conversation. A newer attachment can go through both the upload and the finalize; the original job and its file are preserved for a manual retry or a cleanup.
 
-## Starší vydání
+## Earlier releases
 
-- [Srpen 2026 (buildy 1–30)](docs/changelog/2026-08.md)
+- [August 2026 (builds 1–30)](docs/changelog/2026-08.md)

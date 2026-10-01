@@ -23,6 +23,10 @@ The gates and the trap that makes one of them lie are in the README's [Running t
 
 Run them before you open anything. A change that touches protocol wire shapes also has to keep the contract fixtures under `contracts/` in step; those fixtures are executable evidence, so a fixture edited to match a defect makes the defect permanent.
 
+## Release notes
+
+Keep `CHANGELOG.md` and GitHub release notes in English. Localized store notes and the NKS IS wiki use their respective language.
+
 ## Commits
 
 One line, imperative, saying what changed:
