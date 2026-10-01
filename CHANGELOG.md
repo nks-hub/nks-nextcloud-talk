@@ -10,6 +10,8 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+## 1.0.17 (83) — 1 October 2026
+
 - Aktualizace macOS používají Sparkle a fungují se zapnutým sandboxem. Ověřuje se podpis balíčku i seznamu verzí. Z buildů 81 a 82 je nutné první opravenou verzi nainstalovat ručně.
 - Opraven souběh odběrů zvukových přerušení pro hovory a hlasové zprávy, který vyvolával chybu „No active stream to cancel“.
 - Odstraněna zbytečná měření `performance-*` a jejich pomocný kód. Hlášení chyb, zamrznutí, problémů s přílohami a údaje o paměti zůstávají.

@@ -1,3 +1,4 @@
-Ctrl+V na desktopu vloží také soubory ze schránky.
-Více příloh lze přetáhnout najednou i postupně a jednotlivě odebrat před odesláním.
-Opraveno chybné hlášení o nepodporovaném typu při přetažení více souborů.
+Opraveny aktualizace macOS. Tuto verzi je na Macu nutné jednou nainstalovat ručně.
+Opraveno rušení zvukového streamu při hovorech a nahrávání hlasových zpráv.
+Ošetřena nativní chyba síťového připojení.
+Odstraněno zbytečné měření výkonu. Hlášení skutečných chyb zůstává.

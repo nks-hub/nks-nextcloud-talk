@@ -1,3 +1,4 @@
-Paste files from the clipboard with Ctrl+V on desktop.
-Drag multiple attachments together or add them one at a time, and remove individual files before sending.
-Fixed the incorrect unsupported file type message when dropping multiple files.
+Fixed macOS updates. Install this version manually once on your Mac.
+Fixed audio stream cancellation during calls and voice recordings.
+Handled a native network connection error.
+Removed redundant performance measurements while keeping error reporting.
