@@ -49,6 +49,20 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/nks-hub/nks-nextcloud-talk/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>thE5Jj0DG05Rb9w6mA9XnTKsiiPNF5DNyeDB8ae1WcY=</string>
+	<key>SURequireSignedFeed</key>
+	<true/>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
+	<key>SUAllowsAutomaticUpdates</key>
+	<false/>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
 	<key>AppIdentifierPrefix</key>
 	<string>$(AppIdentifierPrefix)</string>
 </dict>

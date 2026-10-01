@@ -111,3 +111,17 @@ If the app ever gets its own encryption (E2EE calls, say), this claim stops bein
 - macOS distribution: either the Mac App Store, or a Developer ID Application with notarization through `notarytool` and stapling.
 - `macos/Runner/Release.entitlements` only has `files.user-selected.read-only`; saving attachments will need read-write.
 - PushKit, CallKit and ReplayKit for full call parity remain a separate open slice.
+
+## Aktualizace macOS přes Sparkle
+
+Sandbox zůstává zapnutý. Instalaci provádí služba Sparkle 2.9.6; tato verze podporuje i macOS 11.
+Při ručním podpisu spusťte `bash tool/sign_sparkle.sh "$APP" "$ID"` z `apps/mobile` před podpisem hlavní aplikace.
+Podepište také ostatní vložené knihovny a rozšíření. Potom aplikaci notarizujte, připojte ticket a vytvořte ZIP.
+
+Nad hotovým `nks-talk-macos-<verze>-<build>.zip` spusťte `python3 tool/macos_appcast.py <cesta-k-zip>`.
+Vedle ZIPu vznikne podepsaný `appcast.xml`. Nahrajte jej do stejného GitHub release společně se ZIPem a aktualizovaným `SHA256SUMS`.
+Bez tohoto souboru novější klient nemůže aktualizaci nainstalovat.
+
+Veřejný klíč `SUPublicEDKey` v `Info.plist` patří do Gitu. Soukromý klíč je v Klíčence sestavovacího Macu pod účtem `com.nkshub.nextcloudtalk`; do Gitu nepatří.
+Při přesunu sestavování přeneste existující klíč zabezpečeně pomocí `generate_keys -x` a `generate_keys -f`. Negenerujte náhradní klíč bez postupu pro jeho výměnu.
+Buildy 81 a 82 mají nefunkční původní instalátor. První verzi s opravou je nutné nainstalovat ručně.

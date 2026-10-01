@@ -13,6 +13,7 @@ private let windowFrameAutosaveName = "NKSTalkMainWindow"
 class MainFlutterWindow: NSWindow {
   private var deepLinkChannel: FlutterMethodChannel?
   private var desktopAutostartChannel: FlutterMethodChannel?
+  private var desktopUpdater: DesktopUpdater?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -47,6 +48,7 @@ class MainFlutterWindow: NSWindow {
     }
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+    desktopUpdater = DesktopUpdater(messenger: flutterViewController.engine.binaryMessenger)
 
     let desktopAutostartChannel = FlutterMethodChannel(
       name: "com.nkshub.nextcloudtalk/desktop_autostart",

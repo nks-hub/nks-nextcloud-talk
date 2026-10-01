@@ -41,6 +41,7 @@ PODS:
     - Sentry/HybridSDK (= 8.58.4)
   - share_plus (0.0.1):
     - FlutterMacOS
+  - Sparkle (2.9.6)
   - url_launcher_macos (0.0.1):
     - FlutterMacOS
   - WebRTC-SDK (150.7871.01)
@@ -63,11 +64,13 @@ DEPENDENCIES:
   - record_macos (from `Flutter/ephemeral/.symlinks/plugins/record_macos/macos`)
   - sentry_flutter (from `Flutter/ephemeral/.symlinks/plugins/sentry_flutter/macos`)
   - share_plus (from `Flutter/ephemeral/.symlinks/plugins/share_plus/macos`)
+  - Sparkle (= 2.9.6)
   - url_launcher_macos (from `Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos`)
 
 SPEC REPOS:
   trunk:
     - Sentry
+    - Sparkle
     - WebRTC-SDK
 
 EXTERNAL SOURCES:
@@ -127,9 +130,10 @@ SPEC CHECKSUMS:
   Sentry: 5321d74bdd28d6f6f8beaa1ca06f1fdc746bff49
   sentry_flutter: b392decea911dcd74891cc4aef402c73abf065b1
   share_plus: 510bf0af1a42cd602274b4629920c9649c52f4cc
+  Sparkle: b8c9cf4ced217ffc708a1ca5f988a7ba877658db
   url_launcher_macos: f87a979182d112f911de6820aefddaf56ee9fbfd
   WebRTC-SDK: 7dc931c64c00c735a614382f1a59cf65019c3c17
 
-PODFILE CHECKSUM: 4a43b06237c71383dbfe3f004d02459a7e248464
+PODFILE CHECKSUM: 5b94283b74dc3c3544e8e738310de2dbab883b09
 
 COCOAPODS: 1.16.2

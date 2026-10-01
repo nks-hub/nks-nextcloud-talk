@@ -353,6 +353,14 @@ base class UpdateInstallStateController extends Notifier<UpdateInstallState> {
     if (state is UpdateInstallDownloading || state is UpdateInstallInstalling) {
       return null;
     }
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      state = const UpdateInstallInstalling();
+      final result = await ref
+          .read(updateInstallerServiceProvider)
+          .installMacOSUpdate(release.buildNumber);
+      state = const UpdateInstallIdle();
+      return result;
+    }
     final result = await download(release);
     if (result is! UpdateInstallReady) return result;
     final ready = state;

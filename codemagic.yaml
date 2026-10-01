@@ -335,6 +335,7 @@ workflows:
             # The full signing identity string ("Developer ID Application: <name> (<team>)")
             # lives in the secure environment group, not in this file.
             ID="${MACOS_SIGNING_IDENTITY:?MACOS_SIGNING_IDENTITY is not set}"
+            bash tool/sign_sparkle.sh "$APP" "$ID"
             # Inside out: a nested bundle signed after its container invalidates
             # the container's seal.
             for f in "$APP"/Contents/Frameworks/*.framework "$APP"/Contents/Frameworks/*.dylib; do

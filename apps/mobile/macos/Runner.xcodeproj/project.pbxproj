@@ -21,6 +21,8 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		B20000000000000000000003 /* Sparkle-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* Sparkle-LICENSE.txt */; };
+		B20000000000000000000001 /* DesktopUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* DesktopUpdater.swift */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		CA9700010000000000000001 /* ScreenCaptureTests.m in Sources */ = {isa = PBXBuildFile; fileRef = CA9700010000000000000002 /* ScreenCaptureTests.m */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
@@ -91,6 +93,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B20000000000000000000004 /* Sparkle-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "Sparkle-LICENSE.txt"; path = Pods/Sparkle/LICENSE; sourceTree = SOURCE_ROOT; };
+		B20000000000000000000002 /* DesktopUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopUpdater.swift; sourceTree = "<group>"; };
 		0543F8935B8E3A7A6EA86B68 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		331C80D5294CF71000263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		331C80D7294CF71000263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
@@ -230,6 +234,8 @@
 			children = (
 				33CC10F02044A3C60003C045 /* AppDelegate.swift */,
 				33CC11122044BFA00003C045 /* MainFlutterWindow.swift */,
+				B20000000000000000000002 /* DesktopUpdater.swift */,
+				B20000000000000000000004 /* Sparkle-LICENSE.txt */,
 				A1000000000000000000000C /* ApplePushDelivery.swift */,
 				A1000000000000000000000D /* PushDeviceKeyStore.swift */,
 				A1000000000000000000000E /* PushEnvelopeDecryptor.swift */,
@@ -413,6 +419,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */,
+				B20000000000000000000003 /* Sparkle-LICENSE.txt in Resources */,
 				33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -543,6 +550,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,
+				B20000000000000000000001 /* DesktopUpdater.swift in Sources */,
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
 				A10000000000000000000001 /* ApplePushDelivery.swift in Sources */,

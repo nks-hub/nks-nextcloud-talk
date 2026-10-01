@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../../core/app_version.dart';
@@ -13,15 +14,9 @@ import 'update_check_service.dart';
 
 /// Whether this platform may download and install an update itself.
 ///
-/// All three desktops. Windows runs the installer the release carries. macOS
-/// and Linux ship a directory rather than an installer, so there the download
-/// is unpacked and put in the place of the running one; see
-/// [update_bundle_swap.dart] for how that is done without the process
-/// replacing itself.
-///
-/// Never the phones: a build from Google Play or the App Store is updated by
-/// the store, and pointing somebody at a download outside it breaks both
-/// stores' rules. That is also why this is not a preference.
+/// Windows runs the release installer, Linux swaps its bundle, and macOS uses
+/// Sparkle's installer service to cross the App Sandbox boundary.
+/// Store builds on phones are updated by their store.
 bool get canDownloadAndInstallUpdate {
   if (kIsWeb) {
     return false;
@@ -41,7 +36,6 @@ enum UpdateInstallKind { runInstaller, replaceBundle }
 /// What the release archives unpack to, and what runs inside them. Checked
 /// after unpacking, so an archive that is not shaped like ours is refused
 /// before anything is put in the running build's place.
-const _macOSBundleName = 'nextcloudtalk.app';
 const _linuxBundleName = 'bundle';
 const _linuxExecutableName = 'nextcloudtalk';
 
@@ -52,7 +46,6 @@ const _stagingPrefix = '.nks-talk-update-';
 
 UpdateInstallKind? _installKind(TargetPlatform platform) => switch (platform) {
   TargetPlatform.windows => UpdateInstallKind.runInstaller,
-  TargetPlatform.macOS ||
   TargetPlatform.linux => UpdateInstallKind.replaceBundle,
   _ => null,
 };
@@ -250,15 +243,23 @@ final class UpdateInstallerService {
     }
   }
 
-  /// Installs the verified download. Only ever called with an
-  /// [UpdateInstallReady] the caller itself obtained from
-  /// [downloadAndVerify], so nothing is run or unpacked without having passed
-  /// the checksum check first.
-  ///
-  /// On Windows that means starting the installer, which replaces the build
-  /// and restarts it. On macOS and Linux there is no installer: the archive is
-  /// unpacked beside the running build and a small script puts it in place
-  /// once this process has exited, so this asks the process to exit.
+  /// Sparkle owns the macOS download, signature verification, installation and restart.
+  Future<UpdateInstallResult> installMacOSUpdate(int buildNumber) async {
+    try {
+      final result = await const MethodChannel(
+        'com.nkshub.nextcloudtalk/updater',
+      ).invokeMethod<String>('install', {'build': buildNumber});
+      return result == 'cancelled'
+          ? const UpdateInstallCancelled()
+          : const UpdateInstallStartFailed();
+    } on PlatformException {
+      return const UpdateInstallStartFailed();
+    } on MissingPluginException {
+      return const UpdateInstallStartFailed();
+    }
+  }
+
+  /// Installs a verified Windows or Linux download.
   Future<bool> runInstaller(UpdateInstallReady ready) async {
     return switch (_installKind(defaultTargetPlatform)) {
       UpdateInstallKind.runInstaller => _startInstaller(ready.installerFile),
@@ -307,21 +308,16 @@ final class UpdateInstallerService {
       if (unpacked == null) {
         return false;
       }
-      if (!await _isTrustedBundle(unpacked)) {
-        return false;
-      }
       final swap = BundleSwap(
         currentDirectory: current.path,
         newDirectory: unpacked.path,
-        relaunchExecutable: defaultTargetPlatform == TargetPlatform.macOS
-            ? current.path
-            : _join(current.path, _linuxExecutableName),
+        relaunchExecutable: _join(current.path, _linuxExecutableName),
       );
       final script = buildSwapScript(
         pid: pid,
         swap: swap,
         stagingDirectory: staging.path,
-        useOpen: defaultTargetPlatform == TargetPlatform.macOS,
+        useOpen: false,
       );
       await Process.start('/bin/sh', <String>[
         '-c',
@@ -339,91 +335,18 @@ final class UpdateInstallerService {
     }
   }
 
-  /// Unpacks [archive] into [staging] with the system's own tool and returns
-  /// the directory that replaces the running one.
-  ///
-  /// `ditto` rather than a Dart zip reader on macOS, and `tar` on Linux,
-  /// because both carry what a plain file-by-file extraction drops: symlinks,
-  /// executable bits and, on macOS, the extended attributes the code signature
-  /// is checked against. An unpacked bundle that lost those is one Gatekeeper
-  /// refuses to start.
   Future<Directory?> _unpack(File archive, Directory staging) async {
-    final macOS = defaultTargetPlatform == TargetPlatform.macOS;
-    final result = macOS
-        ? await Process.run('/usr/bin/ditto', <String>[
-            '-x',
-            '-k',
-            archive.path,
-            staging.path,
-          ])
-        : await Process.run('/usr/bin/env', <String>[
-            'tar',
-            '-xzf',
-            archive.path,
-            '-C',
-            staging.path,
-          ]);
-    if (result.exitCode != 0) {
-      return null;
-    }
-    final root = Directory(
-      _join(staging.path, macOS ? _macOSBundleName : _linuxBundleName),
-    );
-    if (!await root.exists()) {
-      return null;
-    }
-    final executable = File(
-      macOS
-          ? _join(root.path, 'Contents', 'MacOS', _linuxExecutableName)
-          : _join(root.path, _linuxExecutableName),
-    );
-    return await executable.exists() ? root : null;
-  }
-
-  /// On macOS, whether the unpacked bundle really replaces this one.
-  ///
-  /// The checksum already proved the archive is the one GitHub published, so
-  /// this is not the first line of defence — it is the one that still holds if
-  /// the checksum list itself were ever wrong, and it is what Gatekeeper will
-  /// ask anyway when the replacement starts. Failing here now beats replacing
-  /// a working build with one that cannot open.
-  ///
-  /// The team is read off the build that is running rather than written down
-  /// here, so this asks the only question worth asking — is the replacement
-  /// signed by whoever signed me — and keeps working for anybody who builds
-  /// and signs this themselves.
-  Future<bool> _isTrustedBundle(Directory bundle) async {
-    if (defaultTargetPlatform != TargetPlatform.macOS) {
-      return true;
-    }
-    final verify = await Process.run('/usr/bin/codesign', <String>[
-      '--verify',
-      '--strict',
-      bundle.path,
+    final result = await Process.run('/usr/bin/env', <String>[
+      'tar',
+      '-xzf',
+      archive.path,
+      '-C',
+      staging.path,
     ]);
-    if (verify.exitCode != 0) {
-      return false;
-    }
-    final current = bundleDirectory();
-    if (current == null) {
-      return false;
-    }
-    final signedBy = await _teamIdentifierOf(bundle.path);
-    final runningAs = await _teamIdentifierOf(current.path);
-    return signedBy != null && signedBy == runningAs;
-  }
-
-  /// The signing team of the bundle at [path], or null when it has none — an
-  /// ad-hoc signature says `not set`, and a replacement like that must never
-  /// stand in for a real one.
-  Future<String?> _teamIdentifierOf(String path) async {
-    final shown = await Process.run('/usr/bin/codesign', <String>['-dv', path]);
-    final described = '${shown.stdout}${shown.stderr}';
-    final team = RegExp(
-      r'^TeamIdentifier=(\S+)$',
-      multiLine: true,
-    ).firstMatch(described)?.group(1);
-    return team == null || team == 'not' || team == 'not set' ? null : team;
+    if (result.exitCode != 0) return null;
+    final root = Directory(_join(staging.path, _linuxBundleName));
+    final executable = File(_join(root.path, _linuxExecutableName));
+    return await executable.exists() ? root : null;
   }
 
   /// Removes staging directories a previous attempt left behind. Only ever
