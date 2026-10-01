@@ -1,3 +1,3 @@
-Starší výsledky hledání nyní ukazují datum i čas.
-Desktop automaticky nabídne novou verzi. Jedním kliknutím se aktualizace stáhne, ověří, nainstaluje a aplikace restartuje.
-Výslovně vypnuté kontroly aktualizací zůstávají vypnuté.
+Ctrl+V na desktopu vloží také soubory ze schránky.
+Více příloh lze přetáhnout najednou i postupně a jednotlivě odebrat před odesláním.
+Opraveno chybné hlášení o nepodporovaném typu při přetažení více souborů.

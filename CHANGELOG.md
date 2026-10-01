@@ -10,6 +10,12 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+## 1.0.16 (82) — 1 October 2026
+
+- Ctrl+V na desktopu vloží také soubory zkopírované do schránky. Vkládání textu a obrázků zůstává zachované.
+- Do konverzace lze přetáhnout více příloh najednou i postupně. Každou lze před odesláním samostatně odebrat.
+- Opraveno chybné hlášení o nepodporovaném typu při přetažení více souborů, například PPTX a DOCX.
+
 ## 1.0.15 (81) — 30 September 2026
 
 - Starší výsledky hledání zobrazují vedle času také datum v místním časovém pásmu.

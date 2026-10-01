@@ -1,3 +1,3 @@
-Older search results now show both date and time.
-Desktop apps automatically offer new versions. One click downloads, verifies and installs the update, then restarts the app.
-Update checks remain off if you explicitly disabled them.
+Paste files from the clipboard with Ctrl+V on desktop.
+Drag multiple attachments together or add them one at a time, and remove individual files before sending.
+Fixed the incorrect unsupported file type message when dropping multiple files.
