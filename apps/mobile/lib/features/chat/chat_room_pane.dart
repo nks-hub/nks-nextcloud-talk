@@ -10,6 +10,8 @@ import 'package:flutter/services.dart'
     show
         Clipboard,
         ClipboardData,
+        PlatformException,
+        MissingPluginException,
         HardwareKeyboard,
         KeyDownEvent,
         KeyEvent,
@@ -896,6 +898,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
             sending: _sending,
             hasAttachment: () => _mediaComposerController.hasPreparedAttachment,
             onSubmit: _send,
+            onPasteFiles: _mediaComposerController.attachFiles,
             onPasteImage: (image) => _mediaComposerController.attachImageBytes(
               image.bytes,
               mimeType: image.mimeType,

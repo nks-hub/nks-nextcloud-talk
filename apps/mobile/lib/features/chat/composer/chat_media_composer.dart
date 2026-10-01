@@ -24,6 +24,7 @@ import 'giphy_attachment.dart';
 import 'voice_message.dart';
 
 part 'chat_media_composer_attachments.dart';
+part 'chat_media_composer_pending.dart';
 
 typedef CreateVoiceCaptureBackend = VoiceCaptureBackend Function();
 typedef CreateVoicePlaybackBackend = VoicePlaybackBackend Function();
@@ -108,6 +109,7 @@ final class ChatMediaThreadBinding {
 
 final class ChatMediaComposerController {
   Object? _owner;
+  Future<bool> Function(List<String>)? _attachFiles;
   Future<bool> Function(LoadGiphyAttachmentPayload loader)? _submitGiphy;
   Future<bool> Function(AttachmentPickerSource source)? _pickAttachment;
   Future<bool> Function()? _pickContact;
@@ -116,6 +118,11 @@ final class ChatMediaComposerController {
   Future<bool> Function()? _sendPreparedAttachment;
   Future<bool> Function(Uint8List bytes, String mimeType, String displayName)?
   _attachImageBytes;
+
+  Future<bool> attachFiles(List<String> paths) async {
+    final attach = _attachFiles;
+    return attach == null ? false : attach(paths);
+  }
 
   /// Prepares an in-memory image — a pasted screenshot, keyboard-inserted
   /// content — exactly like a picked file: it waits for the send button.
@@ -132,7 +139,7 @@ final class ChatMediaComposerController {
   bool get hasPreparedAttachment => _hasPreparedAttachment?.call() ?? false;
 
   /// Whether [attachImageBytes] can take a file right now: the room accepts
-  /// attachments and no other file is waiting or being prepared.
+  /// attachments. Each file gets its own preparation and upload state.
   bool get canAttachBytes => _canAttachBytes?.call() ?? false;
 
   /// Uploads the waiting file with whatever the message field holds as its
@@ -162,12 +169,14 @@ final class ChatMediaComposerController {
     Future<bool> Function(LoadGiphyAttachmentPayload loader) submitGiphy,
     Future<bool> Function(AttachmentPickerSource source) pickAttachment,
     Future<bool> Function() pickContact, {
+    required Future<bool> Function(List<String>) attachFiles,
     required bool Function() hasPreparedAttachment,
     required bool Function() canAttachBytes,
     required Future<bool> Function() sendPreparedAttachment,
     required Future<bool> Function(Uint8List, String, String) attachImageBytes,
   }) {
     _owner = owner;
+    _attachFiles = attachFiles;
     _submitGiphy = submitGiphy;
     _pickAttachment = pickAttachment;
     _pickContact = pickContact;
@@ -182,6 +191,7 @@ final class ChatMediaComposerController {
       return;
     }
     _owner = null;
+    _attachFiles = null;
     _submitGiphy = null;
     _pickAttachment = null;
     _pickContact = null;
@@ -281,13 +291,12 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   late DurableImageAttachmentPicker _imagePicker;
   late DesktopAttachmentSourcePreparer _desktopAttachmentPreparer;
   late DurableContactAttachmentPicker _contactPicker;
-  late ImageAttachmentUploadController _imageController;
-  AttachmentSubmissionBridge? _retainedImageSubmissionBridge;
-  bool _imageAdmissionPending = false;
-  bool _discardPreparedImageAfterAdmission = false;
+  late _ComposerAttachment _image;
+  final List<_ComposerAttachment> _images = [];
+  bool _sendingAttachments = false;
+
+  ImageAttachmentUploadController get _imageController => _image.controller;
   VoiceMessageController? _voiceController;
-  AttachmentCancellationController? _imagePreparationCancellation;
-  PreparedAttachmentSource? _preparedImageSource;
   Timer? _voiceResetTimer;
   bool _disposed = false;
   DesktopAttachmentDropController? _desktopDropController;
@@ -396,9 +405,11 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       _submitGiphyAttachment,
       _pickAttachment,
       _pickContact,
-      hasPreparedAttachment: () => _imageController.state.isPrepared,
-      canAttachBytes: () =>
-          !_disposed && _imageSupported && !_imageController.state.isActive,
+      attachFiles: _attachFiles,
+      hasPreparedAttachment: () =>
+          _sendingAttachments ||
+          _images.any((image) => image.controller.state.isPrepared),
+      canAttachBytes: () => !_disposed && _imageSupported,
       sendPreparedAttachment: _sendPreparedAttachment,
       attachImageBytes: _attachImageBytes,
     );
@@ -411,9 +422,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     if (identical(_desktopDropController, controller)) {
       return;
     }
-    _desktopDropController?.unbind(this);
+    _desktopDropController?.unbind(_image);
     _desktopDropController = controller;
-    controller?.bind(this, _submitDroppedAttachment);
+    controller?.bind(_image, _submitDroppedAttachment);
   }
 
   @override
@@ -426,9 +437,11 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         _submitGiphyAttachment,
         _pickAttachment,
         _pickContact,
-        hasPreparedAttachment: () => _imageController.state.isPrepared,
-        canAttachBytes: () =>
-            !_disposed && _imageSupported && !_imageController.state.isActive,
+        attachFiles: _attachFiles,
+        hasPreparedAttachment: () =>
+            _sendingAttachments ||
+            _images.any((image) => image.controller.state.isPrepared),
+        canAttachBytes: () => !_disposed && _imageSupported,
         sendPreparedAttachment: _sendPreparedAttachment,
         attachImageBytes: _attachImageBytes,
       );
@@ -463,9 +476,8 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       backend: widget.contactSelectionBackend,
       store: widget.sourceStore,
     );
-    _imageController = ImageAttachmentUploadController(
-      startUpload: _startImageUpload,
-    )..addListener(_handleImageState);
+    _image = _createImageAttachment();
+    _desktopDropController?.bind(_image, _submitDroppedAttachment);
     _voiceController = _voiceSupported ? _createVoiceController() : null;
   }
 
@@ -550,28 +562,35 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     }
   }
 
-  void _discardPreparedImage() {
-    final source = _preparedImageSource;
-    if (source != null && _imageAdmissionPending) {
-      _discardPreparedImageAfterAdmission = true;
-      return;
+  _ComposerAttachment _addImageAttachment() {
+    final idle = _images
+        .where(
+          (image) =>
+              !identical(image, _image) &&
+              !image.preparing &&
+              (image.controller.state.phase ==
+                      ImageAttachmentUploadPhase.idle ||
+                  image.controller.state.phase ==
+                      ImageAttachmentUploadPhase.completed),
+        )
+        .toList();
+    for (final image in idle) {
+      _images.remove(image);
+      image.dispose();
     }
-    _preparedImageSource = null;
-    if (source != null) {
-      unawaited(widget.sourceStore.discard(source.handle));
-    }
+    final image = _createImageAttachment();
+    setState(() {});
+    return image;
   }
 
   void _releaseControllers() {
+    _desktopDropController?.unbind(_image);
     _voiceResetTimer?.cancel();
     _voiceResetTimer = null;
-    _imagePreparationCancellation?.cancel();
-    _imagePreparationCancellation = null;
-    _imageController
-      ..removeListener(_handleImageState)
-      ..dispose();
-    _retainedImageSubmissionBridge = null;
-    _discardPreparedImage();
+    for (final image in _images) {
+      image.dispose();
+    }
+    _images.clear();
     final voiceController = _voiceController;
     _voiceController = null;
     if (voiceController != null) {
@@ -583,7 +602,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   @override
   void dispose() {
     _disposed = true;
-    _desktopDropController?.unbind(this);
+    _desktopDropController?.unbind(_image);
     _desktopDropController = null;
     widget.controller?._detach(this);
     _releaseControllers();
@@ -632,11 +651,22 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       key: const Key('chat-media-composer'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ImageAttachmentUploadPanel(
-          controller: _imageController,
-          onOpenSettings: widget.openAppSettings == null
-              ? null
-              : () => unawaited(_openAppSettings()),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 240),
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                for (final image in _images)
+                  ImageAttachmentUploadPanel(
+                    key: ObjectKey(image),
+                    controller: image.controller,
+                    onOpenSettings: widget.openAppSettings == null
+                        ? null
+                        : () => unawaited(_openAppSettings()),
+                  ),
+              ],
+            ),
+          ),
         ),
         if (voiceOwnsToolbar)
           Row(

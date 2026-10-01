@@ -23,16 +23,21 @@ final class DesktopAttachmentDropController {
   }
 
   Future<DesktopAttachmentDropOutcome> accept(List<DropItem> items) async {
-    if (items.length != 1 || items.single is DropItemDirectory) {
+    if (items.isEmpty || items.any((item) => item is DropItemDirectory)) {
       return DesktopAttachmentDropOutcome.invalidSelection;
     }
     if (_bindings.isEmpty) {
       return DesktopAttachmentDropOutcome.unavailable;
     }
-    final accepted = await _bindings.last.submit(items.single);
-    return accepted
-        ? DesktopAttachmentDropOutcome.accepted
-        : DesktopAttachmentDropOutcome.unavailable;
+    final binding = _bindings.last;
+    for (final item in items) {
+      if (_bindings.isEmpty ||
+          !identical(_bindings.last.owner, binding.owner) ||
+          !await binding.submit(item)) {
+        return DesktopAttachmentDropOutcome.unavailable;
+      }
+    }
+    return DesktopAttachmentDropOutcome.accepted;
   }
 }
 

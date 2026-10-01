@@ -2,6 +2,7 @@ part of 'chat_media_composer.dart';
 
 extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
   Future<ImageAttachmentUploadSession> _startImageUpload(
+    _ComposerAttachment image,
     ImageAttachmentUploadRequest request,
   ) async {
     try {
@@ -11,17 +12,17 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
         AttachmentAdmissionError.lifecycleTimeout,
       );
     }
-    if (_disposed) {
+    if (_disposed || image.disposed) {
       throw const AttachmentAdmissionException(
         AttachmentAdmissionError.composerGone,
       );
     }
-    final bridge = _retainedImageSubmissionBridge ?? widget.submissionBridge;
-    final admissionSourceStore = widget.sourceStore;
+    final bridge = image.bridge ?? widget.submissionBridge;
+    final admissionSourceStore = image.store;
     final acceptedReplyTo = request.metadata.replyTo;
     final acceptanceCallback = widget.onReplyDurablyAccepted;
-    _retainedImageSubmissionBridge = bridge;
-    _imageAdmissionPending = true;
+    image.bridge = bridge;
+    image.admissionPending = true;
     var durablyAccepted = false;
     try {
       final session = await bridge.startImageUpload(request);
@@ -29,8 +30,8 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
       if (request.metadata.caption != null) {
         widget.onCaptionConsumed?.call();
       }
-      if (_sameSource(_preparedImageSource, request.source)) {
-        _preparedImageSource = null;
+      if (_sameSource(image.source, request.source)) {
+        image.source = null;
       }
       _notifyReplyDurablyAccepted(
         acceptedReplyTo,
@@ -38,12 +39,12 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
       );
       return session;
     } finally {
-      _imageAdmissionPending = false;
-      final discardAfterAdmission = _discardPreparedImageAfterAdmission;
-      _discardPreparedImageAfterAdmission = false;
+      image.admissionPending = false;
+      final discardAfterAdmission = image.discardAfterAdmission;
+      image.discardAfterAdmission = false;
       if (!durablyAccepted && discardAfterAdmission) {
-        if (_sameSource(_preparedImageSource, request.source)) {
-          _preparedImageSource = null;
+        if (_sameSource(image.source, request.source)) {
+          image.source = null;
         }
         unawaited(admissionSourceStore.discard(request.source.handle));
       }
@@ -95,6 +96,7 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
   Future<ImageAttachmentUploadRequest?> _prepareImage(
     AttachmentPickerSource pickerSource,
   ) async {
+    final image = _image;
     final admission = _captureAdmission(AttachmentMessageKind.file);
     if (admission == null) {
       throw const AttachmentSubmissionException(
@@ -102,7 +104,7 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
       );
     }
     final cancellation = AttachmentCancellationController();
-    _imagePreparationCancellation = cancellation;
+    image.cancellation = cancellation;
     PreparedAttachmentSource? source;
     try {
       source = await _imagePicker.pick(
@@ -112,11 +114,11 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
       if (source == null) {
         return null;
       }
-      if (_disposed || cancellation.isCancelled) {
-        await widget.sourceStore.discard(source.handle);
+      if (_disposed || image.disposed || cancellation.isCancelled) {
+        await image.store.discard(source.handle);
         return null;
       }
-      _preparedImageSource = source;
+      image.source = source;
       return ImageAttachmentUploadRequest(
         accountId: admission.accountId,
         server: admission.server,
@@ -135,8 +137,8 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
     } on ImageAttachmentPickerException catch (error) {
       throw _pickerPreparationFailure(error);
     } finally {
-      if (identical(_imagePreparationCancellation, cancellation)) {
-        _imagePreparationCancellation = null;
+      if (identical(image.cancellation, cancellation)) {
+        image.cancellation = null;
       }
     }
   }
@@ -149,52 +151,22 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
     return true;
   }
 
-  /// Sends the file that waits in the composer. The request is rebuilt from
-  /// the current admission so the caption is what the field holds now and the
-  /// reply target is the current one, not the state at pick time.
-  Future<bool> _sendPreparedAttachment() async {
-    if (_disposed || !_imageController.state.isPrepared) {
-      return false;
-    }
-    final admission = _captureAdmission(AttachmentMessageKind.file);
-    if (admission == null) {
-      return false;
-    }
-    await _imageController.sendPrepared(
-      refresh: (held) => ImageAttachmentUploadRequest(
-        accountId: admission.accountId,
-        server: admission.server,
-        roomToken: admission.roomToken,
-        source: held.source,
-        metadata: admission.metadata,
-        presentation: held.presentation,
-        diagnosticSource: held.diagnosticSource,
-      ),
-    );
-    return true;
-  }
-
-  /// A pasted or keyboard-inserted image joins the same held-until-send path
-  /// as a desktop drop: the bytes become an app-owned durable copy first.
   Future<bool> _attachImageBytes(
     Uint8List bytes,
     String mimeType,
     String displayName,
   ) async {
-    if (_disposed ||
-        !_imageSupported ||
-        _imageController.state.isActive ||
-        bytes.isEmpty) {
+    if (bytes.isEmpty) {
       return false;
     }
-    final item = DropItemFile.fromData(
-      bytes,
-      name: displayName,
-      path: displayName,
-      mimeType: mimeType,
+    return _submitDroppedAttachment(
+      DropItemFile.fromData(
+        bytes,
+        name: displayName,
+        path: displayName,
+        mimeType: mimeType,
+      ),
     );
-    await _imageController.pickAndHold(() => _prepareDroppedAttachment(item));
-    return _imageController.state.isPrepared;
   }
 
   Future<bool> _pickAttachment(AttachmentPickerSource source) async {
@@ -207,6 +179,7 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
 
   Future<ImageAttachmentUploadRequest?> _prepareDroppedAttachment(
     DropItem item,
+    _ComposerAttachment image,
   ) async {
     final admission = _captureAdmission(AttachmentMessageKind.file);
     if (admission == null) {
@@ -215,18 +188,18 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
       );
     }
     final cancellation = AttachmentCancellationController();
-    _imagePreparationCancellation = cancellation;
+    image.cancellation = cancellation;
     PreparedAttachmentSource? source;
     try {
       source = await _desktopAttachmentPreparer.prepare(
         item,
         cancellationSignal: cancellation.signal,
       );
-      if (_disposed || cancellation.isCancelled) {
-        await widget.sourceStore.discard(source.handle);
+      if (_disposed || image.disposed || cancellation.isCancelled) {
+        await image.store.discard(source.handle);
         return null;
       }
-      _preparedImageSource = source;
+      image.source = source;
       return ImageAttachmentUploadRequest(
         accountId: admission.accountId,
         server: admission.server,
@@ -239,18 +212,26 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
     } on ImageAttachmentPickerException catch (error) {
       throw _pickerPreparationFailure(error);
     } finally {
-      if (identical(_imagePreparationCancellation, cancellation)) {
-        _imagePreparationCancellation = null;
+      if (identical(image.cancellation, cancellation)) {
+        image.cancellation = null;
       }
     }
   }
 
   Future<bool> _submitDroppedAttachment(DropItem item) async {
-    if (_disposed || !_imageSupported || _imageController.state.isActive) {
+    if (_disposed || !_imageSupported) {
       return false;
     }
-    await _imageController.pickAndHold(() => _prepareDroppedAttachment(item));
-    return true;
+    final image = _addImageAttachment();
+    image.preparing = true;
+    try {
+      await image.controller.pickAndHold(
+        () => _prepareDroppedAttachment(item, image),
+      );
+      return !image.disposed;
+    } finally {
+      image.preparing = false;
+    }
   }
 
   ImageAttachmentPreparationFailure _pickerPreparationFailure(
@@ -292,6 +273,7 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
   Future<ImageAttachmentUploadRequest?> _prepareGiphyAttachment(
     LoadGiphyAttachmentPayload loader,
   ) async {
+    final image = _image;
     final admission = _captureAdmission(AttachmentMessageKind.file);
     if (admission == null) {
       throw const AttachmentSubmissionException(
@@ -299,7 +281,7 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
       );
     }
     final cancellation = AttachmentCancellationController();
-    _imagePreparationCancellation = cancellation;
+    image.cancellation = cancellation;
     PreparedAttachmentSource? source;
     try {
       final payload = await loader(cancellation.signal);
@@ -309,7 +291,7 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
           AttachmentSubmissionFailure.unsupported,
         );
       }
-      if (_disposed || cancellation.isCancelled) {
+      if (_disposed || image.disposed || cancellation.isCancelled) {
         return null;
       }
       source = await widget.sourceStore.copyFromStream(
@@ -319,11 +301,11 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
         expectedByteLength: payload.body.lengthInBytes,
         cancellationSignal: cancellation.signal,
       );
-      if (_disposed || cancellation.isCancelled) {
-        await widget.sourceStore.discard(source.handle);
+      if (_disposed || image.disposed || cancellation.isCancelled) {
+        await image.store.discard(source.handle);
         return null;
       }
-      _preparedImageSource = source;
+      image.source = source;
       return ImageAttachmentUploadRequest(
         accountId: admission.accountId,
         server: admission.server,
@@ -334,29 +316,14 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
         diagnosticSource: AttachmentUploadSource.image,
       );
     } finally {
-      if (identical(_imagePreparationCancellation, cancellation)) {
-        _imagePreparationCancellation = null;
+      if (identical(image.cancellation, cancellation)) {
+        image.cancellation = null;
       }
     }
   }
 
-  void _handleImageState() {
-    final state = _imageController.state;
-    if (!state.isActive &&
-        !(state.phase == ImageAttachmentUploadPhase.failed &&
-            state.retryAllowed)) {
-      _retainedImageSubmissionBridge = null;
-    }
-    if (state.phase == ImageAttachmentUploadPhase.cancelling) {
-      _imagePreparationCancellation?.cancel();
-    }
-    if (state.phase == ImageAttachmentUploadPhase.cancelled ||
-        state.phase == ImageAttachmentUploadPhase.idle) {
-      _discardPreparedImage();
-    }
-  }
-
   Future<ImageAttachmentUploadRequest?> _prepareContact() async {
+    final image = _image;
     final admission = _captureAdmission(AttachmentMessageKind.file);
     if (admission == null) {
       throw const AttachmentSubmissionException(
@@ -364,7 +331,7 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
       );
     }
     final cancellation = AttachmentCancellationController();
-    _imagePreparationCancellation = cancellation;
+    image.cancellation = cancellation;
     PreparedAttachmentSource? source;
     try {
       source = await _contactPicker.pick(
@@ -374,11 +341,11 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
       if (source == null) {
         return null;
       }
-      if (_disposed || cancellation.isCancelled) {
-        await widget.sourceStore.discard(source.handle);
+      if (_disposed || image.disposed || cancellation.isCancelled) {
+        await image.store.discard(source.handle);
         return null;
       }
-      _preparedImageSource = source;
+      image.source = source;
       return ImageAttachmentUploadRequest(
         accountId: admission.accountId,
         server: admission.server,
@@ -395,8 +362,8 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
         ContactPickerFailure.invalidSelection => 'contact-invalid-selection',
       });
     } finally {
-      if (identical(_imagePreparationCancellation, cancellation)) {
-        _imagePreparationCancellation = null;
+      if (identical(image.cancellation, cancellation)) {
+        image.cancellation = null;
       }
     }
   }

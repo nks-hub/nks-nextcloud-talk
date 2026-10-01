@@ -276,6 +276,7 @@ final class _ChatComposer extends ConsumerWidget {
     required this.mentionSource,
     required this.onSubmit,
     required this.onPasteImage,
+    required this.onPasteFiles,
     required this.onOversizedPaste,
     required this.canDivertPaste,
     required this.hasAttachment,
@@ -288,6 +289,7 @@ final class _ChatComposer extends ConsumerWidget {
   /// on the clipboard, or content a mobile keyboard inserted — so it can wait
   /// in the composer like a picked file.
   final Future<bool> Function(PastedImage image) onPasteImage;
+  final Future<bool> Function(List<String> paths) onPasteFiles;
 
   /// Receives a paste too long to send as a message, so it can go out as a
   /// file instead of being cut at the length limit.
@@ -320,15 +322,31 @@ final class _ChatComposer extends ConsumerWidget {
   /// Sends whatever is in the composer, same as the send button.
   final VoidCallback onSubmit;
 
-  /// Routes Escape and, where the platform sends on Enter, a bare Enter.
-  Future<void> _pasteImageFromClipboard() async {
+  Future<void> _pasteAttachmentsFromClipboard(BuildContext context) async {
+    final platform = Theme.of(context).platform;
+    if (platform == TargetPlatform.windows ||
+        platform == TargetPlatform.macOS ||
+        platform == TargetPlatform.linux) {
+      try {
+        final files = await Pasteboard.files();
+        if (!context.mounted) return;
+        if (files.isNotEmpty) {
+          await onPasteFiles(files);
+          return;
+        }
+      } on PlatformException {
+        // Image formats can still be available when file enumeration fails.
+      } on MissingPluginException {
+        // Some embedders expose only Flutter's text clipboard.
+      }
+    }
     final Uint8List? raw;
     try {
       raw = await Pasteboard.image;
     } on Object {
       return;
     }
-    if (raw == null) {
+    if (raw == null || !context.mounted) {
       return;
     }
     final image = await normalizePastedImage(raw);
@@ -348,7 +366,11 @@ final class _ChatComposer extends ConsumerWidget {
     }
   }
 
-  KeyEventResult _handleKey(KeyEvent event, {required bool sendsOnEnter}) {
+  KeyEventResult _handleKey(
+    BuildContext context,
+    KeyEvent event, {
+    required bool sendsOnEnter,
+  }) {
     final key = event.logicalKey;
     final isEnter =
         key == LogicalKeyboardKey.enter ||
@@ -386,7 +408,7 @@ final class _ChatComposer extends ConsumerWidget {
             HardwareKeyboard.instance.isMetaPressed) &&
         !readOnly &&
         !sending) {
-      unawaited(_pasteImageFromClipboard());
+      unawaited(_pasteAttachmentsFromClipboard(context));
       return KeyEventResult.ignored;
     }
     if (!isEnter || !sendsOnEnter) {
@@ -463,8 +485,11 @@ final class _ChatComposer extends ConsumerWidget {
                       ),
                     ),
                     Focus(
-                      onKeyEvent: (node, event) =>
-                          _handleKey(event, sendsOnEnter: context.sendsOnEnter),
+                      onKeyEvent: (node, event) => _handleKey(
+                        context,
+                        event,
+                        sendsOnEnter: context.sendsOnEnter,
+                      ),
                       child: TextField(
                         key: const Key('chat-composer'),
                         controller: controller,

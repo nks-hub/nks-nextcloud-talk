@@ -6,6 +6,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/conversations/desktop_attachment_drop.dart';
 
 void main() {
+  test('a batch stops when the active conversation changes', () async {
+    final controller = DesktopAttachmentDropController();
+    final owner = Object();
+    var submitted = 0;
+    controller.bind(owner, (_) async {
+      submitted++;
+      controller.unbind(owner);
+      controller.bind(Object(), (_) async {
+        fail('The remaining file must not reach the new conversation');
+      });
+      return true;
+    });
+    final file = DropItemFile.fromData(Uint8List(1), name: 'file.txt');
+    expect(
+      await controller.accept([file, file]),
+      DesktopAttachmentDropOutcome.unavailable,
+    );
+    expect(submitted, 1);
+  });
+
   testWidgets('desktop exposes one controller to the open conversation', (
     tester,
   ) async {
@@ -43,7 +63,7 @@ void main() {
     expect(submitted.single.name, 'one.bin');
   });
 
-  testWidgets('multiple items and directories never reach the composer', (
+  testWidgets('multiple files reach the composer but directories do not', (
     tester,
   ) async {
     DesktopAttachmentDropController? controller;
@@ -75,7 +95,7 @@ void main() {
 
     expect(
       await controller!.accept(<DropItem>[file, file]),
-      DesktopAttachmentDropOutcome.invalidSelection,
+      DesktopAttachmentDropOutcome.accepted,
     );
     expect(
       await controller!.accept(<DropItem>[
@@ -83,7 +103,7 @@ void main() {
       ]),
       DesktopAttachmentDropOutcome.invalidSelection,
     );
-    expect(submissions, 0);
+    expect(submissions, 2);
   });
 
   testWidgets('mobile leaves the conversation outside a native drop target', (

@@ -59,6 +59,57 @@ void _registerChatRoomPaneDesktopInputTests() {
   }
 
   testWidgets(
+    'Ctrl+V reads clipboard files and preserves text paste',
+    (tester) async {
+      staleModifierRepair.attach();
+      final calls = <String>[];
+      var files = <String>[];
+      const channel = MethodChannel('pasteboard');
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        call,
+      ) async {
+        calls.add(call.method);
+        return call.method == 'files' ? files : null;
+      });
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async =>
+            call.method == 'Clipboard.getData' ? {'text': 'Pasted text'} : null,
+      );
+      addTearDown(() {
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        );
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        );
+      });
+      await pumpRoom(tester);
+      final field = find.byKey(const Key('chat-composer'));
+      for (final selection in [
+        <String>[],
+        ['slides.pptx', 'document.docx'],
+      ]) {
+        files = selection;
+        calls.clear();
+        tester.widget<TextField>(field).controller!.clear();
+        await tester.tap(field);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+        await tester.pumpAndSettle();
+        expect(calls, files.isEmpty ? ['files', 'image'] : ['files']);
+        expect(tester.widget<TextField>(field).controller!.text, 'Pasted text');
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
+
+  testWidgets(
     'a pointer over a message says the bubble is a target',
     (tester) async {
       await pumpRoom(tester);
