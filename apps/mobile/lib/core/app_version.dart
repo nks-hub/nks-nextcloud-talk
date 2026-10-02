@@ -11,4 +11,4 @@
 const appVersionName = '1.0.19';
 
 /// Build number part of the pubspec `version:` field. See [appVersionName].
-const appBuildNumber = '86';
+const appBuildNumber = '87';
