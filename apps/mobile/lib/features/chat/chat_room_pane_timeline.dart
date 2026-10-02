@@ -142,7 +142,13 @@ final class _ChatTimeline extends StatelessWidget {
       return const _EmptyChat();
     }
     final itemCount = messages.length + pending.length + (hasOlder ? 1 : 0);
-    final parsedMessages = messages.map(_parseCachedMessage).toList();
+    final parsedMessages = messages
+        .map(
+          (message) => message.referenceId.startsWith('otg1.')
+              ? _parseCachedMessage(message)
+              : null,
+        )
+        .toList();
     final albums = groupPhotoAlbums(
       parsedMessages,
       canGroup: (index) =>
@@ -200,7 +206,8 @@ final class _ChatTimeline extends StatelessWidget {
         final firstIndex = album?.first ?? contentIndex;
         final message = messages[firstIndex];
         final lastMessage = messages[contentIndex];
-        final parsed = parsedMessages[firstIndex];
+        final parsed =
+            parsedMessages[firstIndex] ?? _parseCachedMessage(message);
         final previous = firstIndex == 0 ? null : messages[firstIndex - 1];
         final next = contentIndex + 1 >= messages.length
             ? null
