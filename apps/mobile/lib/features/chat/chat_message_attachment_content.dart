@@ -8,6 +8,8 @@ final class _ChatAttachment extends ConsumerWidget {
     required this.roomToken,
     required this.messageId,
     required this.index,
+    this.onOpenImage,
+    this.compact = false,
   });
 
   final StoredAccount account;
@@ -15,6 +17,8 @@ final class _ChatAttachment extends ConsumerWidget {
   final String roomToken;
   final int messageId;
   final int index;
+  final VoidCallback? onOpenImage;
+  final bool compact;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -108,7 +112,7 @@ final class _ChatAttachment extends ConsumerWidget {
             ),
           )
         : openExternally;
-    final openAttachment = openImage ?? openFile;
+    final openAttachment = onOpenImage ?? openImage ?? openFile;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -136,7 +140,8 @@ final class _ChatAttachment extends ConsumerWidget {
             name: name,
             messageId: messageId,
             index: index,
-            onOpen: openImage,
+            compact: compact,
+            onOpen: onOpenImage ?? openImage,
             onRetry: () async {
               final cache = ref.read(chatMediaCacheProvider);
               final disk = ref.read(chatMediaDiskCacheProvider);

@@ -3,6 +3,58 @@ part of 'chat_media_composer_test.dart';
 void _registerChatMediaComposerDesktopDropTests(
   DurableAttachmentSourceStore Function() sourceStore,
 ) {
+  testWidgets(
+    'four picked photos share one album, another send gets a new one',
+    (tester) async {
+      final bridge = _RecordingBridge();
+      addTearDown(bridge.close);
+      final voiceBackends = _VoiceBackendFactory();
+      addTearDown(voiceBackends.close);
+      final media = ChatMediaComposerController();
+      await tester.pumpWidget(
+        _composerApp(
+          sourceStore: sourceStore(),
+          bridge: bridge.bridge,
+          threadId: null,
+          voiceBackends: voiceBackends,
+          controller: media,
+          imageSelectionBackend: _AlbumPicker(),
+        ),
+      );
+      await tester.runAsync(
+        () => media.pickAttachment(AttachmentPickerSource.gallery),
+      );
+      await tester.pump();
+      expect(bridge.sessions, isEmpty);
+      expect(await tester.runAsync(media.sendPreparedAttachment), isTrue);
+      final albums = bridge.metadata.map((m) => m.photoAlbum!).toList();
+      expect(albums, hasLength(4));
+      expect(albums.map((a) => a.albumId).toSet(), hasLength(1));
+      expect(albums.map((a) => a.index), [0, 1, 2, 3]);
+      expect(albums.map((a) => a.referenceId).toSet(), hasLength(4));
+      await tester.runAsync(() async {
+        for (final session in bridge.sessions) {
+          session.add(_progress(AttachmentJobPhase.completed));
+        }
+        await Future<void>.delayed(Duration.zero);
+      });
+      await tester.pump();
+      expect(
+        await tester.runAsync(
+          () => media.pickAttachment(AttachmentPickerSource.gallery),
+        ),
+        isTrue,
+      );
+      await tester.pump();
+      await tester.runAsync(media.sendPreparedAttachment);
+      expect(bridge.metadata, hasLength(8));
+      expect(
+        bridge.metadata.last.photoAlbum!.albumId,
+        isNot(albums.first.albumId),
+      );
+    },
+  );
+
   for (final mode in ['together', 'separate', 'overlapping']) {
     testWidgets('two Office files wait and send ($mode)', (tester) async {
       final profile = _profile(caption: true);
@@ -243,4 +295,25 @@ void _registerChatMediaComposerDesktopDropTests(
     expect(bridge.sessions, isEmpty);
     expect(find.text('The attachment could not be sent.'), findsOneWidget);
   });
+}
+
+final class _AlbumPicker
+    implements ImageSelectionBackend, MultipleImageSelectionBackend {
+  @override
+  Future<ImageSelection?> selectImage(AttachmentPickerSource source) =>
+      const _ImageBackend().selectImage(source);
+
+  @override
+  Future<List<ImageSelection>> selectImages() async {
+    final selection = (await selectImage(AttachmentPickerSource.gallery))!;
+    return List.generate(
+      4,
+      (index) => ImageSelection(
+        displayName: 'photo-$index.png',
+        declaredMimeType: selection.declaredMimeType,
+        byteLength: selection.byteLength,
+        openRead: selection.openRead,
+      ),
+    );
+  }
 }

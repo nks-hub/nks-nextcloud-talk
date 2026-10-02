@@ -459,6 +459,7 @@ AttachmentJob _decodeJob(StoredAttachmentJob row) {
       'attachment message kind',
     ),
     caption: row.caption,
+    photoAlbum: ChatPhotoAlbumReference.tryParse(row.referenceId),
     replyTo: row.replyTo,
     threadId: row.threadId,
     threadTitle: row.threadTitle,

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../chat/identifiers.dart';
+import '../chat/photo_album.dart';
 import '../identifiers.dart';
 import '../protocol_exception.dart';
 import 'identifiers.dart';
@@ -103,6 +104,7 @@ final class AttachmentMetadata {
     required this.threadId,
     String? threadTitle,
     required this.silent,
+    this.photoAlbum,
   }) : caption = _trimmedOptional(caption),
        threadTitle = _trimmedOptional(threadTitle) {
     if (this.caption != null && this.caption!.length > 4000) {
@@ -129,6 +131,7 @@ final class AttachmentMetadata {
   final int? threadId;
   final String? threadTitle;
   final bool silent;
+  final ChatPhotoAlbumReference? photoAlbum;
 
   String get expectedMessageType => switch (kind) {
     AttachmentMessageKind.file => 'comment',
@@ -136,8 +139,11 @@ final class AttachmentMetadata {
   };
 
   bool supportsSource(PreparedAttachmentSource source) =>
-      kind != AttachmentMessageKind.voice ||
-      attachmentSupportedVoiceMimeTypes.contains(source.mimeType);
+      (photoAlbum == null ||
+          (kind == AttachmentMessageKind.file &&
+              source.mimeType.startsWith('image/'))) &&
+      (kind != AttachmentMessageKind.voice ||
+          attachmentSupportedVoiceMimeTypes.contains(source.mimeType));
 
   @override
   String toString() =>

@@ -540,7 +540,10 @@ final class AttachmentService with _AttachmentServiceRuntime {
         }
 
         final jobId = _identifierFactory.newJobId();
-        final referenceId = _identifierFactory.newReferenceId();
+        final album = request.metadata.photoAlbum;
+        final referenceId = album == null
+            ? _identifierFactory.newReferenceId()
+            : ChatReferenceId.parse(album.referenceId);
         final sequence = _nextSequence(account, request.roomToken);
         final draft = AttachmentJobDraft(
           jobId: jobId,

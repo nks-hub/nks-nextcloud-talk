@@ -19,6 +19,7 @@ final class _MessageBubble extends StatelessWidget {
     required this.onReplySwipe,
     required this.onReactionTap,
     required this.deliveryState,
+    this.content,
   });
 
   final StoredAccount account;
@@ -46,6 +47,7 @@ final class _MessageBubble extends StatelessWidget {
   )
   onReactionTap;
   final OutgoingMessageDeliveryState? deliveryState;
+  final Widget? content;
 
   @override
   Widget build(BuildContext context) {
@@ -203,27 +205,31 @@ final class _MessageBubble extends StatelessWidget {
                                         ? FontStyle.italic
                                         : null,
                                   ),
-                                  child: ChatMessageContent(
-                                    account: account,
-                                    message: message.deleted ? null : parsed,
-                                    fallbackText: message.deleted
-                                        ? AppLocalizations.of(
-                                            context,
-                                          ).deletedMessage
-                                        : message.displayText,
-                                    foregroundColor: outgoing
-                                        ? scheme.onPrimaryContainer
-                                        : scheme.onSurface,
-                                    showReplyPreview: showReplyPreview,
-                                    onReactionTap: message.deleted
-                                        ? null
-                                        : (emoji) => onReactionTap(
-                                            message,
-                                            parsed,
-                                            emoji,
-                                          ),
-                                    onOpenParent: onJumpToMessage,
-                                  ),
+                                  child:
+                                      content ??
+                                      ChatMessageContent(
+                                        account: account,
+                                        message: message.deleted
+                                            ? null
+                                            : parsed,
+                                        fallbackText: message.deleted
+                                            ? AppLocalizations.of(
+                                                context,
+                                              ).deletedMessage
+                                            : message.displayText,
+                                        foregroundColor: outgoing
+                                            ? scheme.onPrimaryContainer
+                                            : scheme.onSurface,
+                                        showReplyPreview: showReplyPreview,
+                                        onReactionTap: message.deleted
+                                            ? null
+                                            : (emoji) => onReactionTap(
+                                                message,
+                                                parsed,
+                                                emoji,
+                                              ),
+                                        onOpenParent: onJumpToMessage,
+                                      ),
                                 ),
                                 const SizedBox(height: 3),
                                 Row(

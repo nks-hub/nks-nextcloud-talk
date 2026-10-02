@@ -31,6 +31,7 @@ from validator_common import (
     _metadata_message_type,
     _safe_identifier,
     _uuid,
+    _reference_id,
     _validate_filename,
     _validate_metadata,
     find_operation,
@@ -106,7 +107,7 @@ def build_wire_case(kind: str, raw_input: Any) -> dict[str, Any]:
     )
     body = {
         "filePath": input_value["filePath"],
-        "referenceId": _uuid(input_value.get("referenceId"), "referenceId"),
+        "referenceId": _reference_id(input_value.get("referenceId"), "referenceId"),
         "talkMetaData": encoded_metadata,
         "fileName": _validate_filename(input_value.get("fileName"), "fileName"),
         "allowUpdate": require_boolean(input_value.get("allowUpdate"), "allowUpdate"),

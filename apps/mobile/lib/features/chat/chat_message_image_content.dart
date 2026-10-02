@@ -15,6 +15,7 @@ final class _InlineChatImagePreview extends StatefulWidget {
     required this.index,
     required this.onOpen,
     required this.onRetry,
+    this.compact = false,
   });
 
   final ChatRichObjectParameter parameter;
@@ -24,6 +25,7 @@ final class _InlineChatImagePreview extends StatefulWidget {
   final int index;
   final VoidCallback? onOpen;
   final Future<void> Function() onRetry;
+  final bool compact;
 
   @override
   State<_InlineChatImagePreview> createState() =>
@@ -203,7 +205,7 @@ final class _InlineChatImagePreviewState
                 image.body,
                 key: Key('chat-image-${widget.messageId}-${widget.index}'),
                 cacheWidth: _maximumDecodedPreviewWidth,
-                fit: BoxFit.contain,
+                fit: widget.compact ? BoxFit.cover : BoxFit.contain,
                 gaplessPlayback: true,
                 excludeFromSemantics: true,
                 frameBuilder: (_, image, frame, synchronous) =>
@@ -224,6 +226,12 @@ final class _InlineChatImagePreviewState
 
   @override
   Widget build(BuildContext context) {
+    if (widget.compact) {
+      return LayoutBuilder(
+        builder: (context, constraints) =>
+            _preview(Size.square(constraints.maxWidth)),
+      );
+    }
     final preferred = _reservedImageBox(
       widget.parameter,
       decoded: _decodedSize,

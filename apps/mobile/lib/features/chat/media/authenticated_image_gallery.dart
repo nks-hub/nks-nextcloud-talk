@@ -31,6 +31,7 @@ Future<void> showAuthenticatedImageGallery(
   required int initialIndex,
   required ChatMediaRepository repository,
   Future<bool> Function()? openAppSettings,
+  ValueChanged<int>? onImageActions,
 }) => Navigator.of(context).push<void>(
   MaterialPageRoute<void>(
     settings: const RouteSettings(name: '/chat/gallery'),
@@ -41,6 +42,7 @@ Future<void> showAuthenticatedImageGallery(
       initialIndex: initialIndex,
       repository: repository,
       openAppSettings: openAppSettings,
+      onImageActions: onImageActions,
     ),
   ),
 );
@@ -54,6 +56,7 @@ final class AuthenticatedImageGallery extends StatefulWidget {
     required this.repository,
     this.exporter = const PlatformChatImageExporter(),
     this.openAppSettings,
+    this.onImageActions,
   }) : images = List.unmodifiable(images) {
     RangeError.checkValidIndex(initialIndex, images, 'initialIndex');
   }
@@ -64,6 +67,7 @@ final class AuthenticatedImageGallery extends StatefulWidget {
   final ChatMediaRepository repository;
   final ChatImageExporter exporter;
   final Future<bool> Function()? openAppSettings;
+  final ValueChanged<int>? onImageActions;
 
   @override
   State<AuthenticatedImageGallery> createState() =>
@@ -152,6 +156,14 @@ final class _AuthenticatedImageGalleryState
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (widget.onImageActions != null)
+                      IconButton(
+                        key: const Key('chat-gallery-actions'),
+                        tooltip: strings.showMenuTooltip,
+                        color: Colors.white,
+                        onPressed: () => widget.onImageActions!(_index),
+                        icon: const Icon(Icons.more_vert),
+                      ),
                     IconButton(
                       key: const Key('chat-gallery-previous'),
                       tooltip: strings.previousPageTooltip,

@@ -523,6 +523,14 @@ def _conversation_token(value: Any) -> str:
     return token
 
 
+def _reference_id(value: Any, label: str) -> str:
+    if isinstance(value, str):
+        album = re.fullmatch(r"otg1\.[0-9a-f]{32}\.([0-9]{4})\.([0-9]{4})", value)
+        if album and 0 <= int(album[1]) < int(album[2]) and int(album[2]) >= 2:
+            return value
+    return _uuid(value, label)
+
+
 def _uuid(value: Any, label: str) -> str:
     raw = require_string(value, label, maximum=64)
     try:

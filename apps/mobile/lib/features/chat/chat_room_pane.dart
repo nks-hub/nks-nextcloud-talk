@@ -39,6 +39,7 @@ import 'chat_message_actions_service.dart';
 import 'chat_background_surface.dart';
 import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
+import 'photo_album_grouping.dart';
 import 'chat_scroll_controller.dart';
 import 'message_translation_dialog.dart';
 import 'location_picker_screen.dart';

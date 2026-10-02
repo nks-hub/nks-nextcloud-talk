@@ -23,6 +23,7 @@ import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/chat/chat_background_surface.dart';
 import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
+import 'package:nextcloudtalk/features/chat/photo_album_grouping.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_attachment_opener.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/chat/chat_service.dart';
@@ -44,6 +45,7 @@ part 'chat_room_pane_thread_context.part.dart';
 part 'chat_room_pane_send_scope.part.dart';
 part 'chat_room_pane_history_scope.part.dart';
 part 'chat_room_pane_image_geometry.part.dart';
+part 'chat_photo_album_test.part.dart';
 part 'chat_image_preview_layout_test.part.dart';
 
 late AppDatabase database;
@@ -121,6 +123,7 @@ void main({bool imagesOnly = false}) {
     _registerChatRoomPaneHistoryScopeTests();
   }
   _registerChatRoomPaneImageGeometryTests();
+  _registerPhotoAlbumTests();
   _registerChatImagePreviewLayoutTests();
 }
 

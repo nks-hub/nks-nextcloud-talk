@@ -107,10 +107,44 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
     image.cancellation = cancellation;
     PreparedAttachmentSource? source;
     try {
-      source = await _imagePicker.pick(
-        source: pickerSource,
-        cancellationSignal: cancellation.signal,
-      );
+      if (pickerSource == AttachmentPickerSource.gallery) {
+        final sources = await _imagePicker.pickImages(
+          cancellationSignal: cancellation.signal,
+        );
+        if (_disposed || image.disposed || cancellation.isCancelled) {
+          for (final prepared in sources) {
+            await image.store.discard(prepared.handle);
+          }
+          return null;
+        }
+        source = sources.isEmpty ? null : sources.first;
+        image.source = source;
+        for (var index = 1; index < sources.length; index++) {
+          if (_disposed || image.disposed || cancellation.isCancelled) {
+            for (final remaining in sources.skip(index)) {
+              await image.store.discard(remaining.handle);
+            }
+            return null;
+          }
+          final prepared = sources[index];
+          final extra = _addImageAttachment()..source = prepared;
+          await extra.controller.pickAndHold(
+            () async => ImageAttachmentUploadRequest(
+              accountId: admission.accountId,
+              server: admission.server,
+              roomToken: admission.roomToken,
+              source: prepared,
+              metadata: admission.metadata,
+              diagnosticSource: AttachmentUploadSource.gallery,
+            ),
+          );
+        }
+      } else {
+        source = await _imagePicker.pick(
+          source: pickerSource,
+          cancellationSignal: cancellation.signal,
+        );
+      }
       if (source == null) {
         return null;
       }

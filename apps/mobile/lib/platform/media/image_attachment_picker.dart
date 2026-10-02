@@ -56,6 +56,10 @@ abstract interface class ImageSelectionBackend {
   Future<ImageSelection?> selectImage(AttachmentPickerSource source);
 }
 
+abstract interface class MultipleImageSelectionBackend {
+  Future<List<ImageSelection>> selectImages();
+}
+
 typedef OpenAttachmentFile = Future<XFile?> Function({required bool imageOnly});
 typedef PickAttachmentImage =
     Future<XFile?> Function(platform_picker.ImageSource source);
@@ -63,7 +67,7 @@ typedef PickAttachmentImage =
 /// iOS gallery selection uses the native photo picker. Other gallery and file
 /// selections keep the document picker; the camera always uses image_picker.
 final class PlatformAttachmentSelectionBackend
-    implements ImageSelectionBackend {
+    implements ImageSelectionBackend, MultipleImageSelectionBackend {
   const PlatformAttachmentSelectionBackend()
     : _targetPlatform = null,
       _isWeb = null,
@@ -121,6 +125,39 @@ final class PlatformAttachmentSelectionBackend
   final bool? _isWeb;
   final OpenAttachmentFile? _openFile;
   final PickAttachmentImage? _pickImage;
+
+  @override
+  Future<List<ImageSelection>> selectImages() async {
+    try {
+      final platform = _targetPlatform ?? defaultTargetPlatform;
+      final files =
+          !(_isWeb ?? kIsWeb) &&
+              (platform == TargetPlatform.iOS ||
+                  platform == TargetPlatform.android)
+          ? await platform_picker.ImagePicker().pickMultiImage()
+          : await openFiles(acceptedTypeGroups: const [_imageTypes]);
+      return [
+        for (final file in files)
+          ImageSelection(
+            displayName: file.name,
+            declaredMimeType: file.mimeType,
+            byteLength: await file.length(),
+            openRead: ({int? start, int? end}) => file.openRead(start, end),
+          ),
+      ];
+    } on PlatformException catch (error) {
+      throw ImageAttachmentPickerException(
+        error.code == 'photo_access_denied' ||
+                error.code == 'photo_access_restricted'
+            ? ImageAttachmentPickerError.galleryPermissionDenied
+            : ImageAttachmentPickerError.galleryUnavailable,
+      );
+    } on MissingPluginException {
+      throw const ImageAttachmentPickerException(
+        ImageAttachmentPickerError.galleryUnavailable,
+      );
+    }
+  }
 
   @override
   Future<ImageSelection?> selectImage(AttachmentPickerSource source) async {
@@ -211,6 +248,37 @@ final class DurableImageAttachmentPicker {
   final DurableAttachmentSourceStore store;
   final int maximumImageBytes;
   final ReportAttachmentUploadDiagnostic reportDiagnostic;
+
+  Future<List<PreparedAttachmentSource>> pickImages({
+    AttachmentCancellationSignal? cancellationSignal,
+  }) async {
+    final selectionBackend = backend;
+    if (selectionBackend is! MultipleImageSelectionBackend) {
+      final image = await pick(cancellationSignal: cancellationSignal);
+      return image == null ? [] : [image];
+    }
+    final selections = await (selectionBackend as MultipleImageSelectionBackend)
+        .selectImages();
+    final sources = <PreparedAttachmentSource>[];
+    try {
+      for (final selection in selections) {
+        sources.add(
+          await _copySelection(
+            selection,
+            imageOnly: true,
+            diagnosticSource: AttachmentUploadSource.gallery,
+            cancellationSignal: cancellationSignal,
+          ),
+        );
+      }
+      return sources;
+    } on Object {
+      for (final source in sources) {
+        await store.discard(source.handle);
+      }
+      rethrow;
+    }
+  }
 
   Future<PreparedAttachmentSource?> pick({
     AttachmentPickerSource source = AttachmentPickerSource.gallery,

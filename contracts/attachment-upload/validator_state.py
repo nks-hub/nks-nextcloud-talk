@@ -13,6 +13,7 @@ from validator_common import (
     _expected_message_type,
     _safe_identifier,
     _uuid,
+    _reference_id,
     _validate_filename,
     load_json,
     normalize_relative_path,
@@ -92,7 +93,7 @@ def validate_operation(value: Any) -> dict[str, Any]:
         )
     _uuid(operation.get("jobId"), "jobId")
     _conversation_token(operation.get("roomToken"))
-    _uuid(operation.get("referenceId"), "referenceId")
+    _reference_id(operation.get("referenceId"), "referenceId")
     reply_to = operation.get("replyTo")
     if reply_to is not None:
         reply_to = require_integer(reply_to, "replyTo", 1)
@@ -376,7 +377,7 @@ def _confirmation_ids(
             and normalize_server(confirmation.get("server")) == operation["server"]
             and _conversation_token(confirmation.get("roomToken"))
             == operation["roomToken"]
-            and _uuid(confirmation.get("referenceId"), "confirmation referenceId")
+            and _reference_id(confirmation.get("referenceId"), "confirmation referenceId")
             == operation["referenceId"]
             and _bounded_string_allow_empty(
                 confirmation.get("systemMessage"),

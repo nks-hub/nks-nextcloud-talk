@@ -415,6 +415,7 @@ bool _sameSource(
     left.displayName == right.displayName;
 
 bool _sameMetadata(AttachmentMetadata left, AttachmentMetadata right) =>
+    left.photoAlbum?.referenceId == right.photoAlbum?.referenceId &&
     left.kind == right.kind &&
     left.caption == right.caption &&
     left.replyTo == right.replyTo &&
@@ -433,6 +434,7 @@ typedef _ImageSubmissionKey = ({
   String sourceDisplayName,
   String metadataKind,
   String? caption,
+  String? photoAlbum,
   int? replyTo,
   int? threadId,
   String? threadTitle,
@@ -450,6 +452,7 @@ _ImageSubmissionKey _imageKey(ImageAttachmentUploadRequest request) => (
   sourceDisplayName: request.source.displayName,
   metadataKind: request.metadata.kind.name,
   caption: request.metadata.caption,
+  photoAlbum: request.metadata.photoAlbum?.referenceId,
   replyTo: request.metadata.replyTo,
   threadId: request.metadata.threadId,
   threadTitle: request.metadata.threadTitle,

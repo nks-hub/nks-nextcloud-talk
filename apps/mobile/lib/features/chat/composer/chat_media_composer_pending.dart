@@ -84,6 +84,27 @@ extension _ChatMediaComposerPending on _ChatMediaComposerState {
       return false;
     }
     _sendingAttachments = true;
+    final albums = <_ComposerAttachment, ChatPhotoAlbumReference>{};
+    for (var start = 0; start < pending.length;) {
+      var end = start;
+      while (end < pending.length &&
+          pending[end].source?.mimeType.startsWith('image/') == true &&
+          end - start < 9999) {
+        end++;
+      }
+      final count = end - start;
+      if (count > 1) {
+        final id = const Uuid().v4().replaceAll('-', '');
+        for (var index = start; index < end; index++) {
+          albums[pending[index]] = ChatPhotoAlbumReference(
+            albumId: id,
+            index: index - start,
+            count: count,
+          );
+        }
+      }
+      start = end > start ? end : start + 1;
+    }
     var includeCaption = true;
     try {
       for (final image in pending) {
@@ -99,6 +120,7 @@ extension _ChatMediaComposerPending on _ChatMediaComposerState {
             source: held.source,
             metadata: AttachmentMetadata(
               kind: metadata.kind,
+              photoAlbum: albums[image],
               caption: includeCaption ? metadata.caption : null,
               replyTo: metadata.replyTo,
               threadId: metadata.threadId,

@@ -24,11 +24,13 @@ import 'location_map.dart';
 import 'poll_dialog.dart';
 import 'composer/giphy.dart';
 import 'media/authenticated_image_viewer.dart';
+import 'media/authenticated_image_gallery.dart';
 import 'media/chat_attachment_opener.dart';
 import 'media/chat_attachment_exporter.dart';
 import 'media/text_attachment_viewer.dart';
 
 part 'chat_message_attachment_content.dart';
+part 'chat_photo_album_content.dart';
 part 'chat_message_image_content.dart';
 part 'chat_message_voice_content.dart';
 part 'chat_message_giphy_content.dart';
@@ -46,6 +48,7 @@ final class ChatMessageContent extends StatelessWidget {
     required this.fallbackText,
     required this.foregroundColor,
     this.showReplyPreview = true,
+    this.showAttachments = true,
     this.onReactionTap,
     this.onOpenParent,
     this.locationTileClientFactory = _createLocationTileClient,
@@ -56,6 +59,7 @@ final class ChatMessageContent extends StatelessWidget {
   final String fallbackText;
   final Color foregroundColor;
   final bool showReplyPreview;
+  final bool showAttachments;
 
   /// Toggles the account's own reaction for the tapped emoji. `null` renders
   /// the existing reactions read-only (e.g. for a deleted message).
@@ -149,7 +153,11 @@ final class ChatMessageContent extends StatelessWidget {
                 index: index,
                 foregroundColor: foregroundColor,
               ),
-            for (var index = 0; index < attachments.length; index++) ...[
+            for (
+              var index = 0;
+              showAttachments && index < attachments.length;
+              index++
+            ) ...[
               if (!imageOnly || index > 0) const SizedBox(height: 8),
               _ChatAttachment(
                 key: Key('chat-attachment-${parsed.messageId}-$index'),

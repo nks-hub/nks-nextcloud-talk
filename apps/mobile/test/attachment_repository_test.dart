@@ -34,6 +34,11 @@ void main() {
         final initial = _runtime(
           accountId: 'account-a',
           sourceHandle: 'nctalk-media-v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          referenceId: ChatPhotoAlbumReference(
+            albumId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            index: 1,
+            count: 4,
+          ).referenceId,
         );
         final planned = planNextAttachmentStep(
           initial.snapshot,
@@ -64,6 +69,8 @@ void main() {
             reopened.snapshot.accounts.values.single.jobs.values.single;
 
         expect(restored.phase, AttachmentJobPhase.uploading);
+        expect(restored.draft.metadata.photoAlbum?.index, 1);
+        expect(restored.draft.metadata.photoAlbum?.count, 4);
         expect(restored.inFlightRequest?.step, AttachmentRequestStep.chunkPut);
         expect(
           restored.inFlightRequest?.requestId.value,
@@ -697,7 +704,9 @@ _AttachmentRuntimeFixture _runtime({
     sha256: AttachmentSha256.parse(
       '9c56cc51b374c3ba189210d5b6d4bf57790d351c96c47c02190ecf1e430635ab',
     ),
-    mimeType: 'application/octet-stream',
+    mimeType: referenceId?.startsWith('otg1.') == true
+        ? 'image/png'
+        : 'application/octet-stream',
     displayName: 'source.bin',
   );
   final profile = AttachmentCapabilityProfile.fromSnapshot(
@@ -753,6 +762,9 @@ _AttachmentRuntimeFixture _runtime({
       metadata: AttachmentMetadata(
         kind: AttachmentMessageKind.file,
         caption: 'Synthetic caption',
+        photoAlbum: referenceId == null
+            ? null
+            : ChatPhotoAlbumReference.tryParse(referenceId),
         replyTo: replyTo,
         threadId: threadId,
         threadTitle: threadId == null

@@ -5,6 +5,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:talk_protocol/talk_protocol.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
 import '../../../core/attachment_upload_telemetry.dart';

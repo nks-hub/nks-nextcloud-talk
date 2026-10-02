@@ -142,6 +142,28 @@ final class _ChatTimeline extends StatelessWidget {
       return const _EmptyChat();
     }
     final itemCount = messages.length + pending.length + (hasOlder ? 1 : 0);
+    final parsedMessages = messages.map(_parseCachedMessage).toList();
+    final albums = groupPhotoAlbums(
+      parsedMessages,
+      canGroup: (index) =>
+          !messages[index].deleted &&
+          parsedMessages[index] != null &&
+          (inlineReplies || (parsedMessages[index]!.threadReplies ?? 0) == 0) &&
+          chatGalleryImage(account, parsedMessages[index]!) != null,
+      boundaryBefore: (index) =>
+          _gapBeforeContentIndex(index) ||
+          !_sameLocalDay(
+            messages[index - 1].timestamp,
+            messages[index].timestamp,
+          ) ||
+          (anchorMessageId != null &&
+              messages[index - 1].messageId <= anchorMessageId! &&
+              messages[index].messageId > anchorMessageId!),
+    );
+    final albumRows = {for (final album in albums) album.last: album};
+    final hidden = {
+      for (final album in albums) ...album.take(album.length - 1),
+    };
     Widget buildAt(BuildContext context, int chronologicalIndex) {
       if (hasOlder && chronologicalIndex == 0) {
         return Center(
@@ -167,30 +189,40 @@ final class _ChatTimeline extends StatelessWidget {
       }
       final contentIndex = chronologicalIndex - (hasOlder ? 1 : 0);
       if (contentIndex < messages.length) {
-        final message = messages[contentIndex];
-        final parsed = _parseCachedMessage(message);
-        final previous = contentIndex == 0 ? null : messages[contentIndex - 1];
+        if (hidden.contains(contentIndex)) {
+          return ChatMessageExtentObserver(
+            controller: controller,
+            messageId: messages[contentIndex].messageId,
+            child: const SizedBox.shrink(),
+          );
+        }
+        final album = albumRows[contentIndex];
+        final firstIndex = album?.first ?? contentIndex;
+        final message = messages[firstIndex];
+        final lastMessage = messages[contentIndex];
+        final parsed = parsedMessages[firstIndex];
+        final previous = firstIndex == 0 ? null : messages[firstIndex - 1];
         final next = contentIndex + 1 >= messages.length
             ? null
             : messages[contentIndex + 1];
-        final gapBeforeThis = _gapBeforeContentIndex(contentIndex);
+        final gapBeforeThis = _gapBeforeContentIndex(firstIndex);
         final groupedWithPrevious =
             !gapBeforeThis &&
             previous != null &&
             _messagesShareGroup(previous, message);
         final groupedWithNext =
-            next != null && _messagesShareGroup(message, next);
+            next != null && _messagesShareGroup(lastMessage, next);
         final startsDay =
             gapBeforeThis ||
             previous == null ||
             !_sameLocalDay(previous.timestamp, message.timestamp);
         return KeyedSubtree(
           key: ValueKey(
-            'chat-message-${account.id}-${conversation.token}-${message.messageId}',
+            'chat-message-${account.id}-${conversation.token}-${lastMessage.messageId}',
           ),
           child: ChatMessageExtentObserver(
             controller: controller,
-            messageId: message.messageId,
+            messageId: lastMessage.messageId,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -198,11 +230,48 @@ final class _ChatTimeline extends StatelessWidget {
                   const _ChatHistoryGapNotice(key: Key('chat-history-gap')),
                 if (startsDay) _DaySeparator(timestamp: message.timestamp),
                 _MessageBubble(
-                  key: message.messageId == jumpTargetId ? jumpTargetKey : null,
+                  key:
+                      (album ?? [contentIndex]).any(
+                        (index) => messages[index].messageId == jumpTargetId,
+                      )
+                      ? jumpTargetKey
+                      : null,
                   account: account,
                   message: message,
                   parsed: parsed,
-                  highlighted: message.messageId == highlightedMessageId,
+                  highlighted: (album ?? [contentIndex]).any(
+                    (index) =>
+                        messages[index].messageId == highlightedMessageId,
+                  ),
+                  content: album == null
+                      ? null
+                      : ChatPhotoAlbumContent(
+                          account: account,
+                          messages: [
+                            for (final index in album) parsedMessages[index]!,
+                          ],
+                          foregroundColor: message.actorId == account.loginName
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : Theme.of(context).colorScheme.onSurface,
+                          showReplyPreview: _shouldShowReplyPreview(
+                            parsed,
+                            threadId,
+                          ),
+                          onOpenParent: onJumpToMessage,
+                          onMessageActions: (photo) => onMessageActions(
+                            messages.firstWhere(
+                              (row) => row.messageId == photo.messageId,
+                            ),
+                            photo,
+                          ),
+                          onReactionTap: (photo, emoji) => onReactionTap(
+                            messages.firstWhere(
+                              (row) => row.messageId == photo.messageId,
+                            ),
+                            photo,
+                            emoji,
+                          ),
+                        ),
                   onJumpToMessage: onJumpToMessage,
                   showAuthor: !groupedWithPrevious,
                   showAvatar: !groupedWithNext,
@@ -215,8 +284,11 @@ final class _ChatTimeline extends StatelessWidget {
                   onReplySwipe: onReplySwipe,
                   onReactionTap: onReactionTap,
                   deliveryState:
-                      deliveryStates[message.messageId] ??
-                      _serverDeliveryState(message.messageId, lastCommonRead),
+                      deliveryStates[lastMessage.messageId] ??
+                      _serverDeliveryState(
+                        lastMessage.messageId,
+                        lastCommonRead,
+                      ),
                 ),
               ],
             ),

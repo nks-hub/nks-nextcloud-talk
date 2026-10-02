@@ -207,7 +207,10 @@
       },
       "ReferenceId": {
         "type": "string",
-        "format": "uuid",
+        "oneOf": [
+          {"format": "uuid"},
+          {"pattern": "^otg1\\.[0-9a-f]{32}\\.[0-9]{4}\\.[0-9]{4}$"}
+        ],
         "maxLength": 64
       },
       "SafeFilename": {

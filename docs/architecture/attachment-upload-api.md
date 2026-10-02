@@ -105,6 +105,13 @@ The voice branch uses `record` and `audioplayers`. It verifies the capability an
 
 ## State, retry and cleanup
 
+Fotografie odeslané společně nesou `referenceId` ve tvaru
+`otg1.<32 hex znaků ID alba>.<čtyřmístné pořadí od nuly>.<čtyřmístný počet>`.
+Každá fotografie má vlastní identitu pro potvrzení a opakování přenosu.
+OwnTalk z nich na mobilu i počítači sestaví jednu galerii. Server i ostatní
+klienti dál pracují se samostatnými přílohami. ID alba se obnovuje z uloženého
+`referenceId`; změna databázového schématu není potřeba.
+
 The durable phases are `localPrepared`, `probing`, `draftResolved`, `uploading`, `uploaded`, `finalizing`, `awaitingConfirmation`, `completed`, `retryable`, `failed`, `cancelling`, `cancelled` and `cleanupFailed`.
 
 - The probe and a stable private upload can be safely resumed before finalization.

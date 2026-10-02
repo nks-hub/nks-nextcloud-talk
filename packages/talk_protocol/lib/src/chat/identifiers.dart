@@ -1,5 +1,6 @@
 import '../json_value.dart';
 import '../protocol_exception.dart';
+import 'photo_album.dart';
 
 final RegExp _decimalCursorPattern = RegExp(r'^(0|[1-9][0-9]*)$');
 final RegExp _referenceIdPattern = RegExp(
@@ -90,9 +91,10 @@ final class ChatReferenceId {
       path: r'$.referenceId',
       code: TalkProtocolErrorCode.invalidChatIdentifier,
       minLength: 36,
-      maxLength: 36,
+      maxLength: 47,
     );
-    if (!_referenceIdPattern.hasMatch(identifier)) {
+    if (!_referenceIdPattern.hasMatch(identifier) &&
+        ChatPhotoAlbumReference.tryParse(identifier) == null) {
       protocolFailure(
         TalkProtocolErrorCode.invalidChatIdentifier,
         r'$.referenceId',

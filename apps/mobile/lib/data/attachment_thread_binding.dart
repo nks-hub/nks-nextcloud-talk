@@ -70,6 +70,7 @@ final class AttachmentThreadBinding {
   AttachmentMetadata applyTo(AttachmentMetadata metadata) => AttachmentMetadata(
     kind: metadata.kind,
     caption: metadata.caption,
+    photoAlbum: metadata.photoAlbum,
     replyTo: isNamed ? null : rootMessageId,
     threadId: isNamed ? rootMessageId : null,
     threadTitle: isNamed ? title : null,
