@@ -10,7 +10,7 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
-## 1.0.19 (85) — 2 October 2026
+## 1.0.19 (86) — 2 October 2026
 
 - Photos sent together now appear as one gallery on mobile and desktop. Tap a photo to browse, zoom, save or share it; swipe or use arrow keys to move between photos.
 - The photo picker supports selecting multiple images. Albums survive restarts and upload retries, while separate sends stay separate.
