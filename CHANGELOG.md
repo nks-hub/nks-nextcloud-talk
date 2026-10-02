@@ -10,6 +10,9 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+- Attachments upload up to three at a time while preserving message order. Cancelling one upload no longer waits for the others.
+- Sending multiple attachments notifies recipients only for the first attachment when the server supports silent sending. Photos remain grouped as an album in OwnTalk; other clients still receive individual file messages.
+
 ## 1.0.20 (88) — 2 October 2026
 
 - Android photo selection now opens the system multi-photo picker, with explicit selection and confirmation, instead of the legacy file chooser.
