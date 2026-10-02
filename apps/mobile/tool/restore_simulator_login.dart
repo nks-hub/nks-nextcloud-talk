@@ -5,10 +5,9 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:talk_protocol/talk_protocol.dart';
-
-import '../lib/app.dart';
-import '../lib/app_providers.dart';
-import '../lib/features/onboarding/onboarding_coordinator.dart';
+import 'package:nextcloudtalk/app.dart';
+import 'package:nextcloudtalk/app_providers.dart';
+import 'package:nextcloudtalk/features/onboarding/onboarding_coordinator.dart';
 
 // Recovery is limited to an empty simulator profile. Credentials are consumed
 // from its Documents directory, never embedded in a compiled app or a log.
