@@ -3,6 +3,52 @@ part of 'chat_media_composer_test.dart';
 void _registerChatMediaComposerDesktopDropTests(
   DurableAttachmentSourceStore Function() sourceStore,
 ) {
+  for (final (supportsSilent, sendSilently) in [
+    (true, false),
+    (true, true),
+    (false, false),
+  ]) {
+    testWidgets(
+      'photo batch notifications: support=$supportsSilent silent=$sendSilently',
+      (tester) async {
+        final profile = _profile(silent: supportsSilent);
+        final bridge = _RecordingBridge(profile: profile);
+        addTearDown(bridge.close);
+        final voiceBackends = _VoiceBackendFactory();
+        addTearDown(voiceBackends.close);
+        final media = ChatMediaComposerController();
+        await tester.pumpWidget(
+          _composerApp(
+            sourceStore: sourceStore(),
+            bridge: bridge.bridge,
+            threadId: null,
+            voiceBackends: voiceBackends,
+            controller: media,
+            profile: profile,
+            silent: sendSilently,
+            imageSelectionBackend: _AlbumPicker(),
+          ),
+        );
+        await tester.runAsync(
+          () => media.pickAttachment(AttachmentPickerSource.gallery),
+        );
+        await tester.runAsync(media.sendPreparedAttachment);
+        expect(bridge.metadata.map((metadata) => metadata.silent), [
+          sendSilently,
+          supportsSilent,
+          supportsSilent,
+          supportsSilent,
+        ]);
+        expect(
+          bridge.metadata
+              .map((metadata) => metadata.photoAlbum!.albumId)
+              .toSet(),
+          hasLength(1),
+        );
+      },
+    );
+  }
+
   testWidgets(
     'four picked photos share one album, another send gets a new one',
     (tester) async {

@@ -12,6 +12,7 @@ import '../../network/attachment_transport.dart';
 import 'chat_service.dart';
 
 part 'attachment_service_runtime.part.dart';
+part 'attachment_service_parallel.part.dart';
 part 'attachment_service_confirmation.part.dart';
 part 'attachment_service_support.part.dart';
 
@@ -342,6 +343,10 @@ final class AttachmentService with _AttachmentServiceRuntime {
   @override
   final Set<_AttachmentRoomKey> _roomRerunRequests = {};
   @override
+  final Map<_AttachmentRoomKey, void Function()> _roomWakeups = {};
+  @override
+  final Map<AttachmentPersistenceKey, Future<void>> _jobRuns = {};
+  @override
   final Map<_AttachmentRoomKey, Timer> _retryTimers = {};
   @override
   final Map<_AttachmentRoomKey, DateTime> _retryDeadlines = {};
@@ -659,7 +664,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
       }
       await _commitTransition(result, key);
     });
-    final active = _roomRuns[roomKey];
+    final active = _jobRuns[key];
     if (active != null) {
       await active;
     }
@@ -667,7 +672,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
       _clearConfirmationCatchUp(key);
       await _releaseTerminalSource(key);
     }
-    await _scheduleRoom(roomKey);
+    unawaited(_scheduleRoom(roomKey));
   }
 
   Future<void> discardFailed({

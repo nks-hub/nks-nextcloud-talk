@@ -84,6 +84,7 @@ extension _ChatMediaComposerPending on _ChatMediaComposerState {
       return false;
     }
     _sendingAttachments = true;
+    final silenceRemaining = widget.capabilityProfile.silent;
     final albums = <_ComposerAttachment, ChatPhotoAlbumReference>{};
     for (var start = 0; start < pending.length;) {
       var end = start;
@@ -124,7 +125,7 @@ extension _ChatMediaComposerPending on _ChatMediaComposerState {
               caption: includeCaption ? metadata.caption : null,
               replyTo: metadata.replyTo,
               threadId: metadata.threadId,
-              silent: metadata.silent,
+              silent: metadata.silent || (!includeCaption && silenceRemaining),
             ),
             presentation: held.presentation,
             diagnosticSource: held.diagnosticSource,

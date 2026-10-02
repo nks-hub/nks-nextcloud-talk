@@ -20,6 +20,8 @@ mixin _AttachmentServiceRuntime {
   List<Duration> get _retryDelays;
   _AsyncMutex get _stateMutex;
   Map<_AttachmentRoomKey, Future<void>> get _roomRuns;
+  Map<_AttachmentRoomKey, void Function()> get _roomWakeups;
+  Map<AttachmentPersistenceKey, Future<void>> get _jobRuns;
   Set<_AttachmentRoomKey> get _roomRerunRequests;
   Map<_AttachmentRoomKey, Timer> get _retryTimers;
   Map<_AttachmentRoomKey, DateTime> get _retryDeadlines;
@@ -202,6 +204,7 @@ mixin _AttachmentServiceRuntime {
     _roomRerunRequests.add(roomKey);
     final active = _roomRuns[roomKey];
     if (active != null) {
+      _roomWakeups[roomKey]?.call();
       return active;
     }
     late final Future<void> run;
@@ -227,29 +230,8 @@ mixin _AttachmentServiceRuntime {
     }
   }
 
-  Future<void> _runRoom(_AttachmentRoomKey roomKey) async {
-    // A job the state machine refuses to plan right now, such as one held back
-    // by room finalization order, must not end the lane: every later
-    // attachment in the room would sit at localPrepared forever.
-    final blocked = <AttachmentPersistenceKey>{};
-    while (!_closed) {
-      final selection = await _stateMutex.protect(
-        () async => _selectNextJob(roomKey, blocked),
-      );
-      if (selection == null) {
-        await _beforeRoomIdle?.call();
-        return;
-      }
-      final outcome = await _executeOneStep(selection);
-      if (outcome == _AttachmentStepOutcome.blocked) {
-        blocked.add(selection.key);
-        continue;
-      }
-      if (outcome == _AttachmentStepOutcome.stopped) {
-        return;
-      }
-    }
-  }
+  Future<void> _runRoom(_AttachmentRoomKey roomKey) =>
+      _runParallelAttachmentRoom(this, roomKey);
 
   _SelectedAttachmentJob? _selectNextJob(
     _AttachmentRoomKey roomKey,
@@ -280,7 +262,7 @@ mixin _AttachmentServiceRuntime {
           phase == AttachmentJobPhase.probing ||
           phase == AttachmentJobPhase.uploading &&
               job.inFlightRequest != null) {
-        return null;
+        continue;
       }
       final key = _jobKey(account.accountId, job.jobId);
       if (blocked.contains(key)) {
@@ -866,14 +848,29 @@ mixin _AttachmentServiceRuntime {
                 job.phase != AttachmentJobPhase.cleanupFailed)) {
           continue;
         }
-        final next =
-            _metadata[_jobKey(account.accountId, job.jobId)]?.nextAttemptAt;
-        if (next != null && (earliest == null || next.isBefore(earliest))) {
+        final key = _jobKey(account.accountId, job.jobId);
+        final next = _metadata[key]?.nextAttemptAt;
+        if (next == null ||
+            (_jobRuns.containsKey(key) && !next.isAfter(_clock().toUtc()))) {
+          continue;
+        }
+        if (earliest == null || next.isBefore(earliest)) {
           earliest = next;
         }
       }
     }
     if (earliest == null) {
+      // Credential retries keep the job's phase; they have no nextAttemptAt.
+      if (account != null &&
+          account.jobs.values.any(
+            (job) =>
+                job.draft.roomToken == roomKey.roomToken &&
+                _credentialRetryCounts.containsKey(
+                  _jobKey(account.accountId, job.jobId),
+                ),
+          )) {
+        return;
+      }
       _retryTimers.remove(roomKey)?.cancel();
       _retryDeadlines.remove(roomKey);
       return;
