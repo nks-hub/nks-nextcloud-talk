@@ -7,11 +7,76 @@ import 'package:http/http.dart' as http;
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/features/chat/media/authenticated_image_viewer.dart';
+import 'package:nextcloudtalk/features/chat/media/authenticated_image_gallery.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_image_exporter.dart';
 
 import 'test_support.dart';
 
 void main() {
+  testWidgets('gallery opens selected photo, swipes, zooms and exports it', (
+    tester,
+  ) async {
+    final repository = _repository((request) async => _imageResponse());
+    final exporter = _RecordingExporter();
+    await tester.pumpWidget(
+      localizedTestApp(
+        home: AuthenticatedImageGallery(
+          account: _account,
+          initialIndex: 1,
+          images: List.generate(
+            4,
+            (index) => ChatGalleryImage(
+              previewUri: _previewUri.replace(
+                queryParameters: {
+                  ..._previewUri.queryParameters,
+                  'fileId': '${index + 1}',
+                },
+              ),
+              originalUri: _originalUri.resolve('photo-$index.png'),
+              contentType: 'image/png',
+              name: 'photo-$index.png',
+            ),
+          ),
+          repository: repository,
+          exporter: exporter,
+        ),
+      ),
+    );
+    await _pumpRouteAndFuture(tester);
+    expect(find.text('2 / 4'), findsOneWidget);
+    await tester.drag(
+      find.byKey(const Key('chat-gallery-pages')),
+      const Offset(-600, 0),
+    );
+    await _pumpRouteAndFuture(tester);
+    expect(find.text('3 / 4'), findsOneWidget);
+    await _pumpRouteAndFuture(tester);
+    await tester.tap(
+      find.byKey(const Key('authenticated-image-save')).hitTestable(),
+    );
+    await _pumpRouteAndFuture(tester);
+    expect(exporter.saved.single.fileName, 'photo-2');
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('authenticated-image-zoom-in')).hitTestable(),
+    );
+    await tester.pump();
+    await tester.drag(
+      find.byKey(const Key('chat-gallery-pages')),
+      const Offset(-600, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('3 / 4'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chat-gallery-next')));
+    await _pumpRouteAndFuture(tester);
+    expect(find.text('4 / 4'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await _pumpRouteAndFuture(tester);
+    expect(find.text('3 / 4'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('opens an authorized 2048 preview with accessible zoom controls', (
     tester,
   ) async {

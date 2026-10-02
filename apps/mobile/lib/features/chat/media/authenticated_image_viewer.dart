@@ -55,6 +55,7 @@ final class AuthenticatedImageViewer extends StatefulWidget {
     required this.repository,
     this.exporter = const PlatformChatImageExporter(),
     this.openAppSettings,
+    this.onZoomChanged,
   });
 
   final StoredAccount account;
@@ -71,6 +72,7 @@ final class AuthenticatedImageViewer extends StatefulWidget {
   final ChatMediaRepository repository;
   final ChatImageExporter exporter;
   final Future<bool> Function()? openAppSettings;
+  final ValueChanged<bool>? onZoomChanged;
 
   @override
   State<AuthenticatedImageViewer> createState() =>
@@ -292,12 +294,14 @@ final class _AuthenticatedImageViewerState
     setState(() {
       _scale = target;
     });
+    widget.onZoomChanged?.call(_scale > _minimumScale + 0.001);
   }
 
   void _resetTransformation() {
     final matrix = _transformation.value.clone()..setIdentity();
     _transformation.value = matrix;
     _scale = _minimumScale;
+    widget.onZoomChanged?.call(false);
   }
 
   @override
@@ -349,12 +353,16 @@ final class _AuthenticatedImageViewerState
                       transformationController: _transformation,
                       minScale: _minimumScale,
                       maxScale: _maximumScale,
+                      panEnabled: _scale > _minimumScale + 0.001,
                       onInteractionUpdate: (_) {
                         final next = _transformation.value.getMaxScaleOnAxis();
                         if ((next - _scale).abs() >= 0.01 && mounted) {
                           setState(() {
                             _scale = next;
                           });
+                          widget.onZoomChanged?.call(
+                            next > _minimumScale + 0.001,
+                          );
                         }
                       },
                       child: SizedBox.expand(
