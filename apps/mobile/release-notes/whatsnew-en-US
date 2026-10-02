@@ -1,1 +1,1 @@
-Android: the system share sheet now suggests individual conversations when sharing links and attachments. Selecting a conversation prefills the correct account and room. Sending requires confirmation. Suggestions are hidden when app lock is enabled.
+Photos sent together appear as one gallery on mobile and desktop. Select multiple photos, then browse them by swiping or using arrow keys. Zoom, save and share individual photos. Albums survive restarts and upload retries; separate sends stay separate.
