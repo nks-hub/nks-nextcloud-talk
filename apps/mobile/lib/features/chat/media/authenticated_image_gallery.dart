@@ -110,89 +110,95 @@ final class _AuthenticatedImageGalleryState
     final strings = MaterialLocalizations.of(context);
     return CallbackShortcuts(
       bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): () =>
+            unawaited(Navigator.of(context).maybePop()),
         const SingleActivator(LogicalKeyboardKey.arrowLeft): () => _move(-1),
         const SingleActivator(LogicalKeyboardKey.arrowRight): () => _move(1),
       },
-      child: Stack(
-        textDirection: TextDirection.ltr,
-        children: [
-          PageView.builder(
-            key: const Key('chat-gallery-pages'),
-            controller: _pages,
-            physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
-            itemCount: widget.images.length,
-            onPageChanged: (index) => setState(() {
-              _index = index;
-              _zoomed = false;
-            }),
-            itemBuilder: (context, index) {
-              final image = widget.images[index];
-              return AuthenticatedImageViewer(
-                key: ValueKey(image.originalUri),
-                account: widget.account,
-                previewUri: image.previewUri,
-                smallerPreviewUri: image.smallerPreviewUri,
-                originalUri: image.originalUri,
-                originalContentType: image.contentType,
-                imageName: image.name,
-                repository: widget.repository,
-                exporter: widget.exporter,
-                openAppSettings: widget.openAppSettings,
-                onZoomChanged: (zoomed) {
-                  if (index == _index && _zoomed != zoomed) {
-                    setState(() => _zoomed = zoomed);
-                  }
-                },
-              );
-            },
-          ),
-          SafeArea(
-            minimum: const EdgeInsets.all(8),
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Material(
-                color: const Color(0xcc000000),
-                borderRadius: BorderRadius.circular(28),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (widget.onImageActions != null)
+      child: Focus(
+        autofocus: true,
+        child: Stack(
+          textDirection: TextDirection.ltr,
+          children: [
+            PageView.builder(
+              key: const Key('chat-gallery-pages'),
+              controller: _pages,
+              physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
+              itemCount: widget.images.length,
+              onPageChanged: (index) => setState(() {
+                _index = index;
+                _zoomed = false;
+              }),
+              itemBuilder: (context, index) {
+                final image = widget.images[index];
+                return AuthenticatedImageViewer(
+                  autofocus: false,
+                  key: ValueKey(image.originalUri),
+                  account: widget.account,
+                  previewUri: image.previewUri,
+                  smallerPreviewUri: image.smallerPreviewUri,
+                  originalUri: image.originalUri,
+                  originalContentType: image.contentType,
+                  imageName: image.name,
+                  repository: widget.repository,
+                  exporter: widget.exporter,
+                  openAppSettings: widget.openAppSettings,
+                  onZoomChanged: (zoomed) {
+                    if (index == _index && _zoomed != zoomed) {
+                      setState(() => _zoomed = zoomed);
+                    }
+                  },
+                );
+              },
+            ),
+            SafeArea(
+              minimum: const EdgeInsets.all(8),
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Material(
+                  color: const Color(0xcc000000),
+                  borderRadius: BorderRadius.circular(28),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.onImageActions != null)
+                        IconButton(
+                          key: const Key('chat-gallery-actions'),
+                          tooltip: strings.showMenuTooltip,
+                          color: Colors.white,
+                          onPressed: () => widget.onImageActions!(_index),
+                          icon: const Icon(Icons.more_vert),
+                        ),
                       IconButton(
-                        key: const Key('chat-gallery-actions'),
-                        tooltip: strings.showMenuTooltip,
+                        key: const Key('chat-gallery-previous'),
+                        tooltip: strings.previousPageTooltip,
                         color: Colors.white,
-                        onPressed: () => widget.onImageActions!(_index),
-                        icon: const Icon(Icons.more_vert),
+                        disabledColor: Colors.white38,
+                        onPressed: _index == 0 ? null : () => _move(-1),
+                        icon: const Icon(Icons.chevron_left),
                       ),
-                    IconButton(
-                      key: const Key('chat-gallery-previous'),
-                      tooltip: strings.previousPageTooltip,
-                      color: Colors.white,
-                      disabledColor: Colors.white38,
-                      onPressed: _index == 0 ? null : () => _move(-1),
-                      icon: const Icon(Icons.chevron_left),
-                    ),
-                    Text(
-                      '${_index + 1} / ${widget.images.length}',
-                      key: const Key('chat-gallery-position'),
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                    IconButton(
-                      key: const Key('chat-gallery-next'),
-                      tooltip: strings.nextPageTooltip,
-                      color: Colors.white,
-                      disabledColor: Colors.white38,
-                      onPressed: _index == widget.images.length - 1
-                          ? null
-                          : () => _move(1),
-                      icon: const Icon(Icons.chevron_right),
-                    ),
-                  ],
+                      Text(
+                        '${_index + 1} / ${widget.images.length}',
+                        key: const Key('chat-gallery-position'),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      IconButton(
+                        key: const Key('chat-gallery-next'),
+                        tooltip: strings.nextPageTooltip,
+                        color: Colors.white,
+                        disabledColor: Colors.white38,
+                        onPressed: _index == widget.images.length - 1
+                            ? null
+                            : () => _move(1),
+                        icon: const Icon(Icons.chevron_right),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -56,6 +56,7 @@ final class AuthenticatedImageViewer extends StatefulWidget {
     this.exporter = const PlatformChatImageExporter(),
     this.openAppSettings,
     this.onZoomChanged,
+    this.autofocus = true,
   });
 
   final StoredAccount account;
@@ -73,6 +74,7 @@ final class AuthenticatedImageViewer extends StatefulWidget {
   final ChatImageExporter exporter;
   final Future<bool> Function()? openAppSettings;
   final ValueChanged<bool>? onZoomChanged;
+  final bool autofocus;
 
   @override
   State<AuthenticatedImageViewer> createState() =>
@@ -315,7 +317,10 @@ final class _AuthenticatedImageViewerState
         const SingleActivator(LogicalKeyboardKey.escape): () =>
             unawaited(Navigator.of(context).maybePop()),
       },
-      child: Focus(autofocus: true, child: _viewer(context, strings)),
+      child: Focus(
+        autofocus: widget.autofocus,
+        child: _viewer(context, strings),
+      ),
     );
   }
 
