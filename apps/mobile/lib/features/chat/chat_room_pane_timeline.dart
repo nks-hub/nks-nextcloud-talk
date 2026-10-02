@@ -66,6 +66,7 @@ final class _ChatTimeline extends StatelessWidget {
     required this.messages,
     required this.blocks,
     required this.pending,
+    required this.attachments,
     required this.hasOlder,
     required this.loadingOlder,
     required this.controller,
@@ -100,6 +101,7 @@ final class _ChatTimeline extends StatelessWidget {
   /// gap between two cached ranges (see [_gapBeforeContentIndex]).
   final List<ChatBlock>? blocks;
   final List<StoredTextSendOperation> pending;
+  final List<PendingAttachmentBatch> attachments;
   final bool hasOlder;
   final bool loadingOlder;
   final ChatScrollController controller;
@@ -138,10 +140,17 @@ final class _ChatTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (messages.isEmpty && pending.isEmpty && !hasOlder) {
+    if (messages.isEmpty &&
+        pending.isEmpty &&
+        attachments.isEmpty &&
+        !hasOlder) {
       return const _EmptyChat();
     }
-    final itemCount = messages.length + pending.length + (hasOlder ? 1 : 0);
+    final itemCount =
+        messages.length +
+        pending.length +
+        attachments.length +
+        (hasOlder ? 1 : 0);
     final parsedMessages = messages
         .map(
           (message) => message.referenceId.startsWith('otg1.')
@@ -149,9 +158,13 @@ final class _ChatTimeline extends StatelessWidget {
               : null,
         )
         .toList();
+    final pendingMessageIds = {
+      for (final batch in attachments) ...batch.confirmedMessageIds,
+    };
     final albums = groupPhotoAlbums(
       parsedMessages,
       canGroup: (index) =>
+          !pendingMessageIds.contains(messages[index].messageId) &&
           !messages[index].deleted &&
           parsedMessages[index] != null &&
           (inlineReplies || (parsedMessages[index]!.threadReplies ?? 0) == 0) &&
@@ -167,8 +180,19 @@ final class _ChatTimeline extends StatelessWidget {
               messages[index].messageId > anchorMessageId!),
     );
     final albumRows = {for (final album in albums) album.last: album};
+    final confirmedAttachments = {
+      for (final batch in attachments)
+        batch.key: [
+          for (var index = 0; index < messages.length; index++)
+            if (batch.confirmedMessageIds.contains(messages[index].messageId) &&
+                parsedMessages[index] != null &&
+                chatGalleryImage(account, parsedMessages[index]!) != null)
+              index,
+        ],
+    };
     final hidden = {
       for (final album in albums) ...album.take(album.length - 1),
+      for (final indices in confirmedAttachments.values) ...indices,
     };
     Widget buildAt(BuildContext context, int chronologicalIndex) {
       if (hasOlder && chronologicalIndex == 0) {
@@ -196,6 +220,9 @@ final class _ChatTimeline extends StatelessWidget {
       final contentIndex = chronologicalIndex - (hasOlder ? 1 : 0);
       if (contentIndex < messages.length) {
         if (hidden.contains(contentIndex)) {
+          if (pendingMessageIds.contains(messages[contentIndex].messageId)) {
+            return const SizedBox.shrink();
+          }
           return ChatMessageExtentObserver(
             controller: controller,
             messageId: messages[contentIndex].messageId,
@@ -302,7 +329,56 @@ final class _ChatTimeline extends StatelessWidget {
           ),
         );
       }
-      final operation = pending[contentIndex - messages.length];
+      final pendingIndex = contentIndex - messages.length;
+      if (pendingIndex >= pending.length) {
+        final batch = attachments[pendingIndex - pending.length];
+        final confirmed = confirmedAttachments[batch.key]!;
+        Widget bubble = PendingAttachmentBubble(
+          key: batch.confirmedMessageIds.contains(jumpTargetId)
+              ? jumpTargetKey
+              : ValueKey(batch.key),
+          batch: batch,
+          highlighted: batch.confirmedMessageIds.contains(highlightedMessageId),
+          confirmedContent: confirmed.isEmpty
+              ? null
+              : ChatPhotoAlbumContent(
+                  account: account,
+                  messages: [
+                    for (final index in confirmed) parsedMessages[index]!,
+                  ],
+                  foregroundColor: Theme.of(
+                    context,
+                  ).colorScheme.onPrimaryContainer,
+                  showReplyPreview: _shouldShowReplyPreview(
+                    parsedMessages[confirmed.first],
+                    threadId,
+                  ),
+                  onOpenParent: onJumpToMessage,
+                  onMessageActions: (photo) => onMessageActions(
+                    messages.firstWhere(
+                      (row) => row.messageId == photo.messageId,
+                    ),
+                    photo,
+                  ),
+                  onReactionTap: (photo, emoji) => onReactionTap(
+                    messages.firstWhere(
+                      (row) => row.messageId == photo.messageId,
+                    ),
+                    photo,
+                    emoji,
+                  ),
+                ),
+        );
+        for (final index in confirmed) {
+          bubble = ChatMessageExtentObserver(
+            controller: controller,
+            messageId: messages[index].messageId,
+            child: bubble,
+          );
+        }
+        return bubble;
+      }
+      final operation = pending[pendingIndex];
       return _PendingMessageBubble(
         key: ValueKey('chat-pending-${operation.operationId}'),
         account: account,

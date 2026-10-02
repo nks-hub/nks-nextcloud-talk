@@ -10,6 +10,7 @@ final class _ComposerAttachment {
   PreparedAttachmentSource? source;
   bool preparing = false;
   bool admissionPending = false;
+  bool durablyAccepted = false;
   bool discardAfterAdmission = false;
   bool disposed = false;
 
@@ -46,6 +47,13 @@ extension _ChatMediaComposerPending on _ChatMediaComposerState {
 
   void _handleImageState(_ComposerAttachment image) {
     final state = image.controller.state;
+    if (image.durablyAccepted && !state.isActive) {
+      scheduleMicrotask(() {
+        if (_disposed || image.disposed) return;
+        setState(() => _images.remove(image));
+        image.dispose();
+      });
+    }
     if (!state.isActive &&
         !(state.phase == ImageAttachmentUploadPhase.failed &&
             state.retryAllowed)) {

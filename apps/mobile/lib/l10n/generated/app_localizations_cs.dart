@@ -765,6 +765,26 @@ class AppLocalizationsCs extends AppLocalizations {
   String get attachmentReadyToSend => 'Připraveno k odeslání se zprávou';
 
   @override
+  String attachmentBatchTitle(int count) {
+    return 'Přílohy: $count';
+  }
+
+  @override
+  String attachmentBatchProgress(int sent, int total) {
+    return 'Odesláno $sent z $total';
+  }
+
+  @override
+  String get attachmentBatchSending => 'Odesílání příloh…';
+
+  @override
+  String get attachmentBatchDetails => 'Podrobnosti příloh';
+
+  @override
+  String get attachmentActionFailed =>
+      'Stav přílohy se mezitím změnil. Zkuste akci znovu.';
+
+  @override
   String get remove => 'Odebrat';
 
   @override

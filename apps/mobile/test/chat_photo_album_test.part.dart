@@ -12,6 +12,98 @@ Map<String, Object?> _albumWire(
   ).referenceId;
 
 void _registerPhotoAlbumTests() {
+  testWidgets(
+    'partial album keeps sent photos accessible inside the sending bubble',
+    (tester) async {
+      final jobs = StreamController<List<StoredAttachmentJob>>();
+      addTearDown(jobs.close);
+      for (var index = 0; index < 2; index++) {
+        await _insertCachedMessage(
+          database,
+          _albumWire(index),
+          displayText: 'Photo',
+        );
+      }
+      await database.into(database.chatScopes).insert(ChatScopesCompanion.insert(
+        accountId: account.id, roomToken: conversation.token, scopeKey: 'root',
+        historyCursor: '10', futureCursor: '103', lastCommonRead: '10',
+        lastReadMessage: 0, unreadMessages: 0, hasHistory: false,
+        futureConverged: true, blocksJson: '[["10","103"]]',
+      ));
+      await tester.pumpWidget(
+        app(
+          home: roomScreen(),
+          overrides: [
+            attachmentRoomJobsProvider.overrideWith((ref, key) => jobs.stream),
+            chatMediaProvider.overrideWith((ref, key) async => null),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      jobs.add([
+        pendingAttachmentFixture(0, phase: 'completed'),
+        pendingAttachmentFixture(1, phase: 'completed'),
+        pendingAttachmentFixture(2, phase: 'failed'),
+        pendingAttachmentFixture(3, phase: 'failed'),
+      ]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(PendingAttachmentBubble), findsOneWidget);
+      expect(find.text('2 of 4 sent'), findsOneWidget);
+      expect(find.byType(ChatPhotoAlbumContent), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(PendingAttachmentBubble),
+          matching: find.byType(ChatPhotoAlbumContent),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('chat-message-target-100')), findsNothing);
+      final gallery = tester.widget<ChatPhotoAlbumContent>(
+        find.byType(ChatPhotoAlbumContent),
+      );
+      expect(gallery.messages.map((message) => message.messageId), [100, 101]);
+      gallery.onOpenParent!(100);
+      for (var frame = 0; frame < 10; frame++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(find.byKey(const Key('chat-jump-not-found')), findsNothing);
+      expect(
+        tester
+            .widget<PendingAttachmentBubble>(
+              find.byType(PendingAttachmentBubble),
+            )
+            .highlighted,
+        isTrue,
+      );
+      for (var index = 2; index < 4; index++) {
+        await _insertCachedMessage(
+          database,
+          _albumWire(index),
+          displayText: 'Photo',
+        );
+      }
+      jobs.add(
+        List.generate(
+          4,
+          (index) => pendingAttachmentFixture(index, phase: 'completed'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(PendingAttachmentBubble), findsNothing);
+      expect(find.byKey(const Key('chat-photo-album-100')), findsOneWidget);
+      expect(
+        tester
+            .widget<ChatPhotoAlbumContent>(find.byType(ChatPhotoAlbumContent))
+            .messages,
+        hasLength(4),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
+
   test('album grouping respects sender, scope, gaps and separate sends', () {
     List<List<int>> groups(List<Map<String, Object?>> wire, {int? boundary}) =>
         groupPhotoAlbums(

@@ -24,6 +24,7 @@ import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/chat/chat_background_surface.dart';
 import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
 import 'package:nextcloudtalk/features/chat/photo_album_grouping.dart';
+import 'package:nextcloudtalk/features/chat/chat_pending_attachments.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_attachment_opener.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/chat/chat_service.dart';
@@ -35,6 +36,7 @@ import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
+import 'pending_attachment_fixture.dart';
 
 part 'chat_room_pane_desktop_input.part.dart';
 part 'chat_room_pane_interactions.part.dart';

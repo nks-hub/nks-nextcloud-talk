@@ -1436,6 +1436,36 @@ abstract class AppLocalizations {
   /// **'Ready to send with your message'**
   String get attachmentReadyToSend;
 
+  /// No description provided for @attachmentBatchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} attachments'**
+  String attachmentBatchTitle(int count);
+
+  /// No description provided for @attachmentBatchProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{sent} of {total} sent'**
+  String attachmentBatchProgress(int sent, int total);
+
+  /// No description provided for @attachmentBatchSending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending attachments…'**
+  String get attachmentBatchSending;
+
+  /// No description provided for @attachmentBatchDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment details'**
+  String get attachmentBatchDetails;
+
+  /// No description provided for @attachmentActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The attachment changed while processing the action. Please try again.'**
+  String get attachmentActionFailed;
+
   /// No description provided for @remove.
   ///
   /// In en, this message translates to:

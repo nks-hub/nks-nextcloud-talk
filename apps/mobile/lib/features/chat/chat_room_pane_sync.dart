@@ -641,10 +641,20 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       return;
     }
     final messages = _visibleMessages();
-    final offset = _scrollController.offsetForMessage(
-      messageId,
-      messages.map((message) => message.messageId).toList(growable: false),
+    final pending = pendingAttachmentBatches(
+      ref.read(attachmentRoomJobsProvider(_key)).asData?.value ?? const [],
+      serverUrl: widget.account.serverUrl,
     );
+    final pendingIds = {
+      for (final batch in pending) ...batch.confirmedMessageIds,
+    };
+    final orderedIds = [
+      for (final message in messages)
+        if (!pendingIds.contains(message.messageId)) message.messageId,
+      for (final message in messages)
+        if (pendingIds.contains(message.messageId)) message.messageId,
+    ];
+    final offset = _scrollController.offsetForMessage(messageId, orderedIds);
     if (offset == null) {
       return;
     }

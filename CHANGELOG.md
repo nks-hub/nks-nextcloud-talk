@@ -10,6 +10,8 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+- Selected attachments appear in a compact horizontal preview strip. After sending, uploads move into the conversation with progress, per-file details, retry and cancel actions; typing and navigation remain available.
+- Pending photo albums survive leaving the conversation or restarting the app. Photos already sent remain accessible when another photo in the batch fails.
 - Attachments upload up to three at a time while preserving message order. Cancelling one upload no longer waits for the others.
 - Sending multiple attachments notifies recipients only for the first attachment when the server supports silent sending. Photos remain grouped as an album in OwnTalk; other clients still receive individual file messages.
 

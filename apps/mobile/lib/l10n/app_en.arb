@@ -280,6 +280,13 @@
   "preparingImage": "Preparing attachment…",
   "imageUploadQueued": "Waiting to upload",
   "attachmentReadyToSend": "Ready to send with your message",
+  "attachmentBatchTitle": "{count} attachments",
+  "@attachmentBatchTitle": {"placeholders": {"count": {"type": "int"}}},
+  "attachmentBatchProgress": "{sent} of {total} sent",
+  "@attachmentBatchProgress": {"placeholders": {"sent": {"type": "int"}, "total": {"type": "int"}}},
+  "attachmentBatchSending": "Sending attachments…",
+  "attachmentBatchDetails": "Attachment details",
+  "attachmentActionFailed": "The attachment changed while processing the action. Please try again.",
   "remove": "Remove",
   "uploadingImage": "Uploading… {percent}%",
   "@uploadingImage": {

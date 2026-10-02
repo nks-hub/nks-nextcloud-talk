@@ -109,6 +109,26 @@ final class AttachmentRepository {
 
   final AppDatabase _database;
 
+  Stream<List<StoredAttachmentJob>> watchRoomJobs({
+    required String accountId,
+    required String roomToken,
+    int? threadId,
+    required bool inlineReplies,
+  }) =>
+      (_database.select(_database.attachmentJobs)
+            ..where((row) {
+              final scope = threadId != null
+                  ? row.threadId.equals(threadId) | row.replyTo.equals(threadId)
+                  : inlineReplies
+                  ? const Constant(true)
+                  : row.threadId.isNull() & row.replyTo.isNull();
+              return row.accountId.equals(accountId) &
+                  row.roomToken.equals(roomToken) &
+                  scope;
+            })
+            ..orderBy([(row) => OrderingTerm.asc(row.enqueueSequence)]))
+          .watch();
+
   Stream<StoredAttachmentJob?> watchJob({
     required String accountId,
     required String jobId,

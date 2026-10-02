@@ -19,6 +19,7 @@ import '../../calls/call_audio_interruptions.dart';
 import '../attachment_service.dart';
 import '../media/image_attachment_upload_controller.dart';
 import '../media/image_attachment_upload_panel.dart';
+import '../media/attachment_source_thumbnail.dart';
 import '../../conversations/desktop_attachment_drop.dart';
 import 'attachment_submission.dart';
 import 'giphy_attachment.dart';
@@ -26,6 +27,7 @@ import 'voice_message.dart';
 
 part 'chat_media_composer_attachments.dart';
 part 'chat_media_composer_pending.dart';
+part 'chat_media_composer_previews.dart';
 
 typedef CreateVoiceCaptureBackend = VoiceCaptureBackend Function();
 typedef CreateVoicePlaybackBackend = VoicePlaybackBackend Function();
@@ -652,23 +654,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       key: const Key('chat-media-composer'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 240),
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                for (final image in _images)
-                  ImageAttachmentUploadPanel(
-                    key: ObjectKey(image),
-                    controller: image.controller,
-                    onOpenSettings: widget.openAppSettings == null
-                        ? null
-                        : () => unawaited(_openAppSettings()),
-                  ),
-              ],
-            ),
-          ),
-        ),
+        _attachmentPreviews(),
         if (voiceOwnsToolbar)
           Row(
             key: const Key('chat-media-composer-actions'),

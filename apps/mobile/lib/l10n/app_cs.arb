@@ -280,6 +280,13 @@
   "preparingImage": "Příprava přílohy…",
   "imageUploadQueued": "Čeká na nahrání",
   "attachmentReadyToSend": "Připraveno k odeslání se zprávou",
+  "attachmentBatchTitle": "Přílohy: {count}",
+  "@attachmentBatchTitle": {"placeholders": {"count": {"type": "int"}}},
+  "attachmentBatchProgress": "Odesláno {sent} z {total}",
+  "@attachmentBatchProgress": {"placeholders": {"sent": {"type": "int"}, "total": {"type": "int"}}},
+  "attachmentBatchSending": "Odesílání příloh…",
+  "attachmentBatchDetails": "Podrobnosti příloh",
+  "attachmentActionFailed": "Stav přílohy se mezitím změnil. Zkuste akci znovu.",
   "remove": "Odebrat",
   "uploadingImage": "Nahrávání… {percent} %",
   "@uploadingImage": {

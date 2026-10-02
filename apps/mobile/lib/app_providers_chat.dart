@@ -1,5 +1,17 @@
 part of 'app_providers.dart';
 
+final attachmentRoomJobsProvider = StreamProvider.autoDispose
+    .family<List<StoredAttachmentJob>, ChatRoomProviderKey>((ref, key) {
+      return ref
+          .watch(attachmentRepositoryProvider)
+          .watchRoomJobs(
+            accountId: key.accountId,
+            roomToken: key.roomToken,
+            threadId: key.threadId,
+            inlineReplies: ref.watch(replyLayoutProvider) == ReplyLayout.inline,
+          );
+    });
+
 final chatServiceProvider = Provider<ChatService>((ref) {
   final service = ChatService(
     accounts: ref.watch(accountRepositoryProvider),

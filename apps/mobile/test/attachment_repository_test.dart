@@ -11,10 +11,71 @@ import 'package:nextcloudtalk/data/attachment_thread_binding.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
+import 'pending_attachment_fixture.dart';
 
 part 'attachment_repository_thread_binding.part.dart';
 
 void main() {
+  test(
+    'pending attachments follow account, room and both thread layouts',
+    () async {
+      final database = openTestDatabase();
+      addTearDown(database.close);
+      await _insertAccount(database, 'account-a');
+      await _insertAccount(database, 'account-b');
+      final repository = AttachmentRepository(database);
+      for (final id in ['account-a', 'account-b']) {
+        await repository.persistAccountState(
+          account: AttachmentAccountState(
+            accountId: AccountId.parse(id),
+            server: ServerBase.parse('https://cloud.example.invalid'),
+            lane: AttachmentAccountLane.ready,
+            credentialGeneration: 1,
+            capabilityGeneration: 1,
+            jobs: const {},
+          ),
+          updatedAt: DateTime.utc(2026, 10, 2),
+        );
+      }
+      final rows = [
+        pendingAttachmentFixture(0),
+        pendingAttachmentFixture(1).copyWith(replyTo: const Value(51)),
+        pendingAttachmentFixture(2).copyWith(threadId: const Value(51)),
+        pendingAttachmentFixture(0, accountId: 'account-b'),
+        pendingAttachmentFixture(3, roomToken: 'roomb456'),
+      ];
+      for (final row in rows) {
+        await database
+            .into(database.attachmentJobs)
+            .insert(row.toCompanion(true));
+      }
+      Future<List<StoredAttachmentJob>> read({
+        int? threadId,
+        bool inline = false,
+      }) => repository
+          .watchRoomJobs(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            threadId: threadId,
+            inlineReplies: inline,
+          )
+          .first;
+      expect((await read()).map((job) => job.sourceDisplayName), [
+        'photo-0.png',
+      ]);
+      expect((await read(inline: true)).map((job) => job.sourceDisplayName), [
+        'photo-0.png',
+        'photo-1.png',
+        'photo-2.png',
+      ]);
+      expect((await read(threadId: 51)).map((job) => job.sourceDisplayName), [
+        'photo-1.png',
+        'photo-2.png',
+      ]);
+      expect(await read(threadId: 99), isEmpty);
+    },
+  );
+
   _registerAttachmentRepositoryThreadBindingTests();
 
   test(

@@ -761,6 +761,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachmentReadyToSend => 'Ready to send with your message';
 
   @override
+  String attachmentBatchTitle(int count) {
+    return '$count attachments';
+  }
+
+  @override
+  String attachmentBatchProgress(int sent, int total) {
+    return '$sent of $total sent';
+  }
+
+  @override
+  String get attachmentBatchSending => 'Sending attachments…';
+
+  @override
+  String get attachmentBatchDetails => 'Attachment details';
+
+  @override
+  String get attachmentActionFailed =>
+      'The attachment changed while processing the action. Please try again.';
+
+  @override
   String get remove => 'Remove';
 
   @override

@@ -40,6 +40,7 @@ import 'chat_background_surface.dart';
 import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
 import 'photo_album_grouping.dart';
+import 'chat_pending_attachments.dart';
 import 'chat_scroll_controller.dart';
 import 'message_translation_dialog.dart';
 import 'location_picker_screen.dart';
@@ -488,6 +489,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final interactionKey = _key;
     final messagesValue = ref.watch(chatMessagesProvider(_key));
     final operationsValue = ref.watch(textSendOperationsProvider(_key));
+    final attachmentJobs =
+        ref.watch(attachmentRoomJobsProvider(_key)).asData?.value ??
+        const <StoredAttachmentJob>[];
     final statusesValue = ref.watch(outgoingMessageStatusesProvider(_key));
     final scopeValue = ref.watch(chatScopeProvider(_key));
     final liveConversation = _watchLiveConversation();
@@ -631,8 +635,15 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final pending = operations
         .where((operation) => operation.outboxState != 'completed')
         .toList(growable: false);
+    final pendingAttachments = pendingAttachmentBatches(
+      attachmentJobs,
+      serverUrl: widget.account.serverUrl,
+    );
     final showInitialLoading =
-        !_initialAttemptFinished && messages.isEmpty && pending.isEmpty;
+        !_initialAttemptFinished &&
+        messages.isEmpty &&
+        pending.isEmpty &&
+        pendingAttachments.isEmpty;
     final error = _localError ?? _storedError(scope?.lastSyncError);
     final strings = AppLocalizations.of(context);
     final typingState = typingKey == null
@@ -844,6 +855,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                           messages: messages,
                           blocks: scopeBlocks,
                           pending: pending,
+                          attachments: pendingAttachments,
                           hasOlder: scope?.hasHistory ?? false,
                           loadingOlder: _loadingOlder,
                           controller: _scrollController,

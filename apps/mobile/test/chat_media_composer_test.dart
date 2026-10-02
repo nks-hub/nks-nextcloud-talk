@@ -144,15 +144,8 @@ void main() {
       _progress(AttachmentJobPhase.uploading, progress: 0.42),
     );
     await tester.pump();
-    expect(find.text('Uploading… 42%'), findsOneWidget);
-    expect(
-      tester
-          .widget<LinearProgressIndicator>(
-            find.byKey(const Key('image-attachment-upload-progress')),
-          )
-          .value,
-      0.42,
-    );
+    expect(find.byKey(const Key('composer-attachment-previews')), findsNothing);
+    expect(bridge.sessions.single.cancelCount, 0);
 
     bridge.sessions.single
       ..add(_progress(AttachmentJobPhase.awaitingConfirmation, progress: 1))
@@ -242,62 +235,58 @@ void main() {
     );
   });
 
-  testWidgets('ordinary thread image retry keeps replyTo scope', (
-    tester,
-  ) async {
-    final bridge = _RecordingBridge();
-    addTearDown(bridge.close);
-    final voiceBackends = _VoiceBackendFactory();
-    addTearDown(voiceBackends.close);
+  testWidgets(
+    'ordinary thread upload leaves the composer without losing reply scope',
+    (tester) async {
+      final bridge = _RecordingBridge();
+      addTearDown(bridge.close);
+      final voiceBackends = _VoiceBackendFactory();
+      addTearDown(voiceBackends.close);
 
-    await tester.pumpWidget(
-      _threadComposerApp(
-        sourceStore: sourceStore,
-        bridge: bridge.bridge,
-        threadBinding: ChatMediaThreadBinding.ordinary(
-          accountId: _account,
-          roomToken: _room,
-          rootMessageId: 73,
+      await tester.pumpWidget(
+        _threadComposerApp(
+          sourceStore: sourceStore,
+          bridge: bridge.bridge,
+          threadBinding: ChatMediaThreadBinding.ordinary(
+            accountId: _account,
+            roomToken: _room,
+            rootMessageId: 73,
+          ),
+          voiceBackends: voiceBackends,
         ),
-        voiceBackends: voiceBackends,
-      ),
-    );
-    await _pickAttachmentSource(tester);
-    await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
+      );
+      await _pickAttachmentSource(tester);
+      await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
 
-    final metadata = bridge.metadata.single;
-    expect(metadata.kind, AttachmentMessageKind.file);
-    expect(metadata.replyTo, 73);
-    expect(metadata.threadId, isNull);
+      final metadata = bridge.metadata.single;
+      expect(metadata.kind, AttachmentMessageKind.file);
+      expect(metadata.replyTo, 73);
+      expect(metadata.threadId, isNull);
 
-    final session = bridge.sessions.single;
-    session.add(
-      _progress(
-        AttachmentJobPhase.retryable,
-        retryAllowed: true,
-        errorClass: 'dav-transient',
-      ),
-    );
-    await tester.pump();
-    expect(
-      find.byKey(const Key('retry-image-attachment-upload')),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const Key('retry-image-attachment-upload')));
-    await _pumpUntil(tester, () => session.retryCount == 1);
-    session.add(_progress(AttachmentJobPhase.uploading, progress: 0.55));
-    await tester.pump();
-
-    await tester.tap(find.byKey(const Key('cancel-image-attachment-upload')));
-    await _pumpUntil(tester, () => session.cancelCount == 1);
-
-    expect(find.text('Upload cancelled'), findsOneWidget);
-    expect(bridge.metadata, hasLength(1));
-  });
+      final session = bridge.sessions.single;
+      session.add(
+        _progress(
+          AttachmentJobPhase.retryable,
+          retryAllowed: true,
+          errorClass: 'dav-transient',
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const Key('retry-image-attachment-upload')),
+        findsNothing,
+      );
+      expect(session.cancelCount, 0);
+      expect(
+        find.byKey(const Key('composer-attachment-previews')),
+        findsNothing,
+      );
+      expect(bridge.metadata, hasLength(1));
+    },
+  );
 
   testWidgets(
-    'image retry after a same-room rebuild reuses the admitted durable job',
+    'same-room rebuild neither cancels nor resubmits a background attachment',
     (tester) async {
       final admittedBridge = _RecordingBridge();
       final rebuiltBridge = _RecordingBridge();
@@ -329,7 +318,7 @@ void main() {
       await tester.pump();
       expect(
         find.byKey(const Key('retry-image-attachment-upload')),
-        findsOneWidget,
+        findsNothing,
       );
 
       await tester.pumpWidget(
@@ -341,14 +330,12 @@ void main() {
           voiceBackends: voiceBackends,
         ),
       );
-      await tester.tap(find.byKey(const Key('retry-image-attachment-upload')));
-      await _pumpUntil(
-        tester,
-        () =>
-            admittedSession.retryCount > 0 || rebuiltBridge.sessions.isNotEmpty,
+      await tester.pump();
+      expect(admittedSession.cancelCount, 0);
+      expect(
+        find.byKey(const Key('composer-attachment-previews')),
+        findsNothing,
       );
-
-      expect(admittedSession.retryCount, 1);
       expect(admittedBridge.metadata, hasLength(1));
       expect(rebuiltBridge.metadata, isEmpty);
       expect(rebuiltBridge.sessions, isEmpty);

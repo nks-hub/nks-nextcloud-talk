@@ -33,6 +33,15 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
       if (_sameSource(image.source, request.source)) {
         image.source = null;
       }
+      if (!_disposed && !image.disposed) {
+        setState(() {
+          image.durablyAccepted = true;
+          if (identical(_image, image)) {
+            _image = _createImageAttachment();
+            _desktopDropController?.bind(_image, _submitDroppedAttachment);
+          }
+        });
+      }
       _notifyReplyDurablyAccepted(
         acceptedReplyTo,
         callback: acceptanceCallback,

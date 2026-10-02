@@ -37,15 +37,9 @@ void _registerChatMediaComposerContactTests(
     expect(bridge.metadata.single.kind, AttachmentMessageKind.file);
     expect(bridge.metadata.single.replyTo, isNull);
     expect(bridge.metadata.single.threadId, isNull);
-    expect(find.byIcon(Icons.contact_page_outlined), findsOneWidget);
-    final contactSemantics = find.byWidgetPredicate(
-      (widget) => widget is Semantics && widget.properties.label == 'Contact',
-    );
-    expect(contactSemantics, findsOneWidget);
-    expect(
-      tester.widget<Semantics>(contactSemantics).properties.image,
-      isFalse,
-    );
+    await tester.pump();
+    expect(find.byKey(const Key('composer-attachment-previews')), findsNothing);
+    expect(bridge.sessions.single.cancelCount, 0);
   });
 
   testWidgets('dismissed contact picker queues nothing and shows no error', (
