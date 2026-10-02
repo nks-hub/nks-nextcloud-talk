@@ -849,6 +849,9 @@ mixin _AttachmentServiceRuntime {
           continue;
         }
         final key = _jobKey(account.accountId, job.jobId);
+        // A deferred credential read owns the retry timer, even if recovery
+        // left an older transport deadline on the same durable job.
+        if (_credentialRetryCounts.containsKey(key)) continue;
         final next = _metadata[key]?.nextAttemptAt;
         if (next == null ||
             (_jobRuns.containsKey(key) && !next.isAfter(_clock().toUtc()))) {
