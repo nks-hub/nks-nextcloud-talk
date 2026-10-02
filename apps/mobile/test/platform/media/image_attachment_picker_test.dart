@@ -4,6 +4,10 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart' as platform_picker;
+import 'package:image_picker_android/image_picker_android.dart';
+import 'package:image_picker_android/src/messages.g.dart' as picker_wire;
+import 'package:image_picker_platform_interface/image_picker_platform_interface.dart'
+    show ImagePickerPlatform;
 import 'package:nextcloudtalk/core/attachment_upload_telemetry.dart';
 import 'package:nextcloudtalk/network/attachment_transport.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
@@ -25,6 +29,36 @@ void main() {
   });
 
   group('PlatformAttachmentSelectionBackend', () {
+    test('Android gallery requests the multi-photo system picker', () async {
+      final paths = <String>[];
+      for (var index = 0; index < 4; index++) {
+        final file = File.fromUri(root.uri.resolve('photo-$index.png'));
+        await file.writeAsBytes(_pngBytes);
+        paths.add(file.path);
+      }
+      final api = _RecordingAndroidPicker(paths);
+      final previous = ImagePickerPlatform.instance;
+      ImagePickerPlatform.instance = ImagePickerAndroid(api: api);
+      addTearDown(() => ImagePickerPlatform.instance = previous);
+      final backend = PlatformAttachmentSelectionBackend.forTesting(
+        targetPlatform: TargetPlatform.android,
+        isWeb: false,
+        openFile: ({required imageOnly}) async =>
+            throw StateError('Single-file picker used'),
+        pickImage: (_) async => throw StateError('Single-image picker used'),
+      );
+      final selected = await backend.selectImages();
+      expect(api.source?.type, picker_wire.SourceType.gallery);
+      expect(api.options?.allowMultiple, isTrue);
+      expect(api.options?.usePhotoPicker, isTrue);
+      expect(selected.map((image) => image.displayName), [
+        'photo-0.png',
+        'photo-1.png',
+        'photo-2.png',
+        'photo-3.png',
+      ]);
+    });
+
     test('iOS gallery opens the native photo library', () async {
       var fileCalls = 0;
       final imageSources = <platform_picker.ImageSource>[];
@@ -557,5 +591,24 @@ final class _FakeImageSelectionBackend implements ImageSelectionBackend {
   Future<ImageSelection?> selectImage(AttachmentPickerSource source) async {
     requested.add(source);
     return selection;
+  }
+}
+
+final class _RecordingAndroidPicker extends picker_wire.ImagePickerApi {
+  _RecordingAndroidPicker(this.paths);
+
+  final List<String> paths;
+  picker_wire.SourceSpecification? source;
+  picker_wire.GeneralOptions? options;
+
+  @override
+  Future<List<String>> pickImages(
+    picker_wire.SourceSpecification source,
+    picker_wire.ImageSelectionOptions selection,
+    picker_wire.GeneralOptions options,
+  ) async {
+    this.source = source;
+    this.options = options;
+    return paths;
   }
 }

@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart'
     show MissingPluginException, PlatformException;
 import 'package:image_picker/image_picker.dart' as platform_picker;
+import 'package:image_picker_android/image_picker_android.dart';
+import 'package:image_picker_platform_interface/image_picker_platform_interface.dart'
+    show ImagePickerPlatform;
 import 'package:mime/mime.dart';
 import 'package:nextcloudtalk/core/attachment_upload_telemetry.dart';
 import 'package:nextcloudtalk/network/attachment_transport.dart';
@@ -64,8 +67,7 @@ typedef OpenAttachmentFile = Future<XFile?> Function({required bool imageOnly});
 typedef PickAttachmentImage =
     Future<XFile?> Function(platform_picker.ImageSource source);
 
-/// iOS gallery selection uses the native photo picker. Other gallery and file
-/// selections keep the document picker; the camera always uses image_picker.
+/// Photo batches use the native library on phones and file_selector on desktop.
 final class PlatformAttachmentSelectionBackend
     implements ImageSelectionBackend, MultipleImageSelectionBackend {
   const PlatformAttachmentSelectionBackend()
@@ -130,6 +132,12 @@ final class PlatformAttachmentSelectionBackend
   Future<List<ImageSelection>> selectImages() async {
     try {
       final platform = _targetPlatform ?? defaultTargetPlatform;
+      final implementation = ImagePickerPlatform.instance;
+      if (!(_isWeb ?? kIsWeb) &&
+          platform == TargetPlatform.android &&
+          implementation is ImagePickerAndroid) {
+        implementation.useAndroidPhotoPicker = true;
+      }
       final files =
           !(_isWeb ?? kIsWeb) &&
               (platform == TargetPlatform.iOS ||
