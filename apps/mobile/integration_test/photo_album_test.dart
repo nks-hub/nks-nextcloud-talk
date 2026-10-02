@@ -5,6 +5,6 @@ import '../test/chat_room_pane_test.dart' as chat;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  chat.main(imagesOnly: true);
-  viewer.main();
+  chat.main(albumsOnly: true);
+  viewer.main(galleryOnly: true);
 }

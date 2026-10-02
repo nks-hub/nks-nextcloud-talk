@@ -12,7 +12,7 @@ import 'package:nextcloudtalk/features/chat/media/chat_image_exporter.dart';
 
 import 'test_support.dart';
 
-void main() {
+void main({bool galleryOnly = false}) {
   testWidgets('gallery opens selected photo, swipes, zooms and exports it', (
     tester,
   ) async {
@@ -76,6 +76,8 @@ void main() {
     expect(find.text('3 / 4'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  if (galleryOnly) return;
 
   testWidgets('opens an authorized 2048 preview with accessible zoom controls', (
     tester,

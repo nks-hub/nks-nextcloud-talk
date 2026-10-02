@@ -54,7 +54,7 @@ late MemoryCredentialVault vault;
 late StoredAccount account;
 late CachedConversation conversation;
 
-void main({bool imagesOnly = false}) {
+void main({bool imagesOnly = false, bool albumsOnly = false}) {
   setUp(() async {
     database = openTestDatabase();
     accounts = AccountRepository(database);
@@ -112,6 +112,11 @@ void main({bool imagesOnly = false}) {
   });
 
   tearDown(() => database.close());
+
+  if (albumsOnly) {
+    _registerPhotoAlbumTests();
+    return;
+  }
 
   if (!imagesOnly) {
     _registerChatRoomPaneDesktopInputTests();
