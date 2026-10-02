@@ -22,16 +22,19 @@ final class ConversationShortcut {
     required this.id,
     required this.label,
     required this.uri,
+    this.shareable = true,
   });
 
   final String id;
   final String label;
   final Uri uri;
+  final bool shareable;
 
   Map<String, Object?> toMap() => <String, Object?>{
     'id': id,
     'label': label,
     'uri': uri.toString(),
+    'shareable': shareable,
   };
 
   @override
@@ -39,10 +42,11 @@ final class ConversationShortcut {
       other is ConversationShortcut &&
       other.id == id &&
       other.label == label &&
-      other.uri == uri;
+      other.uri == uri &&
+      other.shareable == shareable;
 
   @override
-  int get hashCode => Object.hash(id, label, uri);
+  int get hashCode => Object.hash(id, label, uri, shareable);
 
   @override
   String toString() => 'ConversationShortcut($id, $label, $uri)';
@@ -74,6 +78,7 @@ ConversationShortcut? conversationShortcutFor({
   final label = room.displayName.trim();
   return ConversationShortcut(
     id: '${account.id}|${room.token}',
+    shareable: room.readOnly == 0 && !room.isArchived,
     label: label.isEmpty ? room.token : label,
     uri: server.uri.replace(
       path: '${server.basePath}/index.php/call/${room.token}',
@@ -110,6 +115,7 @@ List<ConversationShortcut> conversationShortcuts({
         lastActivity: room.lastActivity,
         shortcut: ConversationShortcut(
           id: '${account.id}|${room.token}',
+          shareable: room.readOnly == 0,
           label: label.isEmpty ? room.token : label,
           uri: server.uri.replace(
             path: '${server.basePath}/index.php/call/${room.token}',

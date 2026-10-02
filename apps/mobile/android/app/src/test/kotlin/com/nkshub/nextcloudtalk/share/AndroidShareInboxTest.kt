@@ -29,6 +29,32 @@ import org.robolectric.Shadows.shadowOf
 
 @RunWith(RobolectricTestRunner::class)
 class AndroidShareInboxTest {
+    @Test
+    fun directShareRetainsItsTargetAfterInboxReloadForTextAndFiles() {
+        val uri = provider.put("document.txt", "text/plain", byteArrayOf(1, 2, 3))
+        for (attachment in listOf<Uri?>(null, uri)) {
+            val intent = Intent(Intent.ACTION_SEND).setType("text/plain")
+                .putExtra(Intent.EXTRA_TEXT, "https://example.invalid")
+                .putExtra(Intent.EXTRA_SHORTCUT_ID, "account-b|room-a")
+            attachment?.let { intent.putExtra(Intent.EXTRA_STREAM, it) }
+            val captured = inbox().capture(intent) as AndroidShareCaptureResult.Accepted
+            assertEquals("account-b|room-a", captured.share.asMap()["shortcutId"])
+            val restored = inbox().pending().first { it.id == captured.share.id }
+            assertEquals("account-b|room-a", restored.shortcutId)
+        }
+    }
+
+    @Test
+    fun samePayloadToDifferentConversationsIsNotDeduplicated() {
+        val inbox = inbox()
+        for (target in listOf("account-a|room-a", "account-b|room-a")) {
+            inbox.capture(Intent(Intent.ACTION_SEND).setType("text/plain")
+                .putExtra(Intent.EXTRA_TEXT, "https://example.invalid")
+                .putExtra(Intent.EXTRA_SHORTCUT_ID, target))
+        }
+        assertEquals(2, inbox.pending().size)
+    }
+
     private lateinit var context: Context
     private lateinit var provider: ShareTestProvider
     private var nextId = 0

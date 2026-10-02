@@ -316,13 +316,30 @@ final class _IncomingShareTargetDialogState
   /// help - the whole list is on screen anyway.
   static const _searchFrom = 8;
 
-  late final Future<List<IncomingShareAccount>> _accounts = widget
-      .loadAccounts();
+  late final Future<List<IncomingShareAccount>> _accounts = _loadAccounts();
   final _query = TextEditingController();
   IncomingShareAccount? _account;
   IncomingShareRoom? _room;
   String? _error;
   var _sending = false;
+
+  Future<List<IncomingShareAccount>> _loadAccounts() async {
+    final accounts = await widget.loadAccounts();
+    // A system suggestion only selects a currently writable room; it never sends.
+    final shortcutId = widget.share.shortcutId;
+    if (shortcutId != null) {
+      for (final account in accounts) {
+        for (final room in account.rooms) {
+          if ('${account.id}|${room.token}' == shortcutId) {
+            _account = account;
+            _room = room;
+            return accounts;
+          }
+        }
+      }
+    }
+    return accounts;
+  }
 
   @override
   void dispose() {

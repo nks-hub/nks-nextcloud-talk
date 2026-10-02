@@ -10,6 +10,8 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+- Android nyní nabízí nedávné konverzace přímo v systémové nabídce sdílení odkazů a příloh. Vybraná konverzace a účet se předvyplní; odeslání je nutné potvrdit. Při zapnutém zámku aplikace se návrhy nezveřejňují.
+
 ## 1.0.17 (83) — 1 October 2026
 
 - macOS updates now use Sparkle and work with App Sandbox enabled. Both the update archive and feed are signature-verified. Install this version manually once when upgrading from builds 81 or 82.

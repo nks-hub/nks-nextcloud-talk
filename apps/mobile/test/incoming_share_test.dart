@@ -19,6 +19,59 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel(IncomingShareBridge.channelName);
 
+  for (final shortcutId in ['account-b|room-a', 'removed|room-a', null]) {
+    testWidgets('direct share selects only its current account: $shortcutId', (
+      tester,
+    ) async {
+      IncomingShareTarget? sent;
+      await tester.pumpWidget(
+        _localizedApp(
+          IncomingShareTargetDialog(
+            share: parseIncomingShare({
+              'id': 'direct-share',
+              'text': 'https://example.invalid',
+              'shortcutId': shortcutId,
+            }),
+            loadAccounts: () async => const [
+              IncomingShareAccount(
+                id: 'account-a',
+                label: 'Account A',
+                rooms: [IncomingShareRoom(token: 'room-a', label: 'Project A')],
+              ),
+              IncomingShareAccount(
+                id: 'account-b',
+                label: 'Account B',
+                rooms: [IncomingShareRoom(token: 'room-a', label: 'Project B')],
+              ),
+            ],
+            send: (target) async {
+              sent = target;
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final button = find.byKey(const Key('incoming-share-send'));
+      expect(sent, isNull);
+      if (shortcutId == 'account-b|room-a') {
+        expect(
+          tester
+              .widget<ListTile>(
+                find.byKey(const Key('incoming-share-room-account-b-room-a')),
+              )
+              .selected,
+          isTrue,
+        );
+        await tester.tap(button);
+        await tester.pumpAndSettle();
+        expect(sent?.accountId, 'account-b');
+        expect(sent?.roomToken, 'room-a');
+      } else {
+        expect(tester.widget<FilledButton>(button).onPressed, isNull);
+      }
+    });
+  }
+
   tearDown(() async {
     debugDefaultTargetPlatformOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

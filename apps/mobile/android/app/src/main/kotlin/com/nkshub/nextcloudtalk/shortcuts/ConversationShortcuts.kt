@@ -66,7 +66,7 @@ class ConversationShortcuts(private val context: Context) : MethodChannel.Method
             return false
         }
         val manager = context.getSystemService(ShortcutManager::class.java) ?: return false
-        val info = shortcut(entry) ?: return false
+        val info = shortcut(entry, forSharing = false) ?: return false
         return runCatching { manager.requestPinShortcut(info, null) }.getOrDefault(false)
     }
 
@@ -77,33 +77,52 @@ class ConversationShortcuts(private val context: Context) : MethodChannel.Method
         }
         val manager = context.getSystemService(ShortcutManager::class.java) ?: return 0
         val limit = manager.maxShortcutCountPerActivity.coerceAtLeast(0)
-        val shortcuts = entries.mapNotNull(::shortcut).take(limit)
+        val shortcuts = entries.mapNotNull { shortcut(it) }.take(limit)
         // The system rate-limits a background app rather than throwing, so the
         // returned count is what actually reached the launcher, not what was
         // asked for.
         return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val previous = manager.getShortcuts(
+                    ShortcutManager.FLAG_MATCH_DYNAMIC or ShortcutManager.FLAG_MATCH_CACHED,
+                )
+                val shareableIds = shortcuts.filter { SHARE_CATEGORY in it.categories.orEmpty() }
+                    .map { it.id }.toSet()
+                manager.removeLongLivedShortcuts(previous.map { it.id }.filter { it !in shareableIds })
+            }
+            if (shortcuts.isEmpty()) {
+                manager.removeAllDynamicShortcuts()
+                return@runCatching 0
+            }
             if (manager.setDynamicShortcuts(shortcuts)) shortcuts.size else 0
         }.getOrDefault(0)
     }
 
     @RequiresApi(Build.VERSION_CODES.N_MR1)
-    private fun shortcut(entry: Map<String, Any?>): ShortcutInfo? {
+    private fun shortcut(entry: Map<String, Any?>, forSharing: Boolean = true): ShortcutInfo? {
         val id = (entry["id"] as? String)?.takeIf { it.isNotBlank() } ?: return null
         val label = (entry["label"] as? String)?.takeIf { it.isNotBlank() } ?: return null
         val uri = (entry["uri"] as? String)?.takeIf { it.isNotBlank() } ?: return null
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
             .setClass(context, AndroidWebPushActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return ShortcutInfo.Builder(context, id)
+        val builder = ShortcutInfo.Builder(context, id)
             .setShortLabel(label.take(MAX_SHORT_LABEL))
             .setLongLabel(label.take(MAX_LONG_LABEL))
             .setIcon(Icon.createWithResource(context, R.mipmap.ic_launcher))
             .setIntent(intent)
-            .build()
+        if (forSharing && entry["shareable"] == true) {
+            builder.setCategories(setOf(SHARE_CATEGORY))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                builder.setLongLived(true)
+            }
+        }
+        return builder.build()
     }
 
     companion object {
         const val CHANNEL_NAME = "com.nkshub.nextcloudtalk/shortcuts"
+        private const val SHARE_CATEGORY = "com.nkshub.nextcloudtalk.category.CONVERSATION"
 
         // Launchers truncate long names themselves; these caps only keep a
         // pathological room name from being handed to the system verbatim.

@@ -7,11 +7,13 @@ final class IncomingShare {
     required this.id,
     required this.text,
     required this.file,
+    this.shortcutId,
   });
 
   final String id;
   final String? text;
   final IncomingSharedFile? file;
+  final String? shortcutId;
 }
 
 final class IncomingSharedFile {
@@ -91,12 +93,18 @@ IncomingShare parseIncomingShare(Object? value) {
   }
   final id = _requiredString(value, 'id', maximumLength: 128);
   final text = _optionalString(value, 'text', maximumLength: 32768);
+  final shortcutId = _optionalString(value, 'shortcutId', maximumLength: 512);
   final path = _optionalString(value, 'filePath', maximumLength: 4096);
   if (path == null) {
     if (text == null) {
       throw const FormatException('Incoming share is empty.');
     }
-    return IncomingShare(id: id, text: text, file: null);
+    return IncomingShare(
+      id: id,
+      text: text,
+      file: null,
+      shortcutId: shortcutId,
+    );
   }
   final mimeType = _requiredString(value, 'mimeType', maximumLength: 255);
   final displayName = _requiredString(value, 'displayName', maximumLength: 255);
@@ -113,6 +121,7 @@ IncomingShare parseIncomingShare(Object? value) {
   return IncomingShare(
     id: id,
     text: text,
+    shortcutId: shortcutId,
     file: IncomingSharedFile(
       path: path,
       mimeType: mimeType,

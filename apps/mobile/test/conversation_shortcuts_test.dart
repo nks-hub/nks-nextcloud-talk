@@ -18,6 +18,23 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('conversationShortcuts', () {
+    test('read-only rooms remain launcher shortcuts without sharing', () {
+      final shortcuts = conversationShortcuts(
+        accounts: const [_accountA],
+        conversations: {
+          'account-a': [
+            _room(
+              account: 'account-a',
+              token: 'aaaa',
+              activity: 2,
+              readOnly: 1,
+            ),
+            _room(account: 'account-a', token: 'bbbb', activity: 1),
+          ],
+        },
+      );
+      expect(shortcuts.map((shortcut) => shortcut.shareable), [false, true]);
+    });
     test('ranks the busiest rooms across accounts and stops at the limit', () {
       final shortcuts = conversationShortcuts(
         accounts: const [_accountA, _accountB],
@@ -212,6 +229,7 @@ void main() {
             'id': 'account-a|aaaa',
             'label': 'Room',
             'uri': 'https://cloud.example.invalid/index.php/call/aaaa',
+            'shareable': true,
           },
         ],
       });
@@ -286,6 +304,7 @@ CachedConversation _room({
   required int activity,
   String? name,
   bool archived = false,
+  int readOnly = 0,
 }) {
   return CachedConversation(
     accountId: account,
@@ -296,7 +315,7 @@ CachedConversation _room({
     unreadMessages: 0,
     favorite: false,
     isArchived: archived,
-    readOnly: 0,
+    readOnly: readOnly,
     roomType: 2,
     roomName: token,
     objectType: '',

@@ -20,6 +20,7 @@ internal data class AndroidIncomingShare(
     val sha256: String?,
     val sourceFingerprint: String,
     val createdAtMillis: Long,
+    val shortcutId: String? = null,
 ) {
     fun asMap(): Map<String, Any?> = mapOf(
         "id" to id,
@@ -29,6 +30,7 @@ internal data class AndroidIncomingShare(
         "displayName" to displayName,
         "byteLength" to byteLength,
         "sha256" to sha256,
+        "shortcutId" to shortcutId,
     )
 }
 
@@ -92,7 +94,9 @@ internal class AndroidShareInbox(
         if (uri != null && (uri.scheme != "content" || isOwnProvider(uri))) {
             return AndroidShareCaptureResult.Rejected("share-uri-unsupported")
         }
-        val sourceFingerprint = sourceFingerprint(source.type, text, uri)
+        val shortcutId = source.getStringExtra(Intent.EXTRA_SHORTCUT_ID)
+            ?.takeIf { it.isNotEmpty() && it.length <= 512 && '\u0000' !in it }
+        val sourceFingerprint = sourceFingerprint(source.type, text, uri, shortcutId)
         val pending = pending()
         if (deduplicatePending) {
             pending.firstOrNull { it.sourceFingerprint == sourceFingerprint }?.let { existing ->
@@ -124,8 +128,9 @@ internal class AndroidShareInbox(
             } else {
                 copyUri(id, uri, source.type, text, sourceFingerprint)
             }
-            writeMetadata(share)
-            AndroidShareCaptureResult.Accepted(share)
+            val targetedShare = share.copy(shortcutId = shortcutId)
+            writeMetadata(targetedShare)
+            AndroidShareCaptureResult.Accepted(targetedShare)
         } catch (_: AndroidShareRejectedException) {
             removeFiles(id)
             AndroidShareCaptureResult.Rejected("share-file-invalid")
@@ -264,6 +269,7 @@ internal class AndroidShareInbox(
             .put("sourceFingerprint", share.sourceFingerprint)
             .put("createdAtMillis", share.createdAtMillis)
         share.text?.let { objectValue.put("text", it) }
+        share.shortcutId?.let { objectValue.put("shortcutId", it) }
         share.filePath?.let { objectValue.put("filePath", it) }
         share.mimeType?.let { objectValue.put("mimeType", it) }
         share.displayName?.let { objectValue.put("displayName", it) }
@@ -299,6 +305,7 @@ internal class AndroidShareInbox(
             sha256 = value.optString("sha256").takeIf(String::isNotEmpty),
             sourceFingerprint = sourceFingerprint,
             createdAtMillis = value.getLong("createdAtMillis"),
+            shortcutId = value.optString("shortcutId").takeIf(String::isNotEmpty),
         )
     } catch (_: org.json.JSONException) {
         null
@@ -331,8 +338,10 @@ internal class AndroidShareInbox(
         }
     }
 
-    private fun sourceFingerprint(mimeType: String?, text: String?, uri: Uri?): String {
-        val value = listOf(mimeType.orEmpty(), text.orEmpty(), uri?.toString().orEmpty())
+    private fun sourceFingerprint(mimeType: String?, text: String?, uri: Uri?, shortcutId: String?): String {
+        val parts = mutableListOf(mimeType.orEmpty(), text.orEmpty(), uri?.toString().orEmpty())
+        shortcutId?.let(parts::add)
+        val value = parts
             .joinToString("\u0000")
         return MessageDigest.getInstance("SHA-256")
             .digest(value.toByteArray(Charsets.UTF_8))
