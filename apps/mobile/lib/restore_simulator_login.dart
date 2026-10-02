@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -13,7 +14,7 @@ import 'package:nextcloudtalk/features/onboarding/onboarding_coordinator.dart';
 // from its Documents directory, never embedded in a compiled app or a log.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (!Platform.isIOS || !Platform.environment.containsKey('SIMULATOR_UDID')) {
+  if (!Platform.isIOS || (await DeviceInfoPlugin().iosInfo).isPhysicalDevice) {
     throw StateError('Login recovery requires an iOS simulator');
   }
   final documents = await getApplicationDocumentsDirectory();
