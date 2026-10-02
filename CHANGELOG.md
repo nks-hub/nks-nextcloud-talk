@@ -10,6 +10,10 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+## 1.0.20 (88) — 2 October 2026
+
+- Android photo selection now opens the system multi-photo picker, with explicit selection and confirmation, instead of the legacy file chooser.
+
 ## 1.0.19 (87) — 2 October 2026
 
 - Photos sent together now appear as one gallery on mobile and desktop. Tap a photo to browse, zoom, save or share it; swipe or use arrow keys to move between photos.
