@@ -1,4 +1,1 @@
-Opraveny aktualizace macOS. Tuto verzi je na Macu nutné jednou nainstalovat ručně.
-Opraveno rušení zvukového streamu při hovorech a nahrávání hlasových zpráv.
-Ošetřena nativní chyba síťového připojení.
-Odstraněno zbytečné měření výkonu. Hlášení skutečných chyb zůstává.
+Android: při sdílení odkazu nebo přílohy se v systémové nabídce nabízejí jednotlivé konverzace. Výběr předvyplní správný účet a konverzaci. Odeslání je nutné potvrdit. Při zapnutém zámku aplikace se návrhy nezobrazují.

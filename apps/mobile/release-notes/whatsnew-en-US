@@ -1,4 +1,1 @@
-Fixed macOS updates. Install this version manually once on your Mac.
-Fixed audio stream cancellation during calls and voice recordings.
-Handled a native network connection error.
-Removed redundant performance measurements while keeping error reporting.
+Android: the system share sheet now suggests individual conversations when sharing links and attachments. Selecting a conversation prefills the correct account and room. Sending requires confirmation. Suggestions are hidden when app lock is enabled.

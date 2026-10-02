@@ -10,7 +10,9 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
-- Android nyní nabízí nedávné konverzace přímo v systémové nabídce sdílení odkazů a příloh. Vybraná konverzace a účet se předvyplní; odeslání je nutné potvrdit. Při zapnutém zámku aplikace se návrhy nezveřejňují.
+## 1.0.18 (84) — 2 October 2026
+
+- Android now offers recent conversations in the system share sheet for links and attachments. Selecting a conversation prefills its account and room; sending still requires confirmation. Suggestions are hidden when app lock is enabled.
 
 ## 1.0.17 (83) — 1 October 2026
 
