@@ -777,6 +777,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachmentBatchDetails => 'Attachment details';
 
   @override
+  String get settingsUpdateCheckNow => 'Check now';
+
+  @override
   String get previousAttachments => 'Previous attachments';
 
   @override

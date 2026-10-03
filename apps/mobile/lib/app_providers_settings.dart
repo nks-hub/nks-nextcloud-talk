@@ -254,20 +254,25 @@ final updateCheckEnabledProvider =
     NotifierProvider<UpdateCheckController, bool>(UpdateCheckController.new);
 
 base class UpdateCheckController extends Notifier<bool> {
+  bool _changedSinceLoad = false;
+  bool _disposed = false;
+
   @override
   bool build() {
+    ref.onDispose(() => _disposed = true);
     unawaited(_load());
     return false;
   }
 
   Future<void> _load() async {
     final stored = await ref.read(updateCheckPreferenceStoreProvider).read();
-    if (state != stored) {
+    if (!_disposed && !_changedSinceLoad && state != stored) {
       state = stored;
     }
   }
 
   Future<void> setEnabled(bool enabled) async {
+    _changedSinceLoad = true;
     state = enabled;
     await ref.read(updateCheckPreferenceStoreProvider).write(enabled);
   }
@@ -282,15 +287,60 @@ base class UpdateCheckController extends Notifier<bool> {
 /// release, which is the whole difference between a button and an update this
 /// app looks for by itself.
 final latestBuildProvider = FutureProvider<UpdateCheckResult?>((ref) async {
-  if (!ref.watch(updateCheckEnabledProvider)) {
+  if (!ref.watch(updateCheckEnabledProvider) ||
+      !ref.watch(updateCheckHostProvider)) {
     return null;
   }
-  final timer = Timer.periodic(
-    updateCheckInterval,
-    (_) => ref.invalidateSelf(),
-  );
-  ref.onDispose(timer.cancel);
-  return ref.watch(updateCheckServiceProvider).check();
+  var disposed = false;
+  var checking = true;
+  var wakeAllowed = false;
+  Timer? nextCheck;
+  Timer? wakeCooldown;
+  void onWake() {
+    if (disposed || checking || !wakeAllowed) return;
+    wakeAllowed = false;
+    ref.invalidateSelf();
+  }
+
+  final subscriptions = [
+    ref.watch(connectivityWakeEventsProvider).listen((_) => onWake()),
+    ref.watch(appLifecycleResumeEventsProvider).listen((_) => onWake()),
+  ];
+  ref.listen<bool>(windowActiveProvider, (previous, active) {
+    if (active && previous == false) onWake();
+  });
+  ref.onDispose(() {
+    disposed = true;
+    nextCheck?.cancel();
+    wakeCooldown?.cancel();
+    for (final subscription in subscriptions) {
+      unawaited(subscription.cancel());
+    }
+  });
+  final result = await ref.watch(updateCheckServiceProvider).check();
+  if (!disposed) {
+    checking = false;
+    final retrySoon =
+        result is UpdateCheckUnavailable ||
+        result is UpdateAvailable &&
+            isDesktopUpdateCheckPlatform &&
+            (result.installerAssetUri == null ||
+                result.sha256SumsAssetUri == null);
+    final serverDelay = result is UpdateCheckUnavailable
+        ? result.retryAfter
+        : null;
+    wakeCooldown = Timer(
+      serverDelay ??
+          (retrySoon ? updateCheckRetryWakeInterval : updateCheckWakeInterval),
+      () => wakeAllowed = true,
+    );
+    nextCheck = Timer(
+      serverDelay ??
+          (retrySoon ? updateCheckRetryInterval : updateCheckInterval),
+      () => ref.invalidateSelf(),
+    );
+  }
+  return result;
 });
 
 /// Whether a newer build is published, for the small mark on the way into

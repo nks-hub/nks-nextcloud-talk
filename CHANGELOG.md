@@ -10,6 +10,7 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+- Desktop update checks run every 15 minutes, retry failed checks after 2 minutes, and refresh after returning to the app or reconnecting. Server rate limits and the automatic-check preference are respected. Settings also provide a Check now button.
 - Attachment previews show the total count, visible scrolling controls and a scrollbar, so files outside the visible strip are easier to find.
 - Dragging files over an open chat highlights the drop area. A preparation indicator stays visible while the dropped files are copied into the composer.
 

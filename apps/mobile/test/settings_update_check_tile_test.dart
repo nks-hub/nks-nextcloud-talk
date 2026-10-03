@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -18,6 +19,33 @@ import 'test_support.dart';
 
 void main() {
   tearDown(() => debugDefaultTargetPlatformOverride = null);
+
+  testWidgets(
+    'check now refreshes immediately and is disabled while checking',
+    (tester) async {
+      var checks = 0;
+      final pending = Completer<UpdateCheckResult>();
+      await tester.pumpWidget(
+        _tile(
+          store: _Store(enabled: true),
+          answer: () async {
+            checks++;
+            return checks == 1 ? const UpdateUpToDate() : pending.future;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(checks, 1);
+      final button = find.byKey(const Key('settings-update-check-now'));
+      await tester.tap(button);
+      await tester.pump();
+      expect(checks, 2);
+      expect(tester.widget<TextButton>(button).onPressed, isNull);
+      pending.complete(const UpdateUpToDate());
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextButton>(button).onPressed, isNotNull);
+    },
+  );
 
   testWidgets('the check is off until it is switched on, and asks nothing', (
     tester,

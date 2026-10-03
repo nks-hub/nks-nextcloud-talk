@@ -286,6 +286,7 @@
   "@attachmentBatchProgress": {"placeholders": {"sent": {"type": "int"}, "total": {"type": "int"}}},
   "attachmentBatchSending": "Odesílání příloh…",
   "attachmentBatchDetails": "Podrobnosti příloh",
+  "settingsUpdateCheckNow": "Zkontrolovat nyní",
   "previousAttachments": "Předchozí přílohy",
   "nextAttachments": "Další přílohy",
   "dropAttachmentsHere": "Puštěním souborů přidáte přílohy",

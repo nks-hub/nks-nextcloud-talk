@@ -781,6 +781,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get attachmentBatchDetails => 'Podrobnosti příloh';
 
   @override
+  String get settingsUpdateCheckNow => 'Zkontrolovat nyní';
+
+  @override
   String get previousAttachments => 'Předchozí přílohy';
 
   @override

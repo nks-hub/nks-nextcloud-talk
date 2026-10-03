@@ -286,6 +286,7 @@
   "@attachmentBatchProgress": {"placeholders": {"sent": {"type": "int"}, "total": {"type": "int"}}},
   "attachmentBatchSending": "Sending attachments…",
   "attachmentBatchDetails": "Attachment details",
+  "settingsUpdateCheckNow": "Check now",
   "previousAttachments": "Previous attachments",
   "nextAttachments": "Next attachments",
   "dropAttachmentsHere": "Drop files to add attachments",

@@ -8,6 +8,34 @@ import 'package:http/testing.dart';
 import 'package:nextcloudtalk/features/settings/update_check_service.dart';
 
 void main() {
+  test('GitHub exhausted quota preserves the reset deadline', () async {
+    final now = DateTime.utc(2026, 10, 3, 12);
+    final service = UpdateCheckService(
+      clock: () => now,
+      client: MockClient(
+        (_) async => http.Response(
+          '',
+          403,
+          headers: {
+            'x-ratelimit-remaining': '0',
+            'x-ratelimit-reset':
+                '${now.add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000}',
+          },
+        ),
+      ),
+    );
+    addTearDown(service.close);
+    final result = await service.check();
+    expect(
+      result,
+      isA<UpdateCheckUnavailable>().having(
+        (result) => result.retryAfter,
+        'retry delay',
+        const Duration(hours: 1),
+      ),
+    );
+  });
+
   UpdateCheckService service(
     MockClient client, {
     String currentBuild = '62',

@@ -54,10 +54,11 @@ bool get isDesktopUpdateCheckPlatform {
   };
 }
 
-/// How often a running app asks again. Long on purpose: a release happens at
-/// most a few times a week, and the point is that a window left open for days
-/// still notices one, not that GitHub is polled.
-const updateCheckInterval = Duration(hours: 6);
+// GitHub's anonymous API budget is shared by all clients on one public IP.
+const updateCheckInterval = Duration(minutes: 15);
+const updateCheckRetryInterval = Duration(minutes: 2);
+const updateCheckWakeInterval = Duration(minutes: 5);
+const updateCheckRetryWakeInterval = Duration(minutes: 1);
 
 /// What one check found.
 sealed class UpdateCheckResult {
@@ -99,7 +100,9 @@ final class UpdateAvailable extends UpdateCheckResult {
 /// useful to say beyond "ask again later", and the reasons — offline, rate
 /// limited, a redirect, a body that is not the release JSON — all lead there.
 final class UpdateCheckUnavailable extends UpdateCheckResult {
-  const UpdateCheckUnavailable();
+  const UpdateCheckUnavailable({this.retryAfter});
+
+  final Duration? retryAfter;
 }
 
 /// Asks GitHub for the newest published release and compares its build number
@@ -117,11 +120,14 @@ final class UpdateCheckService {
     this.timeout = const Duration(seconds: 10),
     this.maximumResponseBytes = 128 * 1024,
     this.assetPlatform,
+    DateTime Function()? clock,
   }) : _client = client ?? http.Client(),
-       _uri = latestReleaseUri ?? defaultLatestReleaseUri;
+       _uri = latestReleaseUri ?? defaultLatestReleaseUri,
+       _clock = clock ?? DateTime.now;
 
   final http.Client _client;
   final Uri _uri;
+  final DateTime Function() _clock;
   final String currentBuild;
   final Duration timeout;
   final int maximumResponseBytes;
@@ -159,7 +165,7 @@ final class UpdateCheckService {
     final response = await _client.send(request);
     final body = await _readBounded(response);
     if (response.statusCode != 200) {
-      return const UpdateCheckUnavailable();
+      return UpdateCheckUnavailable(retryAfter: _retryAfter(response));
     }
 
     final decoded = jsonDecode(body);
@@ -191,6 +197,19 @@ final class UpdateCheckService {
       installerAssetUri: installer,
       sha256SumsAssetUri: sums,
     );
+  }
+
+  Duration? _retryAfter(http.StreamedResponse response) {
+    if (response.statusCode != 403 && response.statusCode != 429) return null;
+    var seconds = int.tryParse(response.headers['retry-after'] ?? '');
+    if (seconds == null && response.headers['x-ratelimit-remaining'] == '0') {
+      final reset = int.tryParse(response.headers['x-ratelimit-reset'] ?? '');
+      if (reset != null) {
+        seconds = reset - _clock().toUtc().millisecondsSinceEpoch ~/ 1000;
+      }
+    }
+    if (seconds == null || seconds <= 0) return null;
+    return Duration(seconds: seconds.clamp(60, 86400));
   }
 
   /// Picks this platform's download and the release's `SHA256SUMS` list out of

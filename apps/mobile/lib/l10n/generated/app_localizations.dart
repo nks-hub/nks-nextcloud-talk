@@ -1460,6 +1460,12 @@ abstract class AppLocalizations {
   /// **'Attachment details'**
   String get attachmentBatchDetails;
 
+  /// No description provided for @settingsUpdateCheckNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Check now'**
+  String get settingsUpdateCheckNow;
+
   /// No description provided for @previousAttachments.
   ///
   /// In en, this message translates to:

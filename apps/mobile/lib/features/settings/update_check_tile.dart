@@ -34,6 +34,18 @@ final class UpdateCheckSettingsTile extends ConsumerWidget {
           ),
         ),
         if (enabled)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              key: const Key('settings-update-check-now'),
+              onPressed: answer.isLoading
+                  ? null
+                  : () => ref.invalidate(latestBuildProvider),
+              icon: const Icon(Icons.refresh_rounded),
+              label: Text(strings.settingsUpdateCheckNow),
+            ),
+          ),
+        if (enabled)
           ListTile(
             key: const Key('settings-update-check-result'),
             leading: const Icon(Icons.new_releases_outlined),
