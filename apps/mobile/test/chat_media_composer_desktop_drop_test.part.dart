@@ -53,8 +53,9 @@ void _registerChatMediaComposerDesktopDropTests(
       final seen = <String>{};
       for (var page = 0; page < 6; page++) {
         for (var index = 1; index <= 6; index++) {
-          if (find.text('file-$index.pdf').hitTestable().evaluate().isNotEmpty)
+          if (find.text('file-$index.pdf').hitTestable().evaluate().isNotEmpty) {
             seen.add('file-$index.pdf');
+          }
         }
         final next = find.byKey(const Key('next-prepared-attachments'));
         if (tester.widget<IconButton>(next).onPressed == null) break;
