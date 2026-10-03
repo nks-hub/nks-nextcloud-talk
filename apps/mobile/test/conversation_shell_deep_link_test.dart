@@ -125,6 +125,9 @@ void main() {
           textSendOperationsProvider.overrideWith(
             (ref, key) => Stream.value(const <StoredTextSendOperation>[]),
           ),
+          attachmentRoomJobsProvider.overrideWith(
+            (ref, key) => Stream.value(const <StoredAttachmentJob>[]),
+          ),
           chatScopeProvider.overrideWith((ref, key) => Stream.value(null)),
           chatAttachmentDependenciesProvider.overrideWith(
             (ref, key) => Future<ChatAttachmentDependencies>.error(

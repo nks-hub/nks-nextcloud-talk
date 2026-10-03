@@ -614,6 +614,9 @@ final class _RouteFixture {
       textSendOperationsProvider.overrideWith(
         (ref, key) => Stream.value(const <StoredTextSendOperation>[]),
       ),
+      attachmentRoomJobsProvider.overrideWith(
+        (ref, key) => Stream.value(const <StoredAttachmentJob>[]),
+      ),
       chatScopeProvider.overrideWith((ref, key) => Stream.value(null)),
       connectivityWakeEventsProvider.overrideWithValue(
         const Stream<void>.empty(),
