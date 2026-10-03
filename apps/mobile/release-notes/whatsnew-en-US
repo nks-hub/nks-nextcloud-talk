@@ -1,1 +1,1 @@
-Android now opens the system photo picker, where you can select multiple photos and confirm them together. Photos sent together appear as one gallery.
+Attachments upload concurrently and appear in the conversation with progress, retry and cancel controls. Keep typing and switching conversations while uploads continue. Photos form one album and produce just one notification when supported by the server. Pending uploads resume after restarting the app.

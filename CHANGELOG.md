@@ -10,6 +10,8 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+## 1.0.21 (89) — 3 October 2026
+
 - Selected attachments appear in a compact horizontal preview strip. After sending, uploads move into the conversation with progress, per-file details, retry and cancel actions; typing and navigation remain available.
 - Pending photo albums survive leaving the conversation or restarting the app. Photos already sent remain accessible when another photo in the batch fails.
 - Attachments upload up to three at a time while preserving message order. Cancelling one upload no longer waits for the others.
