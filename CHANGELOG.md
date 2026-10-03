@@ -10,6 +10,9 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+- Attachment previews show the total count, visible scrolling controls and a scrollbar, so files outside the visible strip are easier to find.
+- Dragging files over an open chat highlights the drop area. A preparation indicator stays visible while the dropped files are copied into the composer.
+
 ## 1.0.21 (89) — 3 October 2026
 
 - Selected attachments appear in a compact horizontal preview strip. After sending, uploads move into the conversation with progress, per-file details, retry and cancel actions; typing and navigation remain available.

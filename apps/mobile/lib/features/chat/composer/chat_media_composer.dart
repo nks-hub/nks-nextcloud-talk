@@ -296,6 +296,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   late DurableContactAttachmentPicker _contactPicker;
   late _ComposerAttachment _image;
   final List<_ComposerAttachment> _images = [];
+  final ScrollController _attachmentPreviewScroll = ScrollController();
   bool _sendingAttachments = false;
 
   ImageAttachmentUploadController get _imageController => _image.controller;
@@ -592,6 +593,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   }
 
   void _releaseControllers() {
+    if (!_disposed && _attachmentPreviewScroll.hasClients) {
+      _attachmentPreviewScroll.jumpTo(0);
+    }
     _desktopDropController?.unbind(_image);
     _voiceResetTimer?.cancel();
     _voiceResetTimer = null;
@@ -614,6 +618,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     _desktopDropController = null;
     widget.controller?._detach(this);
     _releaseControllers();
+    _attachmentPreviewScroll.dispose();
     super.dispose();
   }
 

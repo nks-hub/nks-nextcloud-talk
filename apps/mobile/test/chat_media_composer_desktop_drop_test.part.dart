@@ -3,6 +3,88 @@ part of 'chat_media_composer_test.dart';
 void _registerChatMediaComposerDesktopDropTests(
   DurableAttachmentSourceStore Function() sourceStore,
 ) {
+  testWidgets(
+    'six dropped files show their count and every file is reachable by mouse',
+    (tester) async {
+      tester.view.physicalSize = const Size(460, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final bridge = _RecordingBridge();
+      addTearDown(bridge.close);
+      final voiceBackends = _VoiceBackendFactory();
+      addTearDown(voiceBackends.close);
+      final media = ChatMediaComposerController();
+      await tester.pumpWidget(
+        DesktopAttachmentDrop(
+          child: _composerApp(
+            sourceStore: sourceStore(),
+            bridge: bridge.bridge,
+            threadId: null,
+            voiceBackends: voiceBackends,
+            controller: media,
+          ),
+        ),
+      );
+      final drop = DesktopAttachmentDrop.controllerOf(
+        tester.element(find.byKey(const Key('chat-media-composer'))),
+      );
+      final files = List.generate(
+        6,
+        (index) => DropItemFile.fromData(
+          Uint8List.fromList([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]),
+          name: 'file-${index + 1}.pdf',
+          path: 'file-${index + 1}.pdf',
+        ),
+      );
+      expect(
+        await tester.runAsync(() => drop.accept(files)),
+        DesktopAttachmentDropOutcome.accepted,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('6 attachments'), findsOneWidget);
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const Key('previous-prepared-attachments')),
+            )
+            .onPressed,
+        isNull,
+      );
+      final seen = <String>{};
+      for (var page = 0; page < 6; page++) {
+        for (var index = 1; index <= 6; index++) {
+          if (find.text('file-$index.pdf').hitTestable().evaluate().isNotEmpty)
+            seen.add('file-$index.pdf');
+        }
+        final next = find.byKey(const Key('next-prepared-attachments'));
+        if (tester.widget<IconButton>(next).onPressed == null) break;
+        await tester.tap(next);
+        await tester.pumpAndSettle();
+      }
+      expect(seen, {
+        for (var index = 1; index <= 6; index++) 'file-$index.pdf',
+      });
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const Key('next-prepared-attachments')),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.byTooltip('Remove').hitTestable().last);
+      await tester.pumpAndSettle();
+      expect(find.text('5 attachments'), findsOneWidget);
+      expect(await tester.runAsync(media.sendPreparedAttachment), isTrue);
+      expect(bridge.sources.map((source) => source.displayName), [
+        for (var index = 1; index <= 5; index++) 'file-$index.pdf',
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('composer-attachment-count')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final (supportsSilent, sendSilently) in [
     (true, false),
     (true, true),

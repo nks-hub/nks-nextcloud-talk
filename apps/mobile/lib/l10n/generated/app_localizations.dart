@@ -1460,6 +1460,30 @@ abstract class AppLocalizations {
   /// **'Attachment details'**
   String get attachmentBatchDetails;
 
+  /// No description provided for @previousAttachments.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous attachments'**
+  String get previousAttachments;
+
+  /// No description provided for @nextAttachments.
+  ///
+  /// In en, this message translates to:
+  /// **'Next attachments'**
+  String get nextAttachments;
+
+  /// No description provided for @dropAttachmentsHere.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop files to add attachments'**
+  String get dropAttachmentsHere;
+
+  /// No description provided for @preparingAttachments.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing attachments ({count})…'**
+  String preparingAttachments(int count);
+
   /// No description provided for @attachmentActionFailed.
   ///
   /// In en, this message translates to:

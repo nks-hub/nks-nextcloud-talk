@@ -781,6 +781,20 @@ class AppLocalizationsCs extends AppLocalizations {
   String get attachmentBatchDetails => 'Podrobnosti příloh';
 
   @override
+  String get previousAttachments => 'Předchozí přílohy';
+
+  @override
+  String get nextAttachments => 'Další přílohy';
+
+  @override
+  String get dropAttachmentsHere => 'Puštěním souborů přidáte přílohy';
+
+  @override
+  String preparingAttachments(int count) {
+    return 'Připravuji přílohy ($count)…';
+  }
+
+  @override
   String get attachmentActionFailed =>
       'Stav přílohy se mezitím změnil. Zkuste akci znovu.';
 

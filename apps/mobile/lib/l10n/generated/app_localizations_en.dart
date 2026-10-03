@@ -777,6 +777,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachmentBatchDetails => 'Attachment details';
 
   @override
+  String get previousAttachments => 'Previous attachments';
+
+  @override
+  String get nextAttachments => 'Next attachments';
+
+  @override
+  String get dropAttachmentsHere => 'Drop files to add attachments';
+
+  @override
+  String preparingAttachments(int count) {
+    return 'Preparing attachments ($count)…';
+  }
+
+  @override
   String get attachmentActionFailed =>
       'The attachment changed while processing the action. Please try again.';
 
