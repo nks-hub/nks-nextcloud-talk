@@ -565,6 +565,11 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     }
   }
 
+  void _updateAttachments(VoidCallback update) {
+    if (_disposed || !mounted) return;
+    setState(update);
+  }
+
   _ComposerAttachment _addImageAttachment() {
     final idle = _images
         .where(

@@ -34,7 +34,7 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
         image.source = null;
       }
       if (!_disposed && !image.disposed) {
-        setState(() {
+        _updateAttachments(() {
           image.durablyAccepted = true;
           if (identical(_image, image)) {
             _image = _createImageAttachment();

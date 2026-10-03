@@ -50,7 +50,7 @@ extension _ChatMediaComposerPending on _ChatMediaComposerState {
     if (image.durablyAccepted && !state.isActive) {
       scheduleMicrotask(() {
         if (_disposed || image.disposed) return;
-        setState(() => _images.remove(image));
+        _updateAttachments(() => _images.remove(image));
         image.dispose();
       });
     }
