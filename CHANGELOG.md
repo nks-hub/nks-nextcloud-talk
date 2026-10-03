@@ -8,7 +8,7 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
-## Unreleased
+## 1.0.22 (90) — 3 October 2026
 
 - Desktop update checks run every 15 minutes, retry failed checks after 2 minutes, and refresh after returning to the app or reconnecting. Server rate limits and the automatic-check preference are respected. Settings also provide a Check now button.
 - Attachment previews show the total count, visible scrolling controls and a scrollbar, so files outside the visible strip are easier to find.

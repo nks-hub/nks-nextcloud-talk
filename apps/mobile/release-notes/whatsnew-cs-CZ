@@ -1,1 +1,1 @@
-Přílohy se nahrávají souběžně a po odeslání se zobrazují v konverzaci s průběhem, opakováním a zrušením. Během nahrávání můžete dál psát a přepínat konverzace. Fotky tvoří jedno album a při podpoře serveru vyvolají jen jedno upozornění. Rozpracované přenosy se obnoví po restartu aplikace.
+Náhledy příloh ukazují celkový počet a umožňují posouvání. Při přetahování souborů se zvýrazní chat a zobrazí průběh přípravy. Desktop kontroluje aktualizace každých 15 minut, po chybě za 2 minuty a také po návratu do aplikace nebo obnovení sítě. V nastavení je tlačítko Zkontrolovat nyní.
