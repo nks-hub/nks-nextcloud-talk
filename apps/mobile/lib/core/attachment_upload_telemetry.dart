@@ -106,6 +106,7 @@ final class AttachmentUploadDiagnostic {
     this.durablePhase = AttachmentUploadDurablePhase.none,
     this.resumePhase = AttachmentUploadDurablePhase.none,
     this.failure = AttachmentUploadFailure.none,
+    this.errorClass,
     this.progress = AttachmentUploadProgressBucket.none,
     this.sessionBound = false,
     this.retryScheduled = false,
@@ -122,6 +123,11 @@ final class AttachmentUploadDiagnostic {
   final AttachmentUploadDurablePhase durablePhase;
   final AttachmentUploadDurablePhase resumePhase;
   final AttachmentUploadFailure failure;
+
+  /// The durable job's own failure code, e.g. `network` or
+  /// `dav-quota-exceeded`. [failure] folds most of them into `durable`, which
+  /// left a stuck upload with nothing to go on.
+  final String? errorClass;
   final AttachmentUploadProgressBucket progress;
   final bool sessionBound;
   final bool retryScheduled;
@@ -209,6 +215,7 @@ Map<String, String> attachmentUploadDiagnosticTags(
   'attachment.durable_phase': diagnostic.durablePhase.name,
   'attachment.resume_phase': diagnostic.resumePhase.name,
   'attachment.failure': diagnostic.failure.name,
+  'attachment.error_class': ?diagnostic.errorClass,
   'attachment.progress': diagnostic.progress.name,
   'attachment.session_bound': diagnostic.sessionBound.toString(),
   'attachment.retry_scheduled': diagnostic.retryScheduled.toString(),

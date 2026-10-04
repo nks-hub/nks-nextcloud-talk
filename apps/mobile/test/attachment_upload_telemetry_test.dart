@@ -60,6 +60,18 @@ void main() {
     expect(event.exceptions, isNull);
   });
 
+  test('the durable failure code travels as its own tag', () {
+    final tags = attachmentUploadDiagnosticTags(
+      const AttachmentUploadDiagnostic(
+        checkpoint: AttachmentUploadCheckpoint.durableFailed,
+        failure: AttachmentUploadFailure.durable,
+        errorClass: 'network',
+      ),
+    );
+    expect(tags['attachment.failure'], 'durable');
+    expect(tags['attachment.error_class'], 'network');
+  });
+
   test(
     'disabled Sentry drops upload diagnostics before creating work',
     () async {

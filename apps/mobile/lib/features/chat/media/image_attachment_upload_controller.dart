@@ -883,6 +883,7 @@ AttachmentUploadDiagnostic _diagnosticForEvent(
   durablePhase: attachmentUploadDurablePhase(event.durablePhase),
   resumePhase: attachmentUploadDurablePhase(event.resumePhase),
   failure: _diagnosticFailure(event.failureCode),
+  errorClass: event.failureCode,
   progress: _progressBucket(event.progress),
   sessionBound: true,
   retryScheduled: event.retryScheduled,
