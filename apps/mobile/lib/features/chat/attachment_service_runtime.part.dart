@@ -15,6 +15,9 @@ mixin _AttachmentServiceRuntime {
   BeforeAttachmentStepPlan? get _beforeStepPlan;
   CreateAttachmentRetryTimer get _createRetryTimer;
   ReportAttachmentUploadDiagnostic get _reportDiagnostic;
+  ReportAttachmentTransferActivity? get _reportTransferActivity;
+  bool get _transfersActive;
+  set _transfersActive(bool value);
   List<Duration> get _credentialRetryDelays;
   List<Duration> get _confirmationRetryDelays;
   List<Duration> get _retryDelays;
@@ -199,6 +202,7 @@ mixin _AttachmentServiceRuntime {
   Future<void> _scheduleRoom(_AttachmentRoomKey roomKey) async {
     await _ready;
     if (_closed || _suspendedAccounts.contains(roomKey.accountId)) {
+      _syncTransferActivity();
       return;
     }
     _roomRerunRequests.add(roomKey);
@@ -215,9 +219,23 @@ mixin _AttachmentServiceRuntime {
       if (!_closed && _roomRerunRequests.remove(roomKey)) {
         unawaited(_scheduleRoom(roomKey));
       }
+      _syncTransferActivity();
     });
     _roomRuns[roomKey] = run;
+    _syncTransferActivity();
     return run;
+  }
+
+  /// A room run is a transfer in flight and a retry timer is one about to
+  /// resume; either way the process must not be frozen underneath it.
+  void _syncTransferActivity() {
+    final active =
+        !_closed && (_roomRuns.isNotEmpty || _retryTimers.isNotEmpty);
+    if (active == _transfersActive) {
+      return;
+    }
+    _transfersActive = active;
+    _reportTransferActivity?.call(active);
   }
 
   Future<void> _drainRoom(_AttachmentRoomKey roomKey) async {
@@ -787,6 +805,7 @@ mixin _AttachmentServiceRuntime {
       unawaited(_scheduleRoom(roomKey));
     });
     _retryTimers[roomKey] = timer;
+    _syncTransferActivity();
   }
 
   Future<void> _deferForCredential(
@@ -876,6 +895,7 @@ mixin _AttachmentServiceRuntime {
       }
       _retryTimers.remove(roomKey)?.cancel();
       _retryDeadlines.remove(roomKey);
+      _syncTransferActivity();
       return;
     }
     _armRetry(roomKey, earliest);

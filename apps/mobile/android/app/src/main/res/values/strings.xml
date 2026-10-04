@@ -8,4 +8,6 @@
     <string name="push_action_reply_empty">The reply was empty and was not sent.</string>
     <string name="push_action_reply_failed">The reply could not be sent. Tap to open the conversation.</string>
     <string name="push_action_mark_read_failed">The conversation could not be marked as read. Tap to open it.</string>
+    <string name="attachment_upload_channel">Attachment uploads</string>
+    <string name="attachment_upload_title">Sending attachment…</string>
 </resources>

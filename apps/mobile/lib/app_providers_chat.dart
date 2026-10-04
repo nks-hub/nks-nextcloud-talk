@@ -210,6 +210,9 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
 ) async {
   final source = await ref.watch(attachmentSourceProvider.future);
   final chat = ref.watch(chatServiceProvider);
+  final keepAlive = !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+      ? AttachmentTransferKeepAlive()
+      : null;
   final service = AttachmentService(
     repository: ref.watch(attachmentRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
@@ -225,6 +228,7 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
               roomToken: roomToken.value,
               threadId: threadId,
             ),
+    reportTransferActivity: keepAlive?.report,
   );
   // A network hint or a resumed app is worth one more attempt for uploads
   // whose automatic retries ran out while the device was offline.
@@ -244,6 +248,7 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
     ),
   );
   ref.onDispose(() {
+    keepAlive?.dispose();
     unawaited(readers.cancel());
     for (final wake in wakes) {
       unawaited(wake.cancel());

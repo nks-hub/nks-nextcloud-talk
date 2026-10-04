@@ -1,6 +1,50 @@
 part of 'attachment_service_test.dart';
 
 void _registerAttachmentServiceSchedulerTests() {
+  test('transfer activity spans retries and ends with the upload', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final activity = <bool>[];
+    var failedOnce = false;
+    final client = MockClient((request) async {
+      if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+        return http.Response.bytes(_probeSuccess(), 200);
+      }
+      if (request.method == 'PUT') {
+        if (!failedOnce) {
+          failedOnce = true;
+          throw http.ClientException('connection reset', request.url);
+        }
+        return http.Response('', 201);
+      }
+      if (request.method == 'POST' &&
+          request.url.path.endsWith('/attachment')) {
+        return http.Response.bytes(_finalizeSuccess(), 200);
+      }
+      fail('Unexpected request: ${request.method} ${request.url}');
+    });
+    final service = fixture.service(
+      client,
+      reportTransferActivity: activity.add,
+      retryDelays: const [Duration(milliseconds: 20)],
+      identifierFactory: _SequentialIdentifierFactory(),
+    );
+    addTearDown(service.close);
+
+    final session = await service.enqueue(fixture.request(normalMaximum: 32));
+    await session.events
+        .firstWhere(
+          (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+        )
+        .timeout(const Duration(seconds: 2));
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect(failedOnce, isTrue);
+    // One span: the retry wait between attempts must not drop the hold, or
+    // the process can be frozen exactly while the retry is due.
+    expect(activity, [true, false]);
+  });
+
   test(
     'temporary credential denial after admission does not strand upload',
     () async {

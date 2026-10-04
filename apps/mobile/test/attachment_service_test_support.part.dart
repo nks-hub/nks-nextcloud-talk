@@ -97,6 +97,7 @@ final class _Fixture {
     AttachmentIdentifierFactory? identifierFactory,
     CredentialVault? credentialVault,
     ReportAttachmentUploadDiagnostic? reportDiagnostic,
+    ReportAttachmentTransferActivity? reportTransferActivity,
     List<Duration>? credentialRetryDelays,
   }) {
     final sources = sourceProvider ?? _FileSourceProvider();
@@ -128,6 +129,7 @@ final class _Fixture {
       beforeStepPlan: beforeStepPlan,
       createRetryTimer: createRetryTimer,
       reportDiagnostic: reportDiagnostic ?? reportAttachmentUploadDiagnostic,
+      reportTransferActivity: reportTransferActivity,
       credentialRetryDelays:
           credentialRetryDelays ?? const <Duration>[Duration.zero],
       clock: clock,

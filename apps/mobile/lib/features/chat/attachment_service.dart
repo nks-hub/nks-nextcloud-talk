@@ -43,6 +43,10 @@ typedef BeforeAttachmentStepPlan =
 typedef CreateAttachmentRetryTimer =
     Timer Function(Duration delay, void Function() callback);
 
+/// Told `true` when the first upload or pending retry starts and `false` when
+/// the last one ends, so the platform can keep the process alive meanwhile.
+typedef ReportAttachmentTransferActivity = void Function(bool active);
+
 const String attachmentConfirmationReconciliationRequired =
     'confirmation-reconciliation-required';
 
@@ -227,6 +231,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
     CreateAttachmentRetryTimer? createRetryTimer,
     ReportAttachmentUploadDiagnostic reportDiagnostic =
         reportAttachmentUploadDiagnostic,
+    ReportAttachmentTransferActivity? reportTransferActivity,
     List<Duration> credentialRetryDelays = const <Duration>[
       Duration(seconds: 2),
       Duration(seconds: 10),
@@ -272,6 +277,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
       beforeStepPlan: beforeStepPlan,
       createRetryTimer: createRetryTimer ?? Timer.new,
       reportDiagnostic: reportDiagnostic,
+      reportTransferActivity: reportTransferActivity,
       credentialRetryDelays: List<Duration>.unmodifiable(credentialRetryDelays),
       confirmationRetryDelays: List<Duration>.unmodifiable(
         confirmationRetryDelays,
@@ -297,6 +303,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
     required this._beforeStepPlan,
     required this._createRetryTimer,
     required this._reportDiagnostic,
+    required this._reportTransferActivity,
     required this._credentialRetryDelays,
     required this._confirmationRetryDelays,
     required this._retryDelays,
@@ -330,6 +337,10 @@ final class AttachmentService with _AttachmentServiceRuntime {
   final CreateAttachmentRetryTimer _createRetryTimer;
   @override
   final ReportAttachmentUploadDiagnostic _reportDiagnostic;
+  @override
+  final ReportAttachmentTransferActivity? _reportTransferActivity;
+  @override
+  bool _transfersActive = false;
   @override
   final List<Duration> _credentialRetryDelays;
   @override
@@ -428,6 +439,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
         _retryDeadlines.remove(entry.key);
       }
     }
+    _syncTransferActivity();
     for (final entry in _confirmationRetryTimers.entries.toList(
       growable: false,
     )) {
@@ -942,6 +954,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
     }
     _retryTimers.clear();
     _retryDeadlines.clear();
+    _syncTransferActivity();
     _credentialRetryCounts.clear();
     for (final timer in _confirmationRetryTimers.values) {
       timer.cancel();

@@ -41,6 +41,7 @@ import 'features/calls/call_system_screen.dart';
 import 'features/calls/call_telecom.dart';
 import 'features/calls/call_transport_service.dart';
 import 'features/chat/attachment_service.dart';
+import 'features/chat/attachment_transfer_keep_alive.dart';
 import 'features/chat/chat_background_surface.dart';
 import 'features/chat/chat_attachment_context.dart';
 import 'features/chat/chat_message_actions_service.dart';

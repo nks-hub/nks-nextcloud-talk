@@ -11,6 +11,8 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import com.nkshub.nextcloudtalk.attachments.AttachmentSaverActivityLifecycle
+import com.nkshub.nextcloudtalk.attachments.AttachmentTransferChannel
+import com.nkshub.nextcloudtalk.attachments.AttachmentTransferService
 import com.nkshub.nextcloudtalk.background.BackgroundDrain
 import com.nkshub.nextcloudtalk.calls.CallAudioFocus
 import com.nkshub.nextcloudtalk.calls.CallForegroundChannel
@@ -56,6 +58,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
     private var callTelecom: CallTelecom? = null
     private var callPictureInPicture: CallPictureInPicture? = null
     private var screenShareChannel: MethodChannel? = null
+    private var attachmentTransferChannel: MethodChannel? = null
     private var callForegroundMethodChannel: MethodChannel? = null
     private var callForegroundChannel: CallForegroundChannel? = null
     private var attachmentSaver: AttachmentSaverActivityLifecycle? = null
@@ -276,6 +279,12 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         )
         screenShare.setMethodCallHandler(ScreenShareChannel(applicationContext))
         screenShareChannel = screenShare
+        val attachmentTransfer = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            AttachmentTransferService.CHANNEL_NAME,
+        )
+        attachmentTransfer.setMethodCallHandler(AttachmentTransferChannel(applicationContext))
+        attachmentTransferChannel = attachmentTransfer
         val foreground = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CallForegroundService.CHANNEL_NAME)
         val foregroundHandler = CallForegroundChannel(this) {
             lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
@@ -494,6 +503,8 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         callPictureInPicture = null
         screenShareChannel?.setMethodCallHandler(null)
         screenShareChannel = null
+        attachmentTransferChannel?.setMethodCallHandler(null)
+        attachmentTransferChannel = null
         callForegroundChannel?.dispose()
         callForegroundChannel = null
         callForegroundMethodChannel?.setMethodCallHandler(null)
