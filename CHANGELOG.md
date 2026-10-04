@@ -8,6 +8,11 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## Unreleased
+
+- A picture the server made no preview of, and that is too large to show inline, appears as a tile that opens the file. It no longer says the image could not be loaded with a retry that cannot succeed.
+- Such an oversized original is no longer downloaded in full only to be discarded.
+
 ## 1.0.23 (91) — 4 October 2026
 
 - Attachment uploads keep running while the app is in the background or behind the photo picker. Android shows a quiet "Sending attachment" notification for as long as an upload is in progress.
