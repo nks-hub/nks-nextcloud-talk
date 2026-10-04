@@ -457,7 +457,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       }
       if (_scrollController.hasClients) {
         await _scrollController.animateTo(
-          0,
+          _newestOffset(_scrollController.position),
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
         );

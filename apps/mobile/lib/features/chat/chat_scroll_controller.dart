@@ -64,6 +64,18 @@ final class ChatScrollController extends ScrollController {
     debugLabel: debugLabel,
   );
 
+  /// Holds the visible content in place across the next layout when the
+  /// timeline moves rows between its centre and newer slivers.
+  ///
+  /// Anchoring sends everything after the anchor - sending attachments above
+  /// all - into the sliver below scroll offset zero, which shifts the whole
+  /// scroll range by their height. Without this the reader saw that height as
+  /// a jump, and the jump undid the anchor that caused it.
+  void keepPositionAcrossAnchorChange() {
+    if (hasClients)
+      (position as _ChatScrollPosition)._anchorShiftPending = true;
+  }
+
   void resetExtentTracking() {
     _scopeGeneration++;
     _snapshotScheduled = false;
@@ -244,11 +256,13 @@ final class _ChatScrollPosition extends ScrollPositionWithSingleContext {
   double _extentCorrection = 0;
   double _viewportCorrection = 0;
   bool _inLayout = false;
+  bool _anchorShiftPending = false;
 
   void resetCorrection() {
     _extentCorrection = 0;
     _viewportCorrection = 0;
     _inLayout = false;
+    _anchorShiftPending = false;
   }
 
   void queueExtentCorrection(double change) {
@@ -273,6 +287,8 @@ final class _ChatScrollPosition extends ScrollPositionWithSingleContext {
   bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
     final exact = owner._anchorCorrection();
     if (exact != null) {
+      // A visible message row already pins the view exactly.
+      _anchorShiftPending = false;
       _extentCorrection = exact;
       _viewportCorrection = 0;
       if (exact.abs() > precisionErrorTolerance) correctBy(0);
@@ -293,9 +309,13 @@ final class _ChatScrollPosition extends ScrollPositionWithSingleContext {
     ScrollMetrics oldPosition,
     ScrollMetrics newPosition,
   ) {
-    final correction = _extentCorrection + _viewportCorrection;
+    var correction = _extentCorrection + _viewportCorrection;
+    if (_anchorShiftPending) {
+      correction += newPosition.minScrollExtent - oldPosition.minScrollExtent;
+    }
     _extentCorrection = 0;
     _viewportCorrection = 0;
+    _anchorShiftPending = false;
     if (correction.abs() <= precisionErrorTolerance || oldPosition.outOfRange) {
       return super.correctForNewDimensions(oldPosition, newPosition);
     }

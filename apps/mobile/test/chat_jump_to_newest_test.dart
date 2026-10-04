@@ -7,7 +7,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/features/chat/chat_pending_attachments.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
+
+import 'pending_attachment_fixture.dart';
 
 import 'test_support.dart';
 
@@ -102,8 +105,14 @@ void main() {
     )..where((row) => row.token.equals(token))).getSingle();
   }
 
-  Widget app(Widget home) => ProviderScope(
+  Widget app(
+    Widget home, {
+    List<StoredAttachmentJob> attachments = const <StoredAttachmentJob>[],
+  }) => ProviderScope(
     overrides: [
+      attachmentRoomJobsProvider.overrideWith(
+        (ref, key) => Stream.value(attachments),
+      ),
       appDatabaseProvider.overrideWithValue(database),
       credentialVaultProvider.overrideWithValue(vault),
       connectivityWakeEventsProvider.overrideWithValue(
@@ -119,12 +128,19 @@ void main() {
     child: localizedTestApp(home: home),
   );
 
-  Future<void> openRoom(WidgetTester tester, CachedConversation room) async {
+  Future<void> openRoom(
+    WidgetTester tester,
+    CachedConversation room, {
+    List<StoredAttachmentJob> attachments = const <StoredAttachmentJob>[],
+  }) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      app(PresenceChatRoomScreen(account: account, conversation: room)),
+      app(
+        PresenceChatRoomScreen(account: account, conversation: room),
+        attachments: attachments,
+      ),
     );
     await tester.pump();
     await tester.pump();
@@ -178,6 +194,68 @@ void main() {
       await tester.pumpAndSettle();
 
       // Back at the newest message, and the control retires with it.
+      expect(timelineScrollable(tester).position.pixels, 0);
+      expect(find.byKey(jumpButton), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await closeRoom(tester);
+    },
+  );
+
+  testWidgets(
+    'scrolling up past sending attachments follows the finger without jumps',
+    (tester) async {
+      // Two separate sends stuck in "Sending" filled the screen; leaving the
+      // newest message re-anchored the list and moved both bubbles under the
+      // reader, who saw the timeline jump back and forth instead of scroll.
+      await openRoom(
+        tester,
+        await seedRoom('rooma123', 200),
+        attachments: [
+          pendingAttachmentFixture(0, count: 2),
+          pendingAttachmentFixture(
+            1,
+            count: 2,
+            albumId: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          ),
+        ],
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(PendingAttachmentBubble), findsWidgets);
+
+      double fromNewest() {
+        final position = timelineScrollable(tester).position;
+        return position.pixels - position.minScrollExtent;
+      }
+
+      var distance = fromNewest();
+      for (var step = 0; step < 20; step++) {
+        // From the list's own margin, so no bubble's gestures take part.
+        final list = tester.getRect(find.byKey(const Key('chat-message-list')));
+        await tester.dragFrom(
+          Offset(list.left + 4, list.center.dy),
+          const Offset(0, 40),
+          touchSlopY: 0,
+        );
+        await tester.pump();
+        await tester.pump();
+        final next = fromNewest();
+        expect(
+          next - distance,
+          moreOrLessEquals(40, epsilon: 1),
+          reason: 'step $step',
+        );
+        distance = next;
+      }
+      expect(find.byKey(jumpButton), findsOneWidget);
+
+      await tester.tap(find.byKey(jumpButton));
+      // The sending bubbles spin forever, so the frames are counted instead.
+      for (var frame = 0; frame < 30; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      // Newest means the bottom of the sending bubbles, which is offset zero
+      // again once the anchor is released.
       expect(timelineScrollable(tester).position.pixels, 0);
       expect(find.byKey(jumpButton), findsNothing);
       expect(tester.takeException(), isNull);

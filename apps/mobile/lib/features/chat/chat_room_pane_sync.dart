@@ -448,10 +448,11 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       return;
     }
     final position = _scrollController.position;
-    // The timeline is reversed, so offset zero is the newest message.
     final awayFromNewest =
-        position.pixels > _ChatRoomPaneState._jumpToNewestThreshold;
+        position.pixels - _newestOffset(position) >
+        _ChatRoomPaneState._jumpToNewestThreshold;
     if (awayFromNewest != _awayFromNewest) {
+      _scrollController.keepPositionAcrossAnchorChange();
       _update(() {
         _awayFromNewest = awayFromNewest;
         // Freezing the anchor on the way up is what lets arriving messages be
@@ -468,6 +469,12 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     }
   }
 
+  /// Where the newest row sits. The timeline is reversed, so that is offset
+  /// zero until the reader scrolls away; anchoring then moves everything newer
+  /// than the anchor - sending attachments included - below zero.
+  double _newestOffset(ScrollPosition position) =>
+      _anchorMessageId == null ? 0 : position.minScrollExtent;
+
   /// Returns the reader to the newest message.
   ///
   /// Paging back through history is the only way to reach an old message and
@@ -479,14 +486,24 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     // A long history makes an animated scroll take an unbounded time, so the
     // far part is cut in one step and only the last screen is animated.
     final position = _scrollController.position;
-    if (position.pixels > _ChatRoomPaneState._jumpToNewestAnimatedExtent) {
-      _scrollController.jumpTo(_ChatRoomPaneState._jumpToNewestAnimatedExtent);
+    final newest = _newestOffset(position);
+    final nearby = newest + _ChatRoomPaneState._jumpToNewestAnimatedExtent;
+    if (position.pixels > nearby) {
+      _scrollController.jumpTo(nearby);
     }
     await _scrollController.animateTo(
-      0,
+      newest,
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
     );
+    // Arriving releases the anchor, which moves the newest edge again.
+    if (mounted && _scrollController.hasClients) {
+      final settled = _scrollController.position;
+      final target = _newestOffset(settled);
+      if (settled.pixels != target) {
+        _scrollController.jumpTo(target);
+      }
+    }
   }
 
   /// Newest message id in the cached timeline, or null when there is nothing
