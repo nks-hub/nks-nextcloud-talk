@@ -232,6 +232,33 @@ final class _MemorySourceLease implements AttachmentSourceLease {
   }
 }
 
+/// Reads from disk the way the app's own store does, so the event loop keeps
+/// turning between chunks.
+final class _FileSourceProvider implements AttachmentSourceProvider {
+  _FileSourceProvider(this.file);
+
+  final File file;
+
+  @override
+  Future<AttachmentSourceLease> open(
+    AttachmentSourceHandle handle, {
+    AttachmentCancellationSignal? cancellationSignal,
+  }) async => _FileSourceLease(file);
+}
+
+final class _FileSourceLease implements AttachmentSourceLease {
+  _FileSourceLease(this.file);
+
+  final File file;
+
+  @override
+  Stream<List<int>> openRead({int offset = 0, int? length}) =>
+      file.openRead(offset, length == null ? null : offset + length);
+
+  @override
+  Future<void> close() async {}
+}
+
 final class _BackpressureSourceProvider implements AttachmentSourceProvider {
   _BackpressureSourceProvider({required this.handle, required List<int> bytes})
     : _bytes = Uint8List.fromList(bytes);

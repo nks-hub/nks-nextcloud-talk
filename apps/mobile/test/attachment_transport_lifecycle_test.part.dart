@@ -301,6 +301,224 @@ void _registerLifecycleTests() {
     },
   );
 
+  test('a peer that stops reading mid-body ends in an idle timeout', () async {
+    // A real socket, because the freeze-killed upload on a phone is a write
+    // the kernel can no longer flush, which no mock client reproduces.
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(server.close);
+    final stalled = Completer<void>();
+    final sockets = <Socket>[];
+    server.listen((socket) {
+      sockets.add(socket);
+      var received = 0;
+      late final StreamSubscription<Uint8List> subscription;
+      subscription = socket.listen((data) {
+        received += data.length;
+        if (received >= 64 * 1024) {
+          subscription.pause();
+          if (!stalled.isCompleted) stalled.complete();
+        }
+      });
+    });
+    addTearDown(() {
+      for (final socket in sockets) {
+        socket.destroy();
+      }
+    });
+    final bytes = List<int>.generate(4 * 1024 * 1024, (index) => index & 0xff);
+    final directory = await Directory.systemTemp.createTemp('stall-source');
+    addTearDown(() => directory.delete(recursive: true));
+    final file = File('${directory.path}/source.bin');
+    await file.writeAsBytes(bytes);
+    final transport = HttpAttachmentTransport(
+      client: IOClient(
+        HttpClient()
+          ..connectionFactory = (_, _, _) =>
+              Socket.startConnect(InternetAddress.loopbackIPv4, server.port),
+      ),
+      sourceProvider: _FileSourceProvider(file),
+      connectTimeout: const Duration(seconds: 2),
+      idleTimeout: const Duration(milliseconds: 500),
+    );
+    final prepared = _source(
+      bytes,
+      sha256: crypto.sha256.convert(bytes).toString(),
+    );
+    final verified = await transport.verifySource(
+      source: prepared,
+      authorization: _authorization,
+    );
+    final future = transport.sendDav(
+      request: AttachmentDavRequest.normalPut(
+        context: _context(90),
+        davUserId: _davUser,
+        remotePath: _remotePath,
+        source: prepared,
+      ),
+      authorization: _authorization,
+      verifiedSource: verified,
+    );
+    await stalled.future.timeout(const Duration(seconds: 5));
+    await expectLater(
+      future.timeout(const Duration(seconds: 10)),
+      throwsA(_transportError(AttachmentTransportError.idleTimeout)),
+    );
+    await transport.releaseSource(verified).timeout(const Duration(seconds: 5));
+  });
+
+  test('a handshake that never completes ends in a connect timeout', () async {
+    // The connection a frozen phone left behind: the socket opens, TLS never
+    // answers. IOClient wires the abort trigger only after openUrl returns,
+    // so the transport's own timeout must not depend on the client.
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(server.close);
+    final sockets = <Socket>[];
+    server.listen(sockets.add);
+    addTearDown(() {
+      for (final socket in sockets) {
+        socket.destroy();
+      }
+    });
+    final transport = HttpAttachmentTransport(
+      client: IOClient(
+        HttpClient()
+          ..connectionFactory = (_, _, _) => SecureSocket.startConnect(
+            InternetAddress.loopbackIPv4,
+            server.port,
+          ),
+      ),
+      sourceProvider: _MemorySourceProvider(const <String, List<int>>{}),
+      connectTimeout: const Duration(milliseconds: 300),
+      idleTimeout: const Duration(seconds: 1),
+    );
+
+    await expectLater(
+      transport
+          .probe(
+            request: AttachmentProbeRequest(
+              context: _context(91),
+              fileNames: const <String>['photo.jpg'],
+            ),
+            authorization: _authorization,
+          )
+          .timeout(const Duration(seconds: 10)),
+      throwsA(_transportError(AttachmentTransportError.connectTimeout)),
+    );
+  });
+
+  test(
+    'a chunk upload behind a dead handshake ends in a connect timeout',
+    () async {
+      final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(server.close);
+      final sockets = <Socket>[];
+      server.listen(sockets.add);
+      addTearDown(() {
+        for (final socket in sockets) {
+          socket.destroy();
+        }
+      });
+      final bytes = List<int>.generate(
+        2 * 1024 * 1024,
+        (index) => index & 0xff,
+      );
+      final directory = await Directory.systemTemp.createTemp(
+        'handshake-source',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final file = File('${directory.path}/source.bin');
+      await file.writeAsBytes(bytes);
+      final transport = HttpAttachmentTransport(
+        client: IOClient(
+          HttpClient()
+            ..connectionFactory = (_, _, _) => SecureSocket.startConnect(
+              InternetAddress.loopbackIPv4,
+              server.port,
+            ),
+        ),
+        sourceProvider: _FileSourceProvider(file),
+        connectTimeout: const Duration(milliseconds: 300),
+        idleTimeout: const Duration(seconds: 1),
+      );
+      final prepared = _source(
+        bytes,
+        sha256: crypto.sha256.convert(bytes).toString(),
+      );
+      final verified = await transport.verifySource(
+        source: prepared,
+        authorization: _authorization,
+      );
+
+      await expectLater(
+        transport
+            .sendDav(
+              request: AttachmentDavRequest.normalPut(
+                context: _context(92),
+                davUserId: _davUser,
+                remotePath: _remotePath,
+                source: prepared,
+              ),
+              authorization: _authorization,
+              verifiedSource: verified,
+            )
+            .timeout(const Duration(seconds: 10)),
+        throwsA(_transportError(AttachmentTransportError.connectTimeout)),
+      );
+      await transport
+          .releaseSource(verified)
+          .timeout(const Duration(seconds: 5));
+    },
+  );
+
+  test('a chunk upload whose connection is refused fails promptly', () async {
+    // The common case after a freeze: the network is not back yet. The
+    // response side fails at once, and the body pump must not keep waiting
+    // for a reader that will never come.
+    final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final closedPort = probe.port;
+    await probe.close();
+    final bytes = List<int>.generate(2 * 1024 * 1024, (index) => index & 0xff);
+    final directory = await Directory.systemTemp.createTemp('refused-source');
+    addTearDown(() => directory.delete(recursive: true));
+    final file = File('${directory.path}/source.bin');
+    await file.writeAsBytes(bytes);
+    final transport = HttpAttachmentTransport(
+      client: IOClient(
+        HttpClient()
+          ..connectionFactory = (_, _, _) =>
+              Socket.startConnect(InternetAddress.loopbackIPv4, closedPort),
+      ),
+      sourceProvider: _FileSourceProvider(file),
+      connectTimeout: const Duration(seconds: 5),
+      idleTimeout: const Duration(seconds: 5),
+    );
+    final prepared = _source(
+      bytes,
+      sha256: crypto.sha256.convert(bytes).toString(),
+    );
+    final verified = await transport.verifySource(
+      source: prepared,
+      authorization: _authorization,
+    );
+
+    await expectLater(
+      transport
+          .sendDav(
+            request: AttachmentDavRequest.normalPut(
+              context: _context(93),
+              davUserId: _davUser,
+              remotePath: _remotePath,
+              source: prepared,
+            ),
+            authorization: _authorization,
+            verifiedSource: verified,
+          )
+          .timeout(const Duration(seconds: 10)),
+      throwsA(_transportError(AttachmentTransportError.network)),
+    );
+    await transport.releaseSource(verified).timeout(const Duration(seconds: 5));
+  });
+
   test('SHA-256 padding boundaries 55, 56, 63, 64 and 65 verify', () async {
     const hashes = <int, String>{
       55: '463eb28e72f82e0a96c0a4cc53690c571281131f672aa229e0d45ae59b598b59',

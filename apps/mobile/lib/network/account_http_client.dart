@@ -97,6 +97,9 @@ final class CertificateTrustGate {
   http.Client createClient() {
     unawaited(refresh());
     final client = HttpClient()
+      // Covers the TLS handshake too; without it a connection that died while
+      // the app was frozen keeps its socket open for good.
+      ..connectionTimeout = const Duration(seconds: 30)
       ..badCertificateCallback = (certificate, host, port) =>
           accepts(certificate: certificate, host: host);
     return IOClient(client);

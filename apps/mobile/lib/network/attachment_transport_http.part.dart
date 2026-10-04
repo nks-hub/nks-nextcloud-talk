@@ -257,11 +257,17 @@ mixin _HttpAttachmentTransportInternals {
         if (take > 0) {
           try {
             abort.throwIfAborted();
-            await sink.addStream(
-              Stream<List<int>>.value(
-                take == chunk.length ? chunk : chunk.sublist(0, take),
+            // Until IOClient has a connection it does not listen to the body,
+            // and addStream on an unlistened controller waits for a listener
+            // that a dead handshake never brings.
+            await Future.any<void>([
+              sink.addStream(
+                Stream<List<int>>.value(
+                  take == chunk.length ? chunk : chunk.sublist(0, take),
+                ),
               ),
-            );
+              abort.abortTrigger,
+            ]);
             abort.throwIfAborted();
           } on AttachmentTransportException {
             rethrow;
@@ -326,7 +332,28 @@ mixin _HttpAttachmentTransportInternals {
   }) async {
     try {
       abort.throwIfAborted();
-      final response = await _client.send(request);
+      // IOClient listens to the abort trigger only once openUrl has returned,
+      // so a connect or TLS handshake that never answers would outlive every
+      // timeout here and strand the job as in flight until the app restarts.
+      final sent = _client.send(request);
+      final http.StreamedResponse response;
+      try {
+        response = await Future.any<http.StreamedResponse>([
+          sent,
+          abort.abortTrigger.then<http.StreamedResponse>(
+            (_) => throw http.RequestAbortedException(request.url),
+          ),
+        ]);
+      } on http.RequestAbortedException {
+        // A response that still arrives must not hold its connection.
+        unawaited(
+          sent.then(
+            (late) => late.stream.listen(null).cancel(),
+            onError: (Object _) {},
+          ),
+        );
+        rethrow;
+      }
       abort.throwIfAborted();
       activity.markProgress(
         stage: AttachmentTransportStage.response,
