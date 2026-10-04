@@ -72,8 +72,9 @@ final class ChatScrollController extends ScrollController {
   /// scroll range by their height. Without this the reader saw that height as
   /// a jump, and the jump undid the anchor that caused it.
   void keepPositionAcrossAnchorChange() {
-    if (hasClients)
+    if (hasClients) {
       (position as _ChatScrollPosition)._anchorShiftPending = true;
+    }
   }
 
   void resetExtentTracking() {
