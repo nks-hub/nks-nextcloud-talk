@@ -8,6 +8,13 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.0.23 (91) — 4 October 2026
+
+- Attachment uploads keep running while the app is in the background or behind the photo picker. Android shows a quiet "Sending attachment" notification for as long as an upload is in progress.
+- An upload whose connection could not be opened, for example right after the phone came back online, no longer stays in "Sending" until the app is restarted. It fails over to the usual automatic retry.
+- Scrolling up past attachments that are still sending follows the finger instead of jumping back and forth, and "Jump to newest" lands below the sending attachments.
+- Upload failure reports carry the specific failure code.
+
 ## 1.0.22 (90) — 3 October 2026
 
 - Desktop update checks run every 15 minutes, retry failed checks after 2 minutes, and refresh after returning to the app or reconnecting. Server rate limits and the automatic-check preference are respected. Settings also provide a Check now button.
