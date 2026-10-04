@@ -86,6 +86,7 @@ final class ChatMediaRepository {
   static const int maximumPreviewFallbackBytes = _maximumPreviewBytes;
   static const int _maximumVoiceBytes = 32 * 1024 * 1024;
   static const int _maximumOriginalBytes = 64 * 1024 * 1024;
+  static const int _maximumDrainedBytes = 64 * 1024;
 
   /// Ceiling for an attachment streamed to disk. Only a sanity bound: what
   /// really limits this is the free space the write runs into.
@@ -569,6 +570,13 @@ final class ChatMediaRepository {
     _MediaRequest operation,
   ) async {
     final subscription = response.stream.listen(null);
+    // Draining keeps a small error body's connection reusable. An original
+    // turned down for its size is not small: draining it downloaded all of a
+    // 135 MB picture only to throw it away.
+    if ((response.contentLength ?? 0) > _maximumDrainedBytes) {
+      await subscription.cancel().timeout(requestTimeout);
+      return;
+    }
     try {
       await operation
           .wait(subscription.asFuture<void>())

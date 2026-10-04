@@ -586,6 +586,44 @@ void main() {
       );
     });
 
+    test('an oversized original is not downloaded to be thrown away', () async {
+      final vault = MemoryCredentialVault()
+        ..values[_account.id] = 'fixture-app-password';
+      final body = StreamController<List<int>>();
+      addTearDown(body.close);
+      final repository = ChatMediaRepository(
+        vault,
+        client: _StreamingClient(
+          (_) async => http.StreamedResponse(
+            body.stream,
+            200,
+            contentLength: 135 * 1024 * 1024,
+            headers: const <String, String>{'content-type': 'image/png'},
+          ),
+        ),
+      );
+
+      // A body that never ends: draining it would hang until the request
+      // timeout, just as the real one downloaded all 135 MB first.
+      await expectLater(
+        repository
+            .loadOriginalFile(
+              account: _account,
+              uri: _originalUri,
+              expectedContentType: 'image/png',
+              maximumBytes: 8 * 1024 * 1024,
+            )
+            .timeout(const Duration(seconds: 2)),
+        throwsA(
+          isA<ChatMediaRepositoryException>().having(
+            (error) => error.code,
+            'code',
+            ChatMediaRepositoryError.responseTooLarge,
+          ),
+        ),
+      );
+    });
+
     test('rejects an oversized original from content length', () async {
       final vault = MemoryCredentialVault()
         ..values[_account.id] = 'fixture-app-password';
