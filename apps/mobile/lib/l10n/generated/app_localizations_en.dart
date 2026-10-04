@@ -740,6 +740,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get imageLoadFailed => 'The image could not be loaded.';
 
   @override
+  String get imagePreviewUnavailable =>
+      'No preview is available. Tap to open the file.';
+
+  @override
   String get zoomOut => 'Zoom out';
 
   @override

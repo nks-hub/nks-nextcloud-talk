@@ -290,7 +290,11 @@ void _registerChatImagePreviewLayoutTests() {
     await _showImageContent(
       tester,
       _layoutImageWire(88, width: 100, height: 800),
-      image: Future.value(null),
+      image: Future<ChatMediaImage?>.error(
+        const ChatMediaRepositoryException(
+          ChatMediaRepositoryError.unavailable,
+        ),
+      )..ignore(),
       maxWidth: 72,
     );
     await _pumpUntil(
@@ -303,6 +307,29 @@ void _registerChatImagePreviewLayoutTests() {
     );
     expect(retry.width, greaterThanOrEqualTo(48));
     expect(retry.height, greaterThanOrEqualTo(48));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a picture with no preview at all offers the file, not a retry', (
+    tester,
+  ) async {
+    // The server makes no preview of a very large picture and the original is
+    // over the inline budget. Nothing failed, so "could not be loaded" with a
+    // retry that can never succeed was the wrong thing to show.
+    await _showImageContent(
+      tester,
+      _layoutImageWire(89, width: 7000, height: 7000),
+      image: Future.value(null),
+    );
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('chat-image-unavailable-89-0'))
+          .evaluate()
+          .isNotEmpty,
+    );
+    expect(find.byKey(const Key('chat-image-error-89-0')), findsNothing);
+    expect(find.byKey(const Key('chat-image-retry-89-0')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

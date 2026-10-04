@@ -951,8 +951,9 @@ final chatMediaProvider = FutureProvider.autoDispose
     });
 
 /// The attachment itself, read as the picture, for a file the server has no
-/// preview of. A failure here is the same as no preview at all: the bubble
-/// already says the image could not be loaded and offers a retry.
+/// preview of. `null` means there is no picture to show - the original is not
+/// an image or is too large to stand in for one - and the bubble offers the
+/// file instead. Any other failure is reported, so the bubble can retry it.
 Future<ChatMediaImage?> _loadOriginalAsPreview(
   ChatMediaRepository repository,
   ChatMediaProviderKey key,
@@ -970,8 +971,9 @@ Future<ChatMediaImage?> _loadOriginalAsPreview(
       maximumBytes: ChatMediaRepository.maximumPreviewFallbackBytes,
     );
     return ChatMediaImage(body: file.body, contentType: file.contentType);
-  } on ChatMediaRepositoryException {
-    return null;
+  } on ChatMediaRepositoryException catch (failure) {
+    if (failure.code == ChatMediaRepositoryError.responseTooLarge) return null;
+    rethrow;
   }
 }
 

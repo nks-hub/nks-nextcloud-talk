@@ -15,6 +15,7 @@ final class _InlineChatImagePreview extends StatefulWidget {
     required this.index,
     required this.onOpen,
     required this.onRetry,
+    this.onOpenFile,
     this.compact = false,
   });
 
@@ -25,6 +26,9 @@ final class _InlineChatImagePreview extends StatefulWidget {
   final int index;
   final VoidCallback? onOpen;
   final Future<void> Function() onRetry;
+
+  /// Hands the file to the platform when the picture cannot be shown inline.
+  final VoidCallback? onOpenFile;
   final bool compact;
 
   @override
@@ -179,9 +183,53 @@ final class _InlineChatImagePreviewState
     );
   }
 
+  /// The server made no preview and the original is too large to stand in.
+  /// Nothing failed, so there is nothing to retry; the file itself is offered.
+  Widget _unavailable(Size box) {
+    final strings = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      key: Key('chat-image-unavailable-${widget.messageId}-${widget.index}'),
+      color: scheme.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(10),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: widget.onOpenFile,
+        child: SizedBox(
+          width: box.width,
+          height: box.height,
+          child: box.width < 200
+              ? Icon(Icons.image_not_supported_outlined, color: scheme.primary)
+              : Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.image_not_supported_outlined,
+                        color: scheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          strings.imagePreviewUnavailable,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
   Widget _preview(Size box) {
     if (_retrying || widget.image.isLoading) return _loading(box);
     final image = _image;
+    if (image == null && widget.image.hasValue && !widget.image.hasError) {
+      return _unavailable(box);
+    }
     if (_decodeFailed || image == null) return _error(box);
     final strings = AppLocalizations.of(context);
     return Semantics(

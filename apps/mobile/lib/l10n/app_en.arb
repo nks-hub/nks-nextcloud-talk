@@ -273,6 +273,10 @@
   "openImage": "Open image",
   "loadingImage": "Loading image…",
   "imageLoadFailed": "The image could not be loaded.",
+  "imagePreviewUnavailable": "No preview is available. Tap to open the file.",
+  "@imagePreviewUnavailable": {
+    "description": "Shown in place of a picture when the server has no preview and the original is too large to show inline."
+  },
   "zoomOut": "Zoom out",
   "resetZoom": "Reset zoom",
   "zoomIn": "Zoom in",

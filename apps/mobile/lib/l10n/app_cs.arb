@@ -273,6 +273,7 @@
   "openImage": "Otevřít obrázek",
   "loadingImage": "Načítání obrázku…",
   "imageLoadFailed": "Obrázek se nepodařilo načíst.",
+  "imagePreviewUnavailable": "Náhled není k dispozici. Klepnutím soubor otevřete.",
   "zoomOut": "Oddálit",
   "resetZoom": "Obnovit přiblížení",
   "zoomIn": "Přiblížit",

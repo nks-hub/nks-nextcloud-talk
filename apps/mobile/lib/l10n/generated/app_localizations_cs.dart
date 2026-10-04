@@ -744,6 +744,10 @@ class AppLocalizationsCs extends AppLocalizations {
   String get imageLoadFailed => 'Obrázek se nepodařilo načíst.';
 
   @override
+  String get imagePreviewUnavailable =>
+      'Náhled není k dispozici. Klepnutím soubor otevřete.';
+
+  @override
   String get zoomOut => 'Oddálit';
 
   @override

@@ -24,12 +24,23 @@ void _registerPhotoAlbumTests() {
           displayText: 'Photo',
         );
       }
-      await database.into(database.chatScopes).insert(ChatScopesCompanion.insert(
-        accountId: account.id, roomToken: conversation.token, scopeKey: 'root',
-        historyCursor: '10', futureCursor: '103', lastCommonRead: '10',
-        lastReadMessage: 0, unreadMessages: 0, hasHistory: false,
-        futureConverged: true, blocksJson: '[["10","103"]]',
-      ));
+      await database
+          .into(database.chatScopes)
+          .insert(
+            ChatScopesCompanion.insert(
+              accountId: account.id,
+              roomToken: conversation.token,
+              scopeKey: 'root',
+              historyCursor: '10',
+              futureCursor: '103',
+              lastCommonRead: '10',
+              lastReadMessage: 0,
+              unreadMessages: 0,
+              hasHistory: false,
+              futureConverged: true,
+              blocksJson: '[["10","103"]]',
+            ),
+          );
       await tester.pumpWidget(
         app(
           home: roomScreen(),
@@ -177,7 +188,13 @@ void _registerPhotoAlbumTests() {
       await tester.pumpWidget(
         app(
           home: roomScreen(),
-          overrides: [chatMediaProvider.overrideWith((ref, key) async => null)],
+          overrides: [
+            chatMediaProvider.overrideWith(
+              (ref, key) async => throw const ChatMediaRepositoryException(
+                ChatMediaRepositoryError.unavailable,
+              ),
+            ),
+          ],
         ),
       );
       await tester.pumpAndSettle();

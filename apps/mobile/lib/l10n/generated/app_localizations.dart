@@ -1394,6 +1394,12 @@ abstract class AppLocalizations {
   /// **'The image could not be loaded.'**
   String get imageLoadFailed;
 
+  /// Shown in place of a picture when the server has no preview and the original is too large to show inline.
+  ///
+  /// In en, this message translates to:
+  /// **'No preview is available. Tap to open the file.'**
+  String get imagePreviewUnavailable;
+
   /// No description provided for @zoomOut.
   ///
   /// In en, this message translates to:

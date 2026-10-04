@@ -142,6 +142,7 @@ final class _ChatAttachment extends ConsumerWidget {
             index: index,
             compact: compact,
             onOpen: onOpenImage ?? openImage,
+            onOpenFile: openFile,
             onRetry: () async {
               final cache = ref.read(chatMediaCacheProvider);
               final disk = ref.read(chatMediaDiskCacheProvider);
