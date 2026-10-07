@@ -2585,6 +2585,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shareImage => 'Share image';
 
   @override
+  String get copyImage => 'Copy image';
+
+  @override
+  String get imageCopying => 'Copying image…';
+
+  @override
+  String get imageCopied => 'Image copied to clipboard.';
+
+  @override
+  String get imageCopyFailed => 'The image could not be copied to clipboard.';
+
+  @override
   String get imageSavedToGallery => 'Image saved to your gallery.';
 
   @override

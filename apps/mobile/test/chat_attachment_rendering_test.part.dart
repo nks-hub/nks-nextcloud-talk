@@ -1,6 +1,44 @@
 part of 'chat_room_pane_test.dart';
 
 void _registerChatAttachmentRenderingTests() {
+  testWidgets('received image menu offers copying the image and its text', (
+    tester,
+  ) async {
+    final preview = await _solidPreview(tester, 120, 80);
+    await _insertCachedMessage(
+      database,
+      _layoutImageWire(100, width: 120, height: 80),
+      displayText: 'Photo',
+    );
+    await tester.pumpWidget(
+      app(
+        home: roomScreen(),
+        overrides: [
+          chatMediaProvider.overrideWith((ref, key) async => preview),
+        ],
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () =>
+          find
+              .byKey(const Key('chat-image-100-0'))
+              .hitTestable()
+              .evaluate()
+              .isNotEmpty &&
+          find.byKey(const Key('chat-image-loading-100-0')).evaluate().isEmpty,
+    );
+    await tester.tap(
+      find.byKey(const Key('chat-image-100-0')),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('message-action-copy-image')), findsOneWidget);
+    expect(find.byKey(const Key('message-action-copy')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('an image bubble keeps the box Talk declared before and after '
       'the preview lands', (tester) async {
     final decodedPreview = await _solidPreview(tester, 300, 600);

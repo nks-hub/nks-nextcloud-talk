@@ -4700,6 +4700,30 @@ abstract class AppLocalizations {
   /// **'Share image'**
   String get shareImage;
 
+  /// No description provided for @copyImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy image'**
+  String get copyImage;
+
+  /// No description provided for @imageCopying.
+  ///
+  /// In en, this message translates to:
+  /// **'Copying image…'**
+  String get imageCopying;
+
+  /// No description provided for @imageCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Image copied to clipboard.'**
+  String get imageCopied;
+
+  /// No description provided for @imageCopyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The image could not be copied to clipboard.'**
+  String get imageCopyFailed;
+
   /// No description provided for @imageSavedToGallery.
   ///
   /// In en, this message translates to:

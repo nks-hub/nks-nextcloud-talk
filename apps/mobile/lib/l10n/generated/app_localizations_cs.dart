@@ -2584,6 +2584,18 @@ class AppLocalizationsCs extends AppLocalizations {
   String get shareImage => 'Sdílet obrázek';
 
   @override
+  String get copyImage => 'Kopírovat obrázek';
+
+  @override
+  String get imageCopying => 'Kopírování obrázku…';
+
+  @override
+  String get imageCopied => 'Obrázek byl zkopírován do schránky.';
+
+  @override
+  String get imageCopyFailed => 'Obrázek se nepodařilo zkopírovat do schránky.';
+
+  @override
   String get imageSavedToGallery => 'Obrázek byl uložen do galerie.';
 
   @override

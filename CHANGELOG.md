@@ -10,6 +10,7 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## Unreleased
 
+- Images can be copied as image data from the message menu and fullscreen gallery on platforms that support image clipboard writing. Copying uses the original attachment and reports download or clipboard failures.
 - A picture the server made no preview of, and that is too large to show inline, appears as a tile that opens the file. It no longer says the image could not be loaded with a retry that cannot succeed.
 - Such an oversized original is no longer downloaded in full only to be discarded.
 

@@ -16,6 +16,9 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
   }) {
     final strings = AppLocalizations.of(context);
     final copyText = message.displayText;
+    final image = parsed == null
+        ? null
+        : chatGalleryImage(widget.account, parsed);
     final forwardFilePath = _forwardableFilePath(parsed);
     final canForward =
         forwardFilePath != null ||
@@ -26,6 +29,13 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
         builder: (sheetContext) => SafeArea(
           child: Wrap(
             children: [
+              if (image != null && imageClipboardSupported)
+                ChatImageCopyAction(
+                  messageContext: context,
+                  account: widget.account,
+                  image: image,
+                  repository: ref.read(chatMediaRepositoryProvider),
+                ),
               if (canReply)
                 ListTile(
                   key: const Key('message-action-reply'),

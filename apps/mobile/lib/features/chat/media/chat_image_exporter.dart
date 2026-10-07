@@ -4,14 +4,18 @@ import 'package:gal/gal.dart';
 import 'package:mime/mime.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'image_clipboard.dart';
+
 enum ChatImageSaveResult { saved, permissionDenied, outOfSpace, failed }
 
 /// Hands a picture the viewer already holds to the platform: the device
-/// gallery, or the system share sheet.
+/// gallery, system share sheet or clipboard.
 ///
 /// This is the seam widget tests replace, because neither destination is
 /// reachable without a platform channel.
 abstract interface class ChatImageExporter {
+  Future<bool> copyToClipboard({required Uint8List bytes});
+
   Future<ChatImageSaveResult> saveToGallery({
     required Uint8List bytes,
     required String fileName,
@@ -29,6 +33,10 @@ abstract interface class ChatImageExporter {
 
 final class PlatformChatImageExporter implements ChatImageExporter {
   const PlatformChatImageExporter();
+
+  @override
+  Future<bool> copyToClipboard({required Uint8List bytes}) =>
+      copyImageBytes(bytes);
 
   @override
   Future<ChatImageSaveResult> saveToGallery({

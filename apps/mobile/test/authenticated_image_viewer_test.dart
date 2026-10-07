@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/features/chat/media/authenticated_image_viewer.dart';
 import 'package:nextcloudtalk/features/chat/media/authenticated_image_gallery.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_image_exporter.dart';
+import 'package:nextcloudtalk/features/chat/media/chat_image_copy_action.dart';
 
 import 'test_support.dart';
 
@@ -16,7 +18,16 @@ void main({bool galleryOnly = false}) {
   testWidgets('gallery opens selected photo, swipes, zooms and exports it', (
     tester,
   ) async {
-    final repository = _repository((request) async => _imageResponse());
+    final repository = _repository((request) async {
+      if (request.url.path.endsWith('photo-2.png')) {
+        return http.StreamedResponse(
+          Stream.value(_originalPng),
+          200,
+          headers: {'content-type': 'image/png'},
+        );
+      }
+      return _imageResponse();
+    });
     final exporter = _RecordingExporter();
     await tester.pumpWidget(
       localizedTestApp(
@@ -56,6 +67,13 @@ void main({bool galleryOnly = false}) {
     );
     await _pumpRouteAndFuture(tester);
     expect(exporter.saved.single.fileName, 'photo-2');
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('authenticated-image-copy')).hitTestable(),
+    );
+    await _pumpRouteAndFuture(tester);
+    expect(exporter.copied.single, _originalPng);
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
     await tester.tap(
@@ -239,6 +257,110 @@ void main({bool galleryOnly = false}) {
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  for (final offered in [true, false]) {
+    testWidgets('copying original reports clipboard success=$offered', (
+      tester,
+    ) async {
+      final exporter = _RecordingExporter(shareOffered: offered);
+      await tester.pumpWidget(
+        _app(
+          repository: _repository(_previewAndOriginalResponse),
+          exporter: exporter,
+        ),
+      );
+      await tester.tap(find.byKey(const Key('open-synthetic-image')));
+      await _pumpRouteAndFuture(tester);
+      await tester.tap(find.byKey(const Key('authenticated-image-copy')));
+      await _pumpRouteAndFuture(tester);
+      expect(exporter.copied.single, _originalPng);
+      expect(
+        find.text(
+          offered
+              ? 'Image copied to clipboard.'
+              : 'The image could not be copied to clipboard.',
+        ),
+        findsOneWidget,
+      );
+    });
+  }
+
+  testWidgets('failed original download does not copy the thumbnail', (
+    tester,
+  ) async {
+    final exporter = _RecordingExporter();
+    await tester.pumpWidget(
+      _app(
+        repository: _repository(
+          (request) async => request.url == _originalUri
+              ? http.StreamedResponse(const Stream.empty(), 404)
+              : _imageResponse(),
+        ),
+        exporter: exporter,
+      ),
+    );
+    await tester.tap(find.byKey(const Key('open-synthetic-image')));
+    await _pumpRouteAndFuture(tester);
+    await tester.tap(find.byKey(const Key('authenticated-image-copy')));
+    await _pumpRouteAndFuture(tester);
+    expect(exporter.copied, isEmpty);
+    expect(
+      find.text('The image could not be copied to clipboard.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('message copy action closes its menu and copies original bytes', (
+    tester,
+  ) async {
+    final exporter = _RecordingExporter();
+    final download = Completer<http.StreamedResponse>();
+    final repository = _repository((_) => download.future);
+    await tester.pumpWidget(
+      localizedTestApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                builder: (_) => ChatImageCopyAction(
+                  messageContext: context,
+                  account: _account,
+                  image: ChatGalleryImage(
+                    previewUri: _previewUri,
+                    originalUri: _originalUri,
+                    contentType: 'image/png',
+                    name: 'image.png',
+                  ),
+                  repository: repository,
+                  exporter: exporter,
+                ),
+              ),
+              child: const Text('Actions'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('message-action-copy-image')));
+    await _pumpRouteAndFuture(tester);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    download.complete(
+      http.StreamedResponse(
+        Stream.value(_originalPng),
+        200,
+        headers: {'content-type': 'image/png'},
+      ),
+    );
+    await _pumpRouteAndFuture(tester);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('message-action-copy-image')), findsNothing);
+    expect(exporter.copied.single, _originalPng);
+    expect(find.text('Image copied to clipboard.'), findsOneWidget);
   });
 
   testWidgets('saving downloads and exports the original instead of preview', (
@@ -535,6 +657,13 @@ final class _RecordingExporter implements ChatImageExporter {
   final bool shareOffered;
   final List<({String fileName, String contentType, int bytes})> saved = [];
   final List<({String fileName, String contentType, int bytes})> shared = [];
+  final List<Uint8List> copied = [];
+
+  @override
+  Future<bool> copyToClipboard({required Uint8List bytes}) async {
+    copied.add(bytes);
+    return shareOffered;
+  }
 
   @override
   Future<ChatImageSaveResult> saveToGallery({

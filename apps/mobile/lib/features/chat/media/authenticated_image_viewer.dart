@@ -7,6 +7,7 @@ import '../../../data/app_database.dart';
 import '../../../data/chat_media_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'chat_image_exporter.dart';
+import 'image_clipboard.dart';
 import 'proportional_image.dart';
 
 const double _minimumScale = 1;
@@ -204,6 +205,14 @@ final class _AuthenticatedImageViewerState
     }, failureMessage: (strings) => strings.imageShareFailed);
   }
 
+  Future<void> _copy() => _export((image, strings) async {
+    final copied = await widget.exporter.copyToClipboard(bytes: image.body);
+    return (
+      message: copied ? strings.imageCopied : strings.imageCopyFailed,
+      offerSettings: false,
+    );
+  }, failureMessage: (strings) => strings.imageCopyFailed);
+
   Future<void> _export(
     Future<({String? message, bool offerSettings})> Function(
       ChatMediaFile image,
@@ -237,7 +246,7 @@ final class _AuthenticatedImageViewerState
         });
       }
     }
-    if (result.message != null) {
+    if (mounted && result.message != null) {
       messenger.showSnackBar(
         SnackBar(
           content: Text(result.message!),
@@ -450,6 +459,13 @@ final class _AuthenticatedImageViewerState
                       icon: Icons.share_rounded,
                       onPressed: _loaded == null || _exporting ? null : _share,
                     ),
+                    if (imageClipboardSupported)
+                      _ViewerIconButton(
+                        key: const Key('authenticated-image-copy'),
+                        tooltip: strings.copyImage,
+                        icon: Icons.copy_rounded,
+                        onPressed: _loaded == null || _exporting ? null : _copy,
+                      ),
                   ],
                 ),
               ),
