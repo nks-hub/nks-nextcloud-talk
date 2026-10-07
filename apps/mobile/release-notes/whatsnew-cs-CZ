@@ -1,1 +1,1 @@
-Přílohy se nahrávají dál i na pozadí nebo za výběrem fotek, Android přitom ukazuje tichou notifikaci. Nahrávání, kterému se nepodařilo otevřít spojení, už nezůstane viset na „Odesílání“ a zkusí se znovu. Posouvání nad odesílanými přílohami už neskáče.
+Obrázky lze kopírovat do schránky z nabídky zprávy i galerie. Kopíruje se původní obrázek, nikoli odkaz. Pokud server nemá náhled a obrázek je příliš velký, zobrazí se dlaždice pro otevření souboru. Velké originály se už nestahují zbytečně jen kvůli náhledu.
