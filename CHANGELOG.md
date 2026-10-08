@@ -8,6 +8,10 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.0.25 (93) — 8 October 2026
+
+- A picture the server has no preview of is shown even when its original is over the 8 MB inline budget: originals up to 32 MB are shrunk to the 1024 preview box on the device before they are cached. Nextcloud 34.0.3 deletes its own stored preview when two requests generate it at the same moment and then answers 404 for every new size, which left large screenshots as a tile that only opened the file.
+
 ## 1.0.24 (92) — 7 October 2026
 
 - Images can be copied as image data from the message menu and fullscreen gallery on platforms that support image clipboard writing. Copying uses the original attachment and reports download or clipboard failures.

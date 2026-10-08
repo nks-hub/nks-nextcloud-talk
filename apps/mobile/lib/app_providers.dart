@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
@@ -950,10 +951,26 @@ final chatMediaProvider = FutureProvider.autoDispose
       });
     });
 
+/// Largest original read to stand in for a missing preview. A Retina
+/// screenshot is 10-15 MB, and a server that loses its own preview of one
+/// (Nextcloud 34.0.3 deletes it when two requests generate it at once) left
+/// such pictures with no image at all.
+const int _maximumOriginalAsPreviewBytes = 32 * 1024 * 1024;
+
+/// An original above this many pixels is not decoded on the device at all.
+const int _maximumOriginalAsPreviewPixels = 48 * 1000 * 1000;
+
+/// The box a downscaled original is fitted into, matching the preview size
+/// the bubble asks the server for.
+const int _originalAsPreviewBox = 1024;
+
 /// The attachment itself, read as the picture, for a file the server has no
 /// preview of. `null` means there is no picture to show - the original is not
 /// an image or is too large to stand in for one - and the bubble offers the
 /// file instead. Any other failure is reported, so the bubble can retry it.
+///
+/// An original over the preview budget is shrunk to the preview box before it
+/// is cached, so one large picture does not fill the memory and disk caches.
 Future<ChatMediaImage?> _loadOriginalAsPreview(
   ChatMediaRepository repository,
   ChatMediaProviderKey key,
@@ -968,12 +985,58 @@ Future<ChatMediaImage?> _loadOriginalAsPreview(
       account: key.account,
       uri: uri,
       expectedContentType: contentType,
-      maximumBytes: ChatMediaRepository.maximumPreviewFallbackBytes,
+      maximumBytes: _maximumOriginalAsPreviewBytes,
     );
-    return ChatMediaImage(body: file.body, contentType: file.contentType);
+    if (file.body.lengthInBytes <=
+        ChatMediaRepository.maximumPreviewFallbackBytes) {
+      return ChatMediaImage(body: file.body, contentType: file.contentType);
+    }
+    return await _downscaledPreview(file.body);
   } on ChatMediaRepositoryException catch (failure) {
     if (failure.code == ChatMediaRepositoryError.responseTooLarge) return null;
     rethrow;
+  }
+}
+
+/// Re-encodes [original] as a PNG no larger than the preview box, or `null`
+/// when it cannot be decoded or has too many pixels to decode safely.
+Future<ChatMediaImage?> _downscaledPreview(Uint8List original) async {
+  final buffer = await ui.ImmutableBuffer.fromUint8List(original);
+  ui.ImageDescriptor? descriptor;
+  ui.Codec? codec;
+  ui.Image? image;
+  try {
+    descriptor = await ui.ImageDescriptor.encoded(buffer);
+    final width = descriptor.width;
+    final height = descriptor.height;
+    if (width < 1 ||
+        height < 1 ||
+        width * height > _maximumOriginalAsPreviewPixels) {
+      return null;
+    }
+    final landscape = width >= height;
+    final longest = landscape ? width : height;
+    final fitted = longest > _originalAsPreviewBox
+        ? _originalAsPreviewBox
+        : longest;
+    codec = await descriptor.instantiateCodec(
+      targetWidth: landscape ? fitted : null,
+      targetHeight: landscape ? null : fitted,
+    );
+    image = (await codec.getNextFrame()).image;
+    final png = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (png == null) return null;
+    return ChatMediaImage(
+      body: png.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes),
+      contentType: 'image/png',
+    );
+  } on Object {
+    return null;
+  } finally {
+    image?.dispose();
+    codec?.dispose();
+    descriptor?.dispose();
+    buffer.dispose();
   }
 }
 
