@@ -1,1 +1,1 @@
-Copy images to the clipboard from the message menu or gallery. Copying uses the original image rather than a link. When no preview is available and the image is too large to display inline, a tile lets you open the file. Oversized originals are no longer downloaded unnecessarily for previews.
+Pictures whose server preview went missing show again. A large original with no preview, such as a Mac screenshot, is shrunk by the app itself instead of appearing only as a tile that opens the file.

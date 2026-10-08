@@ -1,1 +1,1 @@
-Obrázky lze kopírovat do schránky z nabídky zprávy i galerie. Kopíruje se původní obrázek, nikoli odkaz. Pokud server nemá náhled a obrázek je příliš velký, zobrazí se dlaždice pro otevření souboru. Velké originály se už nestahují zbytečně jen kvůli náhledu.
+Obrázky, ke kterým server ztratil náhled, se znovu zobrazují. Velký originál bez náhledu (například snímek obrazovky z Macu) si aplikace sama zmenší, místo aby ukázala jen dlaždici pro otevření souboru.
