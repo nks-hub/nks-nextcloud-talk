@@ -176,6 +176,34 @@ void main({bool galleryOnly = false}) {
     expect(find.text('The image could not be loaded.'), findsNothing);
   });
 
+  testWidgets('a large preview that fails falls back to the chat preview', (
+    tester,
+  ) async {
+    // Measured on 9 October 2026: the 2048 preview of an 11 MB screenshot is
+    // generated anew on every request and did not arrive within the timeout,
+    // so the viewer said the image could not be loaded although the chat
+    // preview of the same picture was already on screen.
+    final asked = <Uri>[];
+    final repository = _repository((request) async {
+      asked.add(request.url);
+      if (request.url == _previewUri) {
+        return http.StreamedResponse(const Stream<List<int>>.empty(), 503);
+      }
+      return _imageResponse();
+    });
+
+    await tester.pumpWidget(_app(repository: repository));
+    await tester.tap(find.byKey(const Key('open-synthetic-image')));
+    await _pumpRouteAndFuture(tester);
+
+    expect(asked, [_previewUri, _smallerPreviewUri]);
+    expect(
+      find.byKey(const Key('authenticated-image-fullscreen')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('authenticated-image-retry')), findsNothing);
+  });
+
   testWidgets('Escape closes the picture and leaves the chat behind', (
     tester,
   ) async {

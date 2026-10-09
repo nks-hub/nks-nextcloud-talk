@@ -123,21 +123,35 @@ final class _AuthenticatedImageViewerState
 
   Future<ChatMediaImage?> _load() async {
     ChatMediaImage? image;
+    // The large preview of a big screenshot is generated anew on every
+    // request and can take longer than the timeout to arrive. Its failure is
+    // kept only to report if no smaller picture can stand in for it.
+    ChatMediaRepositoryException? largeFailure;
     try {
-      image = await widget.repository.loadPreview(
-        account: widget.account,
-        uri: widget.previewUri,
-      );
-      final smaller = widget.smallerPreviewUri;
-      if (image == null && smaller != null && smaller != widget.previewUri) {
+      try {
         image = await widget.repository.loadPreview(
           account: widget.account,
-          uri: smaller,
+          uri: widget.previewUri,
+          retry: widget.smallerPreviewUri == null,
         );
+      } on ChatMediaRepositoryException catch (failure) {
+        largeFailure = failure;
+      }
+      final smaller = widget.smallerPreviewUri;
+      if (image == null && smaller != null && smaller != widget.previewUri) {
+        try {
+          image = await widget.repository.loadPreview(
+            account: widget.account,
+            uri: smaller,
+          );
+        } on ChatMediaRepositoryException catch (failure) {
+          largeFailure ??= failure;
+        }
       }
       // No preview in any size: the server never produced one for this file.
       // The attachment is the picture, so it is shown instead of an error.
       image ??= await _loadOriginal();
+      if (image == null && largeFailure != null) throw largeFailure;
       return image;
     } finally {
       if (mounted) {

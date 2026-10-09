@@ -284,9 +284,13 @@ final class ChatMediaRepository {
   /// 2048 for the same file — and repeating it would only delay the caller's
   /// own fallback. A bad address, a missing credential and an oversized or
   /// non-image response are about the request, so they fail immediately too.
+  ///
+  /// [retry] false skips the waiting, for a caller that already has a smaller
+  /// picture of the same file to fall back on.
   Future<ChatMediaImage?> loadPreview({
     required StoredAccount account,
     required Uri uri,
+    bool retry = true,
   }) async {
     final server = ServerBase.parse(account.serverUrl);
     if (!_isAllowedPreviewUri(server, uri)) {
@@ -296,7 +300,7 @@ final class ChatMediaRepository {
     }
     return _oneAtATimePerFile(
       '${account.id}|${uri.queryParameters['fileId']}',
-      () => _loadPreviewAttempts(account: account, uri: uri),
+      () => _loadPreviewAttempts(account: account, uri: uri, retry: retry),
     );
   }
 
@@ -318,6 +322,7 @@ final class ChatMediaRepository {
   Future<ChatMediaImage?> _loadPreviewAttempts({
     required StoredAccount account,
     required Uri uri,
+    required bool retry,
   }) async {
     for (var attempt = 0; ; attempt++) {
       try {
@@ -328,7 +333,8 @@ final class ChatMediaRepository {
           if (smaller == null) rethrow;
           return _loadImage(account: account, uri: smaller);
         }
-        if (attempt == previewRetries.length ||
+        if (!retry ||
+            attempt == previewRetries.length ||
             failure.code != ChatMediaRepositoryError.unavailable) {
           rethrow;
         }
