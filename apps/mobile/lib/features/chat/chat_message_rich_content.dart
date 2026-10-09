@@ -365,28 +365,31 @@ final class _InlineLink extends StatelessWidget {
       unawaited(launchUrl(uri, mode: LaunchMode.externalApplication));
     }
 
-    return Semantics(
-      container: true,
-      link: true,
-      label: label,
-      onTap: openLink,
-      excludeSemantics: true,
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: openLink,
-          borderRadius: BorderRadius.circular(4),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-            child: Align(
-              widthFactor: 1,
-              heightFactor: 1,
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  decoration: TextDecoration.underline,
-                  decorationColor: color,
+    return ChatContextMenuSource(
+      entries: () => chatLinkContextMenuEntries(context, uri, openLink),
+      child: Semantics(
+        container: true,
+        link: true,
+        label: label,
+        onTap: openLink,
+        excludeSemantics: true,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: openLink,
+            borderRadius: BorderRadius.circular(4),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              child: Align(
+                widthFactor: 1,
+                heightFactor: 1,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    decoration: TextDecoration.underline,
+                    decorationColor: color,
+                  ),
                 ),
               ),
             ),
@@ -463,21 +466,25 @@ final class _RichObjectPill extends StatelessWidget {
         unawaited(launchUrl(objectLink, mode: LaunchMode.externalApplication));
       }
 
-      return Semantics(
-        container: true,
-        link: true,
-        label: label,
-        onTap: openObject,
-        excludeSemantics: true,
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            key: Key('open-rich-object-${node.parameterKey}'),
-            onTap: openObject,
-            borderRadius: BorderRadius.circular(8),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-              child: Center(widthFactor: 1, heightFactor: 1, child: pill),
+      return ChatContextMenuSource(
+        entries: () =>
+            chatLinkContextMenuEntries(context, objectLink, openObject),
+        child: Semantics(
+          container: true,
+          link: true,
+          label: label,
+          onTap: openObject,
+          excludeSemantics: true,
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              key: Key('open-rich-object-${node.parameterKey}'),
+              onTap: openObject,
+              borderRadius: BorderRadius.circular(8),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                child: Center(widthFactor: 1, heightFactor: 1, child: pill),
+              ),
             ),
           ),
         ),
@@ -763,3 +770,30 @@ TextStyle? _headingStyle(ThemeData theme, int level) {
 }
 
 /// A Talk attachment carries a WebDAV path. The `link` field points at the
+
+/// The right-click commands over a link in a message.
+List<ChatContextMenuEntry> chatLinkContextMenuEntries(
+  BuildContext context,
+  Uri uri,
+  VoidCallback open,
+) {
+  final strings = AppLocalizations.of(context);
+  return [
+    ChatContextMenuEntry(
+      key: const Key('message-action-open-link'),
+      icon: Icons.open_in_new_rounded,
+      label: strings.openLink,
+      onSelected: open,
+    ),
+    ChatContextMenuEntry(
+      key: const Key('message-action-copy-link'),
+      icon: Icons.link_rounded,
+      label: strings.copyLink,
+      onSelected: () async {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        await Clipboard.setData(ClipboardData(text: uri.toString()));
+        messenger?.showSnackBar(SnackBar(content: Text(strings.messageCopied)));
+      },
+    ),
+  ];
+}

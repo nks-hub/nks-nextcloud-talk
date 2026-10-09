@@ -1994,6 +1994,18 @@ class AppLocalizationsCs extends AppLocalizations {
   String get messageActionReact => 'Reagovat';
 
   @override
+  String get copySelection => 'Kopírovat výběr';
+
+  @override
+  String get openLink => 'Otevřít odkaz';
+
+  @override
+  String get copyLink => 'Kopírovat odkaz';
+
+  @override
+  String get openAttachmentFile => 'Otevřít soubor';
+
+  @override
   String get messageCopied => 'Zkopírováno do schránky';
 
   @override

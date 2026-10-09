@@ -161,6 +161,220 @@ void _registerChatRoomPaneRenderingTests() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  testWidgets('a horizontal mouse drag selects text instead of swiping to '
+      'reply', (tester) async {
+    // A sideways drag along a line is how text is selected with a mouse. The
+    // reply swipe claimed every horizontal drag, so the bubble slid aside and
+    // nothing was selected.
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 70,
+        actorId: 'someone-else',
+        actorDisplayName: 'Other person',
+        timestamp: 1724300000,
+        message: 'Select this whole sentence',
+      ),
+      displayText: 'Select this whole sentence',
+    );
+    String? copied;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: roomScreen(),
+        overrides: [
+          chatMessageActionsProfileProvider.overrideWith(
+            (ref, key) async => _capabilityProfile(reply: true),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final text = find.text('Select this whole sentence');
+    expect(
+      find.byKey(const Key('chat-message-reply-swipe-70')),
+      findsOneWidget,
+      reason: 'the reply swipe must be live for the drag to compete with it',
+    );
+    final rect = tester.getRect(text);
+    final gesture = await tester.startGesture(
+      rect.centerLeft + const Offset(1, 0),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    for (var step = 1; step <= 10; step++) {
+      await gesture.moveTo(
+        rect.centerLeft + Offset((rect.width - 2) * step / 10 + 1, 0),
+      );
+      await tester.pump();
+    }
+    await gesture.up();
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(copied, 'Select this whole sentence');
+    expect(tester.getRect(text), rect, reason: 'the bubble must not slide');
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  Future<String? Function()> mockClipboard(WidgetTester tester) async {
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String?;
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    return () => copied;
+  }
+
+  Future<void> rightClick(WidgetTester tester, Offset position) async {
+    final gesture = await tester.startGesture(
+      position,
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('a right click on a link offers the link and the message '
+      'actions at the pointer', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 71,
+        actorId: 'someone-else',
+        actorDisplayName: 'Other person',
+        timestamp: 1724300000,
+        message: 'Read [the docs](https://docs.example.invalid/guide) first',
+        markdown: true,
+      ),
+      displayText: 'Read the docs first',
+    );
+    final copied = await mockClipboard(tester);
+    await tester.pumpWidget(
+      app(
+        home: roomScreen(),
+        overrides: [
+          chatMessageActionsProfileProvider.overrideWith(
+            (ref, key) async => _capabilityProfile(reply: true),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final link = find.text('the docs');
+    expect(link, findsOneWidget);
+    await rightClick(tester, tester.getCenter(link));
+
+    expect(find.byKey(const Key('message-action-open-link')), findsOneWidget);
+    expect(find.byKey(const Key('message-action-reply')), findsOneWidget);
+    expect(find.byKey(const Key('message-action-copy')), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
+    final menuTop = tester.getTopLeft(
+      find.byKey(const Key('message-action-open-link')),
+    );
+    expect(
+      (menuTop - tester.getCenter(link)).distance,
+      lessThan(80),
+      reason: 'the menu opens at the pointer',
+    );
+
+    await tester.tap(find.byKey(const Key('message-action-copy-link')));
+    await tester.pumpAndSettle();
+    expect(copied(), 'https://docs.example.invalid/guide');
+
+    // A right click on plain text of another message offers no link.
+    await rightClick(tester, tester.getCenter(find.text('Cached hello')));
+    expect(find.byKey(const Key('message-action-open-link')), findsNothing);
+    expect(find.byKey(const Key('message-action-copy')), findsOneWidget);
+    await tester.tapAt(Offset.zero);
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('a right click over a mouse selection copies just the '
+      'selection', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 72,
+        actorId: 'someone-else',
+        actorDisplayName: 'Other person',
+        timestamp: 1724300000,
+        message: 'alpha beta gamma',
+      ),
+      displayText: 'alpha beta gamma',
+    );
+    final copied = await mockClipboard(tester);
+    await tester.pumpWidget(app(home: roomScreen()));
+    await tester.pump();
+    await tester.pump();
+
+    final text = find.text('alpha beta gamma');
+    final rect = tester.getRect(text);
+    final drag = await tester.startGesture(
+      rect.centerLeft + const Offset(1, 0),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    await drag.moveTo(rect.center);
+    await tester.pump();
+    await drag.up();
+    await tester.pump();
+
+    await rightClick(tester, rect.centerLeft + const Offset(4, 0));
+    final copySelection = find.byKey(
+      const Key('message-action-copy-selection'),
+    );
+    expect(copySelection, findsOneWidget);
+    await tester.tap(copySelection);
+    await tester.pumpAndSettle();
+    final selected = copied() ?? '';
+    expect(selected, startsWith('alpha'));
+    expect(selected.length, lessThan('alpha beta gamma'.length));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('the thread layout takes replies out of the room', (
     tester,
   ) async {

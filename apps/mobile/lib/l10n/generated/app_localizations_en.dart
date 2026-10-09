@@ -1995,6 +1995,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get messageActionReact => 'React';
 
   @override
+  String get copySelection => 'Copy selection';
+
+  @override
+  String get openLink => 'Open link';
+
+  @override
+  String get copyLink => 'Copy link';
+
+  @override
+  String get openAttachmentFile => 'Open file';
+
+  @override
   String get messageCopied => 'Copied to clipboard';
 
   @override

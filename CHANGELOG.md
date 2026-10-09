@@ -8,6 +8,11 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## Unreleased
+
+- On desktop, a right click on a message opens a menu at the pointer instead of the bottom sheet. It starts with what was clicked: copying the selected text, opening or copying a link, opening a picture or its file. The message actions follow.
+- Dragging the mouse along a message selects its text again; the reply swipe answers only to a finger or a stylus. Ctrl+C copies the selection.
+
 ## 1.0.26 (94) — 9 October 2026
 
 - Opening a large picture in full screen no longer ends in "The image could not be loaded". The server generates the 2048 preview of a big screenshot anew on every request and it did not arrive within the timeout; the viewer now asks for it once and falls back to the chat preview and then the original instead of retrying and giving up.

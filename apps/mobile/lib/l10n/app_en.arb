@@ -725,6 +725,22 @@
   "messageActionEdit": "Edit",
   "messageActionDelete": "Delete",
   "messageActionReact": "React",
+  "copySelection": "Copy selection",
+  "@copySelection": {
+    "description": "Right-click menu command that copies the text selected with the mouse in a conversation."
+  },
+  "openLink": "Open link",
+  "@openLink": {
+    "description": "Right-click menu command over a link in a message."
+  },
+  "copyLink": "Copy link",
+  "@copyLink": {
+    "description": "Right-click menu command that copies the address of a link in a message."
+  },
+  "openAttachmentFile": "Open file",
+  "@openAttachmentFile": {
+    "description": "Right-click menu command over a picture that opens the attached file in the system app."
+  },
   "messageCopied": "Copied to clipboard",
   "editMessageTitle": "Edit message",
   "editMessageSave": "Save",

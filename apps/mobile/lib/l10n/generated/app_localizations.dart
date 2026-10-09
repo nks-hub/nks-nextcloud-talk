@@ -3656,6 +3656,30 @@ abstract class AppLocalizations {
   /// **'React'**
   String get messageActionReact;
 
+  /// Right-click menu command that copies the text selected with the mouse in a conversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy selection'**
+  String get copySelection;
+
+  /// Right-click menu command over a link in a message.
+  ///
+  /// In en, this message translates to:
+  /// **'Open link'**
+  String get openLink;
+
+  /// Right-click menu command that copies the address of a link in a message.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get copyLink;
+
+  /// Right-click menu command over a picture that opens the attached file in the system app.
+  ///
+  /// In en, this message translates to:
+  /// **'Open file'**
+  String get openAttachmentFile;
+
   /// No description provided for @messageCopied.
   ///
   /// In en, this message translates to:

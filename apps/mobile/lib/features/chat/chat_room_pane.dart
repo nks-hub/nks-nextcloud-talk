@@ -37,6 +37,7 @@ import '../conversations/conversation_avatar_widget.dart';
 import '../rooms/room_settings_service.dart';
 import 'chat_message_actions_service.dart';
 import 'chat_background_surface.dart';
+import 'chat_context_menu.dart';
 import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
 import 'photo_album_grouping.dart';
@@ -96,6 +97,11 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     '😢',
     '😡',
   ];
+
+  final _contextMenu = ChatContextMenuCollector();
+
+  /// Text currently selected with the mouse, offered first on a right click.
+  String? _selectedText;
 
   /// How many history pages a single jump may fetch before giving up. One
   /// page is [ChatService] `_pageSize` messages, so this reaches roughly a
@@ -472,11 +478,17 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// stays off there. One region above the whole timeline, not one inside
   /// each bubble: a region nested under the bubble sits deeper in the gesture
   /// arena and beats the bubble's long press, which kills the actions sheet.
-  static Widget _pointerSelectable(Widget timeline) {
+  Widget _pointerSelectable(Widget timeline) {
     return switch (defaultTargetPlatform) {
       TargetPlatform.macOS ||
       TargetPlatform.windows ||
-      TargetPlatform.linux => SelectionArea(child: timeline),
+      TargetPlatform.linux => ChatContextMenuArea(
+        collector: _contextMenu,
+        child: SelectionArea(
+          onSelectionChanged: (content) => _selectedText = content?.plainText,
+          child: timeline,
+        ),
+      ),
       TargetPlatform.android ||
       TargetPlatform.iOS ||
       TargetPlatform.fuchsia => timeline,

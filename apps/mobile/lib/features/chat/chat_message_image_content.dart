@@ -272,8 +272,39 @@ final class _InlineChatImagePreviewState
     );
   }
 
+  /// The right-click commands over the picture itself; the message's own
+  /// actions, copying the picture among them, follow in the same menu.
+  List<ChatContextMenuEntry> _contextMenuEntries() {
+    final strings = AppLocalizations.of(context);
+    final onOpen = widget.onOpen;
+    final onOpenFile = widget.onOpenFile;
+    return [
+      if (onOpen != null)
+        ChatContextMenuEntry(
+          key: const Key('message-action-open-image'),
+          icon: Icons.fullscreen_rounded,
+          label: strings.openImage,
+          onSelected: onOpen,
+        ),
+      if (onOpenFile != null)
+        ChatContextMenuEntry(
+          key: const Key('message-action-open-file'),
+          icon: Icons.open_in_new_rounded,
+          label: strings.openAttachmentFile,
+          onSelected: onOpenFile,
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
+    return ChatContextMenuSource(
+      entries: _contextMenuEntries,
+      child: _buildPreview(context),
+    );
+  }
+
+  Widget _buildPreview(BuildContext context) {
     if (widget.compact) {
       return LayoutBuilder(
         builder: (context, constraints) =>

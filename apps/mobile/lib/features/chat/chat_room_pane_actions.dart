@@ -23,145 +23,176 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
     final canForward =
         forwardFilePath != null ||
         (copyText.isNotEmpty && _forwardableAsText(parsed));
+    final entries = <ChatContextMenuEntry>[
+      if (image != null && imageClipboardSupported)
+        ChatContextMenuEntry(
+          key: const Key('message-action-copy-image'),
+          icon: Icons.image_outlined,
+          label: strings.copyImage,
+          onSelected: () => unawaited(
+            copyChatImage(
+              messageContext: context,
+              account: widget.account,
+              image: image,
+              repository: ref.read(chatMediaRepositoryProvider),
+            ),
+          ),
+        ),
+      if (canReply)
+        ChatContextMenuEntry(
+          key: const Key('message-action-reply'),
+          icon: Icons.reply_rounded,
+          label: strings.messageActionReply,
+          onSelected: () {
+            _startReply(message);
+          },
+        ),
+      if (copyText.isNotEmpty)
+        ChatContextMenuEntry(
+          key: const Key('message-action-copy'),
+          icon: Icons.copy_rounded,
+          label: strings.messageActionCopy,
+          onSelected: () {
+            unawaited(_copyMessageText(copyText));
+          },
+        ),
+      if (canPrivateReply)
+        ChatContextMenuEntry(
+          key: const Key('message-action-private-reply'),
+          icon: Icons.lock_outline_rounded,
+          label: strings.messageActionPrivateReply,
+          onSelected: () {
+            unawaited(_startPrivateReply(message));
+          },
+        ),
+      if (canForward)
+        ChatContextMenuEntry(
+          key: const Key('message-action-forward'),
+          icon: Icons.forward_rounded,
+          label: strings.messageActionForward,
+          onSelected: () {
+            unawaited(_forwardMessage(copyText, filePath: forwardFilePath));
+          },
+        ),
+      if (canForward && _noteToSelf() != null)
+        ChatContextMenuEntry(
+          key: const Key('message-action-note-to-self'),
+          icon: Icons.edit_note_rounded,
+          label: strings.messageActionNoteToSelf,
+          onSelected: () {
+            unawaited(
+              _forwardMessage(
+                copyText,
+                target: _noteToSelf(),
+                filePath: forwardFilePath,
+              ),
+            );
+          },
+        ),
+      if (canEdit)
+        ChatContextMenuEntry(
+          key: const Key('message-action-edit'),
+          icon: Icons.edit_outlined,
+          label: strings.messageActionEdit,
+          onSelected: () {
+            unawaited(_startEditMessage(message, parsed));
+          },
+        ),
+      if (canTranslate && parsed != null)
+        ChatContextMenuEntry(
+          key: const Key('message-action-translate'),
+          icon: Icons.translate_outlined,
+          label: strings.messageActionTranslate,
+          onSelected: () {
+            unawaited(_openTranslation(parsed));
+          },
+        ),
+      if (canDelete)
+        ChatContextMenuEntry(
+          key: const Key('message-action-delete'),
+          icon: Icons.delete_outline_rounded,
+          label: strings.messageActionDelete,
+          onSelected: () {
+            unawaited(_confirmDeleteMessage(message));
+          },
+        ),
+      if (canReact)
+        ChatContextMenuEntry(
+          key: const Key('message-action-react'),
+          icon: Icons.add_reaction_outlined,
+          label: strings.messageActionReact,
+          onSelected: () {
+            unawaited(_openReactionPicker(message));
+          },
+        ),
+      if (canPin && !isPinned)
+        ChatContextMenuEntry(
+          key: const Key('message-action-pin'),
+          icon: Icons.push_pin_outlined,
+          label: strings.messageActionPin,
+          onSelected: () {
+            unawaited(_pinMessageWithExpiry(message));
+          },
+        ),
+      if (canPin && isPinned)
+        ChatContextMenuEntry(
+          key: const Key('message-action-unpin'),
+          icon: Icons.push_pin_rounded,
+          label: strings.messageActionUnpin,
+          onSelected: () {
+            unawaited(_unpinMessage(message));
+          },
+        ),
+      if (canRemind)
+        ChatContextMenuEntry(
+          key: const Key('message-action-remind'),
+          icon: Icons.alarm_add_outlined,
+          label: strings.messageActionRemind,
+          onSelected: () {
+            unawaited(_openReminder(message));
+          },
+        ),
+    ];
+    // A right click shows the same actions as a menu at the pointer, led by
+    // what was clicked: the selected text, a link or a picture.
+    final click = _contextMenu.take();
+    if (click != null) {
+      final selection = _selectedText;
+      unawaited(
+        showChatContextMenu(
+          context: context,
+          position: click.position,
+          groups: [
+            [
+              if (selection != null && selection.isNotEmpty)
+                ChatContextMenuEntry(
+                  key: const Key('message-action-copy-selection'),
+                  icon: Icons.content_copy_rounded,
+                  label: strings.copySelection,
+                  onSelected: () => unawaited(_copyMessageText(selection)),
+                ),
+              ...click.entries,
+            ],
+            entries,
+          ],
+        ),
+      );
+      return;
+    }
     unawaited(
       showModalBottomSheet<void>(
         context: context,
         builder: (sheetContext) => SafeArea(
           child: Wrap(
             children: [
-              if (image != null && imageClipboardSupported)
-                ChatImageCopyAction(
-                  messageContext: context,
-                  account: widget.account,
-                  image: image,
-                  repository: ref.read(chatMediaRepositoryProvider),
-                ),
-              if (canReply)
+              for (final entry in entries)
                 ListTile(
-                  key: const Key('message-action-reply'),
-                  leading: const Icon(Icons.reply_rounded),
-                  title: Text(strings.messageActionReply),
+                  key: entry.key,
+                  leading: Icon(entry.icon),
+                  title: Text(entry.label),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
-                    _startReply(message);
-                  },
-                ),
-              if (copyText.isNotEmpty)
-                ListTile(
-                  key: const Key('message-action-copy'),
-                  leading: const Icon(Icons.copy_rounded),
-                  title: Text(strings.messageActionCopy),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(_copyMessageText(copyText));
-                  },
-                ),
-              if (canPrivateReply)
-                ListTile(
-                  key: const Key('message-action-private-reply'),
-                  leading: const Icon(Icons.lock_outline_rounded),
-                  title: Text(strings.messageActionPrivateReply),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(_startPrivateReply(message));
-                  },
-                ),
-              if (canForward)
-                ListTile(
-                  key: const Key('message-action-forward'),
-                  leading: const Icon(Icons.forward_rounded),
-                  title: Text(strings.messageActionForward),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(
-                      _forwardMessage(copyText, filePath: forwardFilePath),
-                    );
-                  },
-                ),
-              if (canForward && _noteToSelf() != null)
-                ListTile(
-                  key: const Key('message-action-note-to-self'),
-                  leading: const Icon(Icons.edit_note_rounded),
-                  title: Text(strings.messageActionNoteToSelf),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(
-                      _forwardMessage(
-                        copyText,
-                        target: _noteToSelf(),
-                        filePath: forwardFilePath,
-                      ),
-                    );
-                  },
-                ),
-              if (canEdit)
-                ListTile(
-                  key: const Key('message-action-edit'),
-                  leading: const Icon(Icons.edit_outlined),
-                  title: Text(strings.messageActionEdit),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(_startEditMessage(message, parsed));
-                  },
-                ),
-              if (canTranslate && parsed != null)
-                ListTile(
-                  key: const Key('message-action-translate'),
-                  leading: const Icon(Icons.translate_outlined),
-                  title: Text(strings.messageActionTranslate),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(_openTranslation(parsed));
-                  },
-                ),
-              if (canDelete)
-                ListTile(
-                  key: const Key('message-action-delete'),
-                  leading: const Icon(Icons.delete_outline_rounded),
-                  title: Text(strings.messageActionDelete),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(_confirmDeleteMessage(message));
-                  },
-                ),
-              if (canReact)
-                ListTile(
-                  key: const Key('message-action-react'),
-                  leading: const Icon(Icons.add_reaction_outlined),
-                  title: Text(strings.messageActionReact),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(_openReactionPicker(message));
-                  },
-                ),
-              if (canPin && !isPinned)
-                ListTile(
-                  key: const Key('message-action-pin'),
-                  leading: const Icon(Icons.push_pin_outlined),
-                  title: Text(strings.messageActionPin),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(_pinMessageWithExpiry(message));
-                  },
-                ),
-              if (canPin && isPinned)
-                ListTile(
-                  key: const Key('message-action-unpin'),
-                  leading: const Icon(Icons.push_pin_rounded),
-                  title: Text(strings.messageActionUnpin),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(_unpinMessage(message));
-                  },
-                ),
-              if (canRemind)
-                ListTile(
-                  key: const Key('message-action-remind'),
-                  leading: const Icon(Icons.alarm_add_outlined),
-                  title: Text(strings.messageActionRemind),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(_openReminder(message));
+                    entry.onSelected();
                   },
                 ),
             ],

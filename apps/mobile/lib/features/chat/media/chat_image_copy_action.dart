@@ -24,33 +24,13 @@ final class ChatImageCopyAction extends StatelessWidget {
   final ChatMediaRepository repository;
   final ChatImageExporter exporter;
 
-  Future<void> _copy() async {
-    final strings = AppLocalizations.of(messageContext);
-    final messenger = ScaffoldMessenger.of(messageContext);
-    messenger.showSnackBar(
-      SnackBar(content: Text(strings.imageCopying)),
-    );
-    var copied = false;
-    try {
-      final original = await repository.loadOriginalFile(
-        account: account,
-        uri: image.originalUri,
-        expectedContentType: image.contentType,
-      );
-      if (messageContext.mounted) {
-        copied = await exporter.copyToClipboard(bytes: original.body);
-      }
-    } on Object {
-      copied = false;
-    }
-    if (!messageContext.mounted) return;
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(copied ? strings.imageCopied : strings.imageCopyFailed),
-      ),
-    );
-  }
+  Future<void> _copy() => copyChatImage(
+    messageContext: messageContext,
+    account: account,
+    image: image,
+    repository: repository,
+    exporter: exporter,
+  );
 
   @override
   Widget build(BuildContext context) => ListTile(
@@ -61,5 +41,39 @@ final class ChatImageCopyAction extends StatelessWidget {
       Navigator.of(context).pop();
       unawaited(_copy());
     },
+  );
+}
+
+/// Copies the original of [image] to the clipboard, telling the person how it
+/// went in [messageContext].
+Future<void> copyChatImage({
+  required BuildContext messageContext,
+  required StoredAccount account,
+  required ChatGalleryImage image,
+  required ChatMediaRepository repository,
+  ChatImageExporter exporter = const PlatformChatImageExporter(),
+}) async {
+  final strings = AppLocalizations.of(messageContext);
+  final messenger = ScaffoldMessenger.of(messageContext);
+  messenger.showSnackBar(SnackBar(content: Text(strings.imageCopying)));
+  var copied = false;
+  try {
+    final original = await repository.loadOriginalFile(
+      account: account,
+      uri: image.originalUri,
+      expectedContentType: image.contentType,
+    );
+    if (messageContext.mounted) {
+      copied = await exporter.copyToClipboard(bytes: original.body);
+    }
+  } on Object {
+    copied = false;
+  }
+  if (!messageContext.mounted) return;
+  messenger.hideCurrentSnackBar();
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(copied ? strings.imageCopied : strings.imageCopyFailed),
+    ),
   );
 }
