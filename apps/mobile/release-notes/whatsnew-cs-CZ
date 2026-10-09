@@ -1,1 +1,1 @@
-Obrázky, ke kterým server ztratil náhled, se znovu zobrazují. Velký originál bez náhledu (například snímek obrazovky z Macu) si aplikace sama zmenší, místo aby ukázala jen dlaždici pro otevření souboru.
+Obrázky, ke kterým server ztratil náhled, se znovu zobrazují. Velký obrázek (například snímek obrazovky z Macu) se v chatu i na celé obrazovce zobrazí, i když server nestihne připravit náhled.

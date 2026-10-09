@@ -1,1 +1,1 @@
-Pictures whose server preview went missing show again. A large original with no preview, such as a Mac screenshot, is shrunk by the app itself instead of appearing only as a tile that opens the file.
+Pictures whose server preview went missing show again. A large picture, such as a Mac screenshot, now shows in the chat and in full screen even when the server is slow to prepare a preview.
