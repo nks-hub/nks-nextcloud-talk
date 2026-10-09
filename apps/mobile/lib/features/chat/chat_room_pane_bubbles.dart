@@ -424,6 +424,13 @@ final class _ReplySwipeState extends State<_ReplySwipe> {
     }
     return GestureDetector(
       key: Key('chat-message-reply-swipe-${widget.messageId}'),
+      // A finger swipes; a mouse drag along a line selects its text, so the
+      // mouse is left to the selection region above the timeline.
+      supportedDevices: const {
+        ui.PointerDeviceKind.touch,
+        ui.PointerDeviceKind.stylus,
+        ui.PointerDeviceKind.invertedStylus,
+      },
       // Only the horizontal axis is claimed; vertical drags stay with the
       // timeline, otherwise the list would not scroll over a bubble.
       onHorizontalDragUpdate: (details) {
