@@ -1,1 +1,1 @@
-On desktop, a right click on a message opens a menu: copy the selected text, open or copy a link, open a picture, and the message actions. Message text can be selected with the mouse and copied with Ctrl+C.
+On desktop, a right click on a message opens a menu with the selected text, links, pictures and message actions. Fixed: a second "Select all" menu no longer appears beside it.
