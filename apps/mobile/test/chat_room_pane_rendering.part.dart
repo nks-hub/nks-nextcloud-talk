@@ -262,6 +262,9 @@ void _registerChatRoomPaneRenderingTests() {
       kind: PointerDeviceKind.mouse,
       buttons: kSecondaryMouseButton,
     );
+    // A real click holds the button past the tap deadline, which is when the
+    // selection region used to open its own toolbar under the menu.
+    await tester.pump(const Duration(milliseconds: 150));
     await gesture.up();
     await tester.pumpAndSettle();
   }
@@ -300,6 +303,8 @@ void _registerChatRoomPaneRenderingTests() {
     await rightClick(tester, tester.getCenter(link));
 
     expect(find.byKey(const Key('message-action-open-link')), findsOneWidget);
+    expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
+    expect(find.text('Select all'), findsNothing);
     expect(find.byKey(const Key('message-action-reply')), findsOneWidget);
     expect(find.byKey(const Key('message-action-copy')), findsOneWidget);
     expect(find.byType(BottomSheet), findsNothing);
@@ -319,6 +324,8 @@ void _registerChatRoomPaneRenderingTests() {
     // A right click on plain text of another message offers no link.
     await rightClick(tester, tester.getCenter(find.text('Cached hello')));
     expect(find.byKey(const Key('message-action-open-link')), findsNothing);
+    expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
+    expect(find.text('Select all'), findsNothing);
     expect(find.byKey(const Key('message-action-copy')), findsOneWidget);
     await tester.tapAt(Offset.zero);
     await tester.pumpAndSettle();
@@ -364,6 +371,7 @@ void _registerChatRoomPaneRenderingTests() {
       const Key('message-action-copy-selection'),
     );
     expect(copySelection, findsOneWidget);
+    expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
     await tester.tap(copySelection);
     await tester.pumpAndSettle();
     final selected = copied() ?? '';

@@ -485,6 +485,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       TargetPlatform.linux => ChatContextMenuArea(
         collector: _contextMenu,
         child: SelectionArea(
+          // The message's own right-click menu offers the selection; the
+          // region's toolbar would open a second menu on top of it.
+          contextMenuBuilder: (_, _) => const SizedBox.shrink(),
           onSelectionChanged: (content) => _selectedText = content?.plainText,
           child: timeline,
         ),
