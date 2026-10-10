@@ -27,7 +27,7 @@ The people, rooms and server in these pictures are invented. They come from `too
 
 ## Features
 
-- 💬 **Chat** - Everything a Talk room offers: replies, threads, reactions, mentions with suggestions, editing and deleting, pinned messages, reminders, silent and scheduled sending
+- 💬 **Chat** - Replies, threads, reactions, mentions with suggestions, editing and deleting, pinned messages, reminders, silent and scheduled sending
 - ✍️ **Markdown** - Messages render Markdown; the composer has a formatting menu for bold, italic, strikethrough, inline code and code blocks
 - 📎 **Attachments** - Photos and files, voice messages, polls, location, contacts and GIFs; a paste longer than 4,000 characters or 40 lines becomes a `.md` or `.txt` attachment that waits in the composer until you send it
 - 📞 **Calls** - Audio and video, group calls, screen sharing, over the Talk high-performance backend or Talk's internal signalling, and through TURN when a direct path fails
@@ -51,7 +51,7 @@ Android builds go to Google Play closed testing; testers opt in at <https://play
 
 iOS builds go to TestFlight, by invitation.
 
-Windows, macOS and Linux builds are attached to each tagged [release](https://github.com/nks-hub/nks-nextcloud-talk/releases). The macOS app is signed with a Developer ID and notarized by Apple. The Windows installer is not code-signed, so SmartScreen warns once on the first run. The desktop app checks the releases page for a newer build and can install it itself.
+Windows, macOS and Linux builds are attached to each tagged [release](https://github.com/nks-hub/nks-nextcloud-talk/releases). The macOS app is signed with a Developer ID and notarized by Apple. The Windows installer is not code-signed, so SmartScreen warns once on the first run.
 
 ## Building
 
@@ -95,7 +95,7 @@ cd ../../packages/talk_protocol
 dart test
 ```
 
-Run `talk_protocol` with `dart test`, not `flutter test`. Seven of its tests compile a probe through `Platform.resolvedExecutable … compile exe`. Under `flutter test` that executable is the Flutter tester instead of the Dart VM, the compilation never returns, and all seven time out after 30 seconds. The suite then looks broken when only the runner is wrong.
+Run `talk_protocol` with `dart test`, not `flutter test`. Seven of its tests compile a probe through `Platform.resolvedExecutable … compile exe`. Under `flutter test` that executable is the Flutter tester instead of the Dart VM, the compilation never returns, and all seven time out after 30 seconds.
 
 Some of the skipped tests are live checks against a real Nextcloud. They run when `NEXTCLOUD_TALK_ORIGIN`, `NEXTCLOUD_TALK_USERNAME` and `NEXTCLOUD_TALK_APP_PASSWORD` are set. The room-scoped search also needs `NEXTCLOUD_TALK_TEST_ROOM_TOKEN` pointing at a conversation with messages; in an empty room its assertion passes without proving anything. `NEXTCLOUD_TALK_SEARCH_TERM` changes the search term, which defaults to `a`.
 
