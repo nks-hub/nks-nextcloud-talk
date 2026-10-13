@@ -1,1 +1,1 @@
-Fixed: a quick double tap on "Scan a login code" on Android no longer opens two cameras, and closing the scanner no longer crashes the app. iOS and macOS create the push encryption key in the background, so the window no longer freezes on first launch.
+Fixed: copying a message with a list no longer runs everything into one line. "Copy" puts the text on the clipboard as its author wrote it, with bullets and line breaks, and a mouse selection across paragraphs, list items or messages keeps its line breaks. The Mac app no longer crashes while quitting.

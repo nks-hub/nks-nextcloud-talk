@@ -1,1 +1,1 @@
-Opraveno: rychlé dvojí klepnutí na „Načíst přihlašovací kód“ na Androidu už neotevře dvě kamery a aplikace při zavírání skeneru nespadne. Na iPhonu a Macu se šifrovací klíč pro oznámení vytváří na pozadí, takže se okno při prvním spuštění nezasekne.
+Opraveno: zkopírovaná zpráva se seznamem už nesplyne do jednoho řádku. „Kopírovat“ vloží text tak, jak ho autor napsal, i s odrážkami a zalomením řádků, a výběr myší přes víc odstavců, položek seznamu nebo zpráv zachová konce řádků. Aplikace na Macu už při ukončení nepadá.

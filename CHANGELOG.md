@@ -8,6 +8,13 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.0.30 (98) — 13 October 2026
+
+- Copying a message with a bulleted list no longer runs the items together into one line. "Copy" puts the message on the clipboard as its author wrote it, with its list markers and line breaks and with mentions and files by name; forwarding sends the same text. A mouse selection across paragraphs, list items or several messages copies them on separate lines, without the avatar initials, times and day headings that used to be glued in between.
+- The right-click menu no longer offers "Copy selection" for text selected in the room you just left.
+- Nested lists and quotes with several paragraphs show each part on its own line instead of running them together, and the quote above a reply shows a quoted list item by item.
+- The Mac app no longer crashes while quitting. The database stayed open while the app shut down and its cleanup touched memory that was already freed.
+
 ## 1.0.29 (97) — 13 October 2026
 
 - A quick double tap on "Scan a login code" on Android no longer opens two cameras, which crashed the app when the scanner closed. Closing the scanner also no longer crashes when the camera fails to shut down cleanly.
