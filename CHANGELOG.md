@@ -8,6 +8,11 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## Unreleased
+
+- A quick double tap on "Scan login code" on Android no longer opens two cameras, which crashed the app when the scanner closed. Closing the scanner also no longer crashes when the camera fails to shut down cleanly.
+- iOS and macOS create the push encryption key in the background. On a Mac the first key could freeze the window for over two seconds.
+
 ## 1.0.28 (96) — 9 October 2026
 
 - A right click on a message no longer opens a second "Select all" toolbar on top of the message menu. The text selection kept its own toolbar, which appeared beside the menu once the button was held a moment.
