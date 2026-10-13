@@ -1,1 +1,1 @@
-On desktop, a right click on a message opens a menu with the selected text, links, pictures and message actions. Fixed: a second "Select all" menu no longer appears beside it.
+Fixed: a quick double tap on "Scan a login code" on Android no longer opens two cameras, and closing the scanner no longer crashes the app. iOS and macOS create the push encryption key in the background, so the window no longer freezes on first launch.

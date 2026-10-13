@@ -1,1 +1,1 @@
-Na počítači otevře pravé tlačítko nad zprávou nabídku s kopírováním vybraného textu, odkazy, obrázky a akcemi se zprávou. Opraveno: vedle nabídky se už neobjevuje druhá nabídka „Vybrat vše“.
+Opraveno: rychlé dvojí klepnutí na „Načíst přihlašovací kód“ na Androidu už neotevře dvě kamery a aplikace při zavírání skeneru nespadne. Na iPhonu a Macu se šifrovací klíč pro oznámení vytváří na pozadí, takže se okno při prvním spuštění nezasekne.
