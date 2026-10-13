@@ -133,15 +133,21 @@ final class _CameraQrScanSession implements QrScanSession {
       return;
     }
     _closed = true;
+    // Tearing the camera down is best effort: the screen closes it without
+    // awaiting, so a throw here would surface as an unhandled crash, and there
+    // is nothing the user could do about a failure.
     try {
       if (_controller.value.isStreamingImages) {
         await _controller.stopImageStream();
       }
     } on Object {
-      // Tearing the camera down is best effort; the controller is disposed
-      // either way and there is nothing the user could do about a failure.
+      // The controller is disposed below either way.
     }
-    await _controller.dispose();
+    try {
+      await _controller.dispose();
+    } on Object {
+      // CameraX throws when its preview surface was never set up.
+    }
     await _payloads.close();
   }
 }

@@ -43,6 +43,7 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Object? _error;
   PendingLogin? _pending;
   CancellationSignal? _cancellation;
+  bool _scannerOpen = false;
 
   bool get _busy => _phase != _OnboardingPhase.entry;
 
@@ -143,14 +144,23 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   Future<void> _scan() async {
-    if (_busy) {
+    if (_busy || _scannerOpen) {
       return;
     }
     _serverFocus.unfocus();
-    final payload = await QrLoginScannerScreen.push(
-      context,
-      onOpenSettings: ref.read(appSettingsOpenerProvider).open,
-    );
+    // A double tap used to push two scanners. Both opened the camera, and
+    // CameraX threw on the second teardown because the first had already
+    // released the shared preview surface.
+    _scannerOpen = true;
+    final QrLoginPayload? payload;
+    try {
+      payload = await QrLoginScannerScreen.push(
+        context,
+        onOpenSettings: ref.read(appSettingsOpenerProvider).open,
+      );
+    } finally {
+      _scannerOpen = false;
+    }
     if (payload == null || !mounted) {
       return;
     }
