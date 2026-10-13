@@ -413,7 +413,7 @@ final class ThreadRepository {
               markdownEnabled: message.markdown ?? false,
               parameters: message.messageParameters,
               server: server,
-            ).root.flattenedText.trim(),
+            ).root.plainText.trim(),
           );
     return _database
         .into(_database.cachedChatMessages)

@@ -38,6 +38,7 @@ import '../rooms/room_settings_service.dart';
 import 'chat_message_actions_service.dart';
 import 'chat_background_surface.dart';
 import 'chat_context_menu.dart';
+import 'chat_selection.dart';
 import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
 import 'photo_album_grouping.dart';

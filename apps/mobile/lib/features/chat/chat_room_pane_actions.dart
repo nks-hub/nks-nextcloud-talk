@@ -15,7 +15,16 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
     required bool canTranslate,
   }) {
     final strings = AppLocalizations.of(context);
-    final copyText = message.displayText;
+    // The author's own text, not a flattening of the rendered message: that
+    // ran list items and paragraphs together into one line.
+    final copyText = parsed == null
+        ? message.displayText
+        : parsed.deleted
+        ? ''
+        : resolveChatMessagePlaceholders(
+            parsed.message,
+            parsed.messageParameters,
+          ).trim();
     final image = parsed == null
         ? null
         : chatGalleryImage(widget.account, parsed);

@@ -777,7 +777,7 @@ extension _ChatRepositoryProjection on ChatRepository {
       markdownEnabled: message.markdown ?? false,
       parameters: message.messageParameters,
       server: server,
-    ).root.flattenedText.trim();
+    ).root.plainText.trim();
     return normalizeGiphyReferencePreview(displayText);
   }
 

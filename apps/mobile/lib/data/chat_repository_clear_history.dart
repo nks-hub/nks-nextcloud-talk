@@ -35,7 +35,7 @@ extension ChatRepositoryClearHistory on ChatRepository {
           markdownEnabled: message.markdown ?? false,
           parameters: message.messageParameters,
           server: server,
-        ).root.flattenedText.trim(),
+        ).root.plainText.trim(),
       );
 
       await (_database.delete(_database.cachedChatMessages)..where(

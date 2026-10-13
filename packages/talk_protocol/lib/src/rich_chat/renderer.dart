@@ -182,10 +182,141 @@ final class RichChatSemanticNode {
     return children.map((child) => child.flattenedText).join();
   }
 
+  /// The text as a reader sees it, one line per block.
+  ///
+  /// [flattenedText] runs every block into the next, so a list came out as
+  /// one word salad. Here list items keep a `- ` or `1. ` marker, nested
+  /// items and continuation lines are indented under their marker, quotes
+  /// carry `> `, table cells are joined by ` | ` and rich objects read as
+  /// their name.
+  String get plainText => _blockLines(this).join('\n');
+
   @override
   String toString() =>
       'RichChatSemanticNode(kind: ${kind.name}, content: <redacted>)';
 }
+
+const Set<RichChatSemanticKind> _blockKinds = {
+  RichChatSemanticKind.document,
+  RichChatSemanticKind.paragraph,
+  RichChatSemanticKind.heading,
+  RichChatSemanticKind.codeBlock,
+  RichChatSemanticKind.unorderedList,
+  RichChatSemanticKind.orderedList,
+  RichChatSemanticKind.taskList,
+  RichChatSemanticKind.listItem,
+  RichChatSemanticKind.quote,
+  RichChatSemanticKind.table,
+  RichChatSemanticKind.tableSection,
+  RichChatSemanticKind.tableRow,
+  RichChatSemanticKind.horizontalRule,
+};
+
+List<String> _blockLines(RichChatSemanticNode node) {
+  switch (node.kind) {
+    case RichChatSemanticKind.codeBlock:
+      final code = node.text ?? '';
+      return (code.endsWith('\n') ? code.substring(0, code.length - 1) : code)
+          .split('\n');
+    case RichChatSemanticKind.horizontalRule:
+      return const ['---'];
+    case RichChatSemanticKind.unorderedList ||
+        RichChatSemanticKind.orderedList ||
+        RichChatSemanticKind.taskList:
+      return _listLines(node);
+    case RichChatSemanticKind.quote:
+      return [
+        for (final line in _childLines(node)) line.isEmpty ? '>' : '> $line',
+      ];
+    case RichChatSemanticKind.tableRow:
+      return [node.children.map(_inlineText).join(' | ')];
+    default:
+      return _blockKinds.contains(node.kind)
+          ? _childLines(node)
+          : _inlineText(node).split('\n');
+  }
+}
+
+/// Lines of a container whose children may mix inline runs and blocks, as a
+/// tight list item holding a nested list does.
+List<String> _childLines(RichChatSemanticNode node) {
+  final lines = <String>[];
+  final run = StringBuffer();
+  void flushRun() {
+    final text = run.toString();
+    run.clear();
+    if (text.trim().isNotEmpty) {
+      lines.addAll(
+        (text.endsWith('\n') ? text.substring(0, text.length - 1) : text).split(
+          '\n',
+        ),
+      );
+    }
+  }
+
+  for (final child in node.children) {
+    if (_blockKinds.contains(child.kind)) {
+      flushRun();
+      lines.addAll(_blockLines(child));
+    } else {
+      run.write(_inlineText(child));
+    }
+  }
+  flushRun();
+  return lines;
+}
+
+List<String> _listLines(RichChatSemanticNode list) {
+  final lines = <String>[];
+  var number = list.orderedStart ?? 1;
+  for (final item in list.children) {
+    if (item.kind != RichChatSemanticKind.listItem) {
+      continue;
+    }
+    final marker = list.kind == RichChatSemanticKind.orderedList
+        ? '${number++}. '
+        : '- ';
+    final itemLines = _childLines(item);
+    if (itemLines.isEmpty) {
+      lines.add(marker.trimRight());
+      continue;
+    }
+    final indent = ' ' * marker.length;
+    lines.add('$marker${itemLines.first}');
+    for (final line in itemLines.skip(1)) {
+      lines.add(line.isEmpty ? line : '$indent$line');
+    }
+  }
+  return lines;
+}
+
+String _inlineText(RichChatSemanticNode node) => switch (node.kind) {
+  RichChatSemanticKind.taskCheckbox => node.checked == true ? '[x] ' : '[ ] ',
+  RichChatSemanticKind.richObject ||
+  RichChatSemanticKind.text ||
+  RichChatSemanticKind.softBreak ||
+  RichChatSemanticKind.inlineCode ||
+  RichChatSemanticKind.codeBlock => node.flattenedText,
+  _ => node.children.map(_inlineText).join(),
+};
+
+/// The message as its author typed it, with each `{placeholder}` the server
+/// describes replaced by the readable name of what it stands for: a mention
+/// reads as the person's display name, a shared file as its file name.
+///
+/// This is what "copy message" puts on the clipboard: the author's own line
+/// breaks and list markers survive, which no rendering of the message can
+/// reproduce exactly. Placeholders without a parameter stay literal, as the
+/// renderer shows them.
+String resolveChatMessagePlaceholders(
+  String message,
+  Map<String, ChatRichObjectParameter> parameters,
+) => message.replaceAllMapped(_placeholderPattern, (match) {
+  final parameter = parameters[match.group(1)];
+  return parameter == null
+      ? match.group(0)!
+      : parameter.name ?? parameter.id ?? match.group(0)!;
+});
 
 final class RichChatDocument {
   RichChatDocument._(Iterable<RichChatSemanticNode> children)

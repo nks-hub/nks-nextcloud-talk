@@ -383,6 +383,138 @@ void _registerChatRoomPaneRenderingTests() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  testWidgets('a selection across messages copies one message per line', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 80,
+        actorId: 'someone-else',
+        actorDisplayName: 'Other person',
+        timestamp: 1724300000,
+        message: 'first message',
+      ),
+      displayText: 'first message',
+    );
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 81,
+        actorId: 'third',
+        actorDisplayName: 'Third person',
+        timestamp: 1724300100,
+        message: 'second message',
+      ),
+      displayText: 'second message',
+    );
+    final copied = await mockClipboard(tester);
+    await tester.pumpWidget(app(home: roomScreen()));
+    await tester.pump();
+    await tester.pump();
+
+    final first = find.text('first message');
+    final second = find.text('second message');
+    final drag = await tester.startGesture(
+      tester.getTopLeft(first) + const Offset(1, 4),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    await drag.moveTo(tester.getBottomRight(second) - const Offset(1, 4));
+    await tester.pump();
+    await drag.up();
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    // Without the avatar initials and the clock glued in between.
+    expect(copied(), 'first message\nThird person\nsecond message');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('a copied list keeps one item per line, from the action and '
+      'from a selection', (tester) async {
+    // Copying a bulleted list used to paste "plastikublikaj schody": the
+    // action copied a flattening of the rendered blocks and the selection
+    // joined the item texts with nothing between them.
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 73,
+        actorId: 'someone-else',
+        actorDisplayName: 'Other person',
+        timestamp: 1724300000,
+        message:
+            '- hana na chodbě dostala plastiku\n'
+            '- blikaj schody, ptej se {mention-user1}\n'
+            '- hlavní vypínač nezhasnul',
+        markdown: true,
+        messageParameters: {
+          'mention-user1': {
+            'type': 'user',
+            'id': 'alice',
+            'name': 'Alice Example',
+          },
+        },
+      ),
+      // What older builds stored for this message.
+      displayText:
+          'hana na chodbě dostala plastikublikaj schody, ptej se '
+          'Alice Examplehlavní vypínač nezhasnul',
+    );
+    final copied = await mockClipboard(tester);
+    await tester.pumpWidget(app(home: roomScreen()));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.longPress(find.byKey(const Key('chat-message-target-73')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('message-action-copy')));
+    await tester.pumpAndSettle();
+    expect(
+      copied(),
+      '- hana na chodbě dostala plastiku\n'
+      '- blikaj schody, ptej se Alice Example\n'
+      '- hlavní vypínač nezhasnul',
+    );
+
+    final first = find.text('hana na chodbě dostala plastiku');
+    final last = find.text('hlavní vypínač nezhasnul');
+    expect(first, findsOneWidget);
+    expect(last, findsOneWidget);
+    final drag = await tester.startGesture(
+      tester.getTopLeft(first) + const Offset(1, 4),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    await drag.moveTo(tester.getBottomRight(last) - const Offset(1, 4));
+    await tester.pump();
+    await drag.up();
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(
+      copied(),
+      'hana na chodbě dostala plastiku\n'
+      '• blikaj schody, ptej se Alice Example\n'
+      '• hlavní vypínač nezhasnul',
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('the thread layout takes replies out of the room', (
     tester,
   ) async {

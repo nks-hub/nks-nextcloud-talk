@@ -80,229 +80,250 @@ final class _MessageBubble extends StatelessWidget {
       // (reported on 5 September 2026). Same clock helper as the bubbles, so
       // the two cannot drift apart, and it is in the spoken label too.
       final clock = _formatMessageClock(context, message.timestamp);
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-        child: Semantics(
-          label: '${message.displayText} · $clock',
-          child: Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(text: message.displayText),
-                const TextSpan(text: '  '),
-                TextSpan(
-                  text: clock,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+      return ChatSelectionJoin(
+        separator: '\n',
+        breakBefore: true,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+          child: Semantics(
+            label: '${message.displayText} · $clock',
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: message.displayText),
+                  const TextSpan(text: '  '),
+                  TextSpan(
+                    text: clock,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
         ),
       );
     }
-    return Padding(
-      padding: EdgeInsets.only(top: groupedWithPrevious ? 2 : 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisAlignment: outgoing
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        children: [
-          if (!outgoing) ...[
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: showAvatar
-                  ? ExcludeSemantics(
-                      child: ChatParticipantAvatar(
-                        key: Key('chat-avatar-${message.messageId}'),
-                        account: account,
-                        actorType: message.actorType,
-                        actorId: message.actorId,
-                        displayName: message.actorDisplayName,
-                      ),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Align(
-              alignment: outgoing
-                  ? Alignment.centerRight
-                  : Alignment.centerLeft,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 620),
-                child: Semantics(
-                  key: Key('chat-message-semantics-${message.messageId}'),
-                  container: true,
-                  explicitChildNodes: true,
-                  label: authorLabel,
-                  child: _MessageAffordance(
-                    key: Key('chat-message-affordance-${message.messageId}'),
-                    messageId: message.messageId,
-                    radius: _bubbleRadius(
-                      outgoing: outgoing,
-                      groupEnd: groupEnd,
-                    ),
-                    onActions: messageActions,
-                    child: _ReplySwipe(
-                      messageId: message.messageId,
-                      onReply: swipeToReply,
-                      child: GestureDetector(
-                        key: Key('chat-message-target-${message.messageId}'),
-                        behavior: HitTestBehavior.opaque,
-                        onLongPress: messageActions,
-                        // Same actions on right-click, for the same reason as the
-                        // conversation rows.
-                        onSecondaryTap: messageActions,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 220),
-                          curve: Curves.easeOut,
-                          decoration: BoxDecoration(
-                            color: outgoing
-                                ? scheme.primaryContainer
-                                : scheme.surfaceContainerHigh,
-                            borderRadius: _bubbleRadius(
-                              outgoing: outgoing,
-                              groupEnd: groupEnd,
-                            ),
-                            border: highlighted
-                                ? Border.all(color: scheme.tertiary, width: 2)
-                                : null,
+    // One message per line when a selection runs across several of them;
+    // the avatar initials, the clock and the buttons stay out of the copy.
+    return ChatSelectionJoin(
+      separator: '\n',
+      breakBefore: true,
+      child: Padding(
+        padding: EdgeInsets.only(top: groupedWithPrevious ? 2 : 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisAlignment: outgoing
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
+          children: [
+            if (!outgoing) ...[
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: showAvatar
+                    ? SelectionContainer.disabled(
+                        child: ExcludeSemantics(
+                          child: ChatParticipantAvatar(
+                            key: Key('chat-avatar-${message.messageId}'),
+                            account: account,
+                            actorType: message.actorType,
+                            actorId: message.actorId,
+                            displayName: message.actorDisplayName,
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (!outgoing && showAuthor)
-                                  ExcludeSemantics(
-                                    child: Text(
-                                      message.actorDisplayName,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelMedium
-                                          ?.copyWith(
-                                            color: scheme.primary,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                    ),
-                                  ),
-                                if (!outgoing && showAuthor)
-                                  const SizedBox(height: 2),
-                                DefaultTextStyle.merge(
-                                  style: TextStyle(
-                                    color: outgoing
-                                        ? scheme.onPrimaryContainer
-                                        : scheme.onSurface,
-                                    fontStyle: message.deleted
-                                        ? FontStyle.italic
-                                        : null,
-                                  ),
-                                  child:
-                                      content ??
-                                      ChatMessageContent(
-                                        account: account,
-                                        message: message.deleted
-                                            ? null
-                                            : parsed,
-                                        fallbackText: message.deleted
-                                            ? AppLocalizations.of(
-                                                context,
-                                              ).deletedMessage
-                                            : message.displayText,
-                                        foregroundColor: outgoing
-                                            ? scheme.onPrimaryContainer
-                                            : scheme.onSurface,
-                                        showReplyPreview: showReplyPreview,
-                                        onReactionTap: message.deleted
-                                            ? null
-                                            : (emoji) => onReactionTap(
-                                                message,
-                                                parsed,
-                                                emoji,
-                                              ),
-                                        onOpenParent: onJumpToMessage,
-                                      ),
-                                ),
-                                const SizedBox(height: 3),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (parsed?.lastEditTimestamp != null) ...[
-                                      Text(
-                                        AppLocalizations.of(context).edited,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 8),
+            ],
+            Flexible(
+              child: Align(
+                alignment: outgoing
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 620),
+                  child: Semantics(
+                    key: Key('chat-message-semantics-${message.messageId}'),
+                    container: true,
+                    explicitChildNodes: true,
+                    label: authorLabel,
+                    child: _MessageAffordance(
+                      key: Key('chat-message-affordance-${message.messageId}'),
+                      messageId: message.messageId,
+                      radius: _bubbleRadius(
+                        outgoing: outgoing,
+                        groupEnd: groupEnd,
+                      ),
+                      onActions: messageActions,
+                      child: _ReplySwipe(
+                        messageId: message.messageId,
+                        onReply: swipeToReply,
+                        child: GestureDetector(
+                          key: Key('chat-message-target-${message.messageId}'),
+                          behavior: HitTestBehavior.opaque,
+                          onLongPress: messageActions,
+                          // Same actions on right-click, for the same reason as the
+                          // conversation rows.
+                          onSecondaryTap: messageActions,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOut,
+                            decoration: BoxDecoration(
+                              color: outgoing
+                                  ? scheme.primaryContainer
+                                  : scheme.surfaceContainerHigh,
+                              borderRadius: _bubbleRadius(
+                                outgoing: outgoing,
+                                groupEnd: groupEnd,
+                              ),
+                              border: highlighted
+                                  ? Border.all(color: scheme.tertiary, width: 2)
+                                  : null,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (!outgoing && showAuthor)
+                                    ExcludeSemantics(
+                                      child: Text(
+                                        message.actorDisplayName,
                                         style: Theme.of(context)
                                             .textTheme
-                                            .labelSmall
+                                            .labelMedium
                                             ?.copyWith(
-                                              color: outgoing
-                                                  ? scheme.onPrimaryContainer
-                                                  : scheme.onSurfaceVariant,
+                                              color: scheme.primary,
+                                              fontWeight: FontWeight.w700,
                                             ),
                                       ),
-                                      const SizedBox(width: 6),
-                                    ],
-                                    Text(
-                                      _formatMessageClock(
-                                        context,
-                                        message.timestamp,
-                                      ),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.copyWith(
-                                            color: outgoing
-                                                ? scheme.onPrimaryContainer
-                                                : scheme.onSurfaceVariant,
-                                          ),
                                     ),
-                                    if (outgoing && deliveryState != null) ...[
-                                      const SizedBox(width: 6),
-                                      _DeliveryMark(
-                                        key: Key(
-                                          'chat-delivery-${message.messageId}',
-                                        ),
-                                        state: deliveryState!,
-                                        color: scheme.onPrimaryContainer,
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                                if (canOpenThread) ...[
-                                  const SizedBox(height: 2),
-                                  TextButton.icon(
-                                    key: Key(
-                                      'chat-open-thread-${message.messageId}',
-                                    ),
-                                    onPressed: () => onOpenThread!(message),
-                                    style: TextButton.styleFrom(
-                                      foregroundColor: outgoing
+                                  if (!outgoing && showAuthor)
+                                    const SizedBox(height: 2),
+                                  DefaultTextStyle.merge(
+                                    style: TextStyle(
+                                      color: outgoing
                                           ? scheme.onPrimaryContainer
-                                          : scheme.primary,
-                                      minimumSize: const Size(48, 48),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                      ),
+                                          : scheme.onSurface,
+                                      fontStyle: message.deleted
+                                          ? FontStyle.italic
+                                          : null,
                                     ),
-                                    icon: const Icon(
-                                      Icons.forum_outlined,
-                                      size: 18,
-                                    ),
-                                    label: Text(
-                                      threadReplies > 0
-                                          ? strings.threadReplies(threadReplies)
-                                          : strings.openThread,
+                                    child:
+                                        content ??
+                                        ChatMessageContent(
+                                          account: account,
+                                          message: message.deleted
+                                              ? null
+                                              : parsed,
+                                          fallbackText: message.deleted
+                                              ? AppLocalizations.of(
+                                                  context,
+                                                ).deletedMessage
+                                              : message.displayText,
+                                          foregroundColor: outgoing
+                                              ? scheme.onPrimaryContainer
+                                              : scheme.onSurface,
+                                          showReplyPreview: showReplyPreview,
+                                          onReactionTap: message.deleted
+                                              ? null
+                                              : (emoji) => onReactionTap(
+                                                  message,
+                                                  parsed,
+                                                  emoji,
+                                                ),
+                                          onOpenParent: onJumpToMessage,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  SelectionContainer.disabled(
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (parsed?.lastEditTimestamp !=
+                                            null) ...[
+                                          Text(
+                                            AppLocalizations.of(context).edited,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .labelSmall
+                                                ?.copyWith(
+                                                  color: outgoing
+                                                      ? scheme
+                                                            .onPrimaryContainer
+                                                      : scheme.onSurfaceVariant,
+                                                ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                        ],
+                                        Text(
+                                          _formatMessageClock(
+                                            context,
+                                            message.timestamp,
+                                          ),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall
+                                              ?.copyWith(
+                                                color: outgoing
+                                                    ? scheme.onPrimaryContainer
+                                                    : scheme.onSurfaceVariant,
+                                              ),
+                                        ),
+                                        if (outgoing &&
+                                            deliveryState != null) ...[
+                                          const SizedBox(width: 6),
+                                          _DeliveryMark(
+                                            key: Key(
+                                              'chat-delivery-${message.messageId}',
+                                            ),
+                                            state: deliveryState!,
+                                            color: scheme.onPrimaryContainer,
+                                          ),
+                                        ],
+                                      ],
                                     ),
                                   ),
+                                  if (canOpenThread) ...[
+                                    const SizedBox(height: 2),
+                                    SelectionContainer.disabled(
+                                      child: TextButton.icon(
+                                        key: Key(
+                                          'chat-open-thread-${message.messageId}',
+                                        ),
+                                        onPressed: () => onOpenThread!(message),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: outgoing
+                                              ? scheme.onPrimaryContainer
+                                              : scheme.primary,
+                                          minimumSize: const Size(48, 48),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                          ),
+                                        ),
+                                        icon: const Icon(
+                                          Icons.forum_outlined,
+                                          size: 18,
+                                        ),
+                                        label: Text(
+                                          threadReplies > 0
+                                              ? strings.threadReplies(
+                                                  threadReplies,
+                                                )
+                                              : strings.openThread,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
-                              ],
+                              ),
                             ),
                           ),
                         ),
@@ -312,8 +333,8 @@ final class _MessageBubble extends StatelessWidget {
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

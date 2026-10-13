@@ -14,21 +14,88 @@ final class RichChatDocumentContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final blocks = document.root.children
-        .map((node) => _buildBlock(context, node))
-        .toList(growable: false);
-    if (blocks.isEmpty) {
+    if (document.root.children.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (var index = 0; index < blocks.length; index++) ...[
-          if (index > 0) const SizedBox(height: 6),
-          blocks[index],
-        ],
-      ],
+    return _RichBlocks(
+      node: document.root,
+      foregroundColor: foregroundColor,
+      hiddenLinks: hiddenLinks,
+      spacing: 6,
+      textStyle: Theme.of(
+        context,
+      ).textTheme.bodyMedium?.copyWith(color: foregroundColor, height: 1.35),
     );
+  }
+}
+
+bool _isBlock(RichChatSemanticKind kind) => switch (kind) {
+  RichChatSemanticKind.paragraph ||
+  RichChatSemanticKind.heading ||
+  RichChatSemanticKind.codeBlock ||
+  RichChatSemanticKind.unorderedList ||
+  RichChatSemanticKind.orderedList ||
+  RichChatSemanticKind.taskList ||
+  RichChatSemanticKind.listItem ||
+  RichChatSemanticKind.quote ||
+  RichChatSemanticKind.table ||
+  RichChatSemanticKind.horizontalRule => true,
+  _ => false,
+};
+
+/// The children of a document, quote or list item, one block per line.
+///
+/// Consecutive inline children - the whole body of a plain-text message, or
+/// the text of a list item ahead of its nested list - share one paragraph.
+final class _RichBlocks extends StatelessWidget {
+  const _RichBlocks({
+    required this.node,
+    required this.foregroundColor,
+    required this.hiddenLinks,
+    required this.spacing,
+    required this.textStyle,
+  });
+
+  final RichChatSemanticNode node;
+  final Color foregroundColor;
+  final Set<Uri> hiddenLinks;
+  final double spacing;
+
+  /// The style of paragraphs and inline runs at this level.
+  final TextStyle? textStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final blocks = <Widget>[];
+    final run = <RichChatSemanticNode>[];
+    void flushRun() {
+      if (run.isEmpty) {
+        return;
+      }
+      blocks.add(
+        Text.rich(
+          TextSpan(
+            children: [
+              for (final inline in run)
+                _inlineSpan(context, inline, foregroundColor, hiddenLinks),
+            ],
+          ),
+          style: textStyle,
+        ),
+      );
+      run.clear();
+    }
+
+    for (final child in node.children) {
+      if (_isBlock(child.kind)) {
+        flushRun();
+        blocks.add(_buildBlock(context, child));
+      } else {
+        run.add(child);
+      }
+    }
+    flushRun();
+    return _SelectableLines(spacing: spacing, children: blocks);
   }
 
   Widget _buildBlock(BuildContext context, RichChatSemanticNode node) {
@@ -48,25 +115,7 @@ final class RichChatDocumentContent extends StatelessWidget {
           node.headingLevel ?? 3,
         )?.copyWith(color: foregroundColor),
       ),
-      RichChatSemanticKind.codeBlock => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: theme.colorScheme.outlineVariant),
-        ),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SelectableText(
-            node.text ?? '',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontFamily: 'monospace',
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-        ),
-      ),
+      RichChatSemanticKind.codeBlock => _CodeBlock(code: node.text ?? ''),
       RichChatSemanticKind.unorderedList ||
       RichChatSemanticKind.orderedList ||
       RichChatSemanticKind.taskList => _RichList(
@@ -81,16 +130,12 @@ final class RichChatDocumentContent extends StatelessWidget {
             left: BorderSide(color: theme.colorScheme.primary, width: 3),
           ),
         ),
-        child: Text.rich(
-          TextSpan(
-            children: _inlineChildren(
-              context,
-              node,
-              foregroundColor,
-              hiddenLinks,
-            ),
-          ),
-          style: theme.textTheme.bodyMedium?.copyWith(
+        child: _RichBlocks(
+          node: node,
+          foregroundColor: foregroundColor,
+          hiddenLinks: hiddenLinks,
+          spacing: 4,
+          textStyle: theme.textTheme.bodyMedium?.copyWith(
             color: foregroundColor,
             fontStyle: FontStyle.italic,
           ),
@@ -111,12 +156,41 @@ final class RichChatDocumentContent extends StatelessWidget {
             hiddenLinks,
           ),
         ),
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: foregroundColor,
-          height: 1.35,
-        ),
+        style: textStyle,
       ),
     };
+  }
+}
+
+final class _CodeBlock extends StatelessWidget {
+  const _CodeBlock({required this.code});
+
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = theme.textTheme.bodyMedium?.copyWith(
+      fontFamily: 'monospace',
+      color: theme.colorScheme.onSurface,
+    );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        // Inside a selection area the code has to be part of that selection;
+        // a SelectableText there keeps its own and drops out of the copy.
+        child: SelectionContainer.maybeOf(context) == null
+            ? SelectableText(code, style: style)
+            : Text(code, style: style),
+      ),
+    );
   }
 }
 
@@ -139,40 +213,73 @@ final class _RichList extends StatelessWidget {
     final start = node.orderedStart ?? 1;
     return DefaultTextStyle.merge(
       style: TextStyle(color: foregroundColor),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: _SelectableLines(
         children: [
           for (var index = 0; index < items.length; index++)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 28,
-                    child: Text(
-                      node.kind == RichChatSemanticKind.orderedList
-                          ? '${start + index}.'
-                          : '•',
-                      textAlign: TextAlign.end,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text.rich(
-                      TextSpan(
-                        children: _inlineChildren(
-                          context,
-                          items[index],
-                          foregroundColor,
-                          hiddenLinks,
-                        ),
+              // Copied as "• item" or "1. item", the way it reads.
+              child: ChatSelectionJoin(
+                separator: ' ',
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 28,
+                      child: Text(
+                        node.kind == RichChatSemanticKind.orderedList
+                            ? '${start + index}.'
+                            : '•',
+                        textAlign: TextAlign.end,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _RichBlocks(
+                        node: items[index],
+                        foregroundColor: foregroundColor,
+                        hiddenLinks: hiddenLinks,
+                        spacing: 2,
+                        textStyle: null,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Sibling blocks of a message stacked in a column that, inside a selection
+/// area, copy as separate lines.
+///
+/// Flutter's selection joins the text of neighbouring widgets with nothing
+/// between them, so a copied list came out as one run-on word. Each block is
+/// first made a single selectable - a paragraph with a mention or a link is
+/// several - and the blocks are then joined by line breaks.
+final class _SelectableLines extends StatelessWidget {
+  const _SelectableLines({required this.children, this.spacing = 0});
+
+  final List<Widget> children;
+  final double spacing;
+
+  @override
+  Widget build(BuildContext context) {
+    if (children.length == 1) {
+      return ChatSelectionJoin(separator: '', child: children.single);
+    }
+    return ChatSelectionJoin(
+      separator: '\n',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var index = 0; index < children.length; index++) ...[
+            if (index > 0 && spacing > 0) SizedBox(height: spacing),
+            ChatSelectionJoin(separator: '', child: children[index]),
+          ],
         ],
       ),
     );
@@ -611,7 +718,7 @@ final class _ReplyPreview extends StatelessWidget {
         markdownEnabled: parent.message.markdown ?? false,
         parameters: parent.message.messageParameters,
         server: ServerBase.parse(account.serverUrl),
-      ).root.flattenedText.trim();
+      ).root.plainText.trim();
       text = normalizeGiphyReferencePreview(rendered);
     } else {
       author = '';
