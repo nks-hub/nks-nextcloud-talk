@@ -17,6 +17,10 @@ SKIP = (".png", ".jpg", ".jpeg", ".gif", ".ico", ".icns", ".ttf", ".otf", ".woff
         "pubspec.lock", "Podfile.lock", "emoji_czech_names.g.dart")
 # Fixture domains (RFC 2606/6761), tester lists, GitHub no-reply and the upstream QR-login fixture.
 ALLOWED_MAIL = re.compile(r"@(?:[a-z0-9-]+\.)*(?:example|invalid|test|localhost|local|example\.(?:com|org|net)|googlegroups\.com|users\.noreply\.github\.com)$|^test@user\.com$", re.I)
+# The organisation's published support mailbox from the README "Support"
+# section. It is a public contact, not infrastructure, so only this exact
+# address is let through; every other name under its domain is still denied.
+PUBLIC_CONTACT = "dev@nks-hub.cz"
 IMAGE_TLD = re.compile(r"\.(?:png|jpe?g|webp|svg|gif)$", re.I)
 PATTERNS = [
     ("private IPv4", re.compile(r"\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b")),
@@ -89,6 +93,7 @@ def main():
         if rel.endswith(".md"):
             checks += MARKDOWN_PATTERNS
         for number, line in enumerate(text.splitlines(), 1):
+            line = line.replace(PUBLIC_CONTACT, "")
             for name, pattern in checks:
                 if pattern.search(line):
                     findings.append((rel, number, name))

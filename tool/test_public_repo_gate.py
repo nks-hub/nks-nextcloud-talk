@@ -125,6 +125,21 @@ class GateExemptionTest(unittest.TestCase):
             )
         self.assertFalse(gate.is_upstream_author("apps/mobile/example.txt", author))
 
+    def test_only_the_public_contact_passes_the_denylist(self) -> None:
+        domain = gate.PUBLIC_CONTACT.split("@", 1)[1]
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, ".public-denylist").write_text(domain + "\n", encoding="utf-8")
+            readme = Path(directory, "README.md")
+            with patch.object(gate, "ROOT", directory), patch.object(
+                gate, "tracked", return_value=["README.md"]
+            ), redirect_stdout(io.StringIO()):
+                readme.write_text(f"- Email: {gate.PUBLIC_CONTACT}\n", encoding="utf-8")
+                self.assertEqual(gate.main(), 0)
+                for line in (f"ops@{domain}", f"https://host.{domain}/x"):
+                    with self.subTest(line=line):
+                        readme.write_text(line + "\n", encoding="utf-8")
+                        self.assertEqual(gate.main(), 1)
+
     def test_operator_denylist_still_checks_upstream_metadata(self) -> None:
         rel = "packages/flutter_webrtc/macos/flutter_webrtc.podspec"
         author = "s.author           = { 'CloudWebRTC' => 'duanweiwei1982@gmail.com' }"
