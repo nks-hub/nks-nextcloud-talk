@@ -163,7 +163,19 @@ final appLifecycleResumeEventsProvider = Provider<Stream<void>>((ref) {
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
   final database = AppDatabase();
-  ref.onDispose(database.close);
+  // A desktop quit never disposes this provider; the engine goes straight to
+  // tearing the VM down. Nothing else here answers an exit request, so closing
+  // before agreeing to it cannot strand a still-running app without its data.
+  final exit = AppLifecycleListener(
+    onExitRequested: () async {
+      await database.closeBeforeExit();
+      return ui.AppExitResponse.exit;
+    },
+  );
+  ref.onDispose(() {
+    exit.dispose();
+    unawaited(database.close());
+  });
   return database;
 });
 

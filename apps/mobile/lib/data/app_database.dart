@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:ui' show IsolateNameServer;
 
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
@@ -564,6 +567,19 @@ class CallLifecycleSessions extends Table {
 
 const _databaseName = 'nks_nextcloud_talk';
 
+/// Name the isolate holding the SQLite connection registers its control port
+/// under, so [AppDatabase.closeBeforeExit] can wait for it to end.
+const databaseHostPortName = 'nks-talk/database-host';
+
+/// Runs inside the isolate drift starts to own the connection.
+void registerDatabaseHost() {
+  IsolateNameServer.removePortNameMapping(databaseHostPortName);
+  IsolateNameServer.registerPortWithName(
+    Isolate.current.controlPort,
+    databaseHostPortName,
+  );
+}
+
 /// Every file SQLite keeps for one database, including the write-ahead log.
 /// Moving the main file alone would drop transactions still sitting in `-wal`.
 const _databaseFileSuffixes = <String>['.sqlite', '.sqlite-wal', '.sqlite-shm'];
@@ -651,12 +667,47 @@ final class AppDatabase extends _$AppDatabase {
           native: DriftNativeOptions(
             shareAcrossIsolates: true,
             databaseDirectory: _resolveDatabaseDirectory,
+            isolateSetup: registerDatabaseHost,
             setup: (database) => database.execute('PRAGMA foreign_keys = ON'),
           ),
         ),
       );
 
   AppDatabase.forTesting(super.connection);
+
+  /// Closes the connection, then waits up to [timeout] for the isolate that
+  /// owns the SQLite handle to exit. Returns whether that exit was seen.
+  ///
+  /// A desktop quit used to leave that isolate running, so the engine killed
+  /// it while tearing the Dart VM down, and SQLite's native finalizers then
+  /// ran on whatever statements and connection were still open, in no
+  /// particular order. macOS build 83 crashed there in `sqlite3_finalize`,
+  /// locking a connection mutex whose memory already held unrelated text.
+  /// Closed here, drift finalizes every statement and then the connection
+  /// itself, so the teardown finds nothing left to finalize.
+  Future<bool> closeBeforeExit({
+    Duration timeout = const Duration(seconds: 2),
+  }) async {
+    final host = IsolateNameServer.lookupPortByName(databaseHostPortName);
+    final exited = ReceivePort();
+    if (host != null) {
+      Isolate(host).addOnExitListener(exited.sendPort, response: true);
+    }
+    try {
+      await close();
+      if (host == null) {
+        return false;
+      }
+      final seen = await exited.first.timeout(timeout, onTimeout: () => false);
+      if (seen == true) {
+        IsolateNameServer.removePortNameMapping(databaseHostPortName);
+        return true;
+      }
+      return false;
+    } finally {
+      exited.close();
+    }
+  }
 
   @override
   int get schemaVersion => 18;
