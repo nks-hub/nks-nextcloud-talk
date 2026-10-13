@@ -503,22 +503,26 @@ final class _DaySeparator extends StatelessWidget {
       excludeSemantics: true,
       header: true,
       label: label,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(4, 14, 4, 8),
-        child: Row(
-          children: [
-            const Expanded(child: Divider()),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                label,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelMedium?.copyWith(color: color),
+      // Kept out of a copied selection, like the clock on each message; it
+      // used to land glued to the end of the message above it.
+      child: SelectionContainer.disabled(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(4, 14, 4, 8),
+          child: Row(
+            children: [
+              const Expanded(child: Divider()),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  label,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelMedium?.copyWith(color: color),
+                ),
               ),
-            ),
-            const Expanded(child: Divider()),
-          ],
+              const Expanded(child: Divider()),
+            ],
+          ),
         ),
       ),
     );

@@ -404,7 +404,8 @@ void _registerChatRoomPaneRenderingTests() {
         id: 81,
         actorId: 'third',
         actorDisplayName: 'Third person',
-        timestamp: 1724300100,
+        // A day later, so a day separator sits between the two.
+        timestamp: 1724300000 + 86400,
         message: 'second message',
       ),
       displayText: 'second message',
