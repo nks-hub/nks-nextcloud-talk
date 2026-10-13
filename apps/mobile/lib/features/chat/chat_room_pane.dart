@@ -302,6 +302,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _composer.clear();
     _suppressDraftSave = false;
     _replyTo = null;
+    // The selected text belonged to the room just left; the right-click menu
+    // offered to copy it in the next room.
+    _selectedText = null;
     _historyGeneration++;
     _loadingOlder = false;
     _scrollController.resetExtentTracking();

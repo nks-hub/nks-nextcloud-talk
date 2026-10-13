@@ -383,6 +383,79 @@ void _registerChatRoomPaneRenderingTests() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  testWidgets('a selection made in one room is not offered in the next', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    await database
+        .into(database.cachedConversations)
+        .insert(
+          CachedConversationsCompanion.insert(
+            accountId: account.id,
+            token: 'roomb456',
+            displayName: 'Synthetic room B',
+            description: '',
+            lastActivity: 1724300000,
+            unreadMessages: 0,
+            favorite: false,
+            rawJson: '{}',
+          ),
+        );
+    final roomB = await (database.select(
+      database.cachedConversations,
+    )..where((row) => row.token.equals('roomb456'))).getSingle();
+    await _insertCachedMessage(database, {
+      ..._messageJson(
+        id: 90,
+        actorId: 'someone-else',
+        actorDisplayName: 'Other person',
+        timestamp: 1724300000,
+        message: 'room b text',
+      ),
+      'token': 'roomb456',
+    }, displayText: 'room b text');
+    final room = ValueNotifier(conversation);
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      app(
+        home: ValueListenableBuilder(
+          valueListenable: room,
+          builder: (context, value, _) =>
+              PresenceChatRoomScreen(account: account, conversation: value),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final hello = tester.getRect(find.text('Cached hello'));
+    final drag = await tester.startGesture(
+      hello.centerLeft + const Offset(1, 0),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    await drag.moveTo(hello.centerRight - const Offset(1, 0));
+    await tester.pump();
+    await drag.up();
+    await tester.pump();
+
+    room.value = roomB;
+    await tester.pump();
+    await tester.pump();
+    await rightClick(tester, tester.getCenter(find.text('room b text')));
+    expect(find.byKey(const Key('message-action-copy')), findsOneWidget);
+    expect(
+      find.byKey(const Key('message-action-copy-selection')),
+      findsNothing,
+    );
+    await tester.tapAt(Offset.zero);
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('a selection across messages copies one message per line', (
     tester,
   ) async {
