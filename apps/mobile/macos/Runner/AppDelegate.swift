@@ -278,16 +278,19 @@ class AppDelegate: FlutterAppDelegate, UNUserNotificationCenterDelegate {
       result(FlutterError(code: "invalid_arguments", message: "Missing handle", details: nil))
       return
     }
-    do {
-      result(try deviceKeys.ensureKey(handle: handle))
-    } catch {
-      result(
-        FlutterError(
-          code: "key_generation_failed",
-          message: error.localizedDescription,
-          details: nil
+    deviceKeys.perform({ try $0.ensureKey(handle: handle) }) { outcome in
+      switch outcome {
+      case .success(let pem):
+        result(pem)
+      case .failure(let error):
+        result(
+          FlutterError(
+            code: "key_generation_failed",
+            message: error.localizedDescription,
+            details: nil
+          )
         )
-      )
+      }
     }
   }
 
@@ -297,8 +300,7 @@ class AppDelegate: FlutterAppDelegate, UNUserNotificationCenterDelegate {
       result(FlutterError(code: "invalid_arguments", message: "Missing handle", details: nil))
       return
     }
-    deviceKeys.destroyKey(handle: handle)
-    result(nil)
+    deviceKeys.perform({ $0.destroyKey(handle: handle) }) { _ in result(nil) }
   }
 
   private func recordDeviceKeyAccount(_ arguments: Any?, _ result: @escaping FlutterResult) {
@@ -315,17 +317,20 @@ class AppDelegate: FlutterAppDelegate, UNUserNotificationCenterDelegate {
       )
       return
     }
-    do {
-      try deviceKeys.setAccount(handle: handle, accountId: accountId)
-      result(nil)
-    } catch {
-      result(
-        FlutterError(
-          code: "account_update_failed",
-          message: error.localizedDescription,
-          details: nil
+    deviceKeys.perform({ try $0.setAccount(handle: handle, accountId: accountId) }) {
+      outcome in
+      switch outcome {
+      case .success:
+        result(nil)
+      case .failure(let error):
+        result(
+          FlutterError(
+            code: "account_update_failed",
+            message: error.localizedDescription,
+            details: nil
+          )
         )
-      )
+      }
     }
   }
 

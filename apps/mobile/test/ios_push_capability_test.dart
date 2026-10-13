@@ -80,6 +80,27 @@ void main() {
     }
   });
 
+  // Generating the RSA key on the main thread hung the macOS app for over two
+  // seconds. Both delegates must hand every key store call to its queue.
+  test('no app delegate touches the device key store on the main thread', () {
+    final separator = Platform.pathSeparator;
+    for (final path in [
+      '$ios${separator}AppDelegate.swift',
+      '${Directory.current.path}${separator}macos$separator'
+          'Runner${separator}AppDelegate.swift',
+    ]) {
+      final delegate = File(path).readAsStringSync();
+      expect(
+        RegExp(
+          r'deviceKeys\.(ensureKey|destroyKey|setAccount)\(',
+        ).hasMatch(delegate),
+        isFalse,
+        reason: '$path calls the key store directly',
+      );
+      expect('deviceKeys.perform('.allMatches(delegate).length, 3);
+    }
+  });
+
   // A Swift file that exists on disk but was never added to the Xcode
   // project's Sources build phase compiles nothing: Xcode simply never
   // sees it, and referencing its type fails with "Cannot find '<Type>' in

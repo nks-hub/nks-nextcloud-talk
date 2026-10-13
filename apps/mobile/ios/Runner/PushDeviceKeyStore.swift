@@ -24,6 +24,24 @@ final class PushDeviceKeyStore {
     return prefix + "com.nkshub.nextcloudtalk"
   }()
 
+  /// RSA key generation held the main thread for over two seconds on a Mac.
+  /// Every call from the app goes through this one serial queue, so the
+  /// method channel never blocks and generate, label and destroy for one
+  /// handle still run in the order Dart sent them.
+  private let queue = DispatchQueue(label: "com.nkshub.nextcloudtalk.pushkey")
+
+  /// Runs `work` off the main thread and hands its outcome to `completion`
+  /// on the main thread, where Flutter expects a method channel reply.
+  func perform<T>(
+    _ work: @escaping (PushDeviceKeyStore) throws -> T,
+    completion: @escaping (Result<T, Error>) -> Void
+  ) {
+    queue.async {
+      let outcome = Result { try work(self) }
+      DispatchQueue.main.async { completion(outcome) }
+    }
+  }
+
   private func applicationTag(for handle: String) -> Data {
     (Self.tagPrefix + handle).data(using: .utf8)!
   }
