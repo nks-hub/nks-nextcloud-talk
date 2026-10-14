@@ -6,11 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'app_providers.dart';
 import 'core/background_drain.dart';
+import 'core/pasteboard_probe_guard.dart';
 import 'core/stale_modifier_repair.dart';
 import 'core/telemetry.dart';
 import 'core/telemetry_bootstrap.dart';
 
 Future<void> main() async {
+  PasteboardProbeBinding.installOnMacOS();
   await runWithTelemetry(
     config: TelemetryConfig.fromEnvironment(),
     appBuilder: (observers) {
