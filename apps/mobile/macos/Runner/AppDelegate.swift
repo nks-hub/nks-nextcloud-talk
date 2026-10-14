@@ -394,7 +394,22 @@ class AppDelegate: FlutterAppDelegate, UNUserNotificationCenterDelegate {
       if let route {
         pushOpens.enqueue(accountId: route.accountId, roomToken: route.roomToken)
       }
+      showMainWindow()
       completionHandler()
     }
+  }
+
+  /// Brings the chat window to the front, as the Windows runner does when its
+  /// toast is clicked. Activation alone leaves a minimized window in the Dock
+  /// and a hidden app hidden, so a click on the notification showed nothing.
+  @objc func showMainWindow() {
+    NSApp.unhide(nil)
+    if let window = mainFlutterWindow {
+      if window.isMiniaturized {
+        window.deminiaturize(nil)
+      }
+      window.makeKeyAndOrderFront(nil)
+    }
+    NSApp.activate(ignoringOtherApps: true)
   }
 }
