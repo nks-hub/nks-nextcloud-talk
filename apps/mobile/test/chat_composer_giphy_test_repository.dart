@@ -149,6 +149,65 @@ void _registerGiphyRepositoryTests(
       },
     );
 
+    test('loads a downsized cut when the original is over the cap', () async {
+      final observed = <Uri>[];
+      final resourceUrl = Uri.parse(
+        'https://giphy.com/gifs/waving-cat-fixture123',
+      );
+      const route =
+          'https://cloud.example.invalid/nextcloud/index.php/apps/'
+          'integration_giphy/gif/direct/fixture123/media0';
+      String cut(String file) =>
+          'https://media0.giphy.com/media/v1.abc/fixture123/$file';
+      final repository = HttpGiphyRepository(
+        server: server,
+        authorization: authorization,
+        maximumReferenceBytes: 1000,
+        client: MockClient((request) async {
+          observed.add(request.url);
+          if (request.url.path.endsWith('/ocs/v2.php/references/resolve')) {
+            return http.Response(
+              _validReferenceResponse(
+                resourceUrl,
+                proxiedUrl: '$route/giphy.gif/cid/giphy.gif/g',
+                images: <String, Object?>{
+                  'original': <String, Object?>{
+                    'size': '5000',
+                    'url': cut('giphy.gif'),
+                  },
+                  'downsized_large': <String, Object?>{
+                    'size': '2000',
+                    'url': cut('giphy-downsized-large.gif'),
+                  },
+                  'downsized_medium': <String, Object?>{
+                    'size': '900',
+                    'url': cut('giphy-downsized-medium.gif'),
+                  },
+                },
+              ),
+              200,
+            );
+          }
+          return http.Response.bytes(
+            _validGif,
+            200,
+            headers: const <String, String>{'content-type': 'image/gif'},
+          );
+        }),
+      );
+      addTearDown(repository.close);
+
+      await repository.loadReference(resourceUrl);
+
+      expect(
+        observed.last,
+        Uri.parse(
+          '$route/giphy-downsized-medium.gif/cid/'
+          'giphy-downsized-medium.gif/g',
+        ),
+      );
+    });
+
     test('rejects a foreign Giphy reference proxy before loading it', () async {
       var requests = 0;
       final resourceUrl = Uri.parse(

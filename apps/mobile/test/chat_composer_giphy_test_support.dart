@@ -63,6 +63,9 @@ String _validReferenceResponse(
   String proxiedUrl =
       'https://cloud.example.invalid/nextcloud/index.php/apps/'
       'integration_giphy/gif/proxy',
+  Map<String, Object?> images = const <String, Object?>{
+    'fixed_width': <String, Object?>{'width': '400', 'height': '200'},
+  },
 }) => jsonEncode(<String, Object?>{
   'ocs': <String, Object?>{
     'meta': <String, Object?>{
@@ -77,9 +80,7 @@ String _validReferenceResponse(
           'richObject': <String, Object?>{
             'id': 'fixture123',
             'proxied_url': proxiedUrl,
-            'images': <String, Object?>{
-              'fixed_width': <String, Object?>{'width': '400', 'height': '200'},
-            },
+            'images': images,
           },
         },
       },

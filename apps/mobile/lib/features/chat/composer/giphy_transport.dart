@@ -53,6 +53,70 @@ double? _referenceAspectRatio(Object? rawImages) {
   return null;
 }
 
+final _giphyRenditionFileName = RegExp(r'^[A-Za-z0-9_-]+\.gif$');
+
+/// Swaps the proxied original for Giphy's largest downsized cut that fits
+/// [maximumBytes]. An original can weigh well over the cap, and the server's
+/// proxy route (`…/{fileName}/{cid}/{rid}/{ct}`) serves any cut by file name.
+Uri _fittingReferenceRendition(
+  Uri proxiedUrl,
+  Object? rawImages, {
+  required int maximumBytes,
+}) {
+  final segments = proxiedUrl.pathSegments;
+  if (rawImages is! Map<String, Object?> || segments.length < 4) {
+    return proxiedUrl;
+  }
+  final originalSize = _renditionSize(rawImages['original']);
+  if (originalSize == null || originalSize <= maximumBytes) {
+    return proxiedUrl;
+  }
+  final fileNameIndex = segments.length - 4;
+  final ridIndex = segments.length - 2;
+  for (final name in const <String>[
+    'downsized_large',
+    'downsized_medium',
+    'downsized',
+  ]) {
+    final rendition = rawImages[name];
+    if (rendition is! Map<String, Object?>) {
+      continue;
+    }
+    final size = _renditionSize(rendition);
+    final url = rendition['url'];
+    if (size == null || size > maximumBytes || url is! String) {
+      continue;
+    }
+    final fileName = Uri.tryParse(url)?.pathSegments.lastOrNull;
+    if (fileName == null || !_giphyRenditionFileName.hasMatch(fileName)) {
+      continue;
+    }
+    return proxiedUrl.replace(
+      pathSegments: <String>[
+        for (var index = 0; index < segments.length; index++)
+          index == fileNameIndex ||
+                  (index == ridIndex &&
+                      segments[ridIndex] == segments[fileNameIndex])
+              ? fileName
+              : segments[index],
+      ],
+    );
+  }
+  return proxiedUrl;
+}
+
+int? _renditionSize(Object? rendition) {
+  if (rendition is! Map<String, Object?>) {
+    return null;
+  }
+  final size = switch (rendition['size']) {
+    final int value => value,
+    final String value => int.tryParse(value),
+    _ => null,
+  };
+  return size != null && size > 0 ? size : null;
+}
+
 double? _referenceDimension(Object? value) {
   final parsed = switch (value) {
     num() => value.toDouble(),

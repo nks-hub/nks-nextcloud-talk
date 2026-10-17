@@ -597,7 +597,11 @@ final class HttpGiphyRepository implements GiphyRepository {
       throw const GiphyException(GiphyError.invalidResponse);
     }
     return (
-      proxiedUrl: proxiedUrl,
+      proxiedUrl: _fittingReferenceRendition(
+        proxiedUrl,
+        richObject['images'],
+        maximumBytes: maximumReferenceBytes,
+      ),
       aspectRatio: _referenceAspectRatio(richObject['images']),
     );
   }
