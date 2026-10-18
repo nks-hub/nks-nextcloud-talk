@@ -8,6 +8,12 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.0.31 (99) — 18 October 2026
+
+- A GIF from Giphy whose original is larger than 16 MB no longer shows "The image could not be loaded" with a retry that never helps. The app loads Giphy's largest downsized cut that fits instead.
+- Clicking a notification on the Mac brings the chat window to the front, also when it was minimized or the app was hidden.
+- The Mac app no longer freezes on returning to the foreground while another device or app holds the clipboard. Text fields no longer ask the pasteboard whether there is something to paste every time the app comes back.
+
 ## 1.0.30 (98) — 13 October 2026
 
 - Copying a message with a bulleted list no longer runs the items together into one line. "Copy" puts the message on the clipboard as its author wrote it, with its list markers and line breaks and with mentions and files by name; forwarding sends the same text. A mouse selection across paragraphs, list items or several messages copies them on separate lines, without the avatar initials, times and day headings that used to be glued in between.

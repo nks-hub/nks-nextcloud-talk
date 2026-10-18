@@ -1,1 +1,1 @@
-Opraveno: zkopírovaná zpráva se seznamem už nesplyne do jednoho řádku. „Kopírovat“ vloží text tak, jak ho autor napsal, i s odrážkami a zalomením řádků, a výběr myší přes víc odstavců, položek seznamu nebo zpráv zachová konce řádků. Aplikace na Macu už při ukončení nepadá.
+Opraveno: velký GIF z Giphy se už nezobrazí jako „Obrázek se nepodařilo načíst“, aplikace načte jeho menší verzi. Na Macu kliknutí na oznámení vytáhne okno do popředí a aplikace po návratu do popředí nezamrzne kvůli schránce.

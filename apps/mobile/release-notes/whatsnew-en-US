@@ -1,1 +1,1 @@
-Fixed: copying a message with a list no longer runs everything into one line. "Copy" puts the text on the clipboard as its author wrote it, with bullets and line breaks, and a mouse selection across paragraphs, list items or messages keeps its line breaks. The Mac app no longer crashes while quitting.
+Fixed: a large GIF from Giphy no longer shows "The image could not be loaded"; the app loads a smaller cut of it. On the Mac, clicking a notification brings the window to the front, and the app no longer freezes on the clipboard when it comes back to the foreground.
