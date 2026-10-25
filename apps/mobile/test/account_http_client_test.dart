@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:asn1lib/asn1lib.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/network/account_http_client.dart';
+import 'package:nextcloudtalk/network/certificate_host.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 final class _FakeCertificate implements X509Certificate {
@@ -31,6 +33,31 @@ final class _FakeCertificate implements X509Certificate {
   Uint8List get sha1 => Uint8List(0);
 }
 
+Uint8List _certificateDer({
+  List<String> dnsNames = const ['cloud.example.invalid'],
+  List<String> ipAddresses = const [],
+  int serial = 1,
+  bool includeSan = true,
+}) {
+  final names = ASN1Sequence();
+  for (final name in dnsNames) {
+    names.add(ASN1OctetString(name, tag: 0x82));
+  }
+  for (final address in ipAddresses) {
+    names.add(ASN1OctetString(InternetAddress(address).rawAddress, tag: 0x87));
+  }
+  final extension = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromComponentString('2.5.29.17'))
+    ..add(ASN1OctetString(names.encodedBytes));
+  final extensions = ASN1Sequence()..add(extension);
+  final tbs = ASN1Sequence()..add(ASN1Integer(BigInt.from(serial)));
+  if (includeSan) {
+    tbs.add(ASN1Sequence(tag: 0xa3)..add(extensions));
+  }
+  // The gate parses SAN fields; HttpClient owns signature verification.
+  return (ASN1Sequence()..add(tbs)).encodedBytes;
+}
+
 void main() {
   group('certificateFingerprint', () {
     test('is the lowercase SHA-256 of the DER bytes', () {
@@ -54,32 +81,38 @@ void main() {
     });
   });
 
-  group('certificateSubjectHost', () {
-    test('reads the common name out of a subject', () {
-      expect(
-        certificateSubjectHost('/C=CZ/O=NKS/CN=cloud.example.invalid'),
-        'cloud.example.invalid',
+  group('certificateMatchesHost', () {
+    test('matches any DNS SAN without treating an IP literal as DNS', () {
+      final der = _certificateDer(
+        dnsNames: ['other.example.invalid', 'Cloud.Example.Invalid', '127.0.0.1'],
       );
-      expect(
-        certificateSubjectHost('C=CZ, O=NKS Hub, CN=cloud.example.invalid'),
-        'cloud.example.invalid',
-      );
-      expect(
-        certificateSubjectHost('cn=cloud.example.invalid'),
-        'cloud.example.invalid',
-      );
+      expect(certificateMatchesHost(der, 'cloud.example.invalid'), isTrue);
+      expect(certificateMatchesHost(der, 'unknown.example.invalid'), isFalse);
+      expect(certificateMatchesHost(der, '127.0.0.1'), isFalse);
     });
 
-    test('says nothing rather than guessing when there is no common name', () {
-      // The trust decision turns a null host into a refusal, so an unreadable
-      // subject can never be silently accepted.
-      expect(certificateSubjectHost('/C=CZ/O=NKS'), isNull);
-      expect(certificateSubjectHost('CN='), isNull);
-      expect(certificateSubjectHost(''), isNull);
+    test('matches binary IPv4 and IPv6 SANs', () {
+      final der = _certificateDer(
+        dnsNames: [],
+        ipAddresses: ['127.0.0.1', '2001:db8::1'],
+      );
+      expect(certificateMatchesHost(der, '127.0.0.1'), isTrue);
+      expect(certificateMatchesHost(der, '2001:db8:0:0:0:0:0:1'), isTrue);
+      expect(certificateMatchesHost(der, '127.0.0.2'), isFalse);
     });
 
-    test('does not mistake another field for the common name', () {
-      expect(certificateSubjectHost('/OU=CN-team/O=NKS'), isNull);
+    test('a wildcard covers exactly one leftmost DNS label', () {
+      final der = _certificateDer(dnsNames: ['*.example.invalid']);
+      expect(certificateMatchesHost(der, 'cloud.example.invalid'), isTrue);
+      expect(certificateMatchesHost(der, 'example.invalid'), isFalse);
+      expect(certificateMatchesHost(der, 'a.cloud.example.invalid'), isFalse);
+      expect(
+        certificateMatchesHost(
+          _certificateDer(dnsNames: ['*.invalid']),
+          'cloud.invalid',
+        ),
+        isFalse,
+      );
     });
   });
 
@@ -87,9 +120,12 @@ void main() {
     const host = 'cloud.example.invalid';
     final certificate = _FakeCertificate(
       subject: 'CN=$host',
-      der: const [1, 2],
+      der: _certificateDer(),
     );
-    final renewed = _FakeCertificate(subject: 'CN=$host', der: const [3, 4]);
+    final renewed = _FakeCertificate(
+      subject: 'CN=$host',
+      der: _certificateDer(serial: 2),
+    );
 
     test('an unknown certificate is refused and reported for confirmation', () {
       final seen = <CertificateEncounter>[];
@@ -146,8 +182,46 @@ void main() {
         gate.accepts(certificate: certificate, host: 'other.example.invalid'),
         isFalse,
       );
-      // Same certificate, same pin, different server: the subject decides.
+      // A pin cannot override the certificate's SAN host restriction.
       expect(gate.accepts(certificate: certificate, host: host), isTrue);
     });
+
+    test('a matching SAN passes even when the CN names another host', () {
+      final certificate = _FakeCertificate(
+        subject: 'CN=other.example.invalid',
+        der: _certificateDer(),
+      );
+      final gate = CertificateTrustGate()
+        ..confirm(
+          host: host,
+          fingerprint: certificateFingerprint(certificate.der),
+        );
+
+      expect(gate.accepts(certificate: certificate, host: host), isTrue);
+    });
+
+    for (final entry in {
+      'mismatched SAN': _certificateDer(dnsNames: ['other.example.invalid']),
+      'missing SAN': _certificateDer(includeSan: false),
+      'malformed DER': <int>[1, 2],
+    }.entries) {
+      test('a matching CN and pin cannot bypass ${entry.key}', () {
+        final certificate = _FakeCertificate(
+          subject: 'CN=$host',
+          der: entry.value,
+        );
+        final gate = CertificateTrustGate()
+          ..confirm(
+            host: host,
+            fingerprint: certificateFingerprint(certificate.der),
+          );
+
+        expect(gate.accepts(certificate: certificate, host: host), isFalse);
+        expect(
+          gate.lastEncounter?.outcome.refusal,
+          CertificateRefusal.hostMismatch,
+        );
+      });
+    }
   });
 }

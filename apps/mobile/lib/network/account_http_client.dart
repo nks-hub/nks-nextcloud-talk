@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'certificate_host.dart';
+
 /// A certificate the platform refused that the user has not answered for yet.
 final class CertificateEncounter {
   const CertificateEncounter({
@@ -111,7 +113,7 @@ final class CertificateTrustGate {
     final key = host.toLowerCase();
     final outcome = decideCertificateTrust(
       requestedHost: host,
-      certificateHost: certificateSubjectHost(certificate.subject) ?? '',
+      certificateHost: certificateMatchesHost(certificate.der, host) ? host : '',
       presentedFingerprint: fingerprint,
       pinnedFingerprints: {...?_stored[key], ?_confirmed[key]},
     );
@@ -135,18 +137,3 @@ final class CertificateTrustGate {
 /// Lowercase SHA-256 of the DER encoding, the form a pin is stored in.
 String certificateFingerprint(List<int> der) =>
     sha256.convert(der).toString().toLowerCase();
-
-/// Pulls `CN=` out of an X.509 subject.
-///
-/// Returns `null` when there is no common name, which the trust decision then
-/// treats as a host mismatch rather than guessing.
-String? certificateSubjectHost(String subject) {
-  for (final part in subject.split(RegExp('[,/]'))) {
-    final trimmed = part.trim();
-    if (trimmed.length > 3 && trimmed.substring(0, 3).toUpperCase() == 'CN=') {
-      final value = trimmed.substring(3).trim();
-      return value.isEmpty ? null : value;
-    }
-  }
-  return null;
-}

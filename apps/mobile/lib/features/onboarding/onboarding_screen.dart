@@ -552,6 +552,7 @@ final class _ServerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     return Card(
+      semanticContainer: false,
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
