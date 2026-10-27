@@ -2,8 +2,6 @@
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
@@ -85,64 +83,16 @@ final class ExternalLoginPageLauncher implements LoginPageLauncher {
 
   final Future<bool> Function(Uri) _opener;
 
-  /// How long the launcher waits for the app to come back before it lets the
-  /// caller carry on polling for the login anyway.
-  static const Duration returnTimeout = Duration(minutes: 5);
-
+  /// Returns as soon as the browser is launched. It does not wait for this app
+  /// to be hidden and resumed: a browser that opens in its own window (iPadOS
+  /// windowed apps, split screen, a custom tab drawn over the app) never
+  /// produces that pair, and onboarding sat on a spinner without ever polling.
   @override
-  Future<bool> open(Uri uri) async {
-    if (!_waitsForMobileReturn) {
-      return _opener(uri);
-    }
-
-    final returnSignal = _MobileAppReturnSignal();
-    try {
-      final opened = await _opener(uri);
-      if (!opened) {
-        return false;
-      }
-      // Bounded. This waits for the app to be hidden and then resumed, and a
-      // browser that opens without hiding this app — a split screen, a
-      // custom tab the system draws over us, a launcher that never reports
-      // the transition — never produces that pair. Onboarding then hung with
-      // a Cancel button that could do nothing, because the caller had not
-      // created its cancellation signal yet.
-      await returnSignal.returned.timeout(returnTimeout, onTimeout: () {});
-      return true;
-    } finally {
-      returnSignal.dispose();
-    }
-  }
+  Future<bool> open(Uri uri) => _opener(uri);
 
   static Future<bool> _openExternalApplication(Uri uri) {
     return launchUrl(uri, mode: LaunchMode.externalApplication);
   }
-
-  static bool get _waitsForMobileReturn =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
-}
-
-final class _MobileAppReturnSignal {
-  _MobileAppReturnSignal() {
-    _listener = AppLifecycleListener(
-      onHide: () => _leftForeground = true,
-      onResume: () {
-        if (_leftForeground && !_returned.isCompleted) {
-          _returned.complete();
-        }
-      },
-    );
-  }
-
-  final Completer<void> _returned = Completer<void>();
-  late final AppLifecycleListener _listener;
-  bool _leftForeground = false;
-
-  Future<void> get returned => _returned.future;
-
-  void dispose() => _listener.dispose();
 }
 
 final class OnboardingCoordinator {
@@ -307,7 +257,23 @@ final class OnboardingCoordinator {
     final deadline = DateTime.now().toUtc().add(loginTimeout);
     while (DateTime.now().toUtc().isBefore(deadline)) {
       cancellation.throwIfCancelled();
-      final result = await _api.pollLogin(pending);
+      final LoginPollResult? result;
+      try {
+        result = await _api.pollLogin(pending);
+      } on NextcloudApiException catch (error) {
+        // iOS suspends the app's sockets while the browser is in front, so the
+        // first polls after returning can fail on a connection that is fine.
+        if (error.code != NextcloudApiError.network &&
+            error.code != NextcloudApiError.timeout) {
+          rethrow;
+        }
+        cancellation.throwIfCancelled();
+        await Future.any<void>([
+          Future<void>.delayed(pollInterval),
+          cancellation.whenCancelled,
+        ]);
+        continue;
+      }
       cancellation.throwIfCancelled();
       if (result case LoginPollSucceeded(:final credentials)) {
         return _commitAccount(

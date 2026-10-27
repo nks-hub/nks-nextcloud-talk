@@ -34,58 +34,36 @@ void main() {
 
   tearDown(() => database.close());
 
-  testWidgets(
-    'external login waits for the mobile app to return before polling',
-    (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
-      try {
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
-        );
+  test('external login polls without the app ever being hidden', () async {
+    var polls = 0;
+    final api = _onboardingApi(
+      withTalk: true,
+      onPoll: () {
+        // The first poll fails the way a socket iOS suspended does.
+        if (polls++ == 0) {
+          throw http.ClientException('connection lost');
+        }
+      },
+    );
+    addTearDown(api.close);
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: ExternalLoginPageLauncher(opener: (_) async => true),
+      pollInterval: Duration.zero,
+    );
 
-        final opened = Completer<void>();
-        final launcher = ExternalLoginPageLauncher(
-          opener: (_) async {
-            opened.complete();
-            return true;
-          },
-        );
+    final pending = await coordinator.start('https://cloud.example.invalid');
+    await coordinator.openLoginPage(pending);
+    final account = await coordinator.waitForAccount(
+      pending,
+      CancellationSignal(),
+    );
 
-        var completed = false;
-        final launch = launcher
-            .open(Uri.parse('https://cloud.example.invalid/index.php/login/v2'))
-            .then((value) {
-              completed = true;
-              return value;
-            });
-        await opened.future;
-        await tester.pump();
-        expect(completed, isFalse);
-
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.inactive,
-        );
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-        await tester.pump();
-        expect(completed, isFalse);
-
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.inactive,
-        );
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
-        );
-        await tester.pump();
-
-        expect(await launch, isTrue);
-        expect(completed, isTrue);
-      } finally {
-        debugDefaultTargetPlatformOverride = null;
-      }
-    },
-  );
+    expect(account.loginName, 'fixture-user');
+    expect(polls, 2);
+  });
 
   test(
     'persists credentials and account only after Talk is confirmed',
