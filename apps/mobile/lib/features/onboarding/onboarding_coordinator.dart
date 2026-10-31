@@ -2,6 +2,7 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
@@ -75,13 +76,25 @@ final class CancellationSignal {
 
 abstract interface class LoginPageLauncher {
   Future<bool> open(Uri uri);
+
+  /// Dismisses the login page if it is shown inside the app.
+  Future<void> close();
 }
 
 final class ExternalLoginPageLauncher implements LoginPageLauncher {
-  ExternalLoginPageLauncher({Future<bool> Function(Uri)? opener})
-    : _opener = opener ?? _openExternalApplication;
+  ExternalLoginPageLauncher({
+    Future<bool> Function(Uri)? opener,
+    Future<void> Function()? closer,
+  }) : _opener = opener ?? _openExternalApplication,
+       _closer = closer ?? _closeInAppBrowser;
 
   final Future<bool> Function(Uri) _opener;
+  final Future<void> Function() _closer;
+
+  /// App Review requires sign-in to stay inside the app on iOS, where the
+  /// page is shown in an SFSafariViewController sheet over the app.
+  static bool get _inApp =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   /// Returns as soon as the browser is launched. It does not wait for this app
   /// to be hidden and resumed: a browser that opens in its own window (iPadOS
@@ -90,8 +103,22 @@ final class ExternalLoginPageLauncher implements LoginPageLauncher {
   @override
   Future<bool> open(Uri uri) => _opener(uri);
 
+  @override
+  Future<void> close() => _closer();
+
   static Future<bool> _openExternalApplication(Uri uri) {
-    return launchUrl(uri, mode: LaunchMode.externalApplication);
+    return launchUrl(
+      uri,
+      mode: _inApp
+          ? LaunchMode.inAppBrowserView
+          : LaunchMode.externalApplication,
+    );
+  }
+
+  static Future<void> _closeInAppBrowser() async {
+    if (_inApp) {
+      await closeInAppWebView();
+    }
   }
 }
 
@@ -249,7 +276,33 @@ final class OnboardingCoordinator {
     }
   }
 
+  /// Polls until the login finishes, fails or is cancelled, and dismisses an
+  /// in-app login page whichever of those happens.
   Future<StoredAccount> waitForAccount(
+    PendingLogin pending,
+    CancellationSignal cancellation, {
+    String? expectedAccountId,
+  }) async {
+    try {
+      return await _pollForAccount(
+        pending,
+        cancellation,
+        expectedAccountId: expectedAccountId,
+      );
+    } finally {
+      await _closeLoginPage();
+    }
+  }
+
+  Future<void> _closeLoginPage() async {
+    try {
+      await _launcher.close();
+    } on Object {
+      // The sheet may already be gone; that must not mask the login outcome.
+    }
+  }
+
+  Future<StoredAccount> _pollForAccount(
     PendingLogin pending,
     CancellationSignal cancellation, {
     String? expectedAccountId,
@@ -276,6 +329,7 @@ final class OnboardingCoordinator {
       }
       cancellation.throwIfCancelled();
       if (result case LoginPollSucceeded(:final credentials)) {
+        await _closeLoginPage();
         return _commitAccount(
           server: pending.server,
           serverStatus: pending.serverStatus,

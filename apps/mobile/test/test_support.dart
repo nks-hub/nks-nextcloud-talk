@@ -47,12 +47,16 @@ final class RecordingLoginPageLauncher implements LoginPageLauncher {
 
   final bool result;
   Uri? openedUri;
+  int closeCount = 0;
 
   @override
   Future<bool> open(Uri uri) async {
     openedUri = uri;
     return result;
   }
+
+  @override
+  Future<void> close() async => closeCount++;
 }
 
 Widget localizedTestApp({

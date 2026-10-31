@@ -86,11 +86,49 @@ void main() {
       );
 
       expect(launcher.openedUri, pending.initialization.loginUri);
+      expect(launcher.closeCount, greaterThanOrEqualTo(1));
       expect(account.loginName, 'fixture-user');
       expect(vault.values[account.id], 'fixture-app-password-never-use');
       expect((await repository.watchAccounts().first), hasLength(1));
     },
   );
+
+  test('the in-app login page is closed when the login is cancelled', () async {
+    final api = _onboardingApi(withTalk: true, onPoll: () {});
+    addTearDown(api.close);
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pollInterval: Duration.zero,
+    );
+    final pending = await coordinator.start('https://cloud.example.invalid');
+    await coordinator.openLoginPage(pending);
+    final cancellation = CancellationSignal()..cancel();
+
+    await expectLater(
+      coordinator.waitForAccount(pending, cancellation),
+      throwsA(isA<OnboardingCancelled>()),
+    );
+    expect(launcher.closeCount, 1);
+  });
+
+  test('the external launcher delegates opening and closing', () async {
+    final calls = <String>[];
+    final launcher = ExternalLoginPageLauncher(
+      opener: (uri) async {
+        calls.add('open ${uri.host}');
+        return true;
+      },
+      closer: () async => calls.add('close'),
+    );
+
+    await launcher.open(Uri.parse('https://cloud.example.invalid/login'));
+    await launcher.close();
+
+    expect(calls, ['open cloud.example.invalid', 'close']);
+  });
 
   test(
     'an unverified certificate blocks the server check until confirmed',
