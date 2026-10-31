@@ -1,1 +1,1 @@
-Opraveno: přihlášení se už nezasekne na točícím kolečku, když se prohlížeč otevře v samostatném okně, třeba na iPadu. Aplikace začne ověřovat přihlášení hned po otevření prohlížeče a krátký výpadek sítě přihlášení neukončí.
+Změna: na iPhonu a iPadu se přihlášení otevře přímo v aplikaci, ne v prohlížeči, a po přihlášení se samo zavře.

@@ -8,6 +8,10 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.0.33 (101) — 31 October 2026
+
+- On iOS, signing in now opens inside the app in a Safari sheet instead of sending you to the browser app. The sheet closes by itself when the sign-in finishes or is cancelled.
+
 ## 1.0.32 (100) — 27 October 2026
 
 - Signing in no longer sits on a spinner when the browser opens in its own window, as it does on an iPad. The app starts checking for the login as soon as the browser is launched instead of waiting for itself to be hidden and shown again, and a network error during that check is retried instead of ending the sign-in.

@@ -1,1 +1,1 @@
-Fixed: signing in no longer hangs on a spinner when the browser opens in its own window, as on an iPad. The app starts checking for the login as soon as the browser opens, and a short network drop no longer ends the sign-in.
+Changed: on iPhone and iPad, signing in now opens inside the app instead of switching to the browser, and closes by itself when you are signed in.
