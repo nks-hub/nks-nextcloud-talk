@@ -461,6 +461,39 @@ void main({bool galleryOnly = false}) {
     );
   });
 
+  testWidgets('the settings action still works after the viewer is closed', (
+    tester,
+  ) async {
+    var settingsOpenCalls = 0;
+    await tester.pumpWidget(
+      _app(
+        repository: _repository((_) async => _imageResponse()),
+        exporter: _RecordingExporter(
+          saveResult: ChatImageSaveResult.permissionDenied,
+        ),
+        openAppSettings: () async {
+          settingsOpenCalls++;
+          return false;
+        },
+      ),
+    );
+    await tester.tap(find.byKey(const Key('open-synthetic-image')));
+    await _pumpRouteAndFuture(tester);
+    await tester.tap(find.byKey(const Key('authenticated-image-save')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    Navigator.of(tester.element(find.byType(Scaffold).last)).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    await tester.tap(find.byType(SnackBarAction));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.takeException(), isNull);
+    expect(settingsOpenCalls, 1);
+  });
+
   testWidgets('sharing downloads and offers the original bytes', (
     tester,
   ) async {

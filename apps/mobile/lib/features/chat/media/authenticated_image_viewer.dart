@@ -268,7 +268,9 @@ final class _AuthenticatedImageViewerState
           action: result.offerSettings && widget.openAppSettings != null
               ? SnackBarAction(
                   label: strings.openAppSettings,
-                  onPressed: () => unawaited(_openAppSettings()),
+                  onPressed: () => unawaited(
+                    _openAppSettings(messenger, strings.openAppSettingsFailed),
+                  ),
                 )
               : null,
         ),
@@ -276,25 +278,26 @@ final class _AuthenticatedImageViewerState
     }
   }
 
-  Future<void> _openAppSettings() async {
+  /// Runs from a snackbar that can outlive this viewer, so it must not touch
+  /// [context]; the messenger and message are captured while it was mounted.
+  Future<void> _openAppSettings(
+    ScaffoldMessengerState messenger,
+    String failedMessage,
+  ) async {
     final open = widget.openAppSettings;
     if (open == null) {
       return;
     }
-    final failedMessage = AppLocalizations.of(context).openAppSettingsFailed;
+    var opened = false;
     try {
-      final opened = await open();
-      if (!opened && mounted) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(content: Text(failedMessage)));
-      }
+      opened = await open();
     } on Object {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(content: Text(failedMessage)));
-      }
+      opened = false;
+    }
+    if (!opened) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(failedMessage)));
     }
   }
 
