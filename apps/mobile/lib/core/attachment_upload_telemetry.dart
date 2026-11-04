@@ -142,12 +142,24 @@ final class AttachmentUploadDiagnostic {
     AttachmentUploadCheckpoint.durableCopyFailed ||
     AttachmentUploadCheckpoint.admissionFailed ||
     AttachmentUploadCheckpoint.credentialUnavailable ||
-    AttachmentUploadCheckpoint.durableFailed ||
     AttachmentUploadCheckpoint.streamFailed ||
     AttachmentUploadCheckpoint.stalled => true,
+    AttachmentUploadCheckpoint.durableFailed => !_expectedDurableFailures
+        .contains(errorClass),
     _ => false,
   };
 }
+
+/// Durable failures caused by the network or by the server refusing the file.
+/// They stay in the breadcrumb trail but are not worth a Sentry event.
+const _expectedDurableFailures = <String>{
+  'network',
+  'timeout',
+  'dav-transient',
+  'dav-quota-exceeded',
+  'dav-permission-denied',
+  'dav-rejected',
+};
 
 typedef ReportAttachmentUploadDiagnostic =
     void Function(AttachmentUploadDiagnostic diagnostic);

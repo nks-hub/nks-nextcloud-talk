@@ -72,6 +72,17 @@ void main() {
     expect(tags['attachment.error_class'], 'network');
   });
 
+  test('expected durable failures stay out of Sentry events', () {
+    bool captures(String? errorClass) => AttachmentUploadDiagnostic(
+      checkpoint: AttachmentUploadCheckpoint.durableFailed,
+      errorClass: errorClass,
+    ).capturesEvent;
+    expect(captures('network'), isFalse);
+    expect(captures('dav-quota-exceeded'), isFalse);
+    expect(captures('dav-weird'), isTrue);
+    expect(captures(null), isTrue);
+  });
+
   test(
     'disabled Sentry drops upload diagnostics before creating work',
     () async {
