@@ -274,6 +274,30 @@ void main() {
       expect(find.byKey(const Key('owntalk-shared-dialog')), findsNothing);
       await unmount(tester);
     });
+
+    testWidgets('without Talk roles it does not blame the moderators', (
+      tester,
+    ) async {
+      server
+        ..capability = ownTalkCapabilityJson(acl: 'membership')
+        ..canEdit = false
+        ..setExternally({'chat.backgroundColor': '#1E3A5F'});
+      await tester.pumpWidget(sectionApp());
+      await pumpUntil(
+        tester,
+        () => subtitleOf(tester, _background) == '#1E3A5F',
+      );
+
+      expect(
+        find.text('Only moderators can change the shared appearance.'),
+        findsNothing,
+      );
+      expect(
+        find.textContaining('cannot read Talk roles'),
+        findsOneWidget,
+      );
+      await unmount(tester);
+    });
   });
 
   group('conflict', () {

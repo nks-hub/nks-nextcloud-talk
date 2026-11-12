@@ -23,6 +23,7 @@ Future<String?> showTextPromptDialog({
   int? minLines,
   int maxLines = 1,
   String? emptyErrorText,
+  String? helperText,
 }) {
   return showDialog<String>(
     context: context,
@@ -39,6 +40,7 @@ Future<String?> showTextPromptDialog({
       minLines: minLines,
       maxLines: maxLines,
       emptyErrorText: emptyErrorText,
+      helperText: helperText,
     ),
   );
 }
@@ -57,6 +59,7 @@ final class _TextPromptDialog extends StatefulWidget {
     required this.minLines,
     required this.maxLines,
     required this.emptyErrorText,
+    this.helperText,
   });
 
   final String title;
@@ -70,6 +73,7 @@ final class _TextPromptDialog extends StatefulWidget {
   final int? minLines;
   final int maxLines;
   final String? emptyErrorText;
+  final String? helperText;
 
   @override
   State<_TextPromptDialog> createState() => _TextPromptDialogState();
@@ -105,7 +109,11 @@ final class _TextPromptDialogState extends State<_TextPromptDialog> {
         maxLength: widget.maxLength,
         minLines: widget.minLines,
         maxLines: widget.maxLines,
-        decoration: InputDecoration(labelText: widget.fieldLabel),
+        decoration: InputDecoration(
+          labelText: widget.fieldLabel,
+          helperText: widget.helperText,
+          helperMaxLines: 3,
+        ),
         validator: emptyErrorText == null
             ? null
             : (value) => value == null || value.trim().isEmpty

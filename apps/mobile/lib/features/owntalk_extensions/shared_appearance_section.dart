@@ -116,7 +116,7 @@ final class _OwnTalkSharedAppearanceSectionState
           child: Text(
             canEdit
                 ? strings.ownTalkSharedIntro
-                : strings.ownTalkSharedReadOnly,
+                : _readOnlyText(strings, extras.capability),
             key: canEdit
                 ? const Key('owntalk-shared-intro')
                 : const Key('owntalk-shared-read-only'),
@@ -192,6 +192,7 @@ final class _OwnTalkSharedAppearanceSectionState
       fieldLabel: field.isEmoji
           ? strings.ownTalkSharedEmojiLabel
           : strings.ownTalkSharedColorLabel,
+      helperText: strings.ownTalkSharedClearHint,
       cancelLabel: strings.cancel,
       confirmLabel: strings.roomDetailsSave,
       dialogKey: const Key('owntalk-shared-dialog'),
@@ -240,8 +241,10 @@ final class _OwnTalkSharedAppearanceSectionState
           await _resolveConflict(changes, conflict);
         case OwnTalkSettingsUpdateFailure(:final kind):
           _message(switch (kind) {
-            OwnTalkExtensionsFailureKind.forbidden =>
-              strings.ownTalkSharedReadOnly,
+            OwnTalkExtensionsFailureKind.forbidden => _readOnlyText(
+              strings,
+              ref.read(ownTalkRoomExtrasProvider(_key)).capability,
+            ),
             _ => strings.ownTalkSharedSaveFailed,
           });
       }
@@ -312,6 +315,15 @@ final class _OwnTalkSharedAppearanceSectionState
       await _apply(mine, conflict.current.revision);
     }
   }
+
+  /// Without Talk roles nobody may edit a group conversation, so "only
+  /// moderators" would be wrong there.
+  String _readOnlyText(
+    AppLocalizations strings,
+    OwnTalkExtensionsCapability? capability,
+  ) => capability?.acl == OwnTalkAclMode.membership
+      ? strings.ownTalkSharedReadOnlyMembership
+      : strings.ownTalkSharedReadOnly;
 
   void _message(String text) {
     ScaffoldMessenger.maybeOf(
