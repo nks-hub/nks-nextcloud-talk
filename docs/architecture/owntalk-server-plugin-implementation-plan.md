@@ -9,11 +9,13 @@ jejich autor na svých zařízeních.
 
 Stav k 12. 11. 2026: první řez je implementovaný v
 [nks-hub/owntalk-extensions](https://github.com/nks-hub/owntalk-extensions)
-0.1.0: členství (kap. 9.1), role přes Talk OCS (kap. 9.2), sdílená nastavení
-barev a rychlé emoji (`GET`/`PATCH`), capability. Brány S0 a S0b prošly
-integrační sadou `tests/integration/acl_test.py` na NC 34.0.5 + Talk 24.0.7
-i NC 35.0.2 + Talk 25.0.7 (40/40, v režimu bez rolí 37/37). Přezdívky, osobní
-preference, obrázky, `/revisions` a úklidový job zatím chybí. Zjištění z běhu:
+0.2.0: členství (kap. 9.1), role přes Talk OCS (kap. 9.2), sdílená nastavení
+barev a rychlé emoji (`GET`/`PATCH`), capability, anonymizace smazaného
+uživatele a noční úklid smazaných konverzací. Brány S0 a S0b prošly integrační
+sadou `tests/integration/acl_test.py` na NC 34.0.5 + Talk 24.0.7 i NC 35.0.2 +
+Talk 25.0.7 (47/47, v režimu bez rolí 41/41). Klient je ve větvi
+`feat/owntalk-extensions` a prošel E2E na dvou telefonech. Přezdívky, osobní
+preference, obrázky a `/revisions` zatím chybí. Zjištění z běhu:
 Talk přidá pozvaného účastníka 1:1 až první zprávou, do té doby vrací 404
 i Talk sám. Tvrzení o Nextcloudu
 a Talku jsou vázaná na SHA nebo dokumentaci uvedenou v textu. Co nebylo
@@ -436,8 +438,11 @@ uživatel z Nextcloud session (kap. 16.5).
 
 ### 6.3 Čtení
 
-- GET vrací dokument + `ETag: "r{revision}"`. `If-None-Match` se shodnou
-  revizí → 304 bez těla.
+- GET vrací dokument + `ETag: "r{revision}-e1"` (smí upravovat) nebo
+  `"r{revision}-e0"`. Oprávnění je součástí ETagu, protože je součástí
+  odpovědi; jinak by změnu role schovala odpověď 304. Klient ETag nesestavuje,
+  jen ho vrací v `If-None-Match`. Slabý tvar `W/"…"` od komprimujících proxy
+  server přijme. Role pro čtení smí být až 15 s stará, zápis se ptá vždy znovu.
 - 404, když konverzace neexistuje **nebo** volající není účastník. Obě
   situace vypadají stejně (tělo i kód).
 - Poznámky pro sebe, changelog a jiný nepodporovaný typ: 404 (kap. 9.1).
@@ -963,7 +968,13 @@ protože se ověřuje při každém požadavku; mazání dat dělá úklidový j
 | Smazání uživatele | okamžitě (účet neexistuje) | `OCP\User\Events\UserDeletedEvent` (veřejné): hned smazat jeho preference a přezdívky, kde je cílem; `updated_by_id`, `set_by_id`, `actor_id` → null |
 | Audit starší 90 dní | – | noční job smaže |
 | `occ app:disable` | API pryč | data zůstanou, klient UI skryje |
-| `occ app:remove` | – | repair step `<uninstall>` smaže tabulky a appdata; zda Nextcloud tabulky maže sám, **k ověření** testem |
+| `occ app:remove` | – | data zůstanou; smazat je `occ owntalk-extensions:cleanup --all` před odebráním |
+
+Ověřeno v kódu Nextcloudu 34 (`lib/private/App/AppManager.php`, `disableApp`,
+ř. 707–710): uninstall repair steps se spouštějí při **každém** vypnutí
+aplikace, i automatickém při upgradu Nextcloudu. Uninstall krok, který by
+mazal tabulky, by proto smazal data i při běžném vypnutí. Úplné smazání je
+proto explicitní příkaz správce.
 
 - Job běží po dávkách (např. 500 tokenů za běh) a před mazáním ověří, že
   je Talk aktivní a poskytovatel `room` existuje; jinak nic nemaže (výpadek
@@ -1674,7 +1685,7 @@ Statická analýza: Psalm nebo PHPStan s `nextcloud/ocp`, php-cs-fixer podle
 | M2 | Obrázky: upload, validace, překódování, kvóty, stažení | M1 |
 | M3 | Přezdívky: API, pravidla 8.3, Unicode validace, testy | M1; pravidla s rolemi až po S0b |
 | M4 | Osobní preference a `/revisions` | M1 |
-| M5 | Životní cyklus: noční job, `UserDeletedEvent`, uninstall, `occ` příkazy | M1–M4 |
+| M5 | Životní cyklus: noční job, `UserDeletedEvent`, `occ owntalk-extensions:cleanup` | M1–M4 |
 | M6 | Flutter: protokol, adaptér, Drift v19, UI, rychlá emoji, přezdívky, kontrast, fallback, testy | kontrakt z M1; funkce podle M2–M4 |
 | M7 | Bezpečnostní brány SG, fuzz, nezávislé review a opravy | M1–M6 |
 | M8 | Release pipeline, podpis, první release v App Store, ověření instalace | M7, vydaný certifikát |
