@@ -96,30 +96,58 @@ final class _TextPromptDialogState extends State<_TextPromptDialog> {
   @override
   Widget build(BuildContext context) {
     final emptyErrorText = widget.emptyErrorText;
+    final form = Form(
+      key: _formKey,
+      child: TextFormField(
+        key: widget.fieldKey,
+        controller: _controller,
+        autofocus: true,
+        maxLength: widget.maxLength,
+        minLines: widget.minLines,
+        maxLines: widget.maxLines,
+        decoration: InputDecoration(labelText: widget.fieldLabel),
+        validator: emptyErrorText == null
+            ? null
+            : (value) => value == null || value.trim().isEmpty
+                  ? emptyErrorText
+                  : null,
+        onFieldSubmitted: (_) => _confirm(),
+      ),
+    );
+    // A phone held sideways is about 360-410 dp tall; once the keyboard is
+    // up, an AlertDialog's scrolling body shrinks to a few dp and clips the
+    // field. Decided on the height without the keyboard, so opening it does
+    // not swap the layout (and the focused field) underneath the user.
+    if (MediaQuery.sizeOf(context).height < 480) {
+      return Dialog.fullscreen(
+        child: Scaffold(
+          appBar: AppBar(
+            leading: CloseButton(
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: Text(widget.title),
+            actions: [
+              TextButton(
+                key: widget.confirmKey,
+                onPressed: _confirm,
+                child: Text(widget.confirmLabel),
+              ),
+            ],
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: form,
+          ),
+        ),
+      );
+    }
     return AlertDialog(
       title: Text(widget.title),
       // Large text can make the body taller than the screen; without this
       // the actions are pushed off the bottom and the dialog cannot be
       // answered at all.
       scrollable: true,
-      content: Form(
-        key: _formKey,
-        child: TextFormField(
-          key: widget.fieldKey,
-          controller: _controller,
-          autofocus: true,
-          maxLength: widget.maxLength,
-          minLines: widget.minLines,
-          maxLines: widget.maxLines,
-          decoration: InputDecoration(labelText: widget.fieldLabel),
-          validator: emptyErrorText == null
-              ? null
-              : (value) => value == null || value.trim().isEmpty
-                    ? emptyErrorText
-                    : null,
-          onFieldSubmitted: (_) => _confirm(),
-        ),
-      ),
+      content: form,
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
