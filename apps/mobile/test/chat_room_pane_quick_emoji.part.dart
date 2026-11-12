@@ -58,7 +58,7 @@ void _registerChatRoomPaneQuickEmojiTests() {
     );
     expect(find.byKey(const Key('send-message')), findsNothing);
     expect(
-      find.byTooltip(RegExp(r'^Send \u{1F44D}', unicode: true)),
+      find.byTooltip(RegExp(r'^Send emoji \S')),
       findsOneWidget,
     );
 

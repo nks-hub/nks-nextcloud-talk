@@ -4005,6 +4005,10 @@ class AppLocalizationsCs extends AppLocalizations {
   String get ownTalkSharedEmojiLabel => 'Jedno emoji';
 
   @override
+  String get ownTalkSharedReadOnlyMembership =>
+      'Server nezjistí role v Talku, proto sdílený vzhled skupinové konverzace nikdo nezmění.';
+
+  @override
   String get ownTalkSharedClearHint => 'Prázdné pole znamená podle motivu.';
 
   @override
@@ -4046,7 +4050,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get ownTalkQuickEmojiSend => 'Odeslat emoji';
 
   @override
-  String ownTalkQuickEmojiSendNamed(String emoji, String name) {
-    return 'Odeslat $emoji, $name';
+  String ownTalkQuickEmojiSendNamed(String name) {
+    return 'Odeslat emoji $name';
   }
 }

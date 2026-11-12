@@ -784,7 +784,7 @@ final class _SendOrQuickEmojiButton extends StatelessWidget {
             .toLowerCase();
         final label = name == null
             ? strings.ownTalkQuickEmojiSend
-            : strings.ownTalkQuickEmojiSendNamed(emoji, name);
+            : strings.ownTalkQuickEmojiSendNamed(name);
         // Bare glyph like the reaction shortcut in other messengers: a filled
         // send-button disc behind a colour emoji reads as a sticker.
         return SizedBox.square(

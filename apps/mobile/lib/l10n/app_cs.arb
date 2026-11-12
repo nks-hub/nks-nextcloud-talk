@@ -1419,6 +1419,7 @@
   "ownTalkSharedThemeDefault": "Podle motivu",
   "ownTalkSharedColorLabel": "Barva (#RRGGBB)",
   "ownTalkSharedEmojiLabel": "Jedno emoji",
+  "ownTalkSharedReadOnlyMembership": "Server nezjistí role v Talku, proto sdílený vzhled skupinové konverzace nikdo nezmění.",
   "ownTalkSharedClearHint": "Prázdné pole znamená podle motivu.",
   "ownTalkSharedInvalidValue": "Tuto hodnotu nelze použít.",
   "ownTalkSharedSaved": "Sdílený vzhled je uložený.",
@@ -1441,12 +1442,9 @@
   "ownTalkConflictKeep": "Ponechat jejich",
   "ownTalkConflictApply": "Použít moje",
   "ownTalkQuickEmojiSend": "Odeslat emoji",
-  "ownTalkQuickEmojiSendNamed": "Odeslat {emoji}, {name}",
+  "ownTalkQuickEmojiSendNamed": "Odeslat emoji {name}",
   "@ownTalkQuickEmojiSendNamed": {
     "placeholders": {
-      "emoji": {
-        "type": "String"
-      },
       "name": {
         "type": "String"
       }

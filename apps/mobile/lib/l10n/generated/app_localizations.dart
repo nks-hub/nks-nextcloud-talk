@@ -7106,6 +7106,12 @@ abstract class AppLocalizations {
   /// **'One emoji'**
   String get ownTalkSharedEmojiLabel;
 
+  /// No description provided for @ownTalkSharedReadOnlyMembership.
+  ///
+  /// In en, this message translates to:
+  /// **'This server cannot read Talk roles, so nobody can change the shared appearance of a group conversation.'**
+  String get ownTalkSharedReadOnlyMembership;
+
   /// No description provided for @ownTalkSharedClearHint.
   ///
   /// In en, this message translates to:
@@ -7181,8 +7187,8 @@ abstract class AppLocalizations {
   /// No description provided for @ownTalkQuickEmojiSendNamed.
   ///
   /// In en, this message translates to:
-  /// **'Send {emoji}, {name}'**
-  String ownTalkQuickEmojiSendNamed(String emoji, String name);
+  /// **'Send emoji {name}'**
+  String ownTalkQuickEmojiSendNamed(String name);
 }
 
 class _AppLocalizationsDelegate

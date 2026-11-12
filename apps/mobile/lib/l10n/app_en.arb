@@ -1988,6 +1988,7 @@
   "ownTalkSharedThemeDefault": "Follow the theme",
   "ownTalkSharedColorLabel": "Colour (#RRGGBB)",
   "ownTalkSharedEmojiLabel": "One emoji",
+  "ownTalkSharedReadOnlyMembership": "This server cannot read Talk roles, so nobody can change the shared appearance of a group conversation.",
   "ownTalkSharedClearHint": "Leave empty to follow the theme.",
   "ownTalkSharedInvalidValue": "That value is not accepted.",
   "ownTalkSharedSaved": "Shared appearance saved.",
@@ -2010,12 +2011,9 @@
   "ownTalkConflictKeep": "Keep theirs",
   "ownTalkConflictApply": "Apply mine",
   "ownTalkQuickEmojiSend": "Send emoji",
-  "ownTalkQuickEmojiSendNamed": "Send {emoji}, {name}",
+  "ownTalkQuickEmojiSendNamed": "Send emoji {name}",
   "@ownTalkQuickEmojiSendNamed": {
     "placeholders": {
-      "emoji": {
-        "type": "String"
-      },
       "name": {
         "type": "String"
       }

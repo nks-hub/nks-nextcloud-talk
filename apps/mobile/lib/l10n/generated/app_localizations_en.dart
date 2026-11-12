@@ -3997,6 +3997,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ownTalkSharedEmojiLabel => 'One emoji';
 
   @override
+  String get ownTalkSharedReadOnlyMembership =>
+      'This server cannot read Talk roles, so nobody can change the shared appearance of a group conversation.';
+
+  @override
   String get ownTalkSharedClearHint => 'Leave empty to follow the theme.';
 
   @override
@@ -4039,7 +4043,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ownTalkQuickEmojiSend => 'Send emoji';
 
   @override
-  String ownTalkQuickEmojiSendNamed(String emoji, String name) {
-    return 'Send $emoji, $name';
+  String ownTalkQuickEmojiSendNamed(String name) {
+    return 'Send emoji $name';
   }
 }
