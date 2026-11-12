@@ -3965,4 +3965,88 @@ class AppLocalizationsCs extends AppLocalizations {
   String botAdminTruncated(int count) {
     return 'Zobrazeno je jen prvních $count botů.';
   }
+
+  @override
+  String get ownTalkSharedHeader => 'Vzhled pro všechny';
+
+  @override
+  String get ownTalkSharedIntro =>
+      'Platí pro všechny v této konverzaci. Barva nastavená jen na tomto zařízení má přednost.';
+
+  @override
+  String get ownTalkSharedReadOnly =>
+      'Sdílený vzhled smějí měnit jen moderátoři.';
+
+  @override
+  String get ownTalkSharedBackground => 'Pozadí chatu';
+
+  @override
+  String get ownTalkSharedOwnBubble => 'Bubliny vašich zpráv';
+
+  @override
+  String get ownTalkSharedOwnText => 'Text vašich zpráv';
+
+  @override
+  String get ownTalkSharedOtherBubble => 'Bubliny ostatních';
+
+  @override
+  String get ownTalkSharedOtherText => 'Text ostatních';
+
+  @override
+  String get ownTalkSharedQuickEmoji => 'Rychlé emoji';
+
+  @override
+  String get ownTalkSharedThemeDefault => 'Podle motivu';
+
+  @override
+  String get ownTalkSharedColorLabel => 'Barva (#RRGGBB)';
+
+  @override
+  String get ownTalkSharedEmojiLabel => 'Jedno emoji';
+
+  @override
+  String get ownTalkSharedClearHint => 'Prázdné pole znamená podle motivu.';
+
+  @override
+  String get ownTalkSharedInvalidValue => 'Tuto hodnotu nelze použít.';
+
+  @override
+  String get ownTalkSharedSaved => 'Sdílený vzhled je uložený.';
+
+  @override
+  String get ownTalkSharedSaveOffline =>
+      'Bez připojení nelze uložit. Zkuste to znovu, až budete online.';
+
+  @override
+  String get ownTalkSharedSaveFailed => 'Sdílený vzhled se nepodařilo uložit.';
+
+  @override
+  String get ownTalkLocalBackgroundAction =>
+      'Pozadí chatu jen na tomto zařízení';
+
+  @override
+  String get ownTalkConflictTitle => 'Mezitím to změnil někdo jiný';
+
+  @override
+  String get ownTalkConflictBody =>
+      'Pro položky, které jste měnili, teď platí tyto hodnoty:';
+
+  @override
+  String ownTalkConflictLine(String field, String value) {
+    return '$field: $value';
+  }
+
+  @override
+  String get ownTalkConflictKeep => 'Ponechat jejich';
+
+  @override
+  String get ownTalkConflictApply => 'Použít moje';
+
+  @override
+  String get ownTalkQuickEmojiSend => 'Odeslat emoji';
+
+  @override
+  String ownTalkQuickEmojiSendNamed(String emoji, String name) {
+    return 'Odeslat $emoji, $name';
+  }
 }

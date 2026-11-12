@@ -7033,6 +7033,156 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Only the first {count} bots are shown.'**
   String botAdminTruncated(int count);
+
+  /// No description provided for @ownTalkSharedHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance for everyone'**
+  String get ownTalkSharedHeader;
+
+  /// No description provided for @ownTalkSharedIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to everyone in this conversation. A colour set only on this device takes precedence.'**
+  String get ownTalkSharedIntro;
+
+  /// No description provided for @ownTalkSharedReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only moderators can change the shared appearance.'**
+  String get ownTalkSharedReadOnly;
+
+  /// No description provided for @ownTalkSharedBackground.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat background'**
+  String get ownTalkSharedBackground;
+
+  /// No description provided for @ownTalkSharedOwnBubble.
+  ///
+  /// In en, this message translates to:
+  /// **'Your message bubbles'**
+  String get ownTalkSharedOwnBubble;
+
+  /// No description provided for @ownTalkSharedOwnText.
+  ///
+  /// In en, this message translates to:
+  /// **'Your message text'**
+  String get ownTalkSharedOwnText;
+
+  /// No description provided for @ownTalkSharedOtherBubble.
+  ///
+  /// In en, this message translates to:
+  /// **'Bubbles of other people'**
+  String get ownTalkSharedOtherBubble;
+
+  /// No description provided for @ownTalkSharedOtherText.
+  ///
+  /// In en, this message translates to:
+  /// **'Text of other people'**
+  String get ownTalkSharedOtherText;
+
+  /// No description provided for @ownTalkSharedQuickEmoji.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick emoji'**
+  String get ownTalkSharedQuickEmoji;
+
+  /// No description provided for @ownTalkSharedThemeDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow the theme'**
+  String get ownTalkSharedThemeDefault;
+
+  /// No description provided for @ownTalkSharedColorLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour (#RRGGBB)'**
+  String get ownTalkSharedColorLabel;
+
+  /// No description provided for @ownTalkSharedEmojiLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'One emoji'**
+  String get ownTalkSharedEmojiLabel;
+
+  /// No description provided for @ownTalkSharedClearHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty to follow the theme.'**
+  String get ownTalkSharedClearHint;
+
+  /// No description provided for @ownTalkSharedInvalidValue.
+  ///
+  /// In en, this message translates to:
+  /// **'That value is not accepted.'**
+  String get ownTalkSharedInvalidValue;
+
+  /// No description provided for @ownTalkSharedSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared appearance saved.'**
+  String get ownTalkSharedSaved;
+
+  /// No description provided for @ownTalkSharedSaveOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot save without a connection. Try again when you are online.'**
+  String get ownTalkSharedSaveOffline;
+
+  /// No description provided for @ownTalkSharedSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The shared appearance could not be saved.'**
+  String get ownTalkSharedSaveFailed;
+
+  /// No description provided for @ownTalkLocalBackgroundAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat background, only on this device'**
+  String get ownTalkLocalBackgroundAction;
+
+  /// No description provided for @ownTalkConflictTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Someone changed this meanwhile'**
+  String get ownTalkConflictTitle;
+
+  /// No description provided for @ownTalkConflictBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The conversation now uses these values for what you changed:'**
+  String get ownTalkConflictBody;
+
+  /// No description provided for @ownTalkConflictLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{field}: {value}'**
+  String ownTalkConflictLine(String field, String value);
+
+  /// No description provided for @ownTalkConflictKeep.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep theirs'**
+  String get ownTalkConflictKeep;
+
+  /// No description provided for @ownTalkConflictApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply mine'**
+  String get ownTalkConflictApply;
+
+  /// No description provided for @ownTalkQuickEmojiSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send emoji'**
+  String get ownTalkQuickEmojiSend;
+
+  /// No description provided for @ownTalkQuickEmojiSendNamed.
+  ///
+  /// In en, this message translates to:
+  /// **'Send {emoji}, {name}'**
+  String ownTalkQuickEmojiSendNamed(String emoji, String name);
 }
 
 class _AppLocalizationsDelegate

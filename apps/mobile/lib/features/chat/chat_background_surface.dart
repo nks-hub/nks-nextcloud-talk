@@ -2,7 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
+import '../owntalk_extensions/chat_appearance.dart';
+import '../owntalk_extensions/owntalk_room_extras.dart';
 import 'chat_background_store.dart';
 import 'chat_background_theme.dart';
 
@@ -32,19 +35,30 @@ final class ChatBackgroundSurface extends ConsumerWidget {
   final String roomToken;
   final Widget child;
 
+  /// Background precedence: this device's own colour, then the colour shared
+  /// by the conversation, then the theme. Every layer goes through the same
+  /// contrast fallback.
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final key = (accountId: accountId, roomToken: roomToken);
     final stored = ref.watch(chatBackgroundProvider(key)).valueOrNull;
+    final shared = ref.watch(ownTalkRoomExtrasProvider(key));
     final scheme = Theme.of(context).colorScheme;
-    final requested = parseChatBackgroundColor(stored);
+    final requested =
+        parseChatBackgroundColor(stored) ??
+        parseChatBackgroundColor(
+          shared.valueOf(OwnTalkSettingField.chatBackgroundColor),
+        );
     final background = requested == null
         ? scheme.surface
         : safeChatBackground(requested, scheme);
-    return Material(
-      key: const Key('chat-background-surface'),
-      color: background,
-      child: child,
+    return SharedChatAppearance.fromExtras(
+      shared,
+      child: Material(
+        key: const Key('chat-background-surface'),
+        color: background,
+        child: child,
+      ),
     );
   }
 }

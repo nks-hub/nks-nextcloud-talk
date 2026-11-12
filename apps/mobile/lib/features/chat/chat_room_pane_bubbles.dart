@@ -65,6 +65,13 @@ final class _MessageBubble extends StatelessWidget {
         ? null
         : () => onMessageActions(message, parsed);
     final outgoing = message.actorId == account.loginName;
+    final shared = SharedChatAppearance.maybeOf(context);
+    final colors = resolveBubbleColors(
+      outgoing: outgoing,
+      scheme: scheme,
+      sharedBubble: outgoing ? shared?.ownBubble : shared?.otherBubble,
+      sharedText: outgoing ? shared?.ownText : shared?.otherText,
+    );
     final authorLabel = chatParticipantSemanticsLabel(
       actorType: message.actorType,
       displayName: message.actorDisplayName,
@@ -176,9 +183,7 @@ final class _MessageBubble extends StatelessWidget {
                             duration: const Duration(milliseconds: 220),
                             curve: Curves.easeOut,
                             decoration: BoxDecoration(
-                              color: outgoing
-                                  ? scheme.primaryContainer
-                                  : scheme.surfaceContainerHigh,
+                              color: colors.background,
                               borderRadius: _bubbleRadius(
                                 outgoing: outgoing,
                                 groupEnd: groupEnd,
@@ -200,7 +205,9 @@ final class _MessageBubble extends StatelessWidget {
                                             .textTheme
                                             .labelMedium
                                             ?.copyWith(
-                                              color: scheme.primary,
+                                              color: colors.shared
+                                                  ? colors.foreground
+                                                  : scheme.primary,
                                               fontWeight: FontWeight.w700,
                                             ),
                                       ),
@@ -209,9 +216,7 @@ final class _MessageBubble extends StatelessWidget {
                                     const SizedBox(height: 2),
                                   DefaultTextStyle.merge(
                                     style: TextStyle(
-                                      color: outgoing
-                                          ? scheme.onPrimaryContainer
-                                          : scheme.onSurface,
+                                      color: colors.foreground,
                                       fontStyle: message.deleted
                                           ? FontStyle.italic
                                           : null,
@@ -228,9 +233,7 @@ final class _MessageBubble extends StatelessWidget {
                                                   context,
                                                 ).deletedMessage
                                               : message.displayText,
-                                          foregroundColor: outgoing
-                                              ? scheme.onPrimaryContainer
-                                              : scheme.onSurface,
+                                          foregroundColor: colors.foreground,
                                           showReplyPreview: showReplyPreview,
                                           onReactionTap: message.deleted
                                               ? null
@@ -254,12 +257,7 @@ final class _MessageBubble extends StatelessWidget {
                                             style: Theme.of(context)
                                                 .textTheme
                                                 .labelSmall
-                                                ?.copyWith(
-                                                  color: outgoing
-                                                      ? scheme
-                                                            .onPrimaryContainer
-                                                      : scheme.onSurfaceVariant,
-                                                ),
+                                                ?.copyWith(color: colors.meta),
                                           ),
                                           const SizedBox(width: 6),
                                         ],
@@ -271,11 +269,7 @@ final class _MessageBubble extends StatelessWidget {
                                           style: Theme.of(context)
                                               .textTheme
                                               .labelSmall
-                                              ?.copyWith(
-                                                color: outgoing
-                                                    ? scheme.onPrimaryContainer
-                                                    : scheme.onSurfaceVariant,
-                                              ),
+                                              ?.copyWith(color: colors.meta),
                                         ),
                                         if (outgoing &&
                                             deliveryState != null) ...[
@@ -285,7 +279,7 @@ final class _MessageBubble extends StatelessWidget {
                                               'chat-delivery-${message.messageId}',
                                             ),
                                             state: deliveryState!,
-                                            color: scheme.onPrimaryContainer,
+                                            color: colors.foreground,
                                           ),
                                         ],
                                       ],
@@ -300,8 +294,9 @@ final class _MessageBubble extends StatelessWidget {
                                         ),
                                         onPressed: () => onOpenThread!(message),
                                         style: TextButton.styleFrom(
-                                          foregroundColor: outgoing
-                                              ? scheme.onPrimaryContainer
+                                          foregroundColor:
+                                              outgoing || colors.shared
+                                              ? colors.foreground
                                               : scheme.primary,
                                           minimumSize: const Size(48, 48),
                                           padding: const EdgeInsets.symmetric(

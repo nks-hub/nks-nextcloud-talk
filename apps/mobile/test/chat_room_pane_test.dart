@@ -27,6 +27,8 @@ import 'package:nextcloudtalk/features/chat/photo_album_grouping.dart';
 import 'package:nextcloudtalk/features/chat/chat_pending_attachments.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_attachment_opener.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
+import 'package:nextcloudtalk/features/owntalk_extensions/owntalk_room_extras.dart';
+import 'package:nextcloudtalk/features/owntalk_extensions/owntalk_settings_store.dart';
 import 'package:nextcloudtalk/features/chat/chat_service.dart';
 import 'package:nextcloudtalk/features/chat/message_translation_service.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
@@ -35,12 +37,14 @@ import 'package:nextcloudtalk/features/settings/reply_layout_preference.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'owntalk_extensions_test_support.dart';
 import 'test_support.dart';
 import 'pending_attachment_fixture.dart';
 
 part 'chat_room_pane_desktop_input.part.dart';
 part 'chat_room_pane_interactions.part.dart';
 part 'chat_room_pane_poll_menu.part.dart';
+part 'chat_room_pane_quick_emoji.part.dart';
 part 'chat_room_pane_rendering.part.dart';
 part 'chat_attachment_rendering_test.part.dart';
 part 'chat_room_pane_thread_context.part.dart';
@@ -125,6 +129,7 @@ void main({bool imagesOnly = false, bool albumsOnly = false}) {
     _registerChatRoomPaneRenderingTests();
     _registerChatRoomPaneInteractionTests();
     _registerChatRoomPanePollMenuTests();
+    _registerChatRoomPaneQuickEmojiTests();
     _registerChatRoomPaneThreadContextTests();
     _registerChatRoomPaneSendScopeTests();
     _registerChatRoomPaneHistoryScopeTests();

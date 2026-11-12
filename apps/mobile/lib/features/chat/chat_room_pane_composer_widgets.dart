@@ -748,3 +748,55 @@ final class _PrivateReplyDialogState extends State<_PrivateReplyDialog> {
     );
   }
 }
+
+/// The conversation's quick emoji in place of the send button while there is
+/// nothing to send. It never replaces the button once text or a file is
+/// waiting, so the tap target for a real message stays where it was.
+final class _SendOrQuickEmojiButton extends StatelessWidget {
+  const _SendOrQuickEmojiButton({
+    required this.composer,
+    required this.emoji,
+    required this.sending,
+    required this.hasAttachment,
+    required this.sendButton,
+    required this.onSendEmoji,
+  });
+
+  final TextEditingController composer;
+  final String emoji;
+  final bool sending;
+  final bool Function() hasAttachment;
+  final Widget sendButton;
+  final ValueChanged<String> onSendEmoji;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: composer,
+      builder: (context, _) {
+        if (composer.text.trim().isNotEmpty || hasAttachment()) {
+          return sendButton;
+        }
+        final strings = AppLocalizations.of(context);
+        final name = EmojiCatalog.standard()
+            .byGlyph(emoji)
+            ?.nameFor(Localizations.maybeLocaleOf(context))
+            .toLowerCase();
+        final label = name == null
+            ? strings.ownTalkQuickEmojiSend
+            : strings.ownTalkQuickEmojiSendNamed(emoji, name);
+        return SizedBox.square(
+          dimension: 48,
+          child: IconButton.filled(
+            key: const Key('send-quick-emoji'),
+            onPressed: sending ? null : () => onSendEmoji(emoji),
+            tooltip: label,
+            icon: ExcludeSemantics(
+              child: Text(emoji, style: const TextStyle(fontSize: 22)),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

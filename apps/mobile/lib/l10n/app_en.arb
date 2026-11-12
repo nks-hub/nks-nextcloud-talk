@@ -1975,5 +1975,50 @@
         "type": "int"
       }
     }
+  },
+  "ownTalkSharedHeader": "Appearance for everyone",
+  "ownTalkSharedIntro": "Applies to everyone in this conversation. A colour set only on this device takes precedence.",
+  "ownTalkSharedReadOnly": "Only moderators can change the shared appearance.",
+  "ownTalkSharedBackground": "Chat background",
+  "ownTalkSharedOwnBubble": "Your message bubbles",
+  "ownTalkSharedOwnText": "Your message text",
+  "ownTalkSharedOtherBubble": "Bubbles of other people",
+  "ownTalkSharedOtherText": "Text of other people",
+  "ownTalkSharedQuickEmoji": "Quick emoji",
+  "ownTalkSharedThemeDefault": "Follow the theme",
+  "ownTalkSharedColorLabel": "Colour (#RRGGBB)",
+  "ownTalkSharedEmojiLabel": "One emoji",
+  "ownTalkSharedClearHint": "Leave empty to follow the theme.",
+  "ownTalkSharedInvalidValue": "That value is not accepted.",
+  "ownTalkSharedSaved": "Shared appearance saved.",
+  "ownTalkSharedSaveOffline": "Cannot save without a connection. Try again when you are online.",
+  "ownTalkSharedSaveFailed": "The shared appearance could not be saved.",
+  "ownTalkLocalBackgroundAction": "Chat background, only on this device",
+  "ownTalkConflictTitle": "Someone changed this meanwhile",
+  "ownTalkConflictBody": "The conversation now uses these values for what you changed:",
+  "ownTalkConflictLine": "{field}: {value}",
+  "@ownTalkConflictLine": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ownTalkConflictKeep": "Keep theirs",
+  "ownTalkConflictApply": "Apply mine",
+  "ownTalkQuickEmojiSend": "Send emoji",
+  "ownTalkQuickEmojiSendNamed": "Send {emoji}, {name}",
+  "@ownTalkQuickEmojiSendNamed": {
+    "placeholders": {
+      "emoji": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
   }
 }

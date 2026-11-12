@@ -108,6 +108,7 @@ final class OwnTalkRoomController
     if (_disposed) {
       return;
     }
+    var retry = true;
     try {
       final service = ref.read(ownTalkExtensionsServiceProvider);
       final capability = await service.capability(_key.accountId);
@@ -137,11 +138,17 @@ final class OwnTalkRoomController
             await _forget(capability);
           }
       }
+    } on OwnTalkExtensionsException catch (error) {
+      // Network, 503 and credential problems keep what is shown. Only a
+      // transient failure, or a server already known to offer the extension,
+      // is worth another silent try.
+      retry = error.code == OwnTalkExtensionsError.network || state.available;
     } on Object {
-      // Network, 503, credential and cache problems keep what is shown; the
-      // next tick retries without any UI.
+      retry = state.available;
     } finally {
-      _schedule();
+      if (retry) {
+        _schedule();
+      }
     }
   }
 
@@ -151,7 +158,7 @@ final class OwnTalkRoomController
   }
 
   void _set(OwnTalkRoomExtras value) {
-    if (!_disposed) {
+    if (!_disposed && value != state) {
       state = value;
     }
   }

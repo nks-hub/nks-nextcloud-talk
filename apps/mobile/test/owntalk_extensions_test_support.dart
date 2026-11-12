@@ -77,7 +77,7 @@ final class FakeOwnTalkServer {
   List<http.Request> get settingsRequests =>
       requests.where((r) => r.url.path.endsWith('/settings')).toList();
 
-  late final http.Client client = MockClient(_handle);
+  late final http.Client client = MockClient(handle);
 
   Map<String, Object?> document() => {
     'schemaVersion': 1,
@@ -99,7 +99,7 @@ final class FakeOwnTalkServer {
     }
   }
 
-  Future<http.Response> _handle(http.Request request) async {
+  Future<http.Response> handle(http.Request request) async {
     requests.add(request);
     final path = request.url.path;
     if (path.endsWith('/cloud/capabilities')) {

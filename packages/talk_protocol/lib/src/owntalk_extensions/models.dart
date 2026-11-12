@@ -140,6 +140,20 @@ final class OwnTalkExtensionsCapability {
 
   bool supportsFeature(String feature) => features.contains(feature);
 
+  @override
+  bool operator ==(Object other) =>
+      other is OwnTalkExtensionsCapability &&
+      other.version == version &&
+      other.acl == acl &&
+      other.features.length == features.length &&
+      other.features.containsAll(features) &&
+      other.roomTypes.length == roomTypes.length &&
+      other.roomTypes.containsAll(roomTypes);
+
+  @override
+  int get hashCode =>
+      Object.hash(version, acl, features.length, roomTypes.length);
+
   bool supportsField(OwnTalkSettingField field) =>
       supportsFeature(field.feature);
 
@@ -304,6 +318,14 @@ final class OwnTalkRoomSettings {
     'updatedBy': updatedBy,
     'updatedAt': updatedAt,
   };
+
+  @override
+  bool operator ==(Object other) =>
+      other is OwnTalkRoomSettings &&
+      jsonEncode(other.toJson()) == jsonEncode(toJson());
+
+  @override
+  int get hashCode => Object.hash(roomToken, revision);
 
   @override
   String toString() => 'OwnTalkRoomSettings(revision: $revision)';

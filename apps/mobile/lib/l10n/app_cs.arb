@@ -1406,5 +1406,50 @@
         "type": "int"
       }
     }
+  },
+  "ownTalkSharedHeader": "Vzhled pro všechny",
+  "ownTalkSharedIntro": "Platí pro všechny v této konverzaci. Barva nastavená jen na tomto zařízení má přednost.",
+  "ownTalkSharedReadOnly": "Sdílený vzhled smějí měnit jen moderátoři.",
+  "ownTalkSharedBackground": "Pozadí chatu",
+  "ownTalkSharedOwnBubble": "Bubliny vašich zpráv",
+  "ownTalkSharedOwnText": "Text vašich zpráv",
+  "ownTalkSharedOtherBubble": "Bubliny ostatních",
+  "ownTalkSharedOtherText": "Text ostatních",
+  "ownTalkSharedQuickEmoji": "Rychlé emoji",
+  "ownTalkSharedThemeDefault": "Podle motivu",
+  "ownTalkSharedColorLabel": "Barva (#RRGGBB)",
+  "ownTalkSharedEmojiLabel": "Jedno emoji",
+  "ownTalkSharedClearHint": "Prázdné pole znamená podle motivu.",
+  "ownTalkSharedInvalidValue": "Tuto hodnotu nelze použít.",
+  "ownTalkSharedSaved": "Sdílený vzhled je uložený.",
+  "ownTalkSharedSaveOffline": "Bez připojení nelze uložit. Zkuste to znovu, až budete online.",
+  "ownTalkSharedSaveFailed": "Sdílený vzhled se nepodařilo uložit.",
+  "ownTalkLocalBackgroundAction": "Pozadí chatu jen na tomto zařízení",
+  "ownTalkConflictTitle": "Mezitím to změnil někdo jiný",
+  "ownTalkConflictBody": "Pro položky, které jste měnili, teď platí tyto hodnoty:",
+  "ownTalkConflictLine": "{field}: {value}",
+  "@ownTalkConflictLine": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ownTalkConflictKeep": "Ponechat jejich",
+  "ownTalkConflictApply": "Použít moje",
+  "ownTalkQuickEmojiSend": "Odeslat emoji",
+  "ownTalkQuickEmojiSendNamed": "Odeslat {emoji}, {name}",
+  "@ownTalkQuickEmojiSendNamed": {
+    "placeholders": {
+      "emoji": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
   }
 }

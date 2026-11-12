@@ -3957,4 +3957,89 @@ class AppLocalizationsEn extends AppLocalizations {
   String botAdminTruncated(int count) {
     return 'Only the first $count bots are shown.';
   }
+
+  @override
+  String get ownTalkSharedHeader => 'Appearance for everyone';
+
+  @override
+  String get ownTalkSharedIntro =>
+      'Applies to everyone in this conversation. A colour set only on this device takes precedence.';
+
+  @override
+  String get ownTalkSharedReadOnly =>
+      'Only moderators can change the shared appearance.';
+
+  @override
+  String get ownTalkSharedBackground => 'Chat background';
+
+  @override
+  String get ownTalkSharedOwnBubble => 'Your message bubbles';
+
+  @override
+  String get ownTalkSharedOwnText => 'Your message text';
+
+  @override
+  String get ownTalkSharedOtherBubble => 'Bubbles of other people';
+
+  @override
+  String get ownTalkSharedOtherText => 'Text of other people';
+
+  @override
+  String get ownTalkSharedQuickEmoji => 'Quick emoji';
+
+  @override
+  String get ownTalkSharedThemeDefault => 'Follow the theme';
+
+  @override
+  String get ownTalkSharedColorLabel => 'Colour (#RRGGBB)';
+
+  @override
+  String get ownTalkSharedEmojiLabel => 'One emoji';
+
+  @override
+  String get ownTalkSharedClearHint => 'Leave empty to follow the theme.';
+
+  @override
+  String get ownTalkSharedInvalidValue => 'That value is not accepted.';
+
+  @override
+  String get ownTalkSharedSaved => 'Shared appearance saved.';
+
+  @override
+  String get ownTalkSharedSaveOffline =>
+      'Cannot save without a connection. Try again when you are online.';
+
+  @override
+  String get ownTalkSharedSaveFailed =>
+      'The shared appearance could not be saved.';
+
+  @override
+  String get ownTalkLocalBackgroundAction =>
+      'Chat background, only on this device';
+
+  @override
+  String get ownTalkConflictTitle => 'Someone changed this meanwhile';
+
+  @override
+  String get ownTalkConflictBody =>
+      'The conversation now uses these values for what you changed:';
+
+  @override
+  String ownTalkConflictLine(String field, String value) {
+    return '$field: $value';
+  }
+
+  @override
+  String get ownTalkConflictKeep => 'Keep theirs';
+
+  @override
+  String get ownTalkConflictApply => 'Apply mine';
+
+  @override
+  String get ownTalkQuickEmojiSend => 'Send emoji';
+
+  @override
+  String ownTalkQuickEmojiSendNamed(String emoji, String name) {
+    return 'Send $emoji, $name';
+  }
 }

@@ -157,7 +157,11 @@ void _registerOverviewAndModerationTests() {
     _growViewport(tester);
     var requestCount = 0;
     final client = MockClient((request) async {
-      requestCount++;
+      // The screen also reads the server capabilities for the optional
+      // shared-appearance section; only the participant list is under test.
+      if (request.url.path.endsWith('/participants')) {
+        requestCount++;
+      }
       return http.Response('not json', 200);
     });
 
