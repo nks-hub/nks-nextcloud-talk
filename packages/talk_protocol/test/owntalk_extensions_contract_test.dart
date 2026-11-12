@@ -142,7 +142,7 @@ void main() {
   });
 
   group('requests', () {
-    test('GET carries If-None-Match only with a known revision', () {
+    test('GET carries If-None-Match only with a known ETag', () {
       final first = _fetch();
       expect(first.httpMethod, 'GET');
       expect(
@@ -152,7 +152,25 @@ void main() {
       );
       expect(first.headers['OCS-APIRequest'], 'true');
       expect(first.headers.containsKey('If-None-Match'), isFalse);
-      expect(_fetch(knownRevision: 3).headers['If-None-Match'], '"r3"');
+      expect(
+        _fetch(knownEtag: '"r3-e1"').headers['If-None-Match'],
+        '"r3-e1"',
+        reason: 'the opaque value is sent exactly as received',
+      );
+      expect(
+        _fetch(knownEtag: 'W/"r3-e0"').headers['If-None-Match'],
+        'W/"r3-e0"',
+      );
+    });
+
+    test('GET refuses a known ETag that is not a header-safe entity tag', () {
+      for (final bad in ['', 'r3', '"r3\r\nX: y"', '"${'a' * 200}"', '"r3']) {
+        expect(
+          () => _fetch(knownEtag: bad),
+          throwsA(isA<TalkProtocolException>()),
+          reason: bad,
+        );
+      }
     });
 
     test('PATCH sends a merge patch with a required If-Match', () {
@@ -221,6 +239,51 @@ void main() {
       expect((result as OwnTalkSettingsLoaded).document.revision, 3);
     });
 
+    test('200 keeps the ETag header verbatim, any header case', () {
+      for (final name in ['etag', 'ETag']) {
+        final result = decodeFetchOwnTalkRoomSettingsResponse(
+          request: _fetch(),
+          statusCode: 200,
+          body: _ocs(200, _documentJson()),
+          headers: {name: '"r3-e1"'},
+        );
+        expect((result as OwnTalkSettingsLoaded).etag, '"r3-e1"');
+      }
+    });
+
+    test('200 with a missing or garbled ETag header has no ETag', () {
+      for (final headers in <Map<String, String>>[
+        const {},
+        {'etag': 'r3'},
+        {'etag': '"r3\u0000"'},
+        {'etag': '"${'a' * 200}"'},
+      ]) {
+        final result = decodeFetchOwnTalkRoomSettingsResponse(
+          request: _fetch(),
+          statusCode: 200,
+          body: _ocs(200, _documentJson()),
+          headers: headers,
+        );
+        expect((result as OwnTalkSettingsLoaded).etag, isNull, reason: '$headers');
+      }
+    });
+
+    test('429 reads Retry-After in seconds, ignores anything else', () {
+      Duration? retryAfter(Map<String, String> headers) =>
+          (decodeFetchOwnTalkRoomSettingsResponse(
+                    request: _fetch(),
+                    statusCode: 429,
+                    body: _ocs(429, {'error': 'x'}, status: 'failure'),
+                    headers: headers,
+                  )
+                  as OwnTalkSettingsFetchFailure)
+              .retryAfter;
+      expect(retryAfter({'retry-after': '30'}), const Duration(seconds: 30));
+      expect(retryAfter({'retry-after': '99999'}), const Duration(minutes: 10));
+      expect(retryAfter({'retry-after': 'soon'}), isNull);
+      expect(retryAfter(const {}), isNull);
+    });
+
     test('200 for another conversation is a protocol failure', () {
       expect(
         () => decodeFetchOwnTalkRoomSettingsResponse(
@@ -232,10 +295,10 @@ void main() {
       );
     });
 
-    test('304 needs a known revision, 404 is "no settings"', () {
+    test('304 needs a known ETag, 404 is "no settings"', () {
       expect(
         decodeFetchOwnTalkRoomSettingsResponse(
-          request: _fetch(knownRevision: 3),
+          request: _fetch(knownEtag: '"r3-e1"'),
           statusCode: 304,
           body: Uint8List(0),
         ),
@@ -296,6 +359,17 @@ void main() {
         body: _ocs(200, _documentJson(revision: 4)),
       );
       expect((result as OwnTalkSettingsSaved).document.revision, 4);
+      expect(result.etag, isNull);
+    });
+
+    test('200 keeps the ETag header of the saved document', () {
+      final result = decodeUpdateOwnTalkRoomSettingsResponse(
+        request: request,
+        statusCode: 200,
+        body: _ocs(200, _documentJson(revision: 4)),
+        headers: {'etag': '"r4-e1"'},
+      );
+      expect((result as OwnTalkSettingsSaved).etag, '"r4-e1"');
     });
 
     test('412 carries the current document and the conflicting fields', () {
@@ -430,13 +504,13 @@ final class _Default {
   const _Default();
 }
 
-FetchOwnTalkRoomSettingsRequest _fetch({int? knownRevision}) =>
+FetchOwnTalkRoomSettingsRequest _fetch({String? knownEtag}) =>
     FetchOwnTalkRoomSettingsRequest(
       accountId: AccountId.parse('account-a'),
       server: ServerBase.parse(_server),
       roomToken: ConversationToken.parse('abc123xy', path: r'$.roomToken'),
       capabilities: _snapshot(),
-      knownRevision: knownRevision,
+      knownEtag: knownEtag,
     );
 
 UpdateOwnTalkRoomSettingsRequest _update(

@@ -39,9 +39,13 @@ sealed class OwnTalkSettingsFetchResult {
 }
 
 final class OwnTalkSettingsLoaded extends OwnTalkSettingsFetchResult {
-  const OwnTalkSettingsLoaded(this.document);
+  const OwnTalkSettingsLoaded(this.document, {this.etag});
 
   final OwnTalkRoomSettings document;
+
+  /// The `ETag` header exactly as received, or `null` when it was missing or
+  /// malformed. Send it back as `If-None-Match`; do not derive it.
+  final String? etag;
 }
 
 /// `304`: the cached revision is still current.
@@ -55,9 +59,12 @@ final class OwnTalkSettingsMissing extends OwnTalkSettingsFetchResult {
 }
 
 final class OwnTalkSettingsFetchFailure extends OwnTalkSettingsFetchResult {
-  const OwnTalkSettingsFetchFailure(this.kind);
+  const OwnTalkSettingsFetchFailure(this.kind, {this.retryAfter});
 
   final OwnTalkExtensionsFailureKind kind;
+
+  /// `Retry-After` of a `429`, in whole seconds, capped at ten minutes.
+  final Duration? retryAfter;
 }
 
 sealed class OwnTalkSettingsUpdateResult {
@@ -65,9 +72,12 @@ sealed class OwnTalkSettingsUpdateResult {
 }
 
 final class OwnTalkSettingsSaved extends OwnTalkSettingsUpdateResult {
-  const OwnTalkSettingsSaved(this.document);
+  const OwnTalkSettingsSaved(this.document, {this.etag});
 
   final OwnTalkRoomSettings document;
+
+  /// See [OwnTalkSettingsLoaded.etag].
+  final String? etag;
 }
 
 /// `412 revision_conflict`: someone changed one of the fields meanwhile.
@@ -94,6 +104,7 @@ OwnTalkSettingsFetchResult decodeFetchOwnTalkRoomSettingsResponse({
   required FetchOwnTalkRoomSettingsRequest request,
   required int statusCode,
   required Uint8List body,
+  Map<String, String> headers = const {},
 }) {
   switch (statusCode) {
     case 200:
@@ -101,16 +112,19 @@ OwnTalkSettingsFetchResult decodeFetchOwnTalkRoomSettingsResponse({
       if (document.roomToken != request.roomToken.value) {
         protocolFailure(_responseCode, r'$.ocs.data.roomToken');
       }
-      return OwnTalkSettingsLoaded(document);
+      return OwnTalkSettingsLoaded(document, etag: _etagHeader(headers));
     case 304:
-      if (request.knownRevision == null) {
+      if (request.knownEtag == null) {
         protocolFailure(_responseCode, r'$.statusCode');
       }
       return const OwnTalkSettingsNotModified();
     case 404:
       return const OwnTalkSettingsMissing();
     default:
-      return OwnTalkSettingsFetchFailure(_failureKind(statusCode));
+      return OwnTalkSettingsFetchFailure(
+        _failureKind(statusCode),
+        retryAfter: statusCode == 429 ? _retryAfterHeader(headers) : null,
+      );
   }
 }
 
@@ -118,6 +132,7 @@ OwnTalkSettingsUpdateResult decodeUpdateOwnTalkRoomSettingsResponse({
   required UpdateOwnTalkRoomSettingsRequest request,
   required int statusCode,
   required Uint8List body,
+  Map<String, String> headers = const {},
 }) {
   switch (statusCode) {
     case 200:
@@ -125,7 +140,7 @@ OwnTalkSettingsUpdateResult decodeUpdateOwnTalkRoomSettingsResponse({
       if (document.roomToken != request.roomToken.value) {
         protocolFailure(_responseCode, r'$.ocs.data.roomToken');
       }
-      return OwnTalkSettingsSaved(document);
+      return OwnTalkSettingsSaved(document, etag: _etagHeader(headers));
     case 412:
       final data = requireObject(
         _decodeOcsData(body),
@@ -168,6 +183,29 @@ OwnTalkSettingsUpdateResult decodeUpdateOwnTalkRoomSettingsResponse({
         errorCode: _optionalErrorCode(body),
       );
   }
+}
+
+String? _header(Map<String, String> headers, String name) {
+  for (final entry in headers.entries) {
+    if (entry.key.toLowerCase() == name) {
+      return entry.value;
+    }
+  }
+  return null;
+}
+
+String? _etagHeader(Map<String, String> headers) {
+  final value = _header(headers, 'etag')?.trim();
+  return value != null && isOwnTalkEntityTag(value) ? value : null;
+}
+
+/// Delta-seconds form only, like the transport layer reads it.
+Duration? _retryAfterHeader(Map<String, String> headers) {
+  final seconds = int.tryParse(_header(headers, 'retry-after')?.trim() ?? '');
+  if (seconds == null || seconds <= 0) {
+    return null;
+  }
+  return Duration(seconds: seconds > 600 ? 600 : seconds);
 }
 
 OwnTalkExtensionsFailureKind _failureKind(int statusCode) =>

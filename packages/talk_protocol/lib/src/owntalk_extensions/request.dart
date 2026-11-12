@@ -17,8 +17,16 @@ const String ownTalkExtensionsApiPath =
 const TalkProtocolErrorCode _requestCode =
     TalkProtocolErrorCode.invalidOwnTalkExtensionsRequest;
 
-/// `If-Match` / `If-None-Match` value for a document revision.
+/// `If-Match` value for a document revision. `If-None-Match` takes the opaque
+/// `ETag` the server sent instead, because that one also depends on the
+/// caller's permissions.
 String ownTalkRevisionEtag(int revision) => '"r$revision"';
+
+final RegExp _entityTagPattern = RegExp(r'^(?:W/)?"[!#-~]*"$');
+
+/// Whether [value] is an entity tag that is safe to echo into a header.
+bool isOwnTalkEntityTag(String value) =>
+    value.length <= 128 && _entityTagPattern.hasMatch(value);
 
 OwnTalkExtensionsCapability _requireCapability(
   CapabilitySnapshot capabilities,
@@ -47,19 +55,19 @@ Uri _settingsUri(ServerBase server, ConversationToken roomToken) {
   );
 }
 
-/// Reads the shared settings document. With [knownRevision] the server answers
-/// `304` when nothing changed.
+/// Reads the shared settings document. With [knownEtag], the `ETag` of the
+/// copy the caller holds, the server answers `304` when nothing changed.
 final class FetchOwnTalkRoomSettingsRequest {
   FetchOwnTalkRoomSettingsRequest({
     required this.accountId,
     required this.server,
     required this.roomToken,
     required CapabilitySnapshot capabilities,
-    this.knownRevision,
+    this.knownEtag,
     this.userAgent = ownTalkExtensionsContractUserAgent,
   }) {
     _requireCapability(capabilities);
-    if (knownRevision != null && knownRevision! < 0) {
+    if (knownEtag != null && !isOwnTalkEntityTag(knownEtag!)) {
       protocolFailure(_requestCode, r'$.headers.ifNoneMatch');
     }
     _validateUserAgent(userAgent);
@@ -68,7 +76,7 @@ final class FetchOwnTalkRoomSettingsRequest {
   final AccountId accountId;
   final ServerBase server;
   final ConversationToken roomToken;
-  final int? knownRevision;
+  final String? knownEtag;
   final String userAgent;
 
   String get httpMethod => 'GET';
@@ -78,8 +86,7 @@ final class FetchOwnTalkRoomSettingsRequest {
   Map<String, String> get headers => UnmodifiableMapView({
     'OCS-APIRequest': 'true',
     'User-Agent': userAgent,
-    if (knownRevision != null)
-      'If-None-Match': ownTalkRevisionEtag(knownRevision!),
+    'If-None-Match': ?knownEtag,
   });
 
   @override
