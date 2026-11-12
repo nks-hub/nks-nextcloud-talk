@@ -8,6 +8,12 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 typedef OwnTalkRoomKey = ({String accountId, String roomToken});
 
+/// A cached document with the `ETag` it arrived with, `null` when the server
+/// sent none or the entry predates storing it.
+typedef OwnTalkCachedSettings = ({OwnTalkRoomSettings document, String? etag});
+
+typedef _Entry = ({int savedAt, OwnTalkRoomSettings document, String? etag});
+
 /// Last shared-settings document per conversation, one JSON file per account.
 ///
 /// A file store rather than a Drift table: the cached value is a small
@@ -35,21 +41,31 @@ final class OwnTalkSettingsStore {
   final Directory _directory;
   Future<void> _tail = Future<void>.value();
 
-  Future<OwnTalkRoomSettings?> read(OwnTalkRoomKey key) {
+  Future<OwnTalkRoomSettings?> read(OwnTalkRoomKey key) async =>
+      (await readEntry(key))?.document;
+
+  Future<OwnTalkCachedSettings?> readEntry(OwnTalkRoomKey key) {
     _validateKey(key);
     return _serialize(() async {
-      final rooms = await _readAccount(key.accountId);
-      return rooms[_hash(key.roomToken)]?.document;
+      final entry = (await _readAccount(key.accountId))[_hash(key.roomToken)];
+      return entry == null
+          ? null
+          : (document: entry.document, etag: entry.etag);
     });
   }
 
-  Future<void> write(OwnTalkRoomKey key, OwnTalkRoomSettings document) {
+  Future<void> write(
+    OwnTalkRoomKey key,
+    OwnTalkRoomSettings document, {
+    String? etag,
+  }) {
     _validateKey(key);
     return _serialize(() async {
       final rooms = await _readAccount(key.accountId);
       rooms[_hash(key.roomToken)] = (
         savedAt: DateTime.now().millisecondsSinceEpoch,
         document: document,
+        etag: etag,
       );
       if (rooms.length > _maximumRooms) {
         final oldest = rooms.entries.reduce(
@@ -95,8 +111,7 @@ final class OwnTalkSettingsStore {
     return completer.future;
   }
 
-  Future<Map<String, ({int savedAt, OwnTalkRoomSettings document})>>
-  _readAccount(String accountId) async {
+  Future<Map<String, _Entry>> _readAccount(String accountId) async {
     final file = _accountFile(accountId);
     try {
       if (!await file.exists() || await file.length() > _maximumFileBytes) {
@@ -111,7 +126,7 @@ final class OwnTalkSettingsStore {
           rawRooms.length > _maximumRooms) {
         return {};
       }
-      final rooms = <String, ({int savedAt, OwnTalkRoomSettings document})>{};
+      final rooms = <String, _Entry>{};
       for (final entry in rawRooms.entries) {
         final value = entry.value;
         if (!_hashPattern.hasMatch(entry.key) ||
@@ -119,9 +134,11 @@ final class OwnTalkSettingsStore {
             value['savedAt'] is! int) {
           return {};
         }
+        final etag = value['etag'];
         rooms[entry.key] = (
           savedAt: value['savedAt']! as int,
           document: OwnTalkRoomSettings.fromJson(value['document']),
+          etag: etag is String && isOwnTalkEntityTag(etag) ? etag : null,
         );
       }
       return rooms;
@@ -136,7 +153,7 @@ final class OwnTalkSettingsStore {
 
   Future<void> _writeAccount(
     String accountId,
-    Map<String, ({int savedAt, OwnTalkRoomSettings document})> rooms,
+    Map<String, _Entry> rooms,
   ) async {
     await _directory.create(recursive: true);
     final target = _accountFile(accountId);
@@ -149,6 +166,7 @@ final class OwnTalkSettingsStore {
             entry.key: {
               'savedAt': entry.value.savedAt,
               'document': entry.value.document.toJson(),
+              if (entry.value.etag != null) 'etag': entry.value.etag,
             },
         },
       }),

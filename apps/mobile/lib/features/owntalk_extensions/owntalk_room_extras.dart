@@ -12,6 +12,9 @@ import 'owntalk_settings_store.dart';
 /// `ETag` makes almost every one of these a bodiless `304`.
 const Duration ownTalkSettingsPollInterval = Duration(seconds: 60);
 
+/// The longest pause between two polls while the server keeps answering `429`.
+const Duration ownTalkSettingsMaximumBackoff = Duration(minutes: 10);
+
 /// What the extension currently says about one conversation.
 final class OwnTalkRoomExtras {
   const OwnTalkRoomExtras({this.capability, this.settings});
@@ -71,6 +74,14 @@ final class OwnTalkRoomController
 
   /// The server answered the capability read without the extension.
   bool _absent = false;
+
+  /// The `ETag` that came with the shown document, exactly as received. It
+  /// goes back as `If-None-Match` and is never rebuilt from the revision,
+  /// because the server also derives it from the caller's permissions.
+  String? _etag;
+
+  /// Pause before the next poll; grows while the server answers `429`.
+  Duration? _pause;
   Future<void> _tail = Future<void>.value();
 
   OwnTalkRoomKey get _key => arg;
@@ -79,6 +90,8 @@ final class OwnTalkRoomController
   OwnTalkRoomExtras build(OwnTalkRoomKey arg) {
     _disposed = false;
     _absent = false;
+    _etag = null;
+    _pause = null;
     final resumes = ref
         .read(appLifecycleResumeEventsProvider)
         .listen((_) => unawaited(refresh()));
@@ -92,12 +105,21 @@ final class OwnTalkRoomController
   }
 
   Future<void> _start() async {
-    final store = await _store();
-    final cached = await _guard(() => store?.read(_key));
-    if (cached != null) {
-      _set(OwnTalkRoomExtras(settings: cached));
-    }
+    await _enqueue(_loadCache);
     await refresh();
+  }
+
+  /// Runs in the queue, so it can tell whether a network answer got there
+  /// first; the cache only fills a gap and never replaces newer state.
+  Future<void> _loadCache() async {
+    final cached = await _guard(() async => (await _store())?.readEntry(_key));
+    if (cached == null || _absent || state.settings != null) {
+      return;
+    }
+    _etag = cached.etag;
+    _set(
+      OwnTalkRoomExtras(capability: state.capability, settings: cached.document),
+    );
   }
 
   /// Reads the capability and then the document, once. Safe to call at any
@@ -109,6 +131,7 @@ final class OwnTalkRoomController
       return;
     }
     var retry = true;
+    var limited = false;
     try {
       final service = ref.read(ownTalkExtensionsServiceProvider);
       final capability = await service.capability(_key.accountId);
@@ -123,36 +146,72 @@ final class OwnTalkRoomController
       final result = await service.fetch(
         accountId: _key.accountId,
         roomToken: _key.roomToken,
-        knownRevision: state.settings?.revision,
+        knownEtag: state.settings == null ? null : _etag,
       );
       switch (result) {
-        case OwnTalkSettingsLoaded(:final document):
-          await _adopt(document, capability);
+        case OwnTalkSettingsLoaded(:final document, :final etag):
+          await _adopt(document, capability, etag);
         case OwnTalkSettingsNotModified():
           break;
         case OwnTalkSettingsMissing():
           await _forget(capability);
-        case OwnTalkSettingsFetchFailure(:final kind):
-          if (kind == OwnTalkExtensionsFailureKind.forbidden) {
-            // Two membership sources disagree: show nothing rather than guess.
-            await _forget(capability);
+        case OwnTalkSettingsFetchFailure(:final kind, retryAfter: final wait):
+          switch (kind) {
+            case OwnTalkExtensionsFailureKind.forbidden:
+              // Two membership sources disagree: show nothing rather than
+              // guess.
+              await _forget(capability);
+            case OwnTalkExtensionsFailureKind.reauthenticationRequired:
+              retry = false;
+            case OwnTalkExtensionsFailureKind.rateLimited:
+              limited = true;
+              _backOff(wait);
+            default:
+              break;
           }
       }
     } on OwnTalkExtensionsException catch (error) {
-      // Network, 503 and credential problems keep what is shown. Only a
-      // transient failure, or a server already known to offer the extension,
-      // is worth another silent try.
-      retry = error.code == OwnTalkExtensionsError.network || state.available;
+      // Network, 503 and rate-limit problems keep what is shown. A rejected
+      // login will not heal by polling. Only a transient failure, or a server
+      // already known to offer the extension, is worth another silent try.
+      if (error.code == OwnTalkExtensionsError.rateLimited) {
+        limited = true;
+        _backOff(error.retryAfter);
+      }
+      retry =
+          error.code != OwnTalkExtensionsError.reauthenticationRequired &&
+          (error.code == OwnTalkExtensionsError.network || state.available);
     } on Object {
       retry = state.available;
     } finally {
+      if (!limited) {
+        _pause = null;
+      }
       if (retry) {
         _schedule();
+      } else {
+        _timer?.cancel();
       }
     }
   }
 
+  /// Doubles the pause up to [ownTalkSettingsMaximumBackoff], or waits as long
+  /// as the server asked, but never less than the normal interval.
+  void _backOff(Duration? retryAfter) {
+    final base = ref.read(ownTalkSettingsPollIntervalProvider);
+    final ceiling = ownTalkSettingsMaximumBackoff > base
+        ? ownTalkSettingsMaximumBackoff
+        : base;
+    final wanted = retryAfter ?? (_pause ?? base) * 2;
+    _pause = wanted < base
+        ? base
+        : wanted > ceiling
+        ? ceiling
+        : wanted;
+  }
+
   Future<void> _forget(OwnTalkExtensionsCapability capability) async {
+    _etag = null;
     await _guard(() async => (await _store())?.remove(_key));
     _set(OwnTalkRoomExtras(capability: capability));
   }
@@ -189,12 +248,17 @@ final class OwnTalkRoomController
                 baseRevision: baseRevision ?? state.settings?.revision ?? 0,
               );
           switch (result) {
-            case OwnTalkSettingsSaved(:final document):
-              await _adopt(document, capability);
+            case OwnTalkSettingsSaved(:final document, :final etag):
+              await _adopt(document, capability, etag);
             case OwnTalkSettingsConflict(:final current):
-              await _adopt(current, capability);
-            case OwnTalkSettingsUpdateFailure():
-              break;
+              await _adopt(current, capability, null);
+            case OwnTalkSettingsUpdateFailure(:final kind):
+              if (kind == OwnTalkExtensionsFailureKind.forbidden) {
+                // The edit right changed under the shown document; read it
+                // again unconditionally rather than trust a `304`.
+                _etag = null;
+                unawaited(refresh());
+              }
           }
           completer.complete(result);
         } on Object catch (error, stackTrace) {
@@ -208,9 +272,13 @@ final class OwnTalkRoomController
   Future<void> _adopt(
     OwnTalkRoomSettings document,
     OwnTalkExtensionsCapability capability,
+    String? etag,
   ) async {
+    _etag = etag;
     _set(OwnTalkRoomExtras(capability: capability, settings: document));
-    await _guard(() async => (await _store())?.write(_key, document));
+    await _guard(
+      () async => (await _store())?.write(_key, document, etag: etag),
+    );
   }
 
   Future<void> _dropAccountCache() =>
@@ -221,7 +289,7 @@ final class OwnTalkRoomController
     if (_disposed || _absent) {
       return;
     }
-    _timer = Timer(ref.read(ownTalkSettingsPollIntervalProvider), () {
+    _timer = Timer(_pause ?? ref.read(ownTalkSettingsPollIntervalProvider), () {
       final lifecycle = WidgetsBinding.instance.lifecycleState;
       if (lifecycle == AppLifecycleState.resumed || lifecycle == null) {
         unawaited(refresh());

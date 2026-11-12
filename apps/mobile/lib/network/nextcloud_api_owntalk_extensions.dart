@@ -49,6 +49,7 @@ mixin _NextcloudApiOwnTalkExtensions on _HttpNextcloudApiBase {
       request: settingsRequest,
       statusCode: payload.statusCode,
       body: payload.body,
+      headers: payload.headers,
     );
   }
 
@@ -78,6 +79,7 @@ mixin _NextcloudApiOwnTalkExtensions on _HttpNextcloudApiBase {
       request: settingsRequest,
       statusCode: payload.statusCode,
       body: payload.body,
+      headers: payload.headers,
     );
   }
 }

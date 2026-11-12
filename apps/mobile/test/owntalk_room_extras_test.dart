@@ -28,6 +28,7 @@ void main() {
 
   ProviderContainer open({
     Duration interval = const Duration(milliseconds: 80),
+    Duration capabilityTtl = const Duration(minutes: 5),
   }) => ProviderContainer(
     overrides: [
       appDatabaseProvider.overrideWithValue(database),
@@ -35,7 +36,10 @@ void main() {
         MemoryCredentialVault()..values['account-a'] = 'fixture-password',
       ),
       nextcloudApiProvider.overrideWithValue(
-        HttpNextcloudApi(client: server.client),
+        HttpNextcloudApi(
+          client: server.client,
+          capabilityCacheTtl: capabilityTtl,
+        ),
       ),
       ownTalkSettingsStoreProvider.overrideWith((ref) => store),
       ownTalkSettingsPollIntervalProvider.overrideWithValue(interval),
@@ -113,8 +117,177 @@ void main() {
     );
 
     await controller().refresh();
-    expect(server.settingsRequests.last.headers['If-None-Match'], '"r1"');
+    expect(server.settingsRequests.last.headers['If-None-Match'], '"r1-e1"');
     expect(shown().settings!.revision, 1);
+  });
+
+  test('revalidates with the ETag the server sent, so a role change behind '
+      'the same revision reaches the screen', () async {
+    watch();
+    await until(() => shown().settings != null);
+    expect(shown().canEdit, isTrue);
+
+    server.canEdit = false;
+    await controller().refresh();
+    expect(server.settingsRequests.last.headers['If-None-Match'], '"r0-e1"');
+    expect(shown().settings!.revision, 0);
+    expect(shown().canEdit, isFalse);
+
+    server.canEdit = true;
+    await controller().refresh();
+    expect(server.settingsRequests.last.headers['If-None-Match'], '"r0-e0"');
+    expect(shown().canEdit, isTrue);
+  });
+
+  test('sends the ETag opaquely and sends none when the header was missing '
+      'or garbled', () async {
+    server.omitEtag = true;
+    watch();
+    await until(() => shown().settings != null);
+    await controller().refresh();
+    expect(server.settingsRequests.last.headers['If-None-Match'], isNull);
+
+    server.omitEtag = false;
+    await controller().refresh();
+    await controller().refresh();
+    expect(server.settingsRequests.last.headers['If-None-Match'], '"r0-e1"');
+  });
+
+  test('the ETag is cached with the document and old entries without one '
+      'send no If-None-Match', () async {
+    server.setExternally({'chat.backgroundColor': '#1E3A5F'});
+    watch();
+    await until(() => shown().settings != null);
+    container.dispose();
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+
+    container = open();
+    watch();
+    await until(() => server.settingsRequests.length > 1);
+    expect(server.settingsRequests.last.headers['If-None-Match'], '"r1-e1"');
+    container.dispose();
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+
+    await store.write(_key, documentWith({'chat.backgroundColor': '#1E3A5F'}));
+    final before = server.settingsRequests.length;
+    container = open();
+    watch();
+    await until(() => server.settingsRequests.length > before);
+    expect(server.settingsRequests[before].headers['If-None-Match'], isNull);
+  });
+
+  test('after a refused save the next read goes out without If-None-Match '
+      'and shows the lost edit right', () async {
+    watch();
+    await until(() => shown().settings != null);
+    server.canEdit = false;
+
+    final result = await controller().save({
+      OwnTalkSettingField.chatAccentColor: '#FFFFFF',
+    });
+    expect(
+      (result as OwnTalkSettingsUpdateFailure).kind,
+      OwnTalkExtensionsFailureKind.forbidden,
+    );
+    await until(() => !shown().canEdit);
+    final reads = server.settingsRequests.where((r) => r.method == 'GET');
+    expect(reads.last.headers['If-None-Match'], isNull);
+  });
+
+  test('a save adopts the ETag of the saved document', () async {
+    watch();
+    await until(() => shown().settings != null);
+    await controller().save({OwnTalkSettingField.bubbleOwnColor: '#2F6FEB'});
+    await controller().refresh();
+    expect(server.settingsRequests.last.headers['If-None-Match'], '"r1-e1"');
+  });
+
+  test('401 stops polling', () async {
+    watch();
+    await until(() => shown().settings != null);
+    server.failSettingsWith = 401;
+    await controller().refresh();
+    final count = server.settingsRequests.length;
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    expect(server.settingsRequests.length, count);
+    expect(shown().settings, isNotNull);
+  });
+
+  test('a 401 on the capability read stops polling too', () async {
+    container.dispose();
+    container = open(capabilityTtl: Duration.zero);
+    watch();
+    await until(() => shown().settings != null);
+    server.failCapabilitiesWith = 401;
+    await controller().refresh();
+    final count = server.requests.length;
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    expect(server.requests.length, count);
+  });
+
+  test('429 backs off, honouring Retry-After', () async {
+    watch();
+    await until(() => shown().settings != null);
+    server
+      ..failSettingsWith = 429
+      ..failHeaders = {'retry-after': '1'};
+    await controller().refresh();
+    final count = server.settingsRequests.length;
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    expect(server.settingsRequests.length, count);
+    server.failSettingsWith = null;
+    await until(() => server.settingsRequests.length > count);
+    expect(shown().settings, isNotNull);
+  });
+
+  test('429 without Retry-After doubles the interval', () async {
+    watch();
+    await until(() => shown().settings != null);
+    server.failSettingsWith = 429;
+    await controller().refresh();
+    final count = server.settingsRequests.length;
+    await Future<void>.delayed(const Duration(milliseconds: 1000));
+    // 80 ms flat would be about a dozen requests; doubling gives two or three.
+    expect(server.settingsRequests.length - count, lessThanOrEqualTo(4));
+    expect(server.settingsRequests.length - count, greaterThanOrEqualTo(1));
+  });
+
+  test('a cache read that finishes late never replaces a newer state', () async {
+    await store.write(_key, documentWith({'chat.backgroundColor': '#111111'}));
+    server.setExternally({'chat.backgroundColor': '#222222'});
+    server.setExternally({'chat.backgroundColor': '#333333'});
+    final gate = Completer<OwnTalkSettingsStore>();
+    container.dispose();
+    container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        credentialVaultProvider.overrideWithValue(
+          MemoryCredentialVault()..values['account-a'] = 'fixture-password',
+        ),
+        nextcloudApiProvider.overrideWithValue(
+          HttpNextcloudApi(client: server.client),
+        ),
+        ownTalkSettingsStoreProvider.overrideWith((ref) => gate.future),
+        ownTalkSettingsPollIntervalProvider.overrideWithValue(
+          const Duration(hours: 1),
+        ),
+        appLifecycleResumeEventsProvider.overrideWithValue(resumes.stream),
+      ],
+    );
+    watch();
+    resumes.add(null);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    gate.complete(store);
+    await until(
+      () =>
+          shown().valueOf(OwnTalkSettingField.chatBackgroundColor) == '#333333',
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(
+      shown().valueOf(OwnTalkSettingField.chatBackgroundColor),
+      '#333333',
+    );
+    expect(shown().settings!.revision, 2);
   });
 
   test('polls while watched and picks up another user change', () async {

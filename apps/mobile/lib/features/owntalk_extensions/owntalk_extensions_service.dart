@@ -13,6 +13,9 @@ enum OwnTalkExtensionsError {
   credentialMissing,
   reauthenticationRequired,
 
+  /// `429`, from the server or from the client's own pause after one.
+  rateLimited,
+
   /// The server does not (or no longer) offer the extension.
   unavailable,
   network,
@@ -20,9 +23,12 @@ enum OwnTalkExtensionsError {
 }
 
 final class OwnTalkExtensionsException implements Exception {
-  const OwnTalkExtensionsException(this.code);
+  const OwnTalkExtensionsException(this.code, {this.retryAfter});
 
   final OwnTalkExtensionsError code;
+
+  /// How long the server asked to wait, for [OwnTalkExtensionsError.rateLimited].
+  final Duration? retryAfter;
 
   @override
   String toString() => 'OwnTalkExtensionsException(${code.name})';
@@ -70,12 +76,12 @@ final class OwnTalkExtensionsService {
     return session.snapshot.ownTalkExtensions;
   }
 
-  /// Fetches the settings document, sending `If-None-Match` when
-  /// [knownRevision] is set.
+  /// Fetches the settings document, sending [knownEtag], the opaque `ETag` of
+  /// the copy the caller holds, as `If-None-Match` when it is set.
   Future<OwnTalkSettingsFetchResult> fetch({
     required String accountId,
     required String roomToken,
-    int? knownRevision,
+    String? knownEtag,
   }) async {
     final session = await _availableSession(accountId);
     final FetchOwnTalkRoomSettingsRequest request;
@@ -85,7 +91,7 @@ final class OwnTalkExtensionsService {
         server: session.server,
         roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
         capabilities: session.snapshot,
-        knownRevision: knownRevision,
+        knownEtag: knownEtag,
       );
     } on TalkProtocolException {
       throw const OwnTalkExtensionsException(
@@ -186,11 +192,13 @@ final class OwnTalkExtensionsService {
       throw OwnTalkExtensionsException(switch (error.code) {
         NextcloudApiError.unexpectedStatus when error.statusCode == 401 =>
           OwnTalkExtensionsError.reauthenticationRequired,
+        NextcloudApiError.unexpectedStatus when error.statusCode == 429 =>
+          OwnTalkExtensionsError.rateLimited,
         NextcloudApiError.network ||
         NextcloudApiError.timeout ||
         NextcloudApiError.cancelled => OwnTalkExtensionsError.network,
         _ => OwnTalkExtensionsError.invalidResponse,
-      });
+      }, retryAfter: error.retryAfter);
     } on TalkProtocolException {
       throw const OwnTalkExtensionsException(
         OwnTalkExtensionsError.invalidResponse,

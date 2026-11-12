@@ -41,8 +41,9 @@ http.Response ocsResponse(
 
 /// A stand-in for a Nextcloud server with (or without) OwnTalk Extensions.
 ///
-/// Implements the documented contract: ETag/304, `If-Match` merge patches with
-/// per-field conflicts, and the capability document.
+/// Implements the documented contract: ETag/304 (the ETag includes whether the
+/// caller may edit), `If-Match` merge patches with per-field conflicts, and the
+/// capability document.
 final class FakeOwnTalkServer {
   FakeOwnTalkServer({
     this.capability = const _DefaultCapability(),
@@ -67,6 +68,13 @@ final class FakeOwnTalkServer {
   /// Answers every settings request with this status while set.
   int? failSettingsWith;
   Object? failBody;
+  Map<String, String> failHeaders = const {};
+
+  /// Answers the capability request with this status while set.
+  int? failCapabilitiesWith;
+
+  /// Leaves the `ETag` header out of every answer.
+  bool omitEtag = false;
 
   /// Runs once before the next PATCH is evaluated, to simulate a second
   /// writer.
@@ -78,6 +86,9 @@ final class FakeOwnTalkServer {
       requests.where((r) => r.url.path.endsWith('/settings')).toList();
 
   late final http.Client client = MockClient(handle);
+
+  /// What the server currently sends as `ETag`.
+  String get etag => '"r$revision-e${canEdit ? 1 : 0}"';
 
   Map<String, Object?> document() => {
     'schemaVersion': 1,
@@ -103,6 +114,10 @@ final class FakeOwnTalkServer {
     requests.add(request);
     final path = request.url.path;
     if (path.endsWith('/cloud/capabilities')) {
+      final capabilityFailure = failCapabilitiesWith;
+      if (capabilityFailure != null) {
+        return ocsResponse(capabilityFailure, {'error': 'x'});
+      }
       return ocsResponse(200, {
         'version': {
           'major': 34,
@@ -124,7 +139,11 @@ final class FakeOwnTalkServer {
     if (path.endsWith('/room/$ownTalkTestToken/settings')) {
       final failure = failSettingsWith;
       if (failure != null) {
-        return ocsResponse(failure, failBody ?? {'error': 'x'});
+        return ocsResponse(
+          failure,
+          failBody ?? {'error': 'x'},
+          headers: failHeaders,
+        );
       }
       return request.method == 'PATCH' ? _patch(request) : _get(request);
     }
@@ -132,11 +151,11 @@ final class FakeOwnTalkServer {
   }
 
   http.Response _get(http.Request request) {
-    final etag = '"r$revision"';
+    final headers = omitEtag ? <String, String>{} : {'etag': etag};
     if (request.headers['If-None-Match'] == etag) {
-      return http.Response('', 304, headers: {'etag': etag});
+      return http.Response('', 304, headers: headers);
     }
-    return ocsResponse(200, document(), headers: {'etag': etag});
+    return ocsResponse(200, document(), headers: headers);
   }
 
   http.Response _patch(http.Request request) {
@@ -171,7 +190,11 @@ final class FakeOwnTalkServer {
       settings[entry.key] = entry.value as String?;
       fieldRevisions[entry.key] = revision;
     }
-    return ocsResponse(200, document(), headers: {'etag': '"r$revision"'});
+    return ocsResponse(
+      200,
+      document(),
+      headers: omitEtag ? const {} : {'etag': etag},
+    );
   }
 }
 
