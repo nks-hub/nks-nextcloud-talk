@@ -30,6 +30,8 @@ enum TalkProtocolErrorCode {
   invalidParticipantsResponse,
   invalidRoomSettingsRequest,
   invalidRoomSettingsResponse,
+  invalidOwnTalkExtensionsRequest,
+  invalidOwnTalkExtensionsResponse,
   invalidBansRequest,
   invalidBansResponse,
   invalidBotsRequest,

@@ -1,0 +1,223 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import '../json_value.dart';
+import '../protocol_exception.dart';
+import 'models.dart';
+import 'request.dart';
+
+const TalkProtocolErrorCode _responseCode =
+    TalkProtocolErrorCode.invalidOwnTalkExtensionsResponse;
+const int ownTalkExtensionsMaximumWireBytes = 64 * 1024;
+
+/// Why an extension request did not produce a document.
+enum OwnTalkExtensionsFailureKind {
+  /// `401`: the app password is no longer valid.
+  reauthenticationRequired,
+
+  /// `400`: the server rejected the input (`invalid_value`, `unknown_field`).
+  rejected,
+
+  /// `403`: `field_forbidden`, or `source_mismatch` on a membership conflict.
+  forbidden,
+
+  /// `404`: no such conversation, or the caller is not a participant.
+  notFound,
+
+  /// `428`: the `If-Match` header was missing or malformed.
+  preconditionRequired,
+
+  /// `429`
+  rateLimited,
+
+  /// `503`: Talk is missing or broken on the server.
+  unavailable,
+}
+
+sealed class OwnTalkSettingsFetchResult {
+  const OwnTalkSettingsFetchResult();
+}
+
+final class OwnTalkSettingsLoaded extends OwnTalkSettingsFetchResult {
+  const OwnTalkSettingsLoaded(this.document);
+
+  final OwnTalkRoomSettings document;
+}
+
+/// `304`: the cached revision is still current.
+final class OwnTalkSettingsNotModified extends OwnTalkSettingsFetchResult {
+  const OwnTalkSettingsNotModified();
+}
+
+/// `404`: no shared settings can be shown for this conversation.
+final class OwnTalkSettingsMissing extends OwnTalkSettingsFetchResult {
+  const OwnTalkSettingsMissing();
+}
+
+final class OwnTalkSettingsFetchFailure extends OwnTalkSettingsFetchResult {
+  const OwnTalkSettingsFetchFailure(this.kind);
+
+  final OwnTalkExtensionsFailureKind kind;
+}
+
+sealed class OwnTalkSettingsUpdateResult {
+  const OwnTalkSettingsUpdateResult();
+}
+
+final class OwnTalkSettingsSaved extends OwnTalkSettingsUpdateResult {
+  const OwnTalkSettingsSaved(this.document);
+
+  final OwnTalkRoomSettings document;
+}
+
+/// `412 revision_conflict`: someone changed one of the fields meanwhile.
+final class OwnTalkSettingsConflict extends OwnTalkSettingsUpdateResult {
+  const OwnTalkSettingsConflict({
+    required this.current,
+    required this.conflictingFields,
+  });
+
+  final OwnTalkRoomSettings current;
+  final List<OwnTalkSettingField> conflictingFields;
+}
+
+final class OwnTalkSettingsUpdateFailure extends OwnTalkSettingsUpdateResult {
+  const OwnTalkSettingsUpdateFailure(this.kind, {this.errorCode});
+
+  final OwnTalkExtensionsFailureKind kind;
+
+  /// Machine code from `data.error`, for example `field_forbidden`.
+  final String? errorCode;
+}
+
+OwnTalkSettingsFetchResult decodeFetchOwnTalkRoomSettingsResponse({
+  required FetchOwnTalkRoomSettingsRequest request,
+  required int statusCode,
+  required Uint8List body,
+}) {
+  switch (statusCode) {
+    case 200:
+      final document = OwnTalkRoomSettings.fromJson(_decodeOcsData(body));
+      if (document.roomToken != request.roomToken.value) {
+        protocolFailure(_responseCode, r'$.ocs.data.roomToken');
+      }
+      return OwnTalkSettingsLoaded(document);
+    case 304:
+      if (request.knownRevision == null) {
+        protocolFailure(_responseCode, r'$.statusCode');
+      }
+      return const OwnTalkSettingsNotModified();
+    case 404:
+      return const OwnTalkSettingsMissing();
+    default:
+      return OwnTalkSettingsFetchFailure(_failureKind(statusCode));
+  }
+}
+
+OwnTalkSettingsUpdateResult decodeUpdateOwnTalkRoomSettingsResponse({
+  required UpdateOwnTalkRoomSettingsRequest request,
+  required int statusCode,
+  required Uint8List body,
+}) {
+  switch (statusCode) {
+    case 200:
+      final document = OwnTalkRoomSettings.fromJson(_decodeOcsData(body));
+      if (document.roomToken != request.roomToken.value) {
+        protocolFailure(_responseCode, r'$.ocs.data.roomToken');
+      }
+      return OwnTalkSettingsSaved(document);
+    case 412:
+      final data = requireObject(
+        _decodeOcsData(body),
+        path: r'$.ocs.data',
+        code: _responseCode,
+      );
+      if (data['error'] != 'revision_conflict') {
+        protocolFailure(_responseCode, r'$.ocs.data.error');
+      }
+      final current = OwnTalkRoomSettings.fromJson(
+        data['current'],
+        path: r'$.ocs.data.current',
+      );
+      if (current.roomToken != request.roomToken.value) {
+        protocolFailure(_responseCode, r'$.ocs.data.current.roomToken');
+      }
+      final fields = requireList(
+        data['fields'],
+        path: r'$.ocs.data.fields',
+        code: _responseCode,
+      );
+      return OwnTalkSettingsConflict(
+        current: current,
+        conflictingFields: [
+          for (var index = 0; index < fields.length; index++)
+            ?OwnTalkSettingField.fromWireKey(
+              requireString(
+                fields[index],
+                path: '\$.ocs.data.fields[$index]',
+                code: _responseCode,
+                minLength: 1,
+                maxLength: 64,
+              ),
+            ),
+        ],
+      );
+    default:
+      return OwnTalkSettingsUpdateFailure(
+        _failureKind(statusCode),
+        errorCode: _optionalErrorCode(body),
+      );
+  }
+}
+
+OwnTalkExtensionsFailureKind _failureKind(int statusCode) =>
+    switch (statusCode) {
+      400 => OwnTalkExtensionsFailureKind.rejected,
+      401 => OwnTalkExtensionsFailureKind.reauthenticationRequired,
+      403 => OwnTalkExtensionsFailureKind.forbidden,
+      404 => OwnTalkExtensionsFailureKind.notFound,
+      428 => OwnTalkExtensionsFailureKind.preconditionRequired,
+      429 => OwnTalkExtensionsFailureKind.rateLimited,
+      503 => OwnTalkExtensionsFailureKind.unavailable,
+      _ => protocolFailure(
+        TalkProtocolErrorCode.unsupportedHttpStatus,
+        r'$.statusCode',
+      ),
+    };
+
+/// Best-effort read of `data.error`; a malformed error body never throws.
+String? _optionalErrorCode(Uint8List body) {
+  try {
+    final data = _decodeOcsData(body);
+    if (data is Map<String, Object?> && data['error'] is String) {
+      final code = data['error']! as String;
+      return code.length <= 64 ? code : null;
+    }
+  } on TalkProtocolException {
+    return null;
+  }
+  return null;
+}
+
+Object? _decodeOcsData(Uint8List body) {
+  if (body.isEmpty || body.length > ownTalkExtensionsMaximumWireBytes) {
+    protocolFailure(_responseCode, r'$');
+  }
+  final Object? decoded;
+  try {
+    decoded = decodeJsonRejectingDuplicateMembers(
+      utf8.decode(body, allowMalformed: false),
+      code: _responseCode,
+      path: r'$',
+    );
+  } on FormatException {
+    protocolFailure(_responseCode, r'$');
+  }
+  final root = requireObject(decoded, path: r'$', code: _responseCode);
+  final ocs = requireObject(root['ocs'], path: r'$.ocs', code: _responseCode);
+  requireObject(ocs['meta'], path: r'$.ocs.meta', code: _responseCode);
+  if (!ocs.containsKey('data')) {
+    protocolFailure(_responseCode, r'$.ocs.data');
+  }
+  return ocs['data'];
+}
