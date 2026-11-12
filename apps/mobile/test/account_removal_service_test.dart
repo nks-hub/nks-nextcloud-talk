@@ -81,6 +81,7 @@ void main() {
     HttpNextcloudApi api, {
     AccountRemovalStarted? onRemovalStarted,
     AccountPushRevocation? revokePush,
+    AccountBackgroundCleanup? clearChatBackgrounds,
   }) {
     final pendingRevocations = AppPasswordRevocationQueue(
       store: vault,
@@ -94,7 +95,8 @@ void main() {
       mediaCache: mediaCache,
       mediaDiskCache: mediaDiskCache,
       emojiUsage: emojiUsage,
-      clearChatBackgrounds: chatBackgrounds.removeAccount,
+      clearChatBackgrounds:
+          clearChatBackgrounds ?? chatBackgrounds.removeAccount,
       voiceDirectory: () async => voiceRoot,
       chatAttachmentDirectory: () async => chatAttachmentRoot,
       attachmentSources: () async => sources,
@@ -153,6 +155,24 @@ void main() {
       expect(await vault.readAppPassword('account-a'), isNull);
     },
   );
+
+  test('a failing background or shared-settings cache cleanup still deletes '
+      'the account and its app password', () async {
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async => http.Response(_okOcs(), 200)),
+    );
+    addTearDown(api.close);
+    await _seedAccount(database, accounts, vault, 'account-a', _serverA);
+
+    await buildService(
+      api,
+      clearChatBackgrounds: (_) async =>
+          throw const FileSystemException('locked by another process'),
+    ).removeAccount('account-a');
+
+    expect(await accounts.getAccount('account-a'), isNull);
+    expect(await vault.readAppPassword('account-a'), isNull);
+  });
 
   test(
     'reports a pending proxy cleanup instead of silently losing it',
