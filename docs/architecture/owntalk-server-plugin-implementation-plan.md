@@ -1,4 +1,4 @@
-# OwnTalk server plugin: sdílená nastavení konverzací
+# OwnTalk Extensions: sdílená nastavení konverzací
 
 Implementační plán volitelné Nextcloud aplikace (server pluginu) pro OwnTalk.
 Plugin ukládá a distribuuje nastavení Talk konverzace, která standardní Talk
@@ -151,15 +151,17 @@ pro admin diagnostiku a capability metadata. Pro tento plugin z něj platí:
 
 ### R2: App ID a název
 
-- App ID **`owntalk_server`**, název v App Store **„OwnTalk Server
-  Extensions“**, PHP namespace `OCA\OwnTalkServer`.
+- App ID **`owntalk_extensions`**, název **„OwnTalk Extensions“**, PHP
+  namespace `OCA\OwnTalkExtensions`, repozitář `nks-hub/owntalk-extensions`
+  (schváleno 12. 11. 2026).
 - Odpovídá vzoru App Store `info.xsd` (`[a-z]+[a-z0-9_]*[a-z0-9]+`, max. 32
   znaků), neobsahuje „Nextcloud“ (zakázáno pravidly App Store), nese značku
   klienta a pojme i další serverové funkce.
-- Alternativy: `owntalk` (splývá s klientem), `nks_talk_companion` (starý
-  kandidát, svádí k záměně s diagnostikou).
-- Ke dni 12. 11. 2026 vrací `https://apps.nextcloud.com/apps/{id}` HTTP 404 pro
-  `owntalk_server`, `owntalk`, `owntalk_extensions` i `nks_talk_companion`.
+- Zvažované a zamítnuté: `owntalk` (splývá s klientem), `owntalk_server`
+  (zní jako náhrada serveru), `nks_talk_companion` (svádí k záměně
+  s diagnostikou).
+- Ke dni 12. 11. 2026 vrací `https://apps.nextcloud.com/apps/owntalk_extensions`
+  HTTP 404.
   404 není rezervace; ID se zamyká schválením certifikátu (kap. 18).
 
 ### R3: Licence
@@ -170,9 +172,9 @@ compatible license“ a Talk je AGPL-3.0-or-later (`spreed`
 
 ### R4: Repozitář
 
-Nový veřejný repozitář `nks-hub/owntalk-server`. Důvody: vlastní release
+Nový veřejný repozitář `nks-hub/owntalk-extensions`. Důvody: vlastní release
 rytmus a tagy, jiná licence, PHP CI matice, archiv pro App Store s jedinou
-top-level složkou `owntalk_server/`. API kontrakt se drží v OwnTalk repu jako
+top-level složkou `owntalk_extensions/`. API kontrakt se drží v OwnTalk repu jako
 `contracts/room-settings/openapi.json` + fixtures (vzor
 `contracts/attachment-upload/`); plugin repo testuje stejné fixtures.
 
@@ -357,7 +359,7 @@ Pravidla:
 
 ## 6. REST/OCS API
 
-Základ: `/ocs/v2.php/apps/owntalk_server/api/v1`. Požadavky posílají
+Základ: `/ocs/v2.php/apps/owntalk_extensions/api/v1`. Požadavky posílají
 `OCS-APIRequest: true` a `Accept: application/json`, zápisy navíc
 `Content-Type: application/json` (resp. typ obrázku). Token konverzace
 v cestě musí odpovídat `^[a-z0-9]{4,64}$`, jinak 400 bez dotazu do DB.
@@ -372,7 +374,7 @@ i `master`). Klient už čte `GET /ocs/v2.php/cloud/capabilities`
 (`packages/talk_protocol/lib/src/server_base.dart`).
 
 ```json
-"owntalk_server": {
+"owntalk_extensions": {
   "version": "1.0.0",
   "api": 1,
   "schemas": { "sharedSettings": [1], "memberNicknames": [1], "userPreferences": [1] },
@@ -390,7 +392,7 @@ i `master`). Klient už čte `GET /ocs/v2.php/cloud/capabilities`
 }
 ```
 
-- Klíč `owntalk_server` chybí → plugin není aktivní. Klient skryje veškeré
+- Klíč `owntalk_extensions` chybí → plugin není aktivní. Klient skryje veškeré
   doplňkové UI, nic víc.
 - `acl`: `"roles"`, když server umí zjistit role přes Talk OCS (kap. 9.2,
   ověřuje `occ owntalk:doctor` a provoz), jinak `"membership"`: 1:1
@@ -649,7 +651,7 @@ permissions. Hosté (4, 6) API pluginu volat nemohou (kap. 10) a uživatel
 připojený odkazem (5) neprojde kontrolou členství (kap. 9.1).
 
 Alternativní politika
-`occ config:app:set owntalk_server edit_policy --value=chat` povolí změnu
+`occ config:app:set owntalk_extensions edit_policy --value=chat` povolí změnu
 každému, kdo má v `permissions` bit „chat“ (128), stále s výjimkou bývalé
 1:1, read-only a federované konverzace.
 
@@ -1007,19 +1009,19 @@ stav bez revizí.
 
 ### 14.1 Protokol (`packages/talk_protocol`)
 
-- `src/owntalk_server/capabilities.dart`: volitelné parsování
-  `owntalk_server`, sada `features`, limity. Neznámá `api` → vše vypnuto.
-- `src/owntalk_server/room_settings.dart`, `member_nicknames.dart`,
+- `src/owntalk_extensions/capabilities.dart`: volitelné parsování
+  `owntalk_extensions`, sada `features`, limity. Neznámá `api` → vše vypnuto.
+- `src/owntalk_extensions/room_settings.dart`, `member_nicknames.dart`,
   `user_preferences.dart`: modely a přísné parsery ve stylu ostatních
   (`requireString`, limity délky, `#RRGGBB`). Neznámá pole se při čtení
   ignorují, nezapisují se.
-- `src/owntalk_server/request.dart`: GET/PATCH/PUT/DELETE, merge patch,
+- `src/owntalk_extensions/request.dart`: GET/PATCH/PUT/DELETE, merge patch,
   `If-Match`/`If-None-Match`, mapování chyb z kap. 6.7.
 - Fixtures z reálného serveru do `contracts/room-settings/fixtures/`.
 
 ### 14.2 Adaptér a data
 
-- `OwnTalkServerAdapter` na úrovni účtu: zná capabilities, vrací
+- `OwnTalkExtensionsAdapter` na úrovni účtu: zná capabilities, vrací
   `RoomExtras` (sloučené vrstvy pro jednu konverzaci) jako `Stream`.
   Bez capability vrací prázdné `RoomExtras` a nic nevolá.
 - Drift migrace v18 → v19: tabulky `room_settings_cache`,
@@ -1448,20 +1450,20 @@ Zdroje:
 - [ ] **Účet v App Store:** přihlášení GitHub účtem maintainera na
       apps.nextcloud.com, API token pro CI.
 - [ ] **Brána S0 zelená.** Žádná předběžná konzultace s App Store.
-- [ ] **App ID** `owntalk_server` potvrzené (R2).
+- [ ] **App ID** `owntalk_extensions` potvrzené (R2).
 - [ ] **Licence:** `LICENSE` AGPL-3.0-or-later, SPDX hlavičky, kontrola
       licencí composer závislostí.
-- [ ] **CSR:** `openssl req -nodes -newkey rsa:4096 -keyout owntalk_server.key
-      -out owntalk_server.csr -subj "/CN=owntalk_server"` (CN = app ID).
+- [ ] **CSR:** `openssl req -nodes -newkey rsa:4096 -keyout owntalk_extensions.key
+      -out owntalk_extensions.csr -subj "/CN=owntalk_extensions"` (CN = app ID).
 - [ ] **Žádost o certifikát:** PR s CSR do
       <https://github.com/nextcloud/app-certificate-requests>, viditelný
-      e-mail v GitHub profilu. Nextcloud vrátí `owntalk_server.crt`.
+      e-mail v GitHub profilu. Nextcloud vrátí `owntalk_extensions.crt`.
 - [ ] **Klíč:** nikdy v repozitáři. Offline záloha + secret v GitHub
       Environment `appstore` s povinným schválením. Ztráta klíče = nový CSR,
       revokace a **smazání všech dosavadních releasů** v App Store.
 - [ ] **Registrace:** web nebo `POST /api/v1/apps` s certifikátem
       a podpisem app ID
-      (`echo -n "owntalk_server" | openssl dgst -sha512 -sign owntalk_server.key | openssl base64`).
+      (`echo -n "owntalk_extensions" | openssl dgst -sha512 -sign owntalk_extensions.key | openssl base64`).
       `is_enterprise_only` nejde později změnit, nechat `false`.
 - [ ] **Metadata:** `name`, `summary`, `description` (EN, včetně věty
       o tom, že uložená nastavení vidí správce serveru a že aplikace
@@ -1479,14 +1481,14 @@ Zdroje:
 - [ ] CI zelená na celé matici (kap. 20.6) včetně upgrade testu
       z předchozí verze.
 - [ ] Bezpečnostní brány SG-01 až SG-16 zelené.
-- [ ] Archiv: jediná složka `owntalk_server/`, bez `.git`, testů a dev
+- [ ] Archiv: jediná složka `owntalk_extensions/`, bez `.git`, testů a dev
       souborů, max. 20 MB, `info.xml` pod 512 KB.
 - [ ] Podpis kódu:
-      `occ integrity:sign-app --privateKey=… --certificate=… --path=…/owntalk_server`
+      `occ integrity:sign-app --privateKey=… --certificate=… --path=…/owntalk_extensions`
       → `appinfo/signature.json`. Po podpisu nic neměnit.
-- [ ] `tar -czf owntalk_server-X.Y.Z.tar.gz owntalk_server`.
+- [ ] `tar -czf owntalk_extensions-X.Y.Z.tar.gz owntalk_extensions`.
 - [ ] Podpis archivu:
-      `openssl dgst -sha512 -sign owntalk_server.key owntalk_server-X.Y.Z.tar.gz | openssl base64`.
+      `openssl dgst -sha512 -sign owntalk_extensions.key owntalk_extensions-X.Y.Z.tar.gz | openssl base64`.
 - [ ] GitHub release `vX.Y.Z` s archivem jako assetem (HTTPS URL).
 - [ ] Upload: `POST https://apps.nextcloud.com/api/v1/apps/releases`
       s `download`, `signature`, `nightly: false`. Odpověď 200/201.
@@ -1500,15 +1502,15 @@ jinak Nextcloud aktualizaci odmítne (code signing doc).
 
 ## 19. Ruční instalace (záloha)
 
-1. Stáhnout podepsaný `owntalk_server-X.Y.Z.tar.gz` z GitHub releasu.
+1. Stáhnout podepsaný `owntalk_extensions-X.Y.Z.tar.gz` z GitHub releasu.
 2. Rozbalit do zapisovatelné složky aplikací (typicky `custom_apps/`, podle
    `apps_paths` v `config.php`), vlastník = uživatel webového serveru.
-3. `occ app:enable owntalk_server` (spustí migrace).
+3. `occ app:enable owntalk_extensions` (spustí migrace).
 4. `occ owntalk:doctor` a kontrola, že `GET /ocs/v2.php/cloud/capabilities`
-   obsahuje `owntalk_server`.
+   obsahuje `owntalk_extensions`.
 
-Odebrání: `occ app:disable owntalk_server`, úplné smazání dat
-`occ app:remove owntalk_server`. Ruční kopie se neaktualizuje sama.
+Odebrání: `occ app:disable owntalk_extensions`, úplné smazání dat
+`occ app:remove owntalk_extensions`. Ruční kopie se neaktualizuje sama.
 
 ## 20. Testy
 
@@ -1680,7 +1682,7 @@ role-dependentní pravidla nevydávají jako hotová.
 
 - **Klient:** doplňkové UI řídí capability; vypnutí pluginu ho po obnově
   capabilities skryje a smaže cache.
-- **Server:** `occ app:disable owntalk_server` vrátí instanci do stavu bez
+- **Server:** `occ app:disable owntalk_extensions` vrátí instanci do stavu bez
   pluginu, data zůstanou. Oprava jde dopředu novou verzí, ne downgradem
   (zda Nextcloud downgrade aplikace odmítá, **k ověření**; plán s ním
   nepočítá).
