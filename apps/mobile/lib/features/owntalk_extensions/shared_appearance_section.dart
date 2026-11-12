@@ -181,6 +181,10 @@ final class _OwnTalkSharedAppearanceSectionState
 
   Future<void> _edit(OwnTalkSettingField field, String? current) async {
     final strings = AppLocalizations.of(context);
+    // A poll may land while the dialog is open; the write must still be
+    // checked against what the user was looking at.
+    final base =
+        ref.read(ownTalkRoomExtrasProvider(_key)).settings?.revision ?? 0;
     final result = await showTextPromptDialog(
       context: context,
       title: _fieldTitle(strings, field),
@@ -212,16 +216,19 @@ final class _OwnTalkSharedAppearanceSectionState
     if (next == current) {
       return;
     }
-    await _apply({field: next});
+    await _apply({field: next}, base);
   }
 
-  Future<void> _apply(Map<OwnTalkSettingField, String?> changes) async {
+  Future<void> _apply(
+    Map<OwnTalkSettingField, String?> changes,
+    int baseRevision,
+  ) async {
     final strings = AppLocalizations.of(context);
     setState(() => _busy = true);
     try {
       final result = await ref
           .read(ownTalkRoomExtrasProvider(_key).notifier)
-          .save(changes);
+          .save(changes, baseRevision: baseRevision);
       if (!mounted) {
         return;
       }
@@ -302,7 +309,7 @@ final class _OwnTalkSharedAppearanceSectionState
       ),
     );
     if (reapply == true && mounted) {
-      await _apply(mine);
+      await _apply(mine, conflict.current.revision);
     }
   }
 

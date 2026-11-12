@@ -245,6 +245,26 @@ void main() {
     expect(shown().valueOf(OwnTalkSettingField.bubbleOwnColor), '#FF0000');
   });
 
+  test('save checks against the revision the edit started from, not a '
+      'newer one a poll brought in meanwhile', () async {
+    watch();
+    await until(() => shown().available);
+    final startedFrom = shown().settings!.revision;
+    server.setExternally({'chat.backgroundColor': '#3B1F4A'});
+    await controller().refresh();
+    await until(() => shown().settings!.revision > startedFrom);
+
+    final result = await controller().save({
+      OwnTalkSettingField.chatBackgroundColor: '#0B4F3A',
+    }, baseRevision: startedFrom);
+    expect(result, isA<OwnTalkSettingsConflict>());
+    expect(
+      server.settingsRequests.last.headers['If-Match'],
+      '"r$startedFrom"',
+    );
+    expect(shown().valueOf(OwnTalkSettingField.chatBackgroundColor), '#3B1F4A');
+  });
+
   test('save without edit rights surfaces the server refusal', () async {
     server.canEdit = false;
     watch();

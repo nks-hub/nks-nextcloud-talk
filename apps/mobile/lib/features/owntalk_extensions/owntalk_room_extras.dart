@@ -163,11 +163,13 @@ final class OwnTalkRoomController
     }
   }
 
-  /// Applies a merge patch on top of the revision currently shown. A `412`
+  /// Applies a merge patch on top of [baseRevision], the revision the user
+  /// saw when they started editing; it defaults to the one shown now. A `412`
   /// still updates the shown document, because it carries the server's.
   Future<OwnTalkSettingsUpdateResult> save(
-    Map<OwnTalkSettingField, String?> changes,
-  ) {
+    Map<OwnTalkSettingField, String?> changes, {
+    int? baseRevision,
+  }) {
     final completer = Completer<OwnTalkSettingsUpdateResult>();
     unawaited(
       _enqueue(() async {
@@ -184,7 +186,7 @@ final class OwnTalkRoomController
                 accountId: _key.accountId,
                 roomToken: _key.roomToken,
                 changes: changes,
-                baseRevision: state.settings?.revision ?? 0,
+                baseRevision: baseRevision ?? state.settings?.revision ?? 0,
               );
           switch (result) {
             case OwnTalkSettingsSaved(:final document):
