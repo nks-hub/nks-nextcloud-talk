@@ -26,6 +26,8 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
     clearChatBackgrounds: (accountId) async {
       final backgrounds = await ref.read(chatBackgroundStoreProvider.future);
       await backgrounds.removeAccount(accountId);
+      final shared = await ref.read(ownTalkSettingsStoreProvider.future);
+      await shared.removeAccount(accountId);
     },
     voiceDirectory: ref.watch(chatVoiceCacheDirectoryProvider),
     chatAttachmentDirectory: getApplicationCacheDirectory,
