@@ -7,7 +7,15 @@ a přezdívky účastníků. Platí pro 1:1 i skupinové konverzace. Sdílené h
 vidí všichni účastníci na všech zařízeních s OwnTalkem, osobní hodnoty jen
 jejich autor na svých zařízeních.
 
-Stav: návrh, 12. 11. 2026. Kód pluginu neexistuje. Tvrzení o Nextcloudu
+Stav k 12. 11. 2026: první řez je implementovaný v
+[nks-hub/owntalk-extensions](https://github.com/nks-hub/owntalk-extensions)
+0.1.0: členství (kap. 9.1), role přes Talk OCS (kap. 9.2), sdílená nastavení
+barev a rychlé emoji (`GET`/`PATCH`), capability. Brány S0 a S0b prošly
+integrační sadou `tests/integration/acl_test.py` na NC 34.0.5 + Talk 24.0.7
+i NC 35.0.2 + Talk 25.0.7 (40/40, v režimu bez rolí 37/37). Přezdívky, osobní
+preference, obrázky, `/revisions` a úklidový job zatím chybí. Zjištění z běhu:
+Talk přidá pozvaného účastníka 1:1 až první zprávou, do té doby vrací 404
+i Talk sám. Tvrzení o Nextcloudu
 a Talku jsou vázaná na SHA nebo dokumentaci uvedenou v textu. Co nebylo
 ověřeno, je označeno **k ověření**. Bezpečnostní tvrzení platí jen za
 podmínky, že projde brána S0 (kap. 16.13); do té doby jsou návrhem.
