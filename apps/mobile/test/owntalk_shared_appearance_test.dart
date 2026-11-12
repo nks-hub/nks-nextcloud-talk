@@ -380,6 +380,7 @@ void main() {
         home: const ChatBackgroundSurface(
           accountId: 'account-a',
           roomToken: ownTalkTestToken,
+          sharedSettings: true,
           child: SizedBox.expand(),
         ),
       ),
@@ -460,6 +461,7 @@ void main() {
             home: ChatBackgroundSurface(
               accountId: 'account-a',
               roomToken: ownTalkTestToken,
+              sharedSettings: true,
               child: Builder(
                 builder: (context) {
                   inner = context;

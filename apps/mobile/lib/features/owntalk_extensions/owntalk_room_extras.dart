@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,29 @@ import 'package:talk_protocol/talk_protocol.dart';
 import '../../app_providers.dart';
 import 'owntalk_extensions_service.dart';
 import 'owntalk_settings_store.dart';
+
+/// Whether a conversation can carry shared settings at all, decided before any
+/// request is made: a Talk one-to-one (1), group (2) or public (3)
+/// conversation that is not federated. Changelog, note-to-self and former
+/// one-to-one conversations are never polled.
+bool ownTalkConversationCanShare({
+  required int roomType,
+  required String rawJson,
+}) {
+  if (roomType != 1 && roomType != 2 && roomType != 3) {
+    return false;
+  }
+  try {
+    final decoded = jsonDecode(rawJson);
+    if (decoded is Map<String, Object?>) {
+      final remoteServer = decoded['remoteServer'];
+      return !(remoteServer is String && remoteServer.trim().isNotEmpty);
+    }
+  } on FormatException {
+    return false;
+  }
+  return false;
+}
 
 /// How often an open conversation re-reads the shared settings. A matching
 /// `ETag` makes almost every one of these a bodiless `304`.

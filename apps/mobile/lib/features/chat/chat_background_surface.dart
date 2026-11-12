@@ -28,11 +28,16 @@ final class ChatBackgroundSurface extends ConsumerWidget {
     super.key,
     required this.accountId,
     required this.roomToken,
+    required this.sharedSettings,
     required this.child,
   });
 
   final String accountId;
   final String roomToken;
+
+  /// Whether the conversation may carry shared settings; when false the
+  /// extension is neither asked nor applied.
+  final bool sharedSettings;
   final Widget child;
 
   /// Background precedence: this device's own colour, then the colour shared
@@ -42,7 +47,9 @@ final class ChatBackgroundSurface extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final key = (accountId: accountId, roomToken: roomToken);
     final stored = ref.watch(chatBackgroundProvider(key)).valueOrNull;
-    final shared = ref.watch(ownTalkRoomExtrasProvider(key));
+    final shared = sharedSettings
+        ? ref.watch(ownTalkRoomExtrasProvider(key))
+        : OwnTalkRoomExtras.none;
     final scheme = Theme.of(context).colorScheme;
     final requested =
         parseChatBackgroundColor(stored) ??

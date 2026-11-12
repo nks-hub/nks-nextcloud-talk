@@ -793,14 +793,21 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         selectedIcon: const Icon(Icons.emoji_emotions),
       ),
     ];
-    final quickEmoji = ref.watch(
-      ownTalkRoomExtrasProvider((
-        accountId: widget.account.id,
-        roomToken: widget.conversation.token,
-      )).select(
-        (extras) => extras.valueOf(OwnTalkSettingField.composerQuickEmoji),
-      ),
-    );
+    final quickEmoji =
+        ownTalkConversationCanShare(
+          roomType: widget.conversation.roomType,
+          rawJson: widget.conversation.rawJson,
+        )
+        ? ref.watch(
+            ownTalkRoomExtrasProvider((
+              accountId: widget.account.id,
+              roomToken: widget.conversation.token,
+            )).select(
+              (extras) =>
+                  extras.valueOf(OwnTalkSettingField.composerQuickEmoji),
+            ),
+          )
+        : null;
     final sendButton = SizedBox.square(
       dimension: 48,
       child: Stack(

@@ -24,6 +24,7 @@ void main() {
             home: const ChatBackgroundSurface(
               accountId: 'account-a',
               roomToken: 'rooma123',
+              sharedSettings: true,
               child: SizedBox.expand(),
             ),
           ),

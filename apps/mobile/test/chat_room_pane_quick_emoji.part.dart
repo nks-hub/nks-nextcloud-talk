@@ -5,7 +5,9 @@ void _registerChatRoomPaneQuickEmojiTests() {
     WidgetTester tester, {
     required FakeOwnTalkServer server,
     bool withSurface = false,
+    CachedConversation? room,
   }) async {
+    final shown = room ?? conversation;
     vault.values[account.id] = 'fixture-password';
     final api = HttpNextcloudApi(client: server.client);
     addTearDown(api.close);
@@ -24,13 +26,14 @@ void _registerChatRoomPaneQuickEmojiTests() {
           body: withSurface
               ? ChatBackgroundSurface(
                   accountId: account.id,
-                  roomToken: conversation.token,
-                  child: ChatRoomPane(
-                    account: account,
-                    conversation: conversation,
+                  roomToken: shown.token,
+                  sharedSettings: ownTalkConversationCanShare(
+                    roomType: shown.roomType,
+                    rawJson: shown.rawJson,
                   ),
+                  child: ChatRoomPane(account: account, conversation: shown),
                 )
-              : ChatRoomPane(account: account, conversation: conversation),
+              : ChatRoomPane(account: account, conversation: shown),
         ),
       ),
     );
@@ -80,6 +83,46 @@ void _registerChatRoomPaneQuickEmojiTests() {
     expect(find.byKey(const Key('send-quick-emoji')), findsNothing);
     expect(find.byKey(const Key('send-message')), findsOneWidget);
     expect(server.settingsRequests, isEmpty);
+    await unmountPane(tester);
+  });
+
+  testWidgets('a changelog conversation never asks the extension, even with '
+      'the capability and a stored quick emoji', (tester) async {
+    final server = FakeOwnTalkServer()
+      ..setExternally({
+        'composer.quickEmoji': '\u{1F44D}',
+        'chat.backgroundColor': '#1E3A5F',
+      });
+    await openPane(
+      tester,
+      server: server,
+      withSurface: true,
+      room: conversation.copyWith(roomType: 4),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(server.settingsRequests, isEmpty);
+    expect(find.byKey(const Key('send-quick-emoji')), findsNothing);
+    expect(find.byKey(const Key('send-message')), findsOneWidget);
+    await unmountPane(tester);
+  });
+
+  testWidgets('a federated conversation never asks the extension', (
+    tester,
+  ) async {
+    final server = FakeOwnTalkServer()
+      ..setExternally({'composer.quickEmoji': '\u{1F44D}'});
+    final raw = Map<String, Object?>.from(
+      jsonDecode(conversation.rawJson) as Map<String, Object?>,
+    )..['remoteServer'] = 'https://other.example';
+    await openPane(
+      tester,
+      server: server,
+      withSurface: true,
+      room: conversation.copyWith(rawJson: jsonEncode(raw)),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(server.settingsRequests, isEmpty);
+    expect(find.byKey(const Key('send-quick-emoji')), findsNothing);
     await unmountPane(tester);
   });
 
