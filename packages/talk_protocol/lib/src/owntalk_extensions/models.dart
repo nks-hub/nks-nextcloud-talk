@@ -65,6 +65,7 @@ String? normalizeOwnTalkSettingValue(OwnTalkSettingField field, String value) {
     if (value.isEmpty ||
         utf8.encode(value).length > _maximumEmojiBytes ||
         value.runes.any((rune) => rune < 0x20 || rune == 0x7f) ||
+        value.runes.any(_isInvisibleOrDirectional) ||
         !value.runes.any((rune) => rune > 0x7f)) {
       return null;
     }
@@ -72,6 +73,16 @@ String? normalizeOwnTalkSettingValue(OwnTalkSettingField field, String value) {
   }
   return _colorPattern.hasMatch(value) ? value.toUpperCase() : null;
 }
+
+/// Bidi controls, zero-width characters and the BOM reorder or hide text;
+/// ZWJ (U+200D) is not among them because emoji sequences need it.
+bool _isInvisibleOrDirectional(int rune) =>
+    (rune >= 0x200B && rune <= 0x200C) ||
+    (rune >= 0x200E && rune <= 0x200F) ||
+    (rune >= 0x202A && rune <= 0x202E) ||
+    (rune >= 0x2060 && rune <= 0x2064) ||
+    (rune >= 0x2066 && rune <= 0x2069) ||
+    rune == 0xFEFF;
 
 /// Optional `owntalk_extensions` capability. Anything unexpected, including an
 /// unknown `api`, means "not available" rather than an error.

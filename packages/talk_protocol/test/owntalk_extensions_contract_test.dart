@@ -112,6 +112,33 @@ void main() {
       expect(document[OwnTalkSettingField.bubbleOwnColor], isNull);
     });
 
+    test('a quick emoji with bidi or zero-width characters is refused, an '
+        'emoji ZWJ sequence is kept', () {
+      for (final hostile in [
+        '\u202E\u{1F44D}',
+        '\u{1F44D}\u200B',
+        '\uFEFF\u{1F44D}',
+        '\u2066\u{1F44D}\u2069',
+      ]) {
+        expect(
+          normalizeOwnTalkSettingValue(
+            OwnTalkSettingField.composerQuickEmoji,
+            hostile,
+          ),
+          isNull,
+          reason: hostile.runes.map((r) => r.toRadixString(16)).join(' '),
+        );
+      }
+      const family = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}';
+      expect(
+        normalizeOwnTalkSettingValue(
+          OwnTalkSettingField.composerQuickEmoji,
+          family,
+        ),
+        family,
+      );
+    });
+
     test('round-trips through toJson', () {
       final document = OwnTalkRoomSettings.fromJson(_documentJson());
       final copy = OwnTalkRoomSettings.fromJson(
