@@ -35,7 +35,7 @@ Obsah:
 19. Ruční instalace
 20. Testy
 21. Akceptační kritéria
-22. Milníky a odhad
+22. Milníky a závislosti
 23. Rollback
 24. Otevřené otázky
 
@@ -486,7 +486,7 @@ sdílená nastavení (merge patch, `If-Match`, konflikt po polích). Klíč
 `POST /revisions` s `{ "tokens": [...] }` (max. 200) vrátí
 `{ "rooms": { "abc123xy": { "settings": 12, "nicknames": 31, "preferences": 4 } } }`.
 Konverzace, kde volající není účastník, v odpovědi chybí bez chyby.
-Slouží jedné kontrole při obnově seznamu konverzací. Fáze M6.
+Slouží jedné kontrole při obnově seznamu konverzací. Milník M4.
 
 ### 6.7 Chybové kódy
 
@@ -1455,8 +1455,7 @@ Zdroje:
       -out owntalk_server.csr -subj "/CN=owntalk_server"` (CN = app ID).
 - [ ] **Žádost o certifikát:** PR s CSR do
       <https://github.com/nextcloud/app-certificate-requests>, viditelný
-      e-mail v GitHub profilu. Nextcloud vrátí `owntalk_server.crt`. Doba
-      vyřízení není dokumentovaná.
+      e-mail v GitHub profilu. Nextcloud vrátí `owntalk_server.crt`.
 - [ ] **Klíč:** nikdy v repozitáři. Offline záloha + secret v GitHub
       Environment `appstore` s povinným schválením. Ztráta klíče = nový CSR,
       revokace a **smazání všech dosavadních releasů** v App Store.
@@ -1656,27 +1655,23 @@ Statická analýza: Psalm nebo PHPStan s `nextcloud/ocp`, php-cs-fixer podle
 11. Vypnutí pluginu nerozbije chat, hovory ani push v OwnTalku ani
     v oficiálních klientech.
 
-## 22. Milníky a odhad
+## 22. Milníky a závislosti
 
-Člověkodny jednoho vývojáře se znalostí Nextcloud app frameworku.
-
-| Milník | Obsah | Odhad |
+| Milník | Obsah | Závisí na |
 | --- | --- | --- |
-| M0 | Brány S0 a S0b (spike členství 9.1 a rolí 9.2 na NC 34/35 s oddělenými účty), app ID, licence, repozitář, CSR | 4–5 d + čekání na certifikát |
-| M1 | Skelet, migrace, registr polí, capability, `RoomAccess` (členství 9.1, role 9.2 s fail-closed), `AccessPolicy`, GET/PATCH sdílených nastavení (barvy, bubliny, emoji), audit, testy, CI | 6–8 d |
-| M2 | Obrázky: upload, validace, překódování, kvóty, stažení | 3–4 d |
-| M3 | Přezdívky: API, pravidla 8.3, Unicode validace, testy | 3–4 d |
-| M4 | Osobní preference a `/revisions` | 2–3 d |
-| M5 | Životní cyklus: události, noční job, uninstall, `occ` příkazy | 2–3 d |
-| M6 | Flutter: protokol, adaptér, Drift v19, UI, rychlá emoji, přezdívky, kontrast, fallback, testy | 8–11 d |
-| M8 | Bezpečnostní brány SG, fuzz, nezávislé review a opravy | 5–7 d |
-| M9 | Release pipeline, podpis, první release v App Store, ověření instalace | 2–3 d |
+| M0 | Brány S0 a S0b (spike členství 9.1 a rolí 9.2 na NC 34/35 s oddělenými účty), app ID, licence, repozitář, CSR | – |
+| M1 | Skelet, migrace, registr polí, capability, `RoomAccess` (členství 9.1, role 9.2 s fail-closed), `AccessPolicy`, GET/PATCH sdílených nastavení (barvy, bubliny, emoji), audit, testy, CI | M0 (S0 zelená) |
+| M2 | Obrázky: upload, validace, překódování, kvóty, stažení | M1 |
+| M3 | Přezdívky: API, pravidla 8.3, Unicode validace, testy | M1; pravidla s rolemi až po S0b |
+| M4 | Osobní preference a `/revisions` | M1 |
+| M5 | Životní cyklus: noční job, `UserDeletedEvent`, uninstall, `occ` příkazy | M1–M4 |
+| M6 | Flutter: protokol, adaptér, Drift v19, UI, rychlá emoji, přezdívky, kontrast, fallback, testy | kontrakt z M1; funkce podle M2–M4 |
+| M7 | Bezpečnostní brány SG, fuzz, nezávislé review a opravy | M1–M6 |
+| M8 | Release pipeline, podpis, první release v App Store, ověření instalace | M7, vydaný certifikát |
 
-Celkem zhruba 35–49 člověkodnů, z toho bezpečnostní práce navíc proti
-verzi bez důrazu na bezpečnost asi 12–15 dní (S0, S0b, Unicode a obrázková
-validace, audit, SG brány, review). Neznámé: doba vyřízení certifikátu,
-zda App Store aplikaci přijme (kap. 9.6), změny chování Talk poskytovatele
-mezi verzemi.
+Neznámé mimo kontrolu projektu: vyřízení žádosti o certifikát, zda App
+Store aplikaci přijme (kap. 9.6), změny chování Talk poskytovatele mezi
+verzemi.
 
 Pořadí je závazné: bez zeleného S0 se nezačíná M1. Bez zeleného S0b se
 role-dependentní pravidla nevydávají jako hotová.
