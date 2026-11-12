@@ -236,6 +236,12 @@ final class _OwnTalkSharedAppearanceSectionState
       switch (result) {
         case OwnTalkSettingsSaved():
           _message(strings.ownTalkSharedSaved);
+        // A retried write whose first attempt did land meets its own values.
+        case final OwnTalkSettingsConflict conflict
+            when changes.entries.every(
+              (change) => conflict.current[change.key] == change.value,
+            ):
+          _message(strings.ownTalkSharedSaved);
         case final OwnTalkSettingsConflict conflict:
           setState(() => _busy = false);
           await _resolveConflict(changes, conflict);

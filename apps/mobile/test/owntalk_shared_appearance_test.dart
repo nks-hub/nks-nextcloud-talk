@@ -351,6 +351,38 @@ void main() {
       },
     );
 
+    testWidgets('a conflict that already holds the wanted value counts as '
+        'saved, without the conflict dialog', (tester) async {
+      await tester.pumpWidget(sectionApp());
+      await pumpUntil(
+        tester,
+        () => find.byKey(_ownBubble).evaluate().isNotEmpty,
+      );
+      // The first attempt landed but its answer was lost; the server already
+      // holds exactly what this write asks for.
+      server.beforePatch = () =>
+          server.setExternally({'bubble.ownColor': '#FF0000'});
+
+      await tester.tap(find.byKey(_ownBubble));
+      await pumpUntil(
+        tester,
+        () =>
+            find.byKey(const Key('owntalk-shared-field')).evaluate().isNotEmpty,
+      );
+      await tester.enterText(
+        find.byKey(const Key('owntalk-shared-field')),
+        '#FF0000',
+      );
+      await tester.tap(find.byKey(const Key('owntalk-shared-save')));
+      await pumpUntil(
+        tester,
+        () => subtitleOf(tester, _ownBubble) == '#FF0000',
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byKey(const Key('owntalk-conflict-dialog')), findsNothing);
+      await unmount(tester);
+    });
+
     testWidgets('keeping theirs leaves the server value alone', (tester) async {
       await tester.pumpWidget(sectionApp());
       await pumpUntil(
