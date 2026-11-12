@@ -4,6 +4,7 @@ void _registerChatRoomPaneQuickEmojiTests() {
   Future<FakeOwnTalkServer> openPane(
     WidgetTester tester, {
     required FakeOwnTalkServer server,
+    bool withSurface = false,
   }) async {
     vault.values[account.id] = 'fixture-password';
     final api = HttpNextcloudApi(client: server.client);
@@ -20,7 +21,16 @@ void _registerChatRoomPaneQuickEmojiTests() {
           ),
         ],
         home: Scaffold(
-          body: ChatRoomPane(account: account, conversation: conversation),
+          body: withSurface
+              ? ChatBackgroundSurface(
+                  accountId: account.id,
+                  roomToken: conversation.token,
+                  child: ChatRoomPane(
+                    account: account,
+                    conversation: conversation,
+                  ),
+                )
+              : ChatRoomPane(account: account, conversation: conversation),
         ),
       ),
     );
@@ -84,6 +94,45 @@ void _registerChatRoomPaneQuickEmojiTests() {
     await tester.pump(const Duration(milliseconds: 50));
     expect(find.byKey(const Key('send-quick-emoji')), findsNothing);
     expect(find.byKey(const Key('send-message')), findsOneWidget);
+    await unmountPane(tester);
+  });
+
+  Color bubbleColor(WidgetTester tester) {
+    final container = tester.widget<AnimatedContainer>(
+      find.descendant(
+        of: find.byKey(const Key('chat-message-target-10')),
+        matching: find.byType(AnimatedContainer),
+      ),
+    );
+    return (container.decoration! as BoxDecoration).color!;
+  }
+
+  testWidgets('shared bubble colours reach the message bubble', (tester) async {
+    final server = FakeOwnTalkServer()
+      ..setExternally({
+        'bubble.otherColor': '#112233',
+        'bubble.otherTextColor': '#101010',
+      });
+    await openPane(tester, server: server, withSurface: true);
+    await pumpUntilCondition(
+      tester,
+      () => bubbleColor(tester) == const Color(0xFF112233),
+    );
+    expect(tester.takeException(), isNull);
+    await unmountPane(tester);
+  });
+
+  testWidgets('without the capability the bubble keeps the theme colour', (
+    tester,
+  ) async {
+    final server = FakeOwnTalkServer(capability: null);
+    await openPane(tester, server: server, withSurface: true);
+    await pumpUntilCondition(tester, () => server.requests.isNotEmpty);
+    await tester.pump(const Duration(milliseconds: 50));
+    final scheme = Theme.of(
+      tester.element(find.byKey(const Key('chat-message-target-10'))),
+    ).colorScheme;
+    expect(bubbleColor(tester), scheme.surfaceContainerHigh);
     await unmountPane(tester);
   });
 }
