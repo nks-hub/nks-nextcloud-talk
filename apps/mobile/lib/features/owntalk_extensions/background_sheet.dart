@@ -51,6 +51,16 @@ String ownTalkPresetName(AppLocalizations strings, String id) => switch (id) {
   'ocean' => strings.ownTalkPresetOcean,
   'dots' => strings.ownTalkPresetDots,
   'grid' => strings.ownTalkPresetGrid,
+  'lavender' => strings.ownTalkPresetLavender,
+  'peach' => strings.ownTalkPresetPeach,
+  'mint' => strings.ownTalkPresetMint,
+  'nebula' => strings.ownTalkPresetNebula,
+  'bokeh' => strings.ownTalkPresetBokeh,
+  'waves' => strings.ownTalkPresetWaves,
+  'dunes' => strings.ownTalkPresetDunes,
+  'topo' => strings.ownTalkPresetTopo,
+  'stars' => strings.ownTalkPresetStars,
+  'confetti' => strings.ownTalkPresetConfetti,
   _ => id,
 };
 
@@ -243,7 +253,7 @@ final class _BackgroundSheetState extends State<_BackgroundSheet> {
         ListTile(
           key: const Key('owntalk-color-custom'),
           contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.tune),
+          leading: const ColorWheelIcon(),
           title: Text(strings.colorPaletteCustom),
           subtitle: custom ? Text(color.toUpperCase()) : null,
           trailing: custom ? const Icon(Icons.check) : null,
@@ -255,21 +265,28 @@ final class _BackgroundSheetState extends State<_BackgroundSheet> {
   }
 
   Widget _presetBody(AppLocalizations strings) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        for (final preset in offeredChatWallpaperPresets(
-          widget.capability.presets,
-        ))
-          _PresetTile(
-            key: Key('owntalk-preset-${preset.id}'),
-            preset: preset,
-            name: ownTalkPresetName(strings, preset.id),
-            selected: widget.preset == preset.id,
-            onTap: () => _choose(BackgroundPresetChosen(preset.id)),
-          ),
-      ],
+    final presets = offeredChatWallpaperPresets(widget.capability.presets);
+    return LayoutBuilder(
+      builder: (context, box) {
+        const gap = 12.0;
+        final columns = (box.maxWidth / 130).floor().clamp(3, 6);
+        final width = (box.maxWidth - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final preset in presets)
+              _PresetTile(
+                key: Key('owntalk-preset-${preset.id}'),
+                preset: preset,
+                name: ownTalkPresetName(strings, preset.id),
+                selected: widget.preset == preset.id,
+                width: width,
+                onTap: () => _choose(BackgroundPresetChosen(preset.id)),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -331,12 +348,14 @@ final class _PresetTile extends StatelessWidget {
     required this.preset,
     required this.name,
     required this.selected,
+    required this.width,
     required this.onTap,
   });
 
   final ChatWallpaperPreset preset;
   final String name;
   final bool selected;
+  final double width;
   final VoidCallback onTap;
 
   @override
@@ -350,29 +369,49 @@ final class _PresetTile extends StatelessWidget {
       onTap: onTap,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: SizedBox(
-          width: 96,
+          width: width,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                height: 72,
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                height: width * 1.2,
+                padding: EdgeInsets.all(selected ? 3 : 0),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: selected ? scheme.primary : scheme.outlineVariant,
                     width: selected ? 3 : 1,
                   ),
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(selected ? 10 : 15),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
                       ChatWallpaper(preset: preset),
+                      const _SampleBubbles(),
                       if (selected)
-                        Icon(Icons.check_circle, color: scheme.primary),
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: scheme.primary,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(2),
+                              child: Icon(
+                                Icons.check,
+                                size: 16,
+                                color: scheme.onPrimary,
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -383,12 +422,52 @@ final class _PresetTile extends StatelessWidget {
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: selected ? FontWeight.w700 : null,
+                  ),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Two message bubbles without text, so a thumbnail shows how a chat looks on
+/// the wallpaper.
+final class _SampleBubbles extends StatelessWidget {
+  const _SampleBubbles();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    Widget bubble(Color color, double widthFactor, Alignment alignment) =>
+        Align(
+          alignment: alignment,
+          child: FractionallySizedBox(
+            widthFactor: widthFactor,
+            child: Container(
+              height: 14,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(7),
+              ),
+            ),
+          ),
+        );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          bubble(scheme.surfaceContainerHighest, 0.62, Alignment.centerLeft),
+          const SizedBox(height: 5),
+          bubble(scheme.primaryContainer, 0.5, Alignment.centerRight),
+          const SizedBox(height: 5),
+          bubble(scheme.surfaceContainerHighest, 0.4, Alignment.centerLeft),
+        ],
       ),
     );
   }

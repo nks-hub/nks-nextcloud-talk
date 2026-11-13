@@ -7280,6 +7280,96 @@ abstract class AppLocalizations {
   /// **'Black'**
   String get colorNameBlack;
 
+  /// No description provided for @colorNameLavender.
+  ///
+  /// In en, this message translates to:
+  /// **'Lavender'**
+  String get colorNameLavender;
+
+  /// No description provided for @colorNamePeach.
+  ///
+  /// In en, this message translates to:
+  /// **'Peach'**
+  String get colorNamePeach;
+
+  /// No description provided for @colorNameAqua.
+  ///
+  /// In en, this message translates to:
+  /// **'Aqua'**
+  String get colorNameAqua;
+
+  /// No description provided for @colorNameSage.
+  ///
+  /// In en, this message translates to:
+  /// **'Sage'**
+  String get colorNameSage;
+
+  /// No description provided for @colorNameSand.
+  ///
+  /// In en, this message translates to:
+  /// **'Sand'**
+  String get colorNameSand;
+
+  /// No description provided for @colorNameLightGrey.
+  ///
+  /// In en, this message translates to:
+  /// **'Light grey'**
+  String get colorNameLightGrey;
+
+  /// No description provided for @colorNamePeriwinkle.
+  ///
+  /// In en, this message translates to:
+  /// **'Periwinkle'**
+  String get colorNamePeriwinkle;
+
+  /// No description provided for @colorNameTeal.
+  ///
+  /// In en, this message translates to:
+  /// **'Teal'**
+  String get colorNameTeal;
+
+  /// No description provided for @colorNameGreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Green'**
+  String get colorNameGreen;
+
+  /// No description provided for @colorNameOrange.
+  ///
+  /// In en, this message translates to:
+  /// **'Orange'**
+  String get colorNameOrange;
+
+  /// No description provided for @colorNameRed.
+  ///
+  /// In en, this message translates to:
+  /// **'Red'**
+  String get colorNameRed;
+
+  /// No description provided for @colorNamePurple.
+  ///
+  /// In en, this message translates to:
+  /// **'Purple'**
+  String get colorNamePurple;
+
+  /// No description provided for @colorPickerHue.
+  ///
+  /// In en, this message translates to:
+  /// **'Hue'**
+  String get colorPickerHue;
+
+  /// No description provided for @colorPickerShade.
+  ///
+  /// In en, this message translates to:
+  /// **'Saturation and brightness'**
+  String get colorPickerShade;
+
+  /// No description provided for @colorPickerPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour preview {hex}'**
+  String colorPickerPreview(String hex);
+
   /// No description provided for @ownTalkSharedBackgroundAll.
   ///
   /// In en, this message translates to:
@@ -7339,6 +7429,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Grid'**
   String get ownTalkPresetGrid;
+
+  /// No description provided for @ownTalkPresetLavender.
+  ///
+  /// In en, this message translates to:
+  /// **'Lavender'**
+  String get ownTalkPresetLavender;
+
+  /// No description provided for @ownTalkPresetPeach.
+  ///
+  /// In en, this message translates to:
+  /// **'Peach'**
+  String get ownTalkPresetPeach;
+
+  /// No description provided for @ownTalkPresetMint.
+  ///
+  /// In en, this message translates to:
+  /// **'Mint'**
+  String get ownTalkPresetMint;
+
+  /// No description provided for @ownTalkPresetNebula.
+  ///
+  /// In en, this message translates to:
+  /// **'Nebula'**
+  String get ownTalkPresetNebula;
+
+  /// No description provided for @ownTalkPresetBokeh.
+  ///
+  /// In en, this message translates to:
+  /// **'Bokeh'**
+  String get ownTalkPresetBokeh;
+
+  /// No description provided for @ownTalkPresetWaves.
+  ///
+  /// In en, this message translates to:
+  /// **'Waves'**
+  String get ownTalkPresetWaves;
+
+  /// No description provided for @ownTalkPresetDunes.
+  ///
+  /// In en, this message translates to:
+  /// **'Dunes'**
+  String get ownTalkPresetDunes;
+
+  /// No description provided for @ownTalkPresetTopo.
+  ///
+  /// In en, this message translates to:
+  /// **'Contours'**
+  String get ownTalkPresetTopo;
+
+  /// No description provided for @ownTalkPresetStars.
+  ///
+  /// In en, this message translates to:
+  /// **'Stars'**
+  String get ownTalkPresetStars;
+
+  /// No description provided for @ownTalkPresetConfetti.
+  ///
+  /// In en, this message translates to:
+  /// **'Confetti'**
+  String get ownTalkPresetConfetti;
 
   /// No description provided for @ownTalkBackgroundPhotoSet.
   ///

@@ -177,14 +177,14 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const Key('owntalk-preset-ocean')),
-          matching: find.byIcon(Icons.check_circle),
+          matching: find.byIcon(Icons.check),
         ),
         findsOneWidget,
       );
       expect(
         find.descendant(
           of: find.byKey(const Key('owntalk-preset-grid')),
-          matching: find.byIcon(Icons.check_circle),
+          matching: find.byIcon(Icons.check),
         ),
         findsNothing,
       );

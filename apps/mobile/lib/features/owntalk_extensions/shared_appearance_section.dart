@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
+import '../../core/color_picker_dialog.dart';
 import '../../core/color_palette.dart';
-import '../../core/text_prompt_dialog.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../chat/chat_background_theme.dart';
 import '../chat/chat_wallpaper.dart';
@@ -340,7 +340,7 @@ final class _OwnTalkSharedAppearanceSectionState
     final current = ref
         .read(ownTalkRoomExtrasProvider(_key))
         .valueOf(OwnTalkSettingField.chatBackgroundColor);
-    final text = await showTextPromptDialog(
+    final text = await showColorPickerDialog(
       context: context,
       title: strings.ownTalkSharedBackgroundAll,
       initialValue: current ?? '#00679E',
@@ -351,7 +351,6 @@ final class _OwnTalkSharedAppearanceSectionState
       dialogKey: const Key('owntalk-shared-dialog'),
       fieldKey: const Key('owntalk-shared-field'),
       confirmKey: const Key('owntalk-shared-save'),
-      maxLength: 7,
     );
     if (!mounted || text == null) {
       return;

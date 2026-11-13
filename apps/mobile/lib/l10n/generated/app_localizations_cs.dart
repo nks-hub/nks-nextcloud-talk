@@ -4100,6 +4100,53 @@ class AppLocalizationsCs extends AppLocalizations {
   String get colorNameBlack => 'Černá';
 
   @override
+  String get colorNameLavender => 'Levandulová';
+
+  @override
+  String get colorNamePeach => 'Broskvová';
+
+  @override
+  String get colorNameAqua => 'Světle tyrkysová';
+
+  @override
+  String get colorNameSage => 'Šalvějová';
+
+  @override
+  String get colorNameSand => 'Písková';
+
+  @override
+  String get colorNameLightGrey => 'Světle šedá';
+
+  @override
+  String get colorNamePeriwinkle => 'Pomněnková';
+
+  @override
+  String get colorNameTeal => 'Tyrkysová';
+
+  @override
+  String get colorNameGreen => 'Zelená';
+
+  @override
+  String get colorNameOrange => 'Oranžová';
+
+  @override
+  String get colorNameRed => 'Červená';
+
+  @override
+  String get colorNamePurple => 'Fialová';
+
+  @override
+  String get colorPickerHue => 'Odstín';
+
+  @override
+  String get colorPickerShade => 'Sytost a jas';
+
+  @override
+  String colorPickerPreview(String hex) {
+    return 'Náhled barvy $hex';
+  }
+
+  @override
   String get ownTalkSharedBackgroundAll => 'Pozadí pro všechny';
 
   @override
@@ -4128,6 +4175,36 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get ownTalkPresetGrid => 'Mřížka';
+
+  @override
+  String get ownTalkPresetLavender => 'Levandule';
+
+  @override
+  String get ownTalkPresetPeach => 'Broskev';
+
+  @override
+  String get ownTalkPresetMint => 'Máta';
+
+  @override
+  String get ownTalkPresetNebula => 'Mlhovina';
+
+  @override
+  String get ownTalkPresetBokeh => 'Světýlka';
+
+  @override
+  String get ownTalkPresetWaves => 'Vlny';
+
+  @override
+  String get ownTalkPresetDunes => 'Duny';
+
+  @override
+  String get ownTalkPresetTopo => 'Vrstevnice';
+
+  @override
+  String get ownTalkPresetStars => 'Hvězdy';
+
+  @override
+  String get ownTalkPresetConfetti => 'Konfety';
 
   @override
   String get ownTalkBackgroundPhotoSet => 'Vlastní fotka';
