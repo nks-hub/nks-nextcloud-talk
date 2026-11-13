@@ -4165,4 +4165,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String ownTalkPhotoTooLargeLocal(String size) {
     return 'The photo could not be reduced below $size MB.';
   }
+
+  @override
+  String get ownTalkBackgroundSheetBarrier => 'Close the background picker';
 }

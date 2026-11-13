@@ -34,21 +34,28 @@ Color safeChatBackground(
   return scheme.surface;
 }
 
-/// Opacity of a surface-coloured veil over a photo wallpaper: the lowest one
-/// for which the theme's text still reaches 4.5:1 on the worst possible photo,
-/// a pure black or a pure white one.
-double wallpaperScrimAlpha(ColorScheme scheme) {
-  for (var step = 8; step < 20; step++) {
+/// Opacity of the surface-coloured veil over a photo wallpaper. Kept light so
+/// the photo stays recognisable; text that sits straight on the background is
+/// protected by [wallpaperChipAlpha] instead.
+double photoScrimAlpha(ColorScheme scheme) =>
+    scheme.brightness == Brightness.dark ? 0.3 : 0.2;
+
+/// Opacity of the surface-coloured chip behind text that is drawn straight on
+/// a wallpaper (day separators, system messages and the like). At least 80 %,
+/// and high enough that the theme's text reads on it at 4.5:1 even over the
+/// worst possible wallpaper, a pure black or a pure white one.
+double wallpaperChipAlpha(ColorScheme scheme) {
+  for (var step = 16; step < 20; step++) {
     final alpha = step / 20;
     final readsOnBoth = const [Color(0xFF000000), Color(0xFFFFFFFF)].every((
-      photo,
+      wallpaper,
     ) {
-      final veiled = Color.alphaBlend(
+      final chip = Color.alphaBlend(
         scheme.surface.withValues(alpha: alpha),
-        photo,
+        wallpaper,
       );
-      return _contrast(veiled, scheme.onSurface) >= 4.5 &&
-          _contrast(veiled, scheme.onSurfaceVariant) >= 4.5;
+      return _contrast(chip, scheme.onSurface) >= 4.5 &&
+          _contrast(chip, scheme.onSurfaceVariant) >= 4.5;
     });
     if (readsOnBoth) {
       return alpha;

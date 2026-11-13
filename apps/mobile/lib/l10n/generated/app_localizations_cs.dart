@@ -4172,4 +4172,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String ownTalkPhotoTooLargeLocal(String size) {
     return 'Fotku se nepodařilo zmenšit pod $size MB.';
   }
+
+  @override
+  String get ownTalkBackgroundSheetBarrier => 'Zavřít výběr pozadí';
 }

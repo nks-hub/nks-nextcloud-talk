@@ -7411,6 +7411,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The photo could not be reduced below {size} MB.'**
   String ownTalkPhotoTooLargeLocal(String size);
+
+  /// No description provided for @ownTalkBackgroundSheetBarrier.
+  ///
+  /// In en, this message translates to:
+  /// **'Close the background picker'**
+  String get ownTalkBackgroundSheetBarrier;
 }
 
 class _AppLocalizationsDelegate

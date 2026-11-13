@@ -93,27 +93,31 @@ void main() {
         }
       });
 
-      test('the photo veil in the ${entry.key} theme reads on the worst '
-          'photo', () {
+      test('text on a chip reads at 4.5:1 over the worst wallpaper in the '
+          '${entry.key} theme', () {
         final scheme = entry.value.colorScheme;
-        final alpha = wallpaperScrimAlpha(scheme);
-        expect(alpha, lessThan(1));
-        for (final photo in const [Color(0xFF000000), Color(0xFFFFFFFF)]) {
-          final veiled = Color.alphaBlend(
-            scheme.surface.withValues(alpha: alpha),
-            photo,
-          );
-          expect(
-            chatBackgroundContrast(veiled, scheme.onSurface),
-            greaterThanOrEqualTo(4.5),
-          );
-          expect(
-            chatBackgroundContrast(veiled, scheme.onSurfaceVariant),
-            greaterThanOrEqualTo(4.5),
-          );
+        final alpha = wallpaperChipAlpha(scheme);
+        expect(alpha, inInclusiveRange(0.8, 1));
+        final fill = scheme.surface.withValues(alpha: alpha);
+        for (final wallpaper in const [Color(0xFF000000), Color(0xFFFFFFFF)]) {
+          final chip = Color.alphaBlend(fill, wallpaper);
+          for (final text in [scheme.onSurface, scheme.onSurfaceVariant]) {
+            expect(
+              chatBackgroundContrast(chip, text),
+              greaterThanOrEqualTo(4.5),
+              reason: '$text over $wallpaper',
+            );
+          }
         }
       });
     }
+
+    test('the photo veil is light, lighter in the light theme', () {
+      final dark = photoScrimAlpha(AppTheme.dark().colorScheme);
+      final light = photoScrimAlpha(AppTheme.light().colorScheme);
+      expect(dark, inInclusiveRange(0.25, 0.35));
+      expect(light, inInclusiveRange(0.15, 0.25));
+    });
 
     testWidgets('each preset paints in both themes without errors', (
       tester,
@@ -174,7 +178,7 @@ void main() {
         final scheme = theme.colorScheme;
         expect(
           scrim.color,
-          scheme.surface.withValues(alpha: wallpaperScrimAlpha(scheme)),
+          scheme.surface.withValues(alpha: photoScrimAlpha(scheme)),
         );
         final image = tester.widget<Image>(find.byType(Image));
         expect(image.fit, BoxFit.cover);
@@ -197,6 +201,55 @@ void main() {
       await tester.pump();
       expect(find.byKey(const Key('chat-wallpaper-scrim')), findsNothing);
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('chip', () {
+    testWidgets('is just its child without a wallpaper', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: ChatBackgroundChip(child: Text('Dnes', key: Key('label'))),
+        ),
+      );
+      expect(find.byType(DecoratedBox), findsNothing);
+      expect(
+        ChatBackgroundChip.colorOf(
+          tester.element(find.byKey(const Key('label'))),
+        ),
+        isNull,
+      );
+    });
+
+    testWidgets('is a rounded translucent surface over a wallpaper', (
+      tester,
+    ) async {
+      for (final theme in [AppTheme.light(), AppTheme.dark()]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: theme,
+            home: const ChatWallpaperScope(
+              active: true,
+              child: ChatBackgroundChip(child: Text('Dnes', key: Key('label'))),
+            ),
+          ),
+        );
+        // The theme change animates; let it arrive.
+        await tester.pump(const Duration(seconds: 1));
+        final box = tester.widget<DecoratedBox>(
+          find.ancestor(
+            of: find.byKey(const Key('label')),
+            matching: find.byType(DecoratedBox),
+          ),
+        );
+        final decoration = box.decoration as BoxDecoration;
+        final scheme = theme.colorScheme;
+        expect(
+          decoration.color,
+          scheme.surface.withValues(alpha: wallpaperChipAlpha(scheme)),
+        );
+        expect(decoration.borderRadius, isNotNull);
+        expect(decoration.color!.a, greaterThanOrEqualTo(0.8));
+      }
     });
   });
 
@@ -472,6 +525,73 @@ void main() {
         safeChatBackground(const Color(0xFFFF00FF), schemeOf(tester)),
       );
       // The retry timer dies with the provider.
+      await unmount(tester);
+    });
+
+    Widget probe({
+      String? local,
+      bool imageProvider = false,
+      Uint8List? imageBytes,
+    }) => ProviderScope(
+      overrides: overrides(
+        local: local,
+        imageProvider: imageProvider,
+        imageBytes: imageBytes,
+      ),
+      child: MaterialApp(
+        home: ChatBackgroundSurface(
+          accountId: 'account-a',
+          roomToken: ownTalkTestToken,
+          sharedSettings: true,
+          child: Builder(
+            builder: (context) => Text(
+              ChatWallpaperScope.isActive(context) ? 'chips' : 'plain',
+              textDirection: TextDirection.ltr,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('chips are on for a preset or a loaded photo, off for a '
+        'plain colour or the theme', (tester) async {
+      await pumpSurface(tester, probe());
+      expect(find.text('plain'), findsOneWidget);
+      await unmount(tester);
+
+      server.setExternally({'chat.backgroundColor': '#123456'});
+      await pumpSurface(tester, probe());
+      expect(find.text('plain'), findsOneWidget);
+      await unmount(tester);
+
+      server.setExternally({'chat.backgroundPreset': 'forest'});
+      await pumpSurface(tester, probe());
+      await pumpUntilCondition(
+        tester,
+        () => find.text('chips').evaluate().isNotEmpty,
+      );
+      await unmount(tester);
+
+      // This device's own colour hides the wallpaper, so no chips either.
+      await pumpSurface(tester, probe(local: '#123456'));
+      expect(find.text('plain'), findsOneWidget);
+      await unmount(tester);
+    });
+
+    testWidgets('a photo that is still loading has no chips yet, a loaded one '
+        'has', (tester) async {
+      server.setExternally({
+        'chat.backgroundImage': ownTalkTestSha(ownTalkTestJpeg()),
+      });
+      await pumpSurface(tester, probe(imageProvider: true));
+      expect(find.text('plain'), findsOneWidget);
+      await unmount(tester);
+
+      await pumpSurface(tester, probe(imageProvider: true, imageBytes: _pixel));
+      await pumpUntilCondition(
+        tester,
+        () => find.text('chips').evaluate().isNotEmpty,
+      );
       await unmount(tester);
     });
 

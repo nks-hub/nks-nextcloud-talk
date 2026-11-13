@@ -94,23 +94,26 @@ final class _MessageBubble extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
           child: Semantics(
             label: '${message.displayText} · $clock',
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(text: message.displayText),
-                  const TextSpan(text: '  '),
-                  TextSpan(
-                    text: clock,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+            child: ChatBackgroundChip(
+              centered: true,
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: message.displayText),
+                    const TextSpan(text: '  '),
+                    TextSpan(
+                      text: clock,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
               ),
-              textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ),
         ),

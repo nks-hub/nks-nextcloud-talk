@@ -221,6 +221,103 @@ void main() {
     }
   });
 
+  group('landscape', () {
+    testWidgets('on the photo tab every action scrolls fully into view and '
+        'none is fixed in front of another', (tester) async {
+      tester.view
+        ..physicalSize = const Size(640, 360)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      server.setExternally({
+        'chat.backgroundImage': ownTalkTestSha(ownTalkTestJpeg(3)),
+      });
+      await show(tester);
+      await openSheet(tester);
+      await tapKey(tester, _tabPhoto);
+
+      // One scroll view carries title, tabs, body and actions.
+      final sheet = find.byType(BottomSheet);
+      final scroll = find.descendant(
+        of: sheet,
+        matching: find.byType(SingleChildScrollView),
+      );
+      expect(scroll, findsOneWidget);
+      final viewport = tester.getRect(scroll);
+
+      for (final key in const [
+        Key('owntalk-photo-pick'),
+        Key('owntalk-photo-remove'),
+        Key('owntalk-background-theme'),
+      ]) {
+        final action = find.descendant(of: scroll, matching: find.byKey(key));
+        expect(action, findsOneWidget, reason: '$key');
+        await tester.ensureVisible(action);
+        await tester.pump(const Duration(milliseconds: 300));
+        final rect = tester.getRect(action);
+        expect(
+          rect.top,
+          greaterThanOrEqualTo(viewport.top - 0.5),
+          reason: '$key',
+        );
+        expect(
+          rect.bottom,
+          lessThanOrEqualTo(viewport.bottom + 0.5),
+          reason: '$key',
+        );
+        // The pixel in the middle of it belongs to that action.
+        final hit = tester.hitTestOnBinding(rect.center);
+        expect(
+          hit.path.any((entry) => entry.target == tester.renderObject(action)),
+          isTrue,
+          reason: '$key is covered by something else',
+        );
+      }
+      expect(tester.takeException(), isNull);
+      await unmount(tester);
+    });
+
+    testWidgets('the sheet keeps its title and actions fixed when there is '
+        'room', (tester) async {
+      server.setExternally({
+        'chat.backgroundImage': ownTalkTestSha(ownTalkTestJpeg(3)),
+      });
+      await show(tester);
+      await openSheet(tester);
+      await tapKey(tester, _tabPhoto);
+      final scroll = find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.byType(SingleChildScrollView),
+      );
+      // Portrait: only the body scrolls, the theme action stays below it.
+      expect(
+        find.descendant(
+          of: scroll,
+          matching: find.byKey(const Key('owntalk-background-theme')),
+        ),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('owntalk-background-theme')), findsOneWidget);
+      await unmount(tester);
+    });
+  });
+
+  group('accessibility', () {
+    testWidgets('the sheet barrier has our own label, not "Scrim"', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await show(tester);
+      await openSheet(tester);
+      expect(find.bySemanticsLabel('Scrim'), findsNothing);
+      expect(
+        find.bySemanticsLabel('Close the background picker'),
+        findsOneWidget,
+      );
+      semantics.dispose();
+      await unmount(tester);
+    });
+  });
+
   group('choosing', () {
     testWidgets('a swatch saves the colour with If-Match', (tester) async {
       await show(tester);

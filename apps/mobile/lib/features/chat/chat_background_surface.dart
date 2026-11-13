@@ -86,7 +86,7 @@ final class ChatBackgroundSurface extends ConsumerWidget {
                       ),
                     ),
             ),
-            child,
+            ChatWallpaperScope(active: wallpaper != null, child: child),
           ],
         ),
       ),

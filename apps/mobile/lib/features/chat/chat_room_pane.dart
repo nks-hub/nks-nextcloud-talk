@@ -37,6 +37,7 @@ import '../conversations/conversation_avatar_widget.dart';
 import '../rooms/room_settings_service.dart';
 import 'chat_message_actions_service.dart';
 import 'chat_background_surface.dart';
+import 'chat_wallpaper.dart';
 import 'chat_context_menu.dart';
 import 'chat_selection.dart';
 import '../owntalk_extensions/chat_appearance.dart';

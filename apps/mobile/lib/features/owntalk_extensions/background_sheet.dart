@@ -79,6 +79,8 @@ Future<OwnTalkBackgroundChoice?> showOwnTalkBackgroundSheet({
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
+    // Flutter's own label for the barrier is "Scrim" even in Czech.
+    barrierLabel: AppLocalizations.of(context).ownTalkBackgroundSheetBarrier,
     constraints: const BoxConstraints(maxWidth: 640),
     builder: (sheetContext) => _BackgroundSheet(
       accountId: accountId,
@@ -151,69 +153,80 @@ final class _BackgroundSheetState extends State<_BackgroundSheet> {
     final theme = Theme.of(context);
     final anySet =
         widget.color != null || widget.preset != null || widget.image != null;
-    return SafeArea(
-      child: Column(
-        key: const Key('owntalk-background-sheet'),
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Semantics(
-              header: true,
-              child: Text(
-                strings.ownTalkSharedBackgroundAll,
-                style: theme.textTheme.titleLarge,
-              ),
+    // A phone held sideways leaves about 300 dp for the whole sheet. There the
+    // title, the tabs and the actions scroll with the body instead of keeping
+    // a few dp for it between two fixed bars.
+    final compact = MediaQuery.sizeOf(context).height < 480;
+    final body = switch (_tab) {
+      _Tab.color => _colorBody(strings),
+      _Tab.preset => _presetBody(strings),
+      _Tab.photo => _photoBody(strings, compact: compact),
+    };
+    final themeAction = anySet
+        ? Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            child: TextButton.icon(
+              key: const Key('owntalk-background-theme'),
+              onPressed: () => _choose(const BackgroundUseTheme()),
+              icon: const Icon(Icons.format_color_reset_outlined),
+              label: Text(strings.ownTalkSharedThemeDefault),
+            ),
+          )
+        : null;
+    final column = Column(
+      key: const Key('owntalk-background-sheet'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Semantics(
+            header: true,
+            child: Text(
+              strings.ownTalkSharedBackgroundAll,
+              style: theme.textTheme.titleLarge,
             ),
           ),
-          if (_tabs.length > 1)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: SegmentedButton<_Tab>(
-                key: const Key('owntalk-background-tabs'),
-                showSelectedIcon: false,
-                segments: [
-                  for (final tab in _tabs)
-                    ButtonSegment<_Tab>(
-                      value: tab,
-                      label: Text(
-                        key: Key('owntalk-tab-${tab.name}'),
-                        switch (tab) {
-                          _Tab.color => strings.ownTalkBackgroundTabColor,
-                          _Tab.preset => strings.ownTalkBackgroundTabPreset,
-                          _Tab.photo => strings.ownTalkBackgroundTabPhoto,
-                        },
-                      ),
+        ),
+        if (_tabs.length > 1)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: SegmentedButton<_Tab>(
+              key: const Key('owntalk-background-tabs'),
+              showSelectedIcon: false,
+              segments: [
+                for (final tab in _tabs)
+                  ButtonSegment<_Tab>(
+                    value: tab,
+                    label: Text(
+                      key: Key('owntalk-tab-${tab.name}'),
+                      switch (tab) {
+                        _Tab.color => strings.ownTalkBackgroundTabColor,
+                        _Tab.preset => strings.ownTalkBackgroundTabPreset,
+                        _Tab.photo => strings.ownTalkBackgroundTabPhoto,
+                      },
                     ),
-                ],
-                selected: {_tab},
-                onSelectionChanged: (selection) =>
-                    setState(() => _tab = selection.first),
-              ),
+                  ),
+              ],
+              selected: {_tab},
+              onSelectionChanged: (selection) =>
+                  setState(() => _tab = selection.first),
             ),
+          ),
+        if (compact)
+          Padding(padding: const EdgeInsets.fromLTRB(16, 4, 16, 8), child: body)
+        else
           Flexible(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: switch (_tab) {
-                _Tab.color => _colorBody(strings),
-                _Tab.preset => _presetBody(strings),
-                _Tab.photo => _photoBody(strings),
-              },
+              child: body,
             ),
           ),
-          if (anySet)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              child: TextButton.icon(
-                key: const Key('owntalk-background-theme'),
-                onPressed: () => _choose(const BackgroundUseTheme()),
-                icon: const Icon(Icons.format_color_reset_outlined),
-                label: Text(strings.ownTalkSharedThemeDefault),
-              ),
-            ),
-        ],
-      ),
+        ?themeAction,
+      ],
+    );
+    return SafeArea(
+      child: compact ? SingleChildScrollView(child: column) : column,
     );
   }
 
@@ -260,7 +273,7 @@ final class _BackgroundSheetState extends State<_BackgroundSheet> {
     );
   }
 
-  Widget _photoBody(AppLocalizations strings) {
+  Widget _photoBody(AppLocalizations strings, {required bool compact}) {
     final image = widget.image;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -276,6 +289,7 @@ final class _BackgroundSheetState extends State<_BackgroundSheet> {
                 sha256: image,
               ),
               label: strings.ownTalkBackgroundPhotoPreview,
+              height: compact ? 72 : 120,
             ),
           ),
         Padding(
@@ -382,10 +396,16 @@ final class _PresetTile extends StatelessWidget {
 
 /// The current photo, loaded through the same cache the chat uses.
 final class _PhotoPreview extends ConsumerWidget {
-  const _PhotoPreview({super.key, required this.image, required this.label});
+  const _PhotoPreview({
+    super.key,
+    required this.image,
+    required this.label,
+    required this.height,
+  });
 
   final OwnTalkImageKey image;
   final String label;
+  final double height;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -394,7 +414,7 @@ final class _PhotoPreview extends ConsumerWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: SizedBox(
-        height: 120,
+        height: height,
         child: bytes == null
             ? ColoredBox(
                 color: scheme.surfaceContainerHighest,

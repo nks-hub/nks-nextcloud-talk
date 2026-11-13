@@ -1500,5 +1500,6 @@
         "type": "String"
       }
     }
-  }
+  },
+  "ownTalkBackgroundSheetBarrier": "Zavřít výběr pozadí"
 }

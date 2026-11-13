@@ -172,10 +172,79 @@ final class _WallpaperPainter extends CustomPainter {
   }
 }
 
-/// A photo wallpaper: [bytes] scaled to cover its parent, veiled with the
-/// theme's surface so text drawn straight on the background stays readable.
-/// The veil only appears once the photo is on screen, so a failed decode
-/// leaves what lies beneath untouched.
+/// Tells the chat below whether a preset or a photo is drawn behind it. Text
+/// that sits straight on the background then gets a [ChatBackgroundChip].
+final class ChatWallpaperScope extends InheritedWidget {
+  const ChatWallpaperScope({
+    super.key,
+    required this.active,
+    required super.child,
+  });
+
+  final bool active;
+
+  static bool isActive(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<ChatWallpaperScope>()
+          ?.active ??
+      false;
+
+  @override
+  bool updateShouldNotify(ChatWallpaperScope oldWidget) =>
+      active != oldWidget.active;
+}
+
+/// A small translucent surface behind text that is drawn without a bubble.
+/// Without a wallpaper behind it, it is just [child].
+final class ChatBackgroundChip extends StatelessWidget {
+  const ChatBackgroundChip({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+    this.radius = 12,
+    this.centered = false,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+
+  /// Centre the chip in the width it is given, as a block of centred text
+  /// would be.
+  final bool centered;
+
+  /// The chip colour for this position in the tree, `null` without a
+  /// wallpaper.
+  static Color? colorOf(BuildContext context) {
+    if (!ChatWallpaperScope.isActive(context)) {
+      return null;
+    }
+    final scheme = Theme.of(context).colorScheme;
+    return scheme.surface.withValues(alpha: wallpaperChipAlpha(scheme));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = colorOf(context);
+    if (color == null) {
+      return child;
+    }
+    final chip = DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      child: Padding(padding: padding, child: child),
+    );
+    return centered ? Center(child: chip) : chip;
+  }
+}
+
+/// A photo wallpaper: [bytes] scaled to cover its parent under a light veil
+/// of the theme's surface. Bubbles have their own background; text drawn
+/// straight on the photo sits on a [ChatBackgroundChip]. The veil only appears
+/// once the photo is on screen, so a failed decode leaves what lies beneath
+/// untouched.
 final class ChatWallpaperPhoto extends StatelessWidget {
   const ChatWallpaperPhoto({super.key, required this.bytes});
 
@@ -202,9 +271,7 @@ final class ChatWallpaperPhoto extends StatelessWidget {
             child,
             ColoredBox(
               key: const Key('chat-wallpaper-scrim'),
-              color: scheme.surface.withValues(
-                alpha: wallpaperScrimAlpha(scheme),
-              ),
+              color: scheme.surface.withValues(alpha: photoScrimAlpha(scheme)),
             ),
           ],
         );
