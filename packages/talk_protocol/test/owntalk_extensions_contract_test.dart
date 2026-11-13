@@ -291,7 +291,11 @@ void main() {
           body: _ocs(200, _documentJson()),
           headers: headers,
         );
-        expect((result as OwnTalkSettingsLoaded).etag, isNull, reason: '$headers');
+        expect(
+          (result as OwnTalkSettingsLoaded).etag,
+          isNull,
+          reason: '$headers',
+        );
       }
     });
 
@@ -459,7 +463,484 @@ void main() {
       expect(failure.errorCode, isNull);
     });
   });
+
+  group('capability 0.3.0', () {
+    test('carries the presets in server order and the upload limits', () {
+      final capability = _snapshot(
+        capability: _v3Capability(),
+      ).ownTalkExtensions!;
+      expect(capability.presets, [
+        'aurora',
+        'sunset',
+        'forest',
+        'ocean',
+        'dots',
+        'grid',
+      ]);
+      expect(capability.imageLimits!.maxImageBytes, 10485760);
+      expect(capability.imageLimits!.maxImageEdge, 2560);
+      expect(capability.maxImageBytes, 10485760);
+      expect(
+        capability.supportsField(OwnTalkSettingField.chatBackgroundPreset),
+        isTrue,
+      );
+      expect(
+        capability.supportsField(OwnTalkSettingField.chatBackgroundImage),
+        isTrue,
+      );
+    });
+
+    test('tolerates a server without presets and limits', () {
+      final capability = _snapshot().ownTalkExtensions!;
+      expect(capability.presets, isEmpty);
+      expect(capability.imageLimits, isNull);
+      expect(capability.maxImageBytes, ownTalkDefaultMaxImageBytes);
+      expect(capability.maxImageEdge, ownTalkDefaultMaxImageEdge);
+      expect(
+        capability.supportsField(OwnTalkSettingField.chatBackgroundPreset),
+        isFalse,
+      );
+    });
+
+    test('malformed presets and limits never switch the extension off', () {
+      for (final broken in <Map<String, Object?>>[
+        {'presets': 'aurora', 'limits': 'big'},
+        {'presets': null, 'limits': <Object?>[]},
+        {
+          'presets': [1, 'Bad Id', '', 'aurora', 'aurora'],
+          'limits': {'maxImageBytes': '10', 'maxImageEdge': 2560},
+        },
+        {
+          'presets': ['aurora'],
+          'limits': {'maxImageBytes': 0, 'maxImageEdge': 2560},
+        },
+        {
+          'presets': ['aurora'],
+          'limits': {'maxImageBytes': 1024},
+        },
+      ]) {
+        final capability = _snapshot(
+          capability: {..._v3Capability(), ...broken},
+        ).ownTalkExtensions;
+        expect(capability, isNotNull, reason: '$broken');
+        expect(capability!.imageLimits, isNull, reason: '$broken');
+        expect(
+          capability.presets,
+          anyOf(isEmpty, ['aurora']),
+          reason: '$broken',
+        );
+      }
+    });
+
+    test('compares presets and limits', () {
+      final first = _snapshot(capability: _v3Capability()).ownTalkExtensions;
+      final same = _snapshot(capability: _v3Capability()).ownTalkExtensions;
+      final other = _snapshot(
+        capability: {
+          ..._v3Capability(),
+          'presets': ['aurora'],
+        },
+      ).ownTalkExtensions;
+      expect(first, same);
+      expect(first, isNot(other));
+    });
+  });
+
+  group('background values', () {
+    test('a preset is a short lower-case ID, an image a lower-case sha256', () {
+      expect(
+        normalizeOwnTalkSettingValue(
+          OwnTalkSettingField.chatBackgroundPreset,
+          'aurora',
+        ),
+        'aurora',
+      );
+      for (final bad in ['Aurora', '', 'a b', 'x' * 33, 'dots!']) {
+        expect(
+          normalizeOwnTalkSettingValue(
+            OwnTalkSettingField.chatBackgroundPreset,
+            bad,
+          ),
+          isNull,
+          reason: bad,
+        );
+      }
+      expect(
+        normalizeOwnTalkSettingValue(
+          OwnTalkSettingField.chatBackgroundImage,
+          _sha,
+        ),
+        _sha,
+      );
+      for (final bad in [
+        _sha.toUpperCase(),
+        _sha.substring(1),
+        '${_sha}0',
+        'g' * 64,
+        '',
+      ]) {
+        expect(
+          normalizeOwnTalkSettingValue(
+            OwnTalkSettingField.chatBackgroundImage,
+            bad,
+          ),
+          isNull,
+          reason: bad,
+        );
+      }
+      expect(isOwnTalkImageHash(_sha), isTrue);
+      expect(isOwnTalkImageHash('abc'), isFalse);
+    });
+
+    test('the document carries preset and image', () {
+      final document = OwnTalkRoomSettings.fromJson(
+        _documentJson(
+          settings: {
+            'chat.backgroundPreset': 'forest',
+            'chat.backgroundImage': _sha,
+          },
+        ),
+      );
+      expect(document[OwnTalkSettingField.chatBackgroundPreset], 'forest');
+      expect(document[OwnTalkSettingField.chatBackgroundImage], _sha);
+      expect(
+        OwnTalkRoomSettings.fromJson(
+          jsonDecode(jsonEncode(document.toJson())),
+        ).toJson(),
+        document.toJson(),
+      );
+    });
+
+    test('a malformed preset or image in a document is a protocol failure', () {
+      for (final settings in <Map<String, Object?>>[
+        {'chat.backgroundPreset': 'Not Valid'},
+        {'chat.backgroundPreset': 4},
+        {'chat.backgroundImage': 'abc'},
+        {'chat.backgroundImage': _sha.toUpperCase()},
+      ]) {
+        expect(
+          () => OwnTalkRoomSettings.fromJson(_documentJson(settings: settings)),
+          throwsA(isA<TalkProtocolException>()),
+          reason: '$settings',
+        );
+      }
+    });
+
+    test('PATCH may set an offered preset, clear the image, nothing else', () {
+      final set = _update({
+        OwnTalkSettingField.chatBackgroundPreset: 'ocean',
+        OwnTalkSettingField.chatBackgroundImage: null,
+      }, capability: _v3Capability());
+      expect(jsonDecode(utf8.decode(set.bodyBytes)), {
+        'settings': {
+          'chat.backgroundPreset': 'ocean',
+          'chat.backgroundImage': null,
+        },
+      });
+      expect(
+        () => _update({
+          OwnTalkSettingField.chatBackgroundPreset: 'neon',
+        }, capability: _v3Capability()),
+        throwsA(isA<TalkProtocolException>()),
+        reason: 'not in the server list',
+      );
+      expect(
+        () => _update({
+          OwnTalkSettingField.chatBackgroundImage: _sha,
+        }, capability: _v3Capability()),
+        throwsA(isA<TalkProtocolException>()),
+        reason: 'only the upload sets an image',
+      );
+      expect(
+        () => _update({OwnTalkSettingField.chatBackgroundPreset: 'ocean'}),
+        throwsA(isA<TalkProtocolException>()),
+        reason: 'feature not announced',
+      );
+    });
+  });
+
+  group('image upload request', () {
+    test('is a PUT of the raw bytes with type, If-Match and OCS header', () {
+      final bytes = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]);
+      final request = _upload(bytes: bytes, base: 7);
+      expect(request.httpMethod, 'PUT');
+      expect(
+        request.uri.toString(),
+        '$_server/ocs/v2.php/apps/owntalk_extensions/api/v1/room/abc123xy/'
+        'settings/image?format=json',
+      );
+      expect(request.headers['Content-Type'], 'image/jpeg');
+      expect(request.headers['If-Match'], '"r7"');
+      expect(request.headers['OCS-APIRequest'], 'true');
+      expect(request.bodyBytes, bytes);
+      bytes[0] = 0;
+      expect(request.bodyBytes[0], 0xFF, reason: 'the body is a copy');
+    });
+
+    test('accepts jpeg, png and webp only', () {
+      for (final type in ['image/jpeg', 'image/png', 'image/webp']) {
+        expect(_upload(contentType: type).headers['Content-Type'], type);
+      }
+      for (final type in ['image/gif', 'image/heic', 'text/plain', '']) {
+        expect(
+          () => _upload(contentType: type),
+          throwsA(isA<TalkProtocolException>()),
+          reason: type,
+        );
+      }
+    });
+
+    test('refuses an empty or oversized body and a missing feature', () {
+      expect(
+        () => _upload(bytes: Uint8List(0)),
+        throwsA(isA<TalkProtocolException>()),
+      );
+      expect(
+        () => _upload(
+          bytes: Uint8List(2049),
+          capability: {
+            ..._v3Capability(),
+            'limits': {'maxImageBytes': 2048, 'maxImageEdge': 1024},
+          },
+        ),
+        throwsA(isA<TalkProtocolException>()),
+      );
+      expect(
+        () => _upload(
+          capability: {
+            ..._v3Capability(),
+            'features': ['appearance.colors'],
+          },
+        ),
+        throwsA(isA<TalkProtocolException>()),
+      );
+      expect(() => _upload(base: -1), throwsA(isA<TalkProtocolException>()));
+    });
+
+    test('falls back to the server maximum when no limits are published', () {
+      final capability = {..._v3Capability()}..remove('limits');
+      expect(
+        _upload(bytes: Uint8List(1024), capability: capability).bodyBytes,
+        hasLength(1024),
+      );
+    });
+  });
+
+  group('image upload responses', () {
+    final request = _upload();
+
+    test('200 yields the saved document and ETag', () {
+      final result = decodeUploadOwnTalkRoomImageResponse(
+        request: request,
+        statusCode: 200,
+        body: _ocs(
+          200,
+          _documentJson(revision: 4, settings: {'chat.backgroundImage': _sha}),
+        ),
+        headers: {'etag': '"r4-e1"'},
+      );
+      final saved = result as OwnTalkSettingsSaved;
+      expect(saved.document[OwnTalkSettingField.chatBackgroundImage], _sha);
+      expect(saved.etag, '"r4-e1"');
+    });
+
+    test('412 carries the current document like PATCH does', () {
+      final result = decodeUploadOwnTalkRoomImageResponse(
+        request: request,
+        statusCode: 412,
+        body: _ocs(412, {
+          'error': 'revision_conflict',
+          'current': _documentJson(revision: 5),
+          'fields': ['chat.backgroundImage'],
+        }, status: 'failure'),
+      );
+      final conflict = result as OwnTalkSettingsConflict;
+      expect(conflict.current.revision, 5);
+      expect(conflict.conflictingFields, [
+        OwnTalkSettingField.chatBackgroundImage,
+      ]);
+    });
+
+    test('maps 400, 413, 415, 507 and the rest with the error code', () {
+      const expected = {
+        400: (OwnTalkExtensionsFailureKind.rejected, 'invalid_image'),
+        403: (OwnTalkExtensionsFailureKind.forbidden, 'field_forbidden'),
+        404: (OwnTalkExtensionsFailureKind.notFound, 'not_found'),
+        413: (
+          OwnTalkExtensionsFailureKind.payloadTooLarge,
+          'payload_too_large',
+        ),
+        415: (
+          OwnTalkExtensionsFailureKind.unsupportedMediaType,
+          'unsupported_media_type',
+        ),
+        428: (
+          OwnTalkExtensionsFailureKind.preconditionRequired,
+          'precondition_required',
+        ),
+        429: (OwnTalkExtensionsFailureKind.rateLimited, 'rate_limited'),
+        507: (OwnTalkExtensionsFailureKind.quotaExceeded, 'quota_exceeded'),
+      };
+      for (final entry in expected.entries) {
+        final result = decodeUploadOwnTalkRoomImageResponse(
+          request: request,
+          statusCode: entry.key,
+          body: _ocs(entry.key, {'error': entry.value.$2}, status: 'failure'),
+        );
+        final failure = result as OwnTalkSettingsUpdateFailure;
+        expect(failure.kind, entry.value.$1, reason: '${entry.key}');
+        expect(failure.errorCode, entry.value.$2, reason: '${entry.key}');
+      }
+    });
+
+    test('a proxy page without OCS body still maps 413 by status', () {
+      final result = decodeUploadOwnTalkRoomImageResponse(
+        request: request,
+        statusCode: 413,
+        body: Uint8List.fromList(utf8.encode('<html>too big</html>')),
+      );
+      final failure = result as OwnTalkSettingsUpdateFailure;
+      expect(failure.kind, OwnTalkExtensionsFailureKind.payloadTooLarge);
+      expect(failure.errorCode, isNull);
+    });
+  });
+
+  group('image download', () {
+    final jpeg = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 0, 16, 74, 70]);
+
+    test('GET names the hash in the path and asks for a JPEG', () {
+      final request = _fetchImage();
+      expect(request.httpMethod, 'GET');
+      expect(
+        request.uri.toString(),
+        '$_server/ocs/v2.php/apps/owntalk_extensions/api/v1/room/abc123xy/'
+        'settings/image/$_sha',
+      );
+      expect(request.headers['OCS-APIRequest'], 'true');
+      expect(request.headers['Accept'], 'image/jpeg');
+    });
+
+    test('refuses a hash that is not 64 lower-case hex digits', () {
+      for (final bad in ['', 'abc', '../settings', _sha.toUpperCase()]) {
+        expect(
+          () => _fetchImage(sha: bad),
+          throwsA(isA<TalkProtocolException>()),
+          reason: bad,
+        );
+      }
+      expect(
+        () => _fetchImage(capability: _capabilityJson()),
+        throwsA(isA<TalkProtocolException>()),
+        reason: 'feature not announced',
+      );
+    });
+
+    test('200 yields the bytes only for a JPEG body', () {
+      final request = _fetchImage();
+      final loaded = decodeFetchOwnTalkRoomImageResponse(
+        request: request,
+        statusCode: 200,
+        body: jpeg,
+      );
+      expect((loaded as OwnTalkImageLoaded).bytes, jpeg);
+      for (final bad in [
+        Uint8List(0),
+        Uint8List.fromList(utf8.encode('<html>login</html>')),
+        Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 0, 0]),
+        Uint8List.fromList([0xFF, 0xD8]),
+      ]) {
+        expect(
+          () => decodeFetchOwnTalkRoomImageResponse(
+            request: request,
+            statusCode: 200,
+            body: bad,
+          ),
+          throwsA(isA<TalkProtocolException>()),
+        );
+      }
+    });
+
+    test('404 is "no longer the current image", others map by status', () {
+      final request = _fetchImage();
+      expect(
+        decodeFetchOwnTalkRoomImageResponse(
+          request: request,
+          statusCode: 404,
+          body: Uint8List(0),
+        ),
+        isA<OwnTalkImageMissing>(),
+      );
+      final limited =
+          decodeFetchOwnTalkRoomImageResponse(
+                request: request,
+                statusCode: 429,
+                body: Uint8List(0),
+                headers: {'Retry-After': '30'},
+              )
+              as OwnTalkImageFetchFailure;
+      expect(limited.kind, OwnTalkExtensionsFailureKind.rateLimited);
+      expect(limited.retryAfter, const Duration(seconds: 30));
+      expect(
+        (decodeFetchOwnTalkRoomImageResponse(
+                  request: request,
+                  statusCode: 403,
+                  body: Uint8List(0),
+                )
+                as OwnTalkImageFetchFailure)
+            .kind,
+        OwnTalkExtensionsFailureKind.forbidden,
+      );
+      expect(
+        () => decodeFetchOwnTalkRoomImageResponse(
+          request: request,
+          statusCode: 418,
+          body: Uint8List(0),
+        ),
+        throwsA(isA<TalkProtocolException>()),
+      );
+    });
+  });
 }
+
+const _sha = '9f2c0d5a1b7e4c3d8a6f5e2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d';
+
+Map<String, Object?> _v3Capability() => {
+  ..._capabilityJson(),
+  'version': '0.3.0',
+  'features': [
+    'appearance.colors',
+    'appearance.bubbles',
+    'appearance.presets',
+    'appearance.image',
+    'composer.quickEmoji',
+  ],
+  'presets': ['aurora', 'sunset', 'forest', 'ocean', 'dots', 'grid'],
+  'limits': {'maxImageBytes': 10485760, 'maxImageEdge': 2560},
+};
+
+UploadOwnTalkRoomImageRequest _upload({
+  Uint8List? bytes,
+  String contentType = 'image/jpeg',
+  int base = 3,
+  Object? capability,
+}) => UploadOwnTalkRoomImageRequest(
+  accountId: AccountId.parse('account-a'),
+  server: ServerBase.parse(_server),
+  roomToken: ConversationToken.parse('abc123xy', path: r'$.roomToken'),
+  capabilities: _snapshot(capability: capability ?? _v3Capability()),
+  bytes: bytes ?? Uint8List.fromList([0xFF, 0xD8, 0xFF, 1]),
+  contentType: contentType,
+  baseRevision: base,
+);
+
+FetchOwnTalkRoomImageRequest _fetchImage({String? sha, Object? capability}) =>
+    FetchOwnTalkRoomImageRequest(
+      accountId: AccountId.parse('account-a'),
+      server: ServerBase.parse(_server),
+      roomToken: ConversationToken.parse('abc123xy', path: r'$.roomToken'),
+      capabilities: _snapshot(capability: capability ?? _v3Capability()),
+      sha256: sha ?? _sha,
+    );
 
 Map<String, Object?> _capabilityJson() => {
   'version': '0.1.0',

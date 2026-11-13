@@ -10,6 +10,10 @@ const TalkProtocolErrorCode _responseCode =
     TalkProtocolErrorCode.invalidOwnTalkExtensionsResponse;
 const int ownTalkExtensionsMaximumWireBytes = 64 * 1024;
 
+/// Largest background image body accepted from the server. Uploads are capped
+/// at 10 MiB and the stored copy is scaled down, so this is generous.
+const int ownTalkExtensionsMaximumImageBytes = 16 * 1024 * 1024;
+
 /// Why an extension request did not produce a document.
 enum OwnTalkExtensionsFailureKind {
   /// `401`: the app password is no longer valid.
@@ -27,8 +31,17 @@ enum OwnTalkExtensionsFailureKind {
   /// `428`: the `If-Match` header was missing or malformed.
   preconditionRequired,
 
+  /// `413`: the upload is over the server's size limit.
+  payloadTooLarge,
+
+  /// `415`: the upload is not JPEG, PNG or WebP.
+  unsupportedMediaType,
+
   /// `429`
   rateLimited,
+
+  /// `507`: the server's storage for background images is full.
+  quotaExceeded,
 
   /// `503`: Talk is missing or broken on the server.
   unavailable,
@@ -133,11 +146,87 @@ OwnTalkSettingsUpdateResult decodeUpdateOwnTalkRoomSettingsResponse({
   required int statusCode,
   required Uint8List body,
   Map<String, String> headers = const {},
+}) => _decodeWriteResponse(
+  roomToken: request.roomToken.value,
+  statusCode: statusCode,
+  body: body,
+  headers: headers,
+);
+
+/// The image upload answers like a merge patch: the document, a `412` with the
+/// current one, or one of the failures.
+OwnTalkSettingsUpdateResult decodeUploadOwnTalkRoomImageResponse({
+  required UploadOwnTalkRoomImageRequest request,
+  required int statusCode,
+  required Uint8List body,
+  Map<String, String> headers = const {},
+}) => _decodeWriteResponse(
+  roomToken: request.roomToken.value,
+  statusCode: statusCode,
+  body: body,
+  headers: headers,
+);
+
+sealed class OwnTalkImageFetchResult {
+  const OwnTalkImageFetchResult();
+}
+
+final class OwnTalkImageLoaded extends OwnTalkImageFetchResult {
+  const OwnTalkImageLoaded(this.bytes);
+
+  final Uint8List bytes;
+}
+
+/// `404`: that hash is not the conversation's current image any more.
+final class OwnTalkImageMissing extends OwnTalkImageFetchResult {
+  const OwnTalkImageMissing();
+}
+
+final class OwnTalkImageFetchFailure extends OwnTalkImageFetchResult {
+  const OwnTalkImageFetchFailure(this.kind, {this.retryAfter});
+
+  final OwnTalkExtensionsFailureKind kind;
+  final Duration? retryAfter;
+}
+
+/// The server stores every background as JPEG, so anything else is refused
+/// before it reaches the image decoder.
+OwnTalkImageFetchResult decodeFetchOwnTalkRoomImageResponse({
+  required FetchOwnTalkRoomImageRequest request,
+  required int statusCode,
+  required Uint8List body,
+  Map<String, String> headers = const {},
+}) {
+  switch (statusCode) {
+    case 200:
+      if (body.length < 4 ||
+          body.length > ownTalkExtensionsMaximumImageBytes ||
+          body[0] != 0xFF ||
+          body[1] != 0xD8 ||
+          body[2] != 0xFF) {
+        protocolFailure(_responseCode, r'$.body');
+      }
+      return OwnTalkImageLoaded(body);
+    case 404:
+      return const OwnTalkImageMissing();
+    default:
+      return OwnTalkImageFetchFailure(
+        _failureKind(statusCode),
+        retryAfter: statusCode == 429 ? _retryAfterHeader(headers) : null,
+      );
+  }
+}
+
+OwnTalkSettingsUpdateResult _decodeWriteResponse({
+  required String roomToken,
+  required int statusCode,
+  required Uint8List body,
+  required Map<String, String> headers,
 }) {
   switch (statusCode) {
     case 200:
       final document = OwnTalkRoomSettings.fromJson(_decodeOcsData(body));
-      if (document.roomToken != request.roomToken.value) {
+      if (document.roomToken != roomToken) {
         protocolFailure(_responseCode, r'$.ocs.data.roomToken');
       }
       return OwnTalkSettingsSaved(document, etag: _etagHeader(headers));
@@ -154,7 +243,7 @@ OwnTalkSettingsUpdateResult decodeUpdateOwnTalkRoomSettingsResponse({
         data['current'],
         path: r'$.ocs.data.current',
       );
-      if (current.roomToken != request.roomToken.value) {
+      if (current.roomToken != roomToken) {
         protocolFailure(_responseCode, r'$.ocs.data.current.roomToken');
       }
       final fields = requireList(
@@ -214,9 +303,12 @@ OwnTalkExtensionsFailureKind _failureKind(int statusCode) =>
       401 => OwnTalkExtensionsFailureKind.reauthenticationRequired,
       403 => OwnTalkExtensionsFailureKind.forbidden,
       404 => OwnTalkExtensionsFailureKind.notFound,
+      413 => OwnTalkExtensionsFailureKind.payloadTooLarge,
+      415 => OwnTalkExtensionsFailureKind.unsupportedMediaType,
       428 => OwnTalkExtensionsFailureKind.preconditionRequired,
       429 => OwnTalkExtensionsFailureKind.rateLimited,
       503 => OwnTalkExtensionsFailureKind.unavailable,
+      507 => OwnTalkExtensionsFailureKind.quotaExceeded,
       _ => protocolFailure(
         TalkProtocolErrorCode.unsupportedHttpStatus,
         r'$.statusCode',

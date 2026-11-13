@@ -16,10 +16,22 @@ const int ownTalkExtensionsSupportedApi = 1;
 const String ownTalkFeatureColors = 'appearance.colors';
 const String ownTalkFeatureBubbles = 'appearance.bubbles';
 const String ownTalkFeatureQuickEmoji = 'composer.quickEmoji';
+const String ownTalkFeaturePresets = 'appearance.presets';
+const String ownTalkFeatureImage = 'appearance.image';
+
+/// Upload limits when the server does not publish `limits`: the server's own
+/// upper bound for the byte size and its default for the longest edge.
+const int ownTalkDefaultMaxImageBytes = 10 * 1024 * 1024;
+const int ownTalkDefaultMaxImageEdge = 2560;
 
 const int _maximumEmojiBytes = 32;
 final RegExp _colorPattern = RegExp(r'^#[0-9A-Fa-f]{6}$');
 final RegExp _roomTypePattern = RegExp(r'^[a-z0-9]{1,32}$');
+final RegExp _presetPattern = RegExp(r'^[a-z0-9]{1,32}$');
+final RegExp _imageHashPattern = RegExp(r'^[0-9a-f]{64}$');
+
+/// Whether [value] is the lower-case hex SHA-256 the server names an image by.
+bool isOwnTalkImageHash(String value) => _imageHashPattern.hasMatch(value);
 
 /// How the server decides who may edit group and public conversations.
 enum OwnTalkAclMode { roles, membership }
@@ -29,21 +41,66 @@ const int _talkTypeOneToOne = 1;
 const int _talkTypeGroup = 2;
 const int _talkTypePublic = 3;
 
+/// What a setting value looks like on the wire.
+enum OwnTalkSettingKind { color, emoji, preset, image }
+
 /// One shared setting the server accepts, with the feature that gates it.
 enum OwnTalkSettingField {
-  chatBackgroundColor('chat.backgroundColor', ownTalkFeatureColors, false),
-  chatAccentColor('chat.accentColor', ownTalkFeatureColors, false),
-  bubbleOwnColor('bubble.ownColor', ownTalkFeatureBubbles, false),
-  bubbleOwnTextColor('bubble.ownTextColor', ownTalkFeatureBubbles, false),
-  bubbleOtherColor('bubble.otherColor', ownTalkFeatureBubbles, false),
-  bubbleOtherTextColor('bubble.otherTextColor', ownTalkFeatureBubbles, false),
-  composerQuickEmoji('composer.quickEmoji', ownTalkFeatureQuickEmoji, true);
+  chatBackgroundColor(
+    'chat.backgroundColor',
+    ownTalkFeatureColors,
+    OwnTalkSettingKind.color,
+  ),
+  chatAccentColor(
+    'chat.accentColor',
+    ownTalkFeatureColors,
+    OwnTalkSettingKind.color,
+  ),
+  bubbleOwnColor(
+    'bubble.ownColor',
+    ownTalkFeatureBubbles,
+    OwnTalkSettingKind.color,
+  ),
+  bubbleOwnTextColor(
+    'bubble.ownTextColor',
+    ownTalkFeatureBubbles,
+    OwnTalkSettingKind.color,
+  ),
+  bubbleOtherColor(
+    'bubble.otherColor',
+    ownTalkFeatureBubbles,
+    OwnTalkSettingKind.color,
+  ),
+  bubbleOtherTextColor(
+    'bubble.otherTextColor',
+    ownTalkFeatureBubbles,
+    OwnTalkSettingKind.color,
+  ),
+  chatBackgroundPreset(
+    'chat.backgroundPreset',
+    ownTalkFeaturePresets,
+    OwnTalkSettingKind.preset,
+  ),
 
-  const OwnTalkSettingField(this.wireKey, this.feature, this.isEmoji);
+  /// Set only by the upload endpoint; a merge patch can only clear it.
+  chatBackgroundImage(
+    'chat.backgroundImage',
+    ownTalkFeatureImage,
+    OwnTalkSettingKind.image,
+  ),
+  composerQuickEmoji(
+    'composer.quickEmoji',
+    ownTalkFeatureQuickEmoji,
+    OwnTalkSettingKind.emoji,
+  );
+
+  const OwnTalkSettingField(this.wireKey, this.feature, this.kind);
 
   final String wireKey;
   final String feature;
-  final bool isEmoji;
+  final OwnTalkSettingKind kind;
+
+  bool get isEmoji => kind == OwnTalkSettingKind.emoji;
 
   static OwnTalkSettingField? fromWireKey(String key) {
     for (final field in values) {
@@ -59,19 +116,27 @@ enum OwnTalkSettingField {
 ///
 /// Colours become upper-case `#RRGGBB`. An emoji must be non-empty, at most 32
 /// UTF-8 bytes, free of control characters and contain a non-ASCII code point;
-/// the server remains the authority on what counts as a single emoji.
+/// the server remains the authority on what counts as a single emoji. A preset
+/// is a short lower-case ID (whether the server offers it is checked against
+/// the capability) and an image is the 64 hex digits of its SHA-256.
 String? normalizeOwnTalkSettingValue(OwnTalkSettingField field, String value) {
-  if (field.isEmoji) {
-    if (value.isEmpty ||
-        utf8.encode(value).length > _maximumEmojiBytes ||
-        value.runes.any((rune) => rune < 0x20 || rune == 0x7f) ||
-        value.runes.any(_isInvisibleOrDirectional) ||
-        !value.runes.any((rune) => rune > 0x7f)) {
-      return null;
-    }
-    return value;
+  switch (field.kind) {
+    case OwnTalkSettingKind.emoji:
+      if (value.isEmpty ||
+          utf8.encode(value).length > _maximumEmojiBytes ||
+          value.runes.any((rune) => rune < 0x20 || rune == 0x7f) ||
+          value.runes.any(_isInvisibleOrDirectional) ||
+          !value.runes.any((rune) => rune > 0x7f)) {
+        return null;
+      }
+      return value;
+    case OwnTalkSettingKind.color:
+      return _colorPattern.hasMatch(value) ? value.toUpperCase() : null;
+    case OwnTalkSettingKind.preset:
+      return _presetPattern.hasMatch(value) ? value : null;
+    case OwnTalkSettingKind.image:
+      return _imageHashPattern.hasMatch(value) ? value : null;
   }
-  return _colorPattern.hasMatch(value) ? value.toUpperCase() : null;
 }
 
 /// Bidi controls, zero-width characters and the BOM reorder or hide text;
@@ -92,8 +157,11 @@ final class OwnTalkExtensionsCapability {
     required this.acl,
     required Set<String> features,
     required Set<String> roomTypes,
+    required List<String> presets,
+    required this.imageLimits,
   }) : features = Set<String>.unmodifiable(features),
-       roomTypes = Set<String>.unmodifiable(roomTypes);
+       roomTypes = Set<String>.unmodifiable(roomTypes),
+       presets = List<String>.unmodifiable(presets);
 
   /// Returns `null` for a missing, malformed or unsupported capability.
   static OwnTalkExtensionsCapability? tryParse(Object? raw) {
@@ -138,6 +206,8 @@ final class OwnTalkExtensionsCapability {
           code: code,
         ),
         roomTypes: roomTypes,
+        presets: _parsePresets(value['presets']),
+        imageLimits: OwnTalkImageLimits._tryParse(value['limits']),
       );
     } on TalkProtocolException {
       return null;
@@ -149,6 +219,19 @@ final class OwnTalkExtensionsCapability {
   final Set<String> features;
   final Set<String> roomTypes;
 
+  /// Background preset IDs the server accepts, in the order it listed them.
+  /// Empty for a server older than 0.3.0.
+  final List<String> presets;
+
+  /// Upload limits, or `null` when the server did not publish them.
+  final OwnTalkImageLimits? imageLimits;
+
+  int get maxImageBytes =>
+      imageLimits?.maxImageBytes ?? ownTalkDefaultMaxImageBytes;
+
+  int get maxImageEdge =>
+      imageLimits?.maxImageEdge ?? ownTalkDefaultMaxImageEdge;
+
   bool supportsFeature(String feature) => features.contains(feature);
 
   @override
@@ -159,11 +242,19 @@ final class OwnTalkExtensionsCapability {
       other.features.length == features.length &&
       other.features.containsAll(features) &&
       other.roomTypes.length == roomTypes.length &&
-      other.roomTypes.containsAll(roomTypes);
+      other.roomTypes.containsAll(roomTypes) &&
+      _sameList(other.presets, presets) &&
+      other.imageLimits == imageLimits;
 
   @override
-  int get hashCode =>
-      Object.hash(version, acl, features.length, roomTypes.length);
+  int get hashCode => Object.hash(
+    version,
+    acl,
+    features.length,
+    roomTypes.length,
+    presets.length,
+    imageLimits,
+  );
 
   bool supportsField(OwnTalkSettingField field) =>
       supportsFeature(field.feature);
@@ -175,6 +266,68 @@ final class OwnTalkExtensionsCapability {
     _talkTypePublic => roomTypes.contains('public'),
     _ => false,
   };
+}
+
+/// A malformed `presets` member means "no presets", and an entry that is not a
+/// plausible ID is skipped, so a newer server never switches the extension off.
+List<String> _parsePresets(Object? raw) {
+  if (raw is! List<Object?>) {
+    return const [];
+  }
+  final result = <String>[];
+  for (final entry in raw) {
+    if (entry is String &&
+        _presetPattern.hasMatch(entry) &&
+        !result.contains(entry)) {
+      result.add(entry);
+    }
+  }
+  return result;
+}
+
+bool _sameList(List<String> first, List<String> second) {
+  if (first.length != second.length) {
+    return false;
+  }
+  for (var index = 0; index < first.length; index++) {
+    if (first[index] != second[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// What the server accepts for a background image upload.
+final class OwnTalkImageLimits {
+  const OwnTalkImageLimits({
+    required this.maxImageBytes,
+    required this.maxImageEdge,
+  });
+
+  /// `null` unless both members are positive integers.
+  static OwnTalkImageLimits? _tryParse(Object? raw) {
+    if (raw is! Map<String, Object?>) {
+      return null;
+    }
+    final bytes = raw['maxImageBytes'];
+    final edge = raw['maxImageEdge'];
+    if (bytes is! int || edge is! int || bytes < 1 || edge < 1) {
+      return null;
+    }
+    return OwnTalkImageLimits(maxImageBytes: bytes, maxImageEdge: edge);
+  }
+
+  final int maxImageBytes;
+  final int maxImageEdge;
+
+  @override
+  bool operator ==(Object other) =>
+      other is OwnTalkImageLimits &&
+      other.maxImageBytes == maxImageBytes &&
+      other.maxImageEdge == maxImageEdge;
+
+  @override
+  int get hashCode => Object.hash(maxImageBytes, maxImageEdge);
 }
 
 /// The shared settings document of one conversation.

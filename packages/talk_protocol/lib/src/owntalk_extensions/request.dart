@@ -22,6 +22,13 @@ const TalkProtocolErrorCode _requestCode =
 /// caller's permissions.
 String ownTalkRevisionEtag(int revision) => '"r$revision"';
 
+/// Image types the upload endpoint accepts.
+const Set<String> ownTalkImageContentTypes = {
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+};
+
 final RegExp _entityTagPattern = RegExp(r'^(?:W/)?"[!#-~]*"$');
 
 /// Whether [value] is an entity tag that is safe to echo into a header.
@@ -52,6 +59,13 @@ Uri _settingsUri(ServerBase server, ConversationToken roomToken) {
     path:
         '${server.basePath}$ownTalkExtensionsApiPath/room/${roomToken.value}/settings',
     queryParameters: const {'format': 'json'},
+  );
+}
+
+Uri _imageUri(ServerBase server, ConversationToken roomToken, String suffix) {
+  return server.uri.replace(
+    path:
+        '${server.basePath}$ownTalkExtensionsApiPath/room/${roomToken.value}/settings/image$suffix',
   );
 }
 
@@ -145,6 +159,103 @@ final class UpdateOwnTalkRoomSettingsRequest {
       'UpdateOwnTalkRoomSettingsRequest(fields: ${changes.length})';
 }
 
+/// Uploads a background image. The server re-encodes it and answers with the
+/// document whose `chat.backgroundImage` names the stored file.
+final class UploadOwnTalkRoomImageRequest {
+  UploadOwnTalkRoomImageRequest({
+    required this.accountId,
+    required this.server,
+    required this.roomToken,
+    required CapabilitySnapshot capabilities,
+    required Uint8List bytes,
+    required this.contentType,
+    required this.baseRevision,
+    this.userAgent = ownTalkExtensionsContractUserAgent,
+  }) : bodyBytes = Uint8List.fromList(bytes) {
+    final capability = _requireCapability(capabilities);
+    if (!capability.supportsField(OwnTalkSettingField.chatBackgroundImage)) {
+      protocolFailure(_requestCode, r'$.body.settings.chat.backgroundImage');
+    }
+    if (!ownTalkImageContentTypes.contains(contentType)) {
+      protocolFailure(_requestCode, r'$.headers.contentType');
+    }
+    if (bodyBytes.isEmpty || bodyBytes.length > capability.maxImageBytes) {
+      protocolFailure(_requestCode, r'$.body');
+    }
+    if (baseRevision < 0) {
+      protocolFailure(_requestCode, r'$.headers.ifMatch');
+    }
+    _validateUserAgent(userAgent);
+  }
+
+  final AccountId accountId;
+  final ServerBase server;
+  final ConversationToken roomToken;
+  final Uint8List bodyBytes;
+  final String contentType;
+  final int baseRevision;
+  final String userAgent;
+
+  String get httpMethod => 'PUT';
+
+  Uri get uri => _imageUri(
+    server,
+    roomToken,
+    '',
+  ).replace(queryParameters: const {'format': 'json'});
+
+  Map<String, String> get headers => UnmodifiableMapView({
+    'OCS-APIRequest': 'true',
+    'User-Agent': userAgent,
+    'Content-Type': contentType,
+    'If-Match': ownTalkRevisionEtag(baseRevision),
+  });
+
+  @override
+  String toString() =>
+      'UploadOwnTalkRoomImageRequest(bytes: ${bodyBytes.length})';
+}
+
+/// Downloads the current background image, named by its SHA-256.
+final class FetchOwnTalkRoomImageRequest {
+  FetchOwnTalkRoomImageRequest({
+    required this.accountId,
+    required this.server,
+    required this.roomToken,
+    required CapabilitySnapshot capabilities,
+    required this.sha256,
+    this.userAgent = ownTalkExtensionsContractUserAgent,
+  }) {
+    final capability = _requireCapability(capabilities);
+    if (!capability.supportsField(OwnTalkSettingField.chatBackgroundImage)) {
+      protocolFailure(_requestCode, r'$.path.sha256');
+    }
+    if (!isOwnTalkImageHash(sha256)) {
+      protocolFailure(_requestCode, r'$.path.sha256');
+    }
+    _validateUserAgent(userAgent);
+  }
+
+  final AccountId accountId;
+  final ServerBase server;
+  final ConversationToken roomToken;
+  final String sha256;
+  final String userAgent;
+
+  String get httpMethod => 'GET';
+
+  Uri get uri => _imageUri(server, roomToken, '/$sha256');
+
+  Map<String, String> get headers => UnmodifiableMapView({
+    'OCS-APIRequest': 'true',
+    'User-Agent': userAgent,
+    'Accept': 'image/jpeg',
+  });
+
+  @override
+  String toString() => 'FetchOwnTalkRoomImageRequest()';
+}
+
 Map<OwnTalkSettingField, String?> _validatedChanges(
   CapabilitySnapshot capabilities,
   Map<OwnTalkSettingField, String?> changes,
@@ -161,10 +272,22 @@ Map<OwnTalkSettingField, String?> _validatedChanges(
       protocolFailure(_requestCode, path);
     }
     final value = entry.value;
-    result[field] = value == null
-        ? null
-        : normalizeOwnTalkSettingValue(field, value) ??
-              protocolFailure(_requestCode, path);
+    if (value == null) {
+      result[field] = null;
+      continue;
+    }
+    // A merge patch can only clear an image; it is set by the upload.
+    if (field == OwnTalkSettingField.chatBackgroundImage) {
+      protocolFailure(_requestCode, path);
+    }
+    final normalized =
+        normalizeOwnTalkSettingValue(field, value) ??
+        protocolFailure(_requestCode, path);
+    if (field == OwnTalkSettingField.chatBackgroundPreset &&
+        !capability.presets.contains(normalized)) {
+      protocolFailure(_requestCode, path);
+    }
+    result[field] = normalized;
   }
   return result;
 }
