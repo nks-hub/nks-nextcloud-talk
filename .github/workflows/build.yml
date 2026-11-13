@@ -569,8 +569,7 @@ jobs:
               svc.edits().delete(packageName=pkg, editId=edit).execute()
           already = str(want) in {str(c) for c in taken}
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"already={'true' if already else 'false'}
-")
+              out.write(f"already={'true' if already else 'false'}\n")
           if already:
               print(f"::notice::version code {want} is already on Play, upload skipped")
           else:
