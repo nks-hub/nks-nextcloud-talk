@@ -44,6 +44,10 @@ const _ownTalkImageTimeout = Duration(minutes: 2);
 
 /// Optional OwnTalk Extensions server app. Callers must have seen the
 /// capability first; nothing here probes for it.
+///
+/// The calls authenticate with Basic auth alone and stay outside the room
+/// session: a desktop re-enters the room while its details are open, and a
+/// new session would otherwise discard a write the server already applied.
 mixin _NextcloudApiOwnTalkExtensions on _HttpNextcloudApiBase {
   Future<OwnTalkSettingsFetchResult> fetchOwnTalkRoomSettings({
     required FetchOwnTalkRoomSettingsRequest settingsRequest,
@@ -62,8 +66,6 @@ mixin _NextcloudApiOwnTalkExtensions on _HttpNextcloudApiBase {
       allowedStatusCodes: _ownTalkFetchAllowedStatusCodes,
       maximumBytes: ownTalkExtensionsMaximumWireBytes,
       readBodyForStatusCodes: const {200, 400, 401, 403, 404, 429, 503},
-      sessionAccountId: settingsRequest.accountId,
-      sessionServer: settingsRequest.server,
     );
     return decodeFetchOwnTalkRoomSettingsResponse(
       request: settingsRequest,
@@ -92,8 +94,6 @@ mixin _NextcloudApiOwnTalkExtensions on _HttpNextcloudApiBase {
       request,
       allowedStatusCodes: _ownTalkUpdateAllowedStatusCodes,
       maximumBytes: ownTalkExtensionsMaximumWireBytes,
-      sessionAccountId: settingsRequest.accountId,
-      sessionServer: settingsRequest.server,
     );
     return decodeUpdateOwnTalkRoomSettingsResponse(
       request: settingsRequest,
@@ -123,8 +123,6 @@ mixin _NextcloudApiOwnTalkExtensions on _HttpNextcloudApiBase {
       allowedStatusCodes: _ownTalkUploadAllowedStatusCodes,
       maximumBytes: ownTalkExtensionsMaximumWireBytes,
       timeout: _ownTalkImageTimeout,
-      sessionAccountId: uploadRequest.accountId,
-      sessionServer: uploadRequest.server,
     );
     return decodeUploadOwnTalkRoomImageResponse(
       request: uploadRequest,
@@ -151,8 +149,6 @@ mixin _NextcloudApiOwnTalkExtensions on _HttpNextcloudApiBase {
       maximumBytes: ownTalkExtensionsMaximumImageBytes,
       readBodyForStatusCodes: const {200},
       timeout: _ownTalkImageTimeout,
-      sessionAccountId: imageRequest.accountId,
-      sessionServer: imageRequest.server,
     );
     return decodeFetchOwnTalkRoomImageResponse(
       request: imageRequest,
