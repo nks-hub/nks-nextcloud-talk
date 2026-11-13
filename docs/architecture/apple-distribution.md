@@ -129,10 +129,10 @@ CI creates the GitHub release for a `v*` tag as a **draft** with the Android, Wi
 On the build Mac, from `apps/mobile` at the tag and with the login keychain unlocked:
 
 ```sh
-bash tool/release_macos.sh <telemetry.env> <build.env> <AuthKey.p8> <key-id> <issuer>
+bash tool/release_macos.sh <telemetry.env> <build.env> <AuthKey.p8> <key-id> <issuer> <team-id>
 ```
 
-It builds, signs every embedded framework and the app with the Developer ID identity, notarizes with the App Store Connect key, staples, and writes `build/macos-release/nks-talk-macos-<version>-<build>.zip` with its signed `appcast.xml`. Upload both to the draft, add the zip's line to `SHA256SUMS`, then:
+It archives with Xcode and exports with `method=developer-id` and manual signing: the app has push and a shared keychain group, so it needs Developer ID provisioning profiles with the entitlements Xcode expands, and the API key may not use cloud signing. The script picks the newest installed Developer ID profile for the app and for the notification extension; when Apple marks one `INVALID` (for example after an App ID capability change), create a new `MAC_APP_DIRECT` profile through the App Store Connect API with the same certificate and install it under `~/Library/MobileDevice/Provisioning Profiles`. It then re-signs Sparkle's helpers and the extension with the hardened runtime, which notarization requires and the Xcode project does not set, notarizes with the App Store Connect key, staples, and writes `build/macos-release/nks-talk-macos-<version>-<build>.zip` with its signed `appcast.xml`. Upload both to the draft, add the zip's line to `SHA256SUMS`, then:
 
 ```sh
 python3 tool/publish_release.py v<version>+<build>
