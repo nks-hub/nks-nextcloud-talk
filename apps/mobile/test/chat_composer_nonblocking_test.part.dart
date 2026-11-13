@@ -178,4 +178,185 @@ void _registerNonBlockingComposerTests() {
     },
     timeout: const Timeout(Duration(seconds: 30)),
   );
+
+  testWidgets(
+    'lines typed while the first is still being admitted queue up in order',
+    (tester) async {
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      _addHarnessTearDown(tester, harness);
+      await tester.pumpWidget(harness.app());
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+      );
+      // Admission starts with a capabilities read against the server. Held,
+      // the first line never reaches the outbox, which is what a slow link
+      // looks like to the composer.
+      final hold = Completer<void>();
+      harness.capabilitiesHold.add(hold);
+      addTearDown(() {
+        if (!hold.isCompleted) hold.complete();
+      });
+
+      for (final line in ['one', 'two', 'three']) {
+        await _typeAndSend(tester, line);
+        await _pumpUntil(
+          tester,
+          () => _composer(tester).text.isEmpty && _sendButtonEnabled(tester),
+        );
+      }
+      expect(harness.chatSendStarted, isEmpty);
+
+      hold.complete();
+      await _pumpUntil(tester, () => harness.sentMessages.length == 3);
+
+      expect(harness.chatSendStarted, ['one', 'two', 'three']);
+      expect(harness.sentMessages, ['one', 'two', 'three']);
+      expect(tester.takeException(), isNull);
+      await _unmountComposer(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
+    'a line that dies on the wire holds the later ones in order behind it',
+    (tester) async {
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      _addHarnessTearDown(tester, harness);
+      harness.chatSendFailures.add('one');
+      await tester.pumpWidget(harness.app());
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+      );
+
+      for (final line in ['one', 'two', 'three']) {
+        await _typeAndSend(tester, line);
+        await _pumpUntil(
+          tester,
+          () => _composer(tester).text.isEmpty && _sendButtonEnabled(tester),
+        );
+      }
+      await _pumpUntil(tester, () => harness.chatSendStarted.isNotEmpty);
+      // Room for a wrongly released second line to show up on the wire.
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 10));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+      }
+      final rows = (await tester.runAsync(
+        () => (harness.database.select(
+          harness.database.textSendOperations,
+        )..orderBy([(row) => OrderingTerm.asc(row.enqueueSequence)])).get(),
+      ))!;
+
+      // The failed line stays in the outbox, unresolved and retryable, and the
+      // two after it are not sent past it: they would reach the chat before it.
+      expect(rows.map((row) => row.message), ['one', 'two', 'three']);
+      expect(rows.first.outboxState, isNot('completed'));
+      expect(rows.skip(1).map((row) => row.outboxState), ['queued', 'queued']);
+      expect(harness.chatSendStarted, ['one']);
+      expect(harness.sentMessages, isEmpty);
+      expect(tester.takeException(), isNull);
+      await _unmountComposer(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
+    'a double tap on send admits the line once',
+    (tester) async {
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      _addHarnessTearDown(tester, harness);
+      await tester.pumpWidget(harness.app());
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+      );
+      await tester.enterText(find.byKey(const Key('chat-composer')), 'once');
+      await tester.pump();
+      final send = find.byKey(const Key('send-message-gesture'));
+      await tester.tap(send);
+      await tester.tap(send);
+      await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 10));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+      }
+
+      expect(harness.sentMessages, ['once']);
+      expect(_composer(tester).text, isEmpty);
+      expect(tester.takeException(), isNull);
+      await _unmountComposer(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
+    'only the first line typed after choosing a reply is a reply',
+    (tester) async {
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      _addHarnessTearDown(tester, harness);
+      await tester.runAsync(harness.seedReplyMessage);
+      await tester.pumpWidget(harness.app());
+      await _pumpUntil(
+        tester,
+        () =>
+            find
+                .byKey(const Key('chat-message-target-109'))
+                .evaluate()
+                .isNotEmpty &&
+            find.byType(ChatMediaComposer).evaluate().isNotEmpty,
+      );
+      await tester.longPress(find.byKey(const Key('chat-message-target-109')));
+      await _pumpTransition(tester);
+      await tester.tap(find.byKey(const Key('message-action-reply')));
+      await _pumpTransition(tester);
+      expect(find.byKey(const Key('chat-reply-banner')), findsOneWidget);
+
+      final hold = Completer<void>();
+      harness.capabilitiesHold.add(hold);
+      addTearDown(() {
+        if (!hold.isCompleted) hold.complete();
+      });
+      for (final line in ['answer', 'follow-up']) {
+        await _typeAndSend(tester, line);
+        await _pumpUntil(
+          tester,
+          () => _composer(tester).text.isEmpty && _sendButtonEnabled(tester),
+        );
+      }
+      expect(find.byKey(const Key('chat-reply-banner')), findsNothing);
+
+      hold.complete();
+      var rows = const <StoredTextSendOperation>[];
+      for (var attempt = 0; attempt < 600 && rows.length < 2; attempt++) {
+        await tester.pump(const Duration(milliseconds: 10));
+        rows = (await tester.runAsync(
+          () => (harness.database.select(
+            harness.database.textSendOperations,
+          )..orderBy([(row) => OrderingTerm.asc(row.enqueueSequence)])).get(),
+        ))!;
+      }
+
+      // The banner went with the first line, so the second is a plain message
+      // and not another reply to the same one.
+      expect(rows.map((row) => row.message), ['answer', 'follow-up']);
+      expect(rows.map((row) => row.replyTo), [109, null]);
+      expect(harness.chatSendFields.first['replyTo'], '109');
+      expect(tester.takeException(), isNull);
+      await _unmountComposer(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+}
+
+Future<void> _typeAndSend(WidgetTester tester, String text) async {
+  await tester.enterText(find.byKey(const Key('chat-composer')), text);
+  await tester.pump();
+  await tester.tap(find.byKey(const Key('send-message-gesture')));
+  await tester.pump();
 }

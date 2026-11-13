@@ -507,8 +507,11 @@ final class _ComposerHarness {
     required this.api,
     required this.sentMessages,
     required this.chatSendStarted,
+    required this.chatSendFields,
     required this.attachmentUploadStarted,
     required this.chatSendHold,
+    required this.capabilitiesHold,
+    required this.chatSendFailures,
     required this.attachmentUploadHold,
     required this.sourceStore,
     required this.attachmentService,
@@ -529,12 +532,19 @@ final class _ComposerHarness {
   /// Messages and uploads whose request has reached the fixture server,
   /// answered or not.
   final List<String> chatSendStarted;
+
+  /// The form fields of every send request that reached the fixture server.
+  final List<Map<String, String>> chatSendFields;
   final List<int> attachmentUploadStarted;
 
   /// While one of these is pending, the matching fixture request stays open, so
   /// a test can look at the composer with a send still on the wire.
   final List<Completer<void>> chatSendHold;
+  final List<Completer<void>> capabilitiesHold;
   final List<Completer<void>> attachmentUploadHold;
+
+  /// Messages whose send request dies on the wire instead of being answered.
+  final Set<String> chatSendFailures;
   final DurableAttachmentSourceStore sourceStore;
   final AttachmentService attachmentService;
   final http.Client attachmentClient;
@@ -582,8 +592,11 @@ final class _ComposerHarness {
       ..values[account.id] = 'fixture-app-password';
     final sentMessages = <String>[];
     final chatSendStarted = <String>[];
+    final chatSendFields = <Map<String, String>>[];
     final attachmentUploadStarted = <int>[];
     final chatSendHold = <Completer<void>>[];
+    final capabilitiesHold = <Completer<void>>[];
+    final chatSendFailures = <String>{};
     final attachmentUploadHold = <Completer<void>>[];
     final uploadedAttachments = <List<int>>[];
     final finalizedFileNames = <String>[];
@@ -635,10 +648,17 @@ final class _ComposerHarness {
     final api = HttpNextcloudApi(
       client: MockClient((request) async {
         if (request.url.path.endsWith('/cloud/capabilities')) {
+          if (capabilitiesHold.isNotEmpty) {
+            await capabilitiesHold.first.future;
+          }
           return http.Response(jsonEncode(_attachmentCapabilities()), 200);
         }
         if (request.method == 'POST') {
           chatSendStarted.add(request.bodyFields['message']!);
+          chatSendFields.add(Map<String, String>.of(request.bodyFields));
+          if (chatSendFailures.contains(request.bodyFields['message'])) {
+            throw http.ClientException('connection lost');
+          }
           if (chatSendHold.isNotEmpty) {
             await chatSendHold.first.future;
           }
@@ -677,8 +697,11 @@ final class _ComposerHarness {
       api: api,
       sentMessages: sentMessages,
       chatSendStarted: chatSendStarted,
+      chatSendFields: chatSendFields,
       attachmentUploadStarted: attachmentUploadStarted,
       chatSendHold: chatSendHold,
+      capabilitiesHold: capabilitiesHold,
+      chatSendFailures: chatSendFailures,
       attachmentUploadHold: attachmentUploadHold,
       sourceStore: sourceStore,
       attachmentService: attachmentService,

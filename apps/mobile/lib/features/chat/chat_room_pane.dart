@@ -148,6 +148,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   StreamSubscription<void>? _connectivityWakeSubscription;
   int _syncGeneration = 0;
   int _sendGeneration = 0;
+  // Text sends overlap, so unlike _sendGeneration this only moves when the
+  // room changes or the pane goes away.
+  int _textSendGeneration = 0;
   int _giphyGeneration = 0;
   bool _syncing = false;
   bool _loadingOlder = false;
@@ -309,6 +312,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _loadingOlder = false;
     _scrollController.resetExtentTracking();
     _sendGeneration++;
+    _textSendGeneration++;
     _composerFocusGeneration++;
     _giphyGeneration++;
     _jumpGeneration++;
@@ -389,6 +393,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _view = null;
     _syncGeneration++;
     _sendGeneration++;
+    _textSendGeneration++;
     _composerFocusGeneration++;
     _giphyGeneration++;
     _jumpGeneration++;

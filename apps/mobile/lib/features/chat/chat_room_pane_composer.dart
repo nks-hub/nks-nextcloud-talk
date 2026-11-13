@@ -414,7 +414,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     if (expectedKey != null && expectedKey != targetKey) {
       return;
     }
-    if (message.isEmpty || _sending || _isReadOnlyNow()) {
+    if (message.isEmpty || _isReadOnlyNow()) {
       return;
     }
     final threadContext = _currentThreadContext;
@@ -423,7 +423,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       return;
     }
     final rootReply = targetKey.threadId == null ? _replyTo : null;
-    final generation = ++_sendGeneration;
+    final generation = _textSendGeneration;
     // Emptied before the request, not after it. Clearing on the way back
     // compared the whole field against the sent text, so typing the next line
     // while the send was in flight left the sent one sitting in the composer.
@@ -437,7 +437,14 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       // for a second time.
       _closeEmojiPicker();
     }
-    _update(() => _sending = true);
+    // Taken off the banner with the text, so the next line typed before this
+    // one is admitted is not a second reply to the same message.
+    if (rootReply != null && _replyTo?.messageId == rootReply.messageId) {
+      _update(() => _replyTo = null);
+    }
+    // Not held by _sending: a send is a queue entry, not a mode of the
+    // composer. Calls reach the service in tap order and its admission lane
+    // keeps that order, so the next line can be sent while this one waits.
     try {
       await ref
           .read(chatServiceProvider)
@@ -449,11 +456,8 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             threadId: targetKey.threadId,
             replyTo: rootReply?.messageId,
           );
-      if (!_isCurrentSendScope(targetKey, generation)) {
+      if (!_isCurrentTextSendScope(targetKey, generation)) {
         return;
-      }
-      if (rootReply != null && _replyTo?.messageId == rootReply.messageId) {
-        _update(() => _replyTo = null);
       }
       if (_scrollController.hasClients) {
         await _scrollController.animateTo(
@@ -462,22 +466,18 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
           curve: Curves.easeOut,
         );
       }
-      if (_isCurrentSendScope(targetKey, generation)) {
+      if (_isCurrentTextSendScope(targetKey, generation)) {
         _update(() => _localError = null);
       }
     } on ChatServiceException catch (error) {
-      if (_isCurrentSendScope(targetKey, generation)) {
-        _restoreSentDraft(sentDraft);
+      if (_isCurrentTextSendScope(targetKey, generation)) {
+        _restoreSentDraft(sentDraft, rootReply);
         _update(() => _localError = error.code);
       }
     } on Object {
-      if (_isCurrentSendScope(targetKey, generation)) {
-        _restoreSentDraft(sentDraft);
+      if (_isCurrentTextSendScope(targetKey, generation)) {
+        _restoreSentDraft(sentDraft, rootReply);
         _update(() => _localError = ChatServiceError.invalidResponse);
-      }
-    } finally {
-      if (_isCurrentSendScope(targetKey, generation)) {
-        _update(() => _sending = false);
       }
     }
   }
@@ -487,16 +487,23 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
   /// Only into a field the user has left alone: once they have started the
   /// next line, restoring would overwrite what they are writing, and the
   /// failure is already reported above the composer.
-  void _restoreSentDraft(String? draft) {
+  void _restoreSentDraft(String? draft, CachedChatMessage? reply) {
     if (draft == null || draft.isEmpty || _composer.text.isNotEmpty) {
       return;
     }
     _composer.text = draft;
     _composer.selection = TextSelection.collapsed(offset: draft.length);
+    if (reply != null && _replyTo == null) {
+      _update(() => _replyTo = reply);
+    }
   }
 
   bool _isCurrentSendScope(ChatRoomProviderKey targetKey, int generation) {
     return mounted && generation == _sendGeneration && targetKey == _key;
+  }
+
+  bool _isCurrentTextSendScope(ChatRoomProviderKey targetKey, int generation) {
+    return mounted && generation == _textSendGeneration && targetKey == _key;
   }
 
   /// Opens the emoji panel above the compose row, or closes it again.
