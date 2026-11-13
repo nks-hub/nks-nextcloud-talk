@@ -83,6 +83,25 @@ void main() {
     expect(await result, '');
   });
 
+  testWidgets('a vertical drag on the shade field wins over a scrolling dialog', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await open(tester, '#808080');
+    final shade = find.byKey(const Key('color-picker-shade'));
+    final top = tester.getTopLeft(shade).dy;
+    await tester.dragFrom(tester.getCenter(shade), const Offset(0, 50));
+    await tester.pump();
+    expect(tester.getTopLeft(shade).dy, top);
+    final text = tester
+        .widget<TextField>(find.byKey(const Key('field')))
+        .controller!
+        .text;
+    expect(HSVColor.fromColor(colorPickerParse(text)!).value, lessThan(0.35));
+  });
+
   testWidgets('the hue bar changes the hue and keeps the field in step', (
     tester,
   ) async {

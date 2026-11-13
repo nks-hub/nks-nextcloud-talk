@@ -232,8 +232,16 @@ final class _ShadeField extends StatelessWidget {
       child: Builder(
         builder: (context) => GestureDetector(
           key: const Key('color-picker-shade'),
-          onPanDown: (details) => _at(details.localPosition, context.size!),
-          onPanUpdate: (details) => _at(details.localPosition, context.size!),
+          // Axis drags settle at the touch slop, before the dialog's own
+          // scroll view does; a pan would wait for twice that and lose.
+          onVerticalDragDown: (details) =>
+              _at(details.localPosition, context.size!),
+          onVerticalDragUpdate: (details) =>
+              _at(details.localPosition, context.size!),
+          onHorizontalDragDown: (details) =>
+              _at(details.localPosition, context.size!),
+          onHorizontalDragUpdate: (details) =>
+              _at(details.localPosition, context.size!),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: CustomPaint(
