@@ -3965,4 +3965,214 @@ class AppLocalizationsCs extends AppLocalizations {
   String botAdminTruncated(int count) {
     return 'Zobrazeno je jen prvních $count botů.';
   }
+
+  @override
+  String get ownTalkSharedHeader => 'Vzhled pro všechny';
+
+  @override
+  String get ownTalkSharedIntro =>
+      'Platí pro všechny v této konverzaci. Barva nastavená jen na tomto zařízení má přednost.';
+
+  @override
+  String get ownTalkSharedReadOnly =>
+      'Sdílený vzhled smějí měnit jen moderátoři.';
+
+  @override
+  String get ownTalkSharedBackground => 'Pozadí chatu';
+
+  @override
+  String get ownTalkSharedOwnBubble => 'Bubliny vašich zpráv';
+
+  @override
+  String get ownTalkSharedOwnText => 'Text vašich zpráv';
+
+  @override
+  String get ownTalkSharedOtherBubble => 'Bubliny ostatních';
+
+  @override
+  String get ownTalkSharedOtherText => 'Text ostatních';
+
+  @override
+  String get ownTalkSharedQuickEmoji => 'Rychlé emoji';
+
+  @override
+  String get ownTalkSharedThemeDefault => 'Podle motivu';
+
+  @override
+  String get ownTalkSharedColorLabel => 'Barva (#RRGGBB)';
+
+  @override
+  String get ownTalkSharedEmojiLabel => 'Jedno emoji';
+
+  @override
+  String get ownTalkSharedReadOnlyMembership =>
+      'Server nezjistí role v Talku, proto sdílený vzhled skupinové konverzace nikdo nezmění.';
+
+  @override
+  String get ownTalkSharedClearHint => 'Prázdné pole znamená podle motivu.';
+
+  @override
+  String get ownTalkSharedInvalidValue => 'Tuto hodnotu nelze použít.';
+
+  @override
+  String get ownTalkSharedSaved => 'Sdílený vzhled je uložený.';
+
+  @override
+  String get ownTalkSharedSaveOffline =>
+      'Bez připojení nelze uložit. Zkuste to znovu, až budete online.';
+
+  @override
+  String get ownTalkSharedSaveFailed => 'Sdílený vzhled se nepodařilo uložit.';
+
+  @override
+  String get ownTalkLocalBackgroundAction =>
+      'Pozadí chatu jen na tomto zařízení';
+
+  @override
+  String get ownTalkConflictTitle => 'Mezitím to změnil někdo jiný';
+
+  @override
+  String get ownTalkConflictBody =>
+      'Pro položky, které jste měnili, teď platí tyto hodnoty:';
+
+  @override
+  String ownTalkConflictLine(String field, String value) {
+    return '$field: $value';
+  }
+
+  @override
+  String get ownTalkConflictKeep => 'Ponechat jejich';
+
+  @override
+  String get ownTalkConflictApply => 'Použít moje';
+
+  @override
+  String get ownTalkQuickEmojiSend => 'Odeslat emoji';
+
+  @override
+  String ownTalkQuickEmojiSendNamed(String name) {
+    return 'Odeslat emoji $name';
+  }
+
+  @override
+  String get colorPaletteCustom => 'Vlastní…';
+
+  @override
+  String get colorNameWhite => 'Bílá';
+
+  @override
+  String get colorNameLemon => 'Světle žlutá';
+
+  @override
+  String get colorNameMint => 'Mátová';
+
+  @override
+  String get colorNameSky => 'Světle modrá';
+
+  @override
+  String get colorNamePink => 'Růžová';
+
+  @override
+  String get colorNameBlue => 'Modrá';
+
+  @override
+  String get colorNameNavy => 'Námořnická modrá';
+
+  @override
+  String get colorNameForest => 'Lesní zelená';
+
+  @override
+  String get colorNamePlum => 'Švestková';
+
+  @override
+  String get colorNameBurgundy => 'Vínová';
+
+  @override
+  String get colorNameGraphite => 'Grafitová';
+
+  @override
+  String get colorNameBlack => 'Černá';
+
+  @override
+  String get ownTalkSharedBackgroundAll => 'Pozadí pro všechny';
+
+  @override
+  String get ownTalkBackgroundTabColor => 'Barva';
+
+  @override
+  String get ownTalkBackgroundTabPreset => 'Tapeta';
+
+  @override
+  String get ownTalkBackgroundTabPhoto => 'Fotka';
+
+  @override
+  String get ownTalkPresetAurora => 'Polární záře';
+
+  @override
+  String get ownTalkPresetSunset => 'Západ slunce';
+
+  @override
+  String get ownTalkPresetForest => 'Les';
+
+  @override
+  String get ownTalkPresetOcean => 'Oceán';
+
+  @override
+  String get ownTalkPresetDots => 'Tečky';
+
+  @override
+  String get ownTalkPresetGrid => 'Mřížka';
+
+  @override
+  String get ownTalkBackgroundPhotoSet => 'Vlastní fotka';
+
+  @override
+  String get ownTalkBackgroundPhotoPick => 'Vybrat fotku';
+
+  @override
+  String get ownTalkBackgroundPhotoChange => 'Změnit fotku';
+
+  @override
+  String get ownTalkBackgroundPhotoRemove => 'Odebrat fotku';
+
+  @override
+  String ownTalkBackgroundPhotoHint(String size) {
+    return 'JPEG, PNG nebo WebP, nejvýše $size MB. Server fotku zmenší.';
+  }
+
+  @override
+  String get ownTalkBackgroundPhotoPreview => 'Náhled fotky na pozadí';
+
+  @override
+  String get ownTalkBackgroundUploading => 'Nahrávám fotku…';
+
+  @override
+  String get ownTalkPhotoRejectedType =>
+      'Server přijímá jen fotky ve formátu JPEG, PNG nebo WebP.';
+
+  @override
+  String get ownTalkPhotoRejectedImage =>
+      'Soubor se nepodařilo přečíst jako obrázek.';
+
+  @override
+  String get ownTalkPhotoTooLargeServer =>
+      'Server fotku odmítl, je příliš velká.';
+
+  @override
+  String get ownTalkPhotoQuota => 'Úložiště pro pozadí na serveru je plné.';
+
+  @override
+  String get ownTalkPhotoRateLimited =>
+      'Příliš mnoho nahrávání. Zkuste to později.';
+
+  @override
+  String get ownTalkPhotoUnreadable => 'Fotku se nepodařilo načíst.';
+
+  @override
+  String ownTalkPhotoTooLargeLocal(String size) {
+    return 'Fotku se nepodařilo zmenšit pod $size MB.';
+  }
+
+  @override
+  String get ownTalkBackgroundSheetBarrier => 'Zavřít výběr pozadí';
 }

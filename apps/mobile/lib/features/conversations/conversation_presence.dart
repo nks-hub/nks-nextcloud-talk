@@ -10,6 +10,7 @@ import '../calls/call_banner.dart';
 import '../calls/call_start_button.dart';
 import '../chat/chat_room_pane.dart';
 import '../chat/chat_background_surface.dart';
+import '../owntalk_extensions/owntalk_room_extras.dart';
 import '../chat/poll_draft_actions.dart';
 import '../rooms/room_details_screen.dart';
 import 'conversation_shell.dart';
@@ -258,6 +259,10 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
               child: ChatBackgroundSurface(
                 accountId: account.id,
                 roomToken: current.token,
+                sharedSettings: ownTalkConversationCanShare(
+                  roomType: current.roomType,
+                  rawJson: current.rawJson,
+                ),
                 child: ChatRoomPane(
                   account: account,
                   conversation: current,
@@ -396,6 +401,10 @@ final class PresenceChatRoomPane extends ConsumerWidget {
           child: ChatBackgroundSurface(
             accountId: account.id,
             roomToken: conversation.token,
+            sharedSettings: ownTalkConversationCanShare(
+              roomType: conversation.roomType,
+              rawJson: conversation.rawJson,
+            ),
             child: ChatRoomPane(account: account, conversation: conversation),
           ),
         ),

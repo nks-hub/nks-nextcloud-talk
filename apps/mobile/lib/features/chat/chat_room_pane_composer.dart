@@ -380,6 +380,18 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     await _sendMessage(message, clearComposer: true);
   }
 
+  /// Sends the conversation's quick emoji as an ordinary message. A file that
+  /// is waiting in the composer still wins, exactly as it does for the send
+  /// button the emoji replaces.
+  Future<void> _sendQuickEmoji(String emoji) async {
+    if (_mediaComposerController.hasPreparedAttachment ||
+        _composer.text.trim().isNotEmpty) {
+      await _send();
+      return;
+    }
+    await _sendMessage(emoji, clearComposer: false);
+  }
+
   Future<void> _sendGiphyForScope(
     GiphyEntry entry,
     HttpGiphyRepository repository,

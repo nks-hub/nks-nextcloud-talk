@@ -22,22 +22,27 @@ import 'package:nextcloudtalk/features/chat/composer/chat_media_composer.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy_attachment.dart';
 import 'package:nextcloudtalk/features/chat/location_share_service.dart';
+import 'package:nextcloudtalk/features/owntalk_extensions/owntalk_room_extras.dart';
+import 'package:nextcloudtalk/features/owntalk_extensions/owntalk_settings_store.dart';
 import 'package:nextcloudtalk/network/attachment_transport.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 import 'package:nextcloudtalk/platform/app_settings.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'owntalk_extensions_test_support.dart';
 import 'test_support.dart';
 
 part 'chat_composer_location_test.part.dart';
 part 'chat_composer_giphy_reopen_test.part.dart';
 part 'chat_composer_nonblocking_test.part.dart';
+part 'chat_composer_quick_emoji_test.part.dart';
 
 void main() {
   _registerLocationComposerTests();
   _registerGiphyReopenTests();
   _registerNonBlockingComposerTests();
+  _registerQuickEmojiComposerTests();
   testWidgets(
     'media reply reaches finalize and clears its banner on enqueue',
     (tester) async {
@@ -559,7 +564,7 @@ final class _ComposerHarness {
   final List<String> finalizedFileNames;
   final List<Map<String, Object?>> finalizedMetadata;
 
-  static Future<_ComposerHarness> create() async {
+  static Future<_ComposerHarness> create({FakeOwnTalkServer? ownTalk}) async {
     final database = openTestDatabase();
     final accounts = AccountRepository(database);
     final account = await accounts.upsertAccount(
@@ -654,6 +659,10 @@ final class _ComposerHarness {
     await attachmentService.ready;
     final api = HttpNextcloudApi(
       client: MockClient((request) async {
+        if (ownTalk != null &&
+            request.url.path.contains('/owntalk_extensions/')) {
+          return ownTalk.handle(request);
+        }
         if (request.url.path.endsWith('/cloud/capabilities')) {
           if (capabilitiesHold.isNotEmpty) {
             await capabilitiesHold.first.future;
@@ -661,7 +670,14 @@ final class _ComposerHarness {
           if (capabilitiesStatus.isNotEmpty) {
             return http.Response('', capabilitiesStatus.first);
           }
-          return http.Response(jsonEncode(_attachmentCapabilities()), 200);
+          final capabilities = _attachmentCapabilities();
+          if (ownTalk != null) {
+            (((capabilities['ocs']! as Map<String, Object?>)['data']!
+                        as Map<String, Object?>)['capabilities']!
+                    as Map<String, Object?>)['owntalk_extensions'] =
+                ownTalkCapabilityJson();
+          }
+          return http.Response(jsonEncode(capabilities), 200);
         }
         if (request.method == 'POST') {
           chatSendStarted.add(request.bodyFields['message']!);

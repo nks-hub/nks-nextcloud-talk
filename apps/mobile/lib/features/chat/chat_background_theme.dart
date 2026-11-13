@@ -10,7 +10,14 @@ Color? parseChatBackgroundColor(String? value) {
   return rgb == null ? null : Color(0xFF000000 | rgb);
 }
 
-Color safeChatBackground(Color requested, ColorScheme scheme) {
+/// [requested] blended towards the theme surface until text and borders read
+/// on it. [dividers] also requires the faint divider colour to show; a
+/// decorative wallpaper that only sits behind the chat can do without that.
+Color safeChatBackground(
+  Color requested,
+  ColorScheme scheme, {
+  bool dividers = true,
+}) {
   for (var step = 20; step >= 0; step--) {
     final alpha = step / 20;
     final candidate = Color.alphaBlend(
@@ -20,11 +27,41 @@ Color safeChatBackground(Color requested, ColorScheme scheme) {
     if (_contrast(candidate, scheme.onSurface) >= 4.5 &&
         _contrast(candidate, scheme.onSurfaceVariant) >= 4.5 &&
         _contrast(candidate, scheme.outline) >= 3 &&
-        _contrast(candidate, scheme.outlineVariant) >= 3) {
+        (!dividers || _contrast(candidate, scheme.outlineVariant) >= 3)) {
       return candidate;
     }
   }
   return scheme.surface;
+}
+
+/// Opacity of the surface-coloured veil over a photo wallpaper. Kept light so
+/// the photo stays recognisable; text that sits straight on the background is
+/// protected by [wallpaperChipAlpha] instead.
+double photoScrimAlpha(ColorScheme scheme) =>
+    scheme.brightness == Brightness.dark ? 0.3 : 0.2;
+
+/// Opacity of the surface-coloured chip behind text that is drawn straight on
+/// a wallpaper (day separators, system messages and the like). At least 80 %,
+/// and high enough that the theme's text reads on it at 4.5:1 even over the
+/// worst possible wallpaper, a pure black or a pure white one.
+double wallpaperChipAlpha(ColorScheme scheme) {
+  for (var step = 16; step < 20; step++) {
+    final alpha = step / 20;
+    final readsOnBoth = const [Color(0xFF000000), Color(0xFFFFFFFF)].every((
+      wallpaper,
+    ) {
+      final chip = Color.alphaBlend(
+        scheme.surface.withValues(alpha: alpha),
+        wallpaper,
+      );
+      return _contrast(chip, scheme.onSurface) >= 4.5 &&
+          _contrast(chip, scheme.onSurfaceVariant) >= 4.5;
+    });
+    if (readsOnBoth) {
+      return alpha;
+    }
+  }
+  return 1;
 }
 
 double chatBackgroundContrast(Color first, Color second) =>

@@ -156,7 +156,8 @@ final class AccountRemovalService {
 
     // From here on nothing may be skipped, whatever the server did.
     await _emojiUsage.delete(AccountId.parse(accountId));
-    await _clearChatBackgrounds(accountId);
+    // Only caches: a locked file must not keep the credentials on the device.
+    await _bestEffort(() => _clearChatBackgrounds(accountId));
     final sourceHandles = await _accounts.purgeAccount(accountId);
     await _credentials.deleteAppPassword(accountId);
     _mediaCache.evictAccount(accountId);

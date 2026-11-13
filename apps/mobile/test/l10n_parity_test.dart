@@ -17,6 +17,8 @@ const Set<String> _sharedWithEnglish = {
   'emojiPickerTitle',
   'giphyPoweredBy',
   'locationCoordinates',
+  // Only a name and its value around a colon, the same in both languages.
+  'ownTalkConflictLine',
   'participantAvatarBot',
   'presenceOnline',
   'profileServerLabel',

@@ -44,6 +44,8 @@ import 'features/calls/call_transport_service.dart';
 import 'features/chat/attachment_service.dart';
 import 'features/chat/attachment_transfer_keep_alive.dart';
 import 'features/chat/chat_background_surface.dart';
+import 'features/owntalk_extensions/owntalk_image_cache.dart';
+import 'features/owntalk_extensions/owntalk_room_extras.dart';
 import 'features/chat/chat_attachment_context.dart';
 import 'features/chat/chat_message_actions_service.dart';
 import 'features/chat/chat_message_content.dart';

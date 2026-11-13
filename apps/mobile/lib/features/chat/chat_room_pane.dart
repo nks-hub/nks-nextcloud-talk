@@ -37,8 +37,11 @@ import '../conversations/conversation_avatar_widget.dart';
 import '../rooms/room_settings_service.dart';
 import 'chat_message_actions_service.dart';
 import 'chat_background_surface.dart';
+import 'chat_wallpaper.dart';
 import 'chat_context_menu.dart';
 import 'chat_selection.dart';
+import '../owntalk_extensions/chat_appearance.dart';
+import '../owntalk_extensions/owntalk_room_extras.dart';
 import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
 import 'photo_album_grouping.dart';
@@ -821,44 +824,70 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         selectedIcon: const Icon(Icons.emoji_emotions),
       ),
     ];
-    final trailingComposerActions = <Widget>[
-      SizedBox.square(
-        dimension: 48,
-        // Part of the field's own tap region: a tap here is not "outside" it,
-        // so a mouse, stylus or injected pointer no longer drops the focus,
-        // and with it the soft keyboard, before the send is even handled.
-        child: TextFieldTapRegion(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              IconButton.filled(
-                key: const Key('send-message'),
-                onPressed: _sending ? null : _send,
-                tooltip: strings.sendMessage,
-                icon: _sending
-                    ? const SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.send_rounded),
-              ),
-              GestureDetector(
-                key: const Key('send-message-gesture'),
-                behavior: HitTestBehavior.opaque,
-                excludeFromSemantics: true,
-                onTap: _sending ? null : _send,
-                onLongPress: _sending
-                    ? null
-                    : () => unawaited(
-                        _openSendOptions(
-                          canSendSilently: canSendSilently,
-                          canSchedule: profileCanSchedule,
-                        ),
-                      ),
-              ),
-            ],
+    final quickEmoji =
+        ownTalkConversationCanShare(
+          roomType: widget.conversation.roomType,
+          rawJson: widget.conversation.rawJson,
+        )
+        ? ref.watch(
+            ownTalkRoomExtrasProvider((
+              accountId: widget.account.id,
+              roomToken: widget.conversation.token,
+            )).select(
+              (extras) =>
+                  extras.valueOf(OwnTalkSettingField.composerQuickEmoji),
+            ),
+          )
+        : null;
+    final sendButton = SizedBox.square(
+      dimension: 48,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          IconButton.filled(
+            key: const Key('send-message'),
+            onPressed: _sending ? null : _send,
+            tooltip: strings.sendMessage,
+            icon: _sending
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.send_rounded),
           ),
-        ),
+          GestureDetector(
+            key: const Key('send-message-gesture'),
+            behavior: HitTestBehavior.opaque,
+            excludeFromSemantics: true,
+            onTap: _sending ? null : _send,
+            onLongPress: _sending
+                ? null
+                : () => unawaited(
+                    _openSendOptions(
+                      canSendSilently: canSendSilently,
+                      canSchedule: profileCanSchedule,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+    final trailingComposerActions = <Widget>[
+      // Part of the field's own tap region: a tap here is not "outside" it,
+      // so a mouse, stylus or injected pointer no longer drops the focus,
+      // and with it the soft keyboard, before the send is even handled.
+      TextFieldTapRegion(
+        child: quickEmoji == null
+            ? sendButton
+            : _SendOrQuickEmojiButton(
+                composer: _composer,
+                emoji: quickEmoji,
+                sending: _sending,
+                hasAttachment: () =>
+                    _mediaComposerController.hasPreparedAttachment,
+                sendButton: sendButton,
+                onSendEmoji: (emoji) => unawaited(_sendQuickEmoji(emoji)),
+              ),
       ),
     ];
 

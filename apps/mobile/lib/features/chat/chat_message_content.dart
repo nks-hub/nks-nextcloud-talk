@@ -19,6 +19,7 @@ import 'references/reference_resolver.dart';
 import '../../platform/media/voice_platform_adapters.dart';
 import '../../platform/media/voice_transcription.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../owntalk_extensions/chat_appearance.dart';
 import 'chat_context_menu.dart';
 import 'chat_selection.dart';
 import 'emoji_only_message.dart';

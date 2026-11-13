@@ -9,6 +9,7 @@ import 'package:mime/mime.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
+import '../../core/color_palette.dart';
 import '../../core/desktop_metrics.dart';
 import '../../core/text_prompt_dialog.dart';
 import '../../data/app_database.dart';
@@ -20,6 +21,8 @@ import '../chat/chat_background_theme.dart';
 import '../conversations/conversation_avatar_widget.dart';
 import '../conversations/conversation_presence.dart'
     show ConversationPresenceKind, presenceColor;
+import '../owntalk_extensions/owntalk_room_extras.dart';
+import '../owntalk_extensions/shared_appearance_section.dart';
 import '../shareditems/shared_items_screen.dart';
 import 'bots_service.dart';
 import 'conversation_tags_service.dart';
@@ -222,6 +225,11 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
     final background = ref
         .watch(chatBackgroundProvider(backgroundKey))
         .valueOrNull;
+    final sharedAppearance = ownTalkSharedAppearanceApplies(
+      ref.watch(ownTalkRoomExtrasProvider(backgroundKey)),
+      roomType: _roomType,
+      federated: _room?.isFederated ?? false,
+    );
     return ContentColumn(
       child: ListView(
         children: [
@@ -334,7 +342,11 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
           ListTile(
             key: const Key('room-details-chat-background'),
             leading: const Icon(Icons.wallpaper_outlined),
-            title: Text(strings.roomDetailsChatBackgroundAction),
+            title: Text(
+              sharedAppearance
+                  ? strings.ownTalkLocalBackgroundAction
+                  : strings.roomDetailsChatBackgroundAction,
+            ),
             subtitle: Text(
               background ?? strings.roomDetailsAvatarColorDefault,
               key: const Key('room-details-chat-background-subtitle'),
@@ -348,6 +360,12 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
                     onPressed: _busy ? null : _resetChatBackground,
                   ),
             onTap: _busy ? null : _changeChatBackground,
+          ),
+          OwnTalkSharedAppearanceSection(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            roomType: _roomType,
+            federated: _room?.isFederated ?? false,
           ),
           if (_canSetAvatar)
             ListTile(

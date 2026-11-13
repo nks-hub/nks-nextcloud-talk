@@ -1406,5 +1406,100 @@
         "type": "int"
       }
     }
-  }
+  },
+  "ownTalkSharedHeader": "Vzhled pro všechny",
+  "ownTalkSharedIntro": "Platí pro všechny v této konverzaci. Barva nastavená jen na tomto zařízení má přednost.",
+  "ownTalkSharedReadOnly": "Sdílený vzhled smějí měnit jen moderátoři.",
+  "ownTalkSharedBackground": "Pozadí chatu",
+  "ownTalkSharedOwnBubble": "Bubliny vašich zpráv",
+  "ownTalkSharedOwnText": "Text vašich zpráv",
+  "ownTalkSharedOtherBubble": "Bubliny ostatních",
+  "ownTalkSharedOtherText": "Text ostatních",
+  "ownTalkSharedQuickEmoji": "Rychlé emoji",
+  "ownTalkSharedThemeDefault": "Podle motivu",
+  "ownTalkSharedColorLabel": "Barva (#RRGGBB)",
+  "ownTalkSharedEmojiLabel": "Jedno emoji",
+  "ownTalkSharedReadOnlyMembership": "Server nezjistí role v Talku, proto sdílený vzhled skupinové konverzace nikdo nezmění.",
+  "ownTalkSharedClearHint": "Prázdné pole znamená podle motivu.",
+  "ownTalkSharedInvalidValue": "Tuto hodnotu nelze použít.",
+  "ownTalkSharedSaved": "Sdílený vzhled je uložený.",
+  "ownTalkSharedSaveOffline": "Bez připojení nelze uložit. Zkuste to znovu, až budete online.",
+  "ownTalkSharedSaveFailed": "Sdílený vzhled se nepodařilo uložit.",
+  "ownTalkLocalBackgroundAction": "Pozadí chatu jen na tomto zařízení",
+  "ownTalkConflictTitle": "Mezitím to změnil někdo jiný",
+  "ownTalkConflictBody": "Pro položky, které jste měnili, teď platí tyto hodnoty:",
+  "ownTalkConflictLine": "{field}: {value}",
+  "@ownTalkConflictLine": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ownTalkConflictKeep": "Ponechat jejich",
+  "ownTalkConflictApply": "Použít moje",
+  "ownTalkQuickEmojiSend": "Odeslat emoji",
+  "ownTalkQuickEmojiSendNamed": "Odeslat emoji {name}",
+  "@ownTalkQuickEmojiSendNamed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "colorPaletteCustom": "Vlastní…",
+  "colorNameWhite": "Bílá",
+  "colorNameLemon": "Světle žlutá",
+  "colorNameMint": "Mátová",
+  "colorNameSky": "Světle modrá",
+  "colorNamePink": "Růžová",
+  "colorNameBlue": "Modrá",
+  "colorNameNavy": "Námořnická modrá",
+  "colorNameForest": "Lesní zelená",
+  "colorNamePlum": "Švestková",
+  "colorNameBurgundy": "Vínová",
+  "colorNameGraphite": "Grafitová",
+  "colorNameBlack": "Černá",
+  "ownTalkSharedBackgroundAll": "Pozadí pro všechny",
+  "ownTalkBackgroundTabColor": "Barva",
+  "ownTalkBackgroundTabPreset": "Tapeta",
+  "ownTalkBackgroundTabPhoto": "Fotka",
+  "ownTalkPresetAurora": "Polární záře",
+  "ownTalkPresetSunset": "Západ slunce",
+  "ownTalkPresetForest": "Les",
+  "ownTalkPresetOcean": "Oceán",
+  "ownTalkPresetDots": "Tečky",
+  "ownTalkPresetGrid": "Mřížka",
+  "ownTalkBackgroundPhotoSet": "Vlastní fotka",
+  "ownTalkBackgroundPhotoPick": "Vybrat fotku",
+  "ownTalkBackgroundPhotoChange": "Změnit fotku",
+  "ownTalkBackgroundPhotoRemove": "Odebrat fotku",
+  "ownTalkBackgroundPhotoHint": "JPEG, PNG nebo WebP, nejvýše {size} MB. Server fotku zmenší.",
+  "@ownTalkBackgroundPhotoHint": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "ownTalkBackgroundPhotoPreview": "Náhled fotky na pozadí",
+  "ownTalkBackgroundUploading": "Nahrávám fotku…",
+  "ownTalkPhotoRejectedType": "Server přijímá jen fotky ve formátu JPEG, PNG nebo WebP.",
+  "ownTalkPhotoRejectedImage": "Soubor se nepodařilo přečíst jako obrázek.",
+  "ownTalkPhotoTooLargeServer": "Server fotku odmítl, je příliš velká.",
+  "ownTalkPhotoQuota": "Úložiště pro pozadí na serveru je plné.",
+  "ownTalkPhotoRateLimited": "Příliš mnoho nahrávání. Zkuste to později.",
+  "ownTalkPhotoUnreadable": "Fotku se nepodařilo načíst.",
+  "ownTalkPhotoTooLargeLocal": "Fotku se nepodařilo zmenšit pod {size} MB.",
+  "@ownTalkPhotoTooLargeLocal": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "ownTalkBackgroundSheetBarrier": "Zavřít výběr pozadí"
 }

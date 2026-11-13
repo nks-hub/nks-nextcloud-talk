@@ -13,6 +13,7 @@ final class _ChatHeader extends StatelessWidget {
       constraints: BoxConstraints(minHeight: context.paneHeaderHeight),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       decoration: BoxDecoration(
+        color: ChatBackgroundChip.colorOf(context),
         border: Border(
           bottom: BorderSide(
             color: Theme.of(context).colorScheme.outlineVariant,
@@ -200,18 +201,22 @@ final class _ChatTimeline extends StatelessWidget {
           key: const Key('chat-load-older'),
           child: Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: TextButton.icon(
-              onPressed: loadingOlder ? null : onLoadOlder,
-              icon: loadingOlder
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.history_rounded),
-              label: Text(
-                loadingOlder
-                    ? AppLocalizations.of(context).loadingOlderMessages
-                    : AppLocalizations.of(context).loadOlderMessages,
+            child: ChatBackgroundChip(
+              padding: EdgeInsets.zero,
+              radius: 20,
+              child: TextButton.icon(
+                onPressed: loadingOlder ? null : onLoadOlder,
+                icon: loadingOlder
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.history_rounded),
+                label: Text(
+                  loadingOlder
+                      ? AppLocalizations.of(context).loadingOlderMessages
+                      : AppLocalizations.of(context).loadOlderMessages,
+                ),
               ),
             ),
           ),
@@ -513,11 +518,13 @@ final class _DaySeparator extends StatelessWidget {
               const Expanded(child: Divider()),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  label,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelMedium?.copyWith(color: color),
+                child: ChatBackgroundChip(
+                  child: Text(
+                    label,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelMedium?.copyWith(color: color),
+                  ),
                 ),
               ),
               const Expanded(child: Divider()),
@@ -645,11 +652,13 @@ final class _ChatHistoryGapNotice extends StatelessWidget {
             Expanded(child: Divider(color: scheme.outlineVariant)),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
+              child: ChatBackgroundChip(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ),

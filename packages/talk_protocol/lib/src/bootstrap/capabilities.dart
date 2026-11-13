@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import '../json_value.dart';
+import '../owntalk_extensions/models.dart';
 import '../protocol_exception.dart';
 
 /// Whether a capability snapshot was fetched before or after authentication.
@@ -256,6 +257,13 @@ final class CapabilitySnapshot {
   final bool chatTranslationAvailable;
   final String? serverThemeColor;
   final Set<String> notificationPushFeatures;
+
+  /// The optional OwnTalk Extensions server app; `null` when it is missing,
+  /// malformed or speaks an `api` this client does not know.
+  late final OwnTalkExtensionsCapability? ownTalkExtensions =
+      OwnTalkExtensionsCapability.tryParse(
+        capabilities[ownTalkExtensionsCapabilityKey],
+      );
 
   bool get hasTalk => namespaces.contains('spreed');
 

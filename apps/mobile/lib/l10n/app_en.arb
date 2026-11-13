@@ -1975,5 +1975,100 @@
         "type": "int"
       }
     }
-  }
+  },
+  "ownTalkSharedHeader": "Appearance for everyone",
+  "ownTalkSharedIntro": "Applies to everyone in this conversation. A colour set only on this device takes precedence.",
+  "ownTalkSharedReadOnly": "Only moderators can change the shared appearance.",
+  "ownTalkSharedBackground": "Chat background",
+  "ownTalkSharedOwnBubble": "Your message bubbles",
+  "ownTalkSharedOwnText": "Your message text",
+  "ownTalkSharedOtherBubble": "Bubbles of other people",
+  "ownTalkSharedOtherText": "Text of other people",
+  "ownTalkSharedQuickEmoji": "Quick emoji",
+  "ownTalkSharedThemeDefault": "Follow the theme",
+  "ownTalkSharedColorLabel": "Colour (#RRGGBB)",
+  "ownTalkSharedEmojiLabel": "One emoji",
+  "ownTalkSharedReadOnlyMembership": "This server cannot read Talk roles, so nobody can change the shared appearance of a group conversation.",
+  "ownTalkSharedClearHint": "Leave empty to follow the theme.",
+  "ownTalkSharedInvalidValue": "That value is not accepted.",
+  "ownTalkSharedSaved": "Shared appearance saved.",
+  "ownTalkSharedSaveOffline": "Cannot save without a connection. Try again when you are online.",
+  "ownTalkSharedSaveFailed": "The shared appearance could not be saved.",
+  "ownTalkLocalBackgroundAction": "Chat background, only on this device",
+  "ownTalkConflictTitle": "Someone changed this meanwhile",
+  "ownTalkConflictBody": "The conversation now uses these values for what you changed:",
+  "ownTalkConflictLine": "{field}: {value}",
+  "@ownTalkConflictLine": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ownTalkConflictKeep": "Keep theirs",
+  "ownTalkConflictApply": "Apply mine",
+  "ownTalkQuickEmojiSend": "Send emoji",
+  "ownTalkQuickEmojiSendNamed": "Send emoji {name}",
+  "@ownTalkQuickEmojiSendNamed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "colorPaletteCustom": "Custom…",
+  "colorNameWhite": "White",
+  "colorNameLemon": "Light yellow",
+  "colorNameMint": "Mint",
+  "colorNameSky": "Light blue",
+  "colorNamePink": "Pink",
+  "colorNameBlue": "Blue",
+  "colorNameNavy": "Navy blue",
+  "colorNameForest": "Forest green",
+  "colorNamePlum": "Plum",
+  "colorNameBurgundy": "Burgundy",
+  "colorNameGraphite": "Graphite",
+  "colorNameBlack": "Black",
+  "ownTalkSharedBackgroundAll": "Background for everyone",
+  "ownTalkBackgroundTabColor": "Colour",
+  "ownTalkBackgroundTabPreset": "Wallpaper",
+  "ownTalkBackgroundTabPhoto": "Photo",
+  "ownTalkPresetAurora": "Aurora",
+  "ownTalkPresetSunset": "Sunset",
+  "ownTalkPresetForest": "Forest",
+  "ownTalkPresetOcean": "Ocean",
+  "ownTalkPresetDots": "Dots",
+  "ownTalkPresetGrid": "Grid",
+  "ownTalkBackgroundPhotoSet": "Your photo",
+  "ownTalkBackgroundPhotoPick": "Choose a photo",
+  "ownTalkBackgroundPhotoChange": "Change photo",
+  "ownTalkBackgroundPhotoRemove": "Remove photo",
+  "ownTalkBackgroundPhotoHint": "JPEG, PNG or WebP, up to {size} MB. The server scales it down.",
+  "@ownTalkBackgroundPhotoHint": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "ownTalkBackgroundPhotoPreview": "Preview of the background photo",
+  "ownTalkBackgroundUploading": "Uploading the photo…",
+  "ownTalkPhotoRejectedType": "The server accepts only JPEG, PNG or WebP photos.",
+  "ownTalkPhotoRejectedImage": "That file could not be read as an image.",
+  "ownTalkPhotoTooLargeServer": "The server rejected the photo as too large.",
+  "ownTalkPhotoQuota": "The background storage on this server is full.",
+  "ownTalkPhotoRateLimited": "Too many uploads. Try again later.",
+  "ownTalkPhotoUnreadable": "The photo could not be read.",
+  "ownTalkPhotoTooLargeLocal": "The photo could not be reduced below {size} MB.",
+  "@ownTalkPhotoTooLargeLocal": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "ownTalkBackgroundSheetBarrier": "Close the background picker"
 }

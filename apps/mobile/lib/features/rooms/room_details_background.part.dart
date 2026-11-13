@@ -14,28 +14,25 @@ extension _RoomDetailsBackground on _RoomDetailsScreenState {
     if (!mounted) {
       return;
     }
-    final result = await showTextPromptDialog(
+    final pick = await pickColor(
       context: context,
       title: strings.roomDetailsChatBackgroundAction,
-      initialValue: current ?? '#00679E',
+      current: current,
       fieldLabel: strings.roomDetailsAvatarColorLabel,
-      cancelLabel: strings.cancel,
-      confirmLabel: strings.roomDetailsSave,
-      dialogKey: const Key('chat-background-dialog'),
+      normalize: (text) =>
+          parseChatBackgroundColor(text) == null ? null : text.toUpperCase(),
+      onInvalid: () => _showMessage(strings.roomDetailsActionErrorGeneric),
+      paletteKey: const Key('chat-background-palette'),
+      promptKey: const Key('chat-background-dialog'),
       fieldKey: const Key('chat-background-field'),
       confirmKey: const Key('chat-background-save'),
-      maxLength: 7,
     );
-    if (!mounted || result == null) {
+    if (!mounted || pick == null) {
       return;
     }
-    final value = result.trim();
-    if (value.isEmpty) {
+    final value = pick.value;
+    if (value == null) {
       await store.remove(_chatBackgroundKey);
-      return;
-    }
-    if (parseChatBackgroundColor(value) == null) {
-      _showMessage(strings.roomDetailsActionErrorGeneric);
       return;
     }
     await store.write(_chatBackgroundKey, value);

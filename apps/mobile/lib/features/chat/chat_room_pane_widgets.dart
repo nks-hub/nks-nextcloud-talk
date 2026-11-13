@@ -45,6 +45,10 @@ final class ChatThreadScreen extends ConsumerWidget {
         child: ChatBackgroundSurface(
           accountId: account.id,
           roomToken: conversation.token,
+          sharedSettings: ownTalkConversationCanShare(
+            roomType: conversation.roomType,
+            rawJson: conversation.rawJson,
+          ),
           child: ChatRoomPane(
             account: account,
             conversation: conversation,

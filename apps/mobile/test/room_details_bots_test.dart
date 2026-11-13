@@ -378,6 +378,10 @@ void main() {
       if (request.url.path.endsWith('/participants')) {
         return _ocs(const <Object?>[]);
       }
+      // The screen reads capabilities for the optional shared appearance.
+      if (request.url.path.endsWith('/cloud/capabilities')) {
+        return http.Response('', 404);
+      }
       if (request.method == 'GET' && request.url.path.contains('/bot/')) {
         return _ocs([
           {'id': 17, 'name': 'Assistant', 'description': null, 'state': 0},

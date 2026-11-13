@@ -117,17 +117,22 @@ final class ChatTypingBanner extends StatelessWidget {
               label: text,
               excludeSemantics: true,
               child: ColoredBox(
-                color: Theme.of(context).colorScheme.surface,
+                // Over a wallpaper the opaque strip gives way to a chip.
+                color: ChatBackgroundChip.colorOf(context) == null
+                    ? Theme.of(context).colorScheme.surface
+                    : Colors.transparent,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 2, 16, 2),
                   child: Align(
                     alignment: AlignmentDirectional.centerStart,
-                    child: Text(
-                      text,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    child: ChatBackgroundChip(
+                      child: Text(
+                        text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ),
