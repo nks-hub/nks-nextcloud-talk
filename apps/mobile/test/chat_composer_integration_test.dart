@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNull;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +17,7 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/attachment_repository.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
+import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/features/chat/composer/chat_media_composer.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy_attachment.dart';
@@ -752,6 +754,7 @@ final class _ComposerHarness {
     StoredAccount? account,
     CachedConversation? conversation,
     bool wrapInScaffold = false,
+    bool inRoomScreen = false,
     List<Override> overrides = const <Override>[],
   }) {
     return ProviderScope(
@@ -766,7 +769,12 @@ final class _ComposerHarness {
         ...overrides,
       ],
       child: localizedTestApp(
-        home: wrapInScaffold
+        home: inRoomScreen
+            ? PresenceChatRoomScreen(
+                account: account ?? this.account,
+                conversation: conversation ?? this.conversation,
+              )
+            : wrapInScaffold
             ? Scaffold(
                 body: ChatRoomPane(
                   account: account ?? this.account,

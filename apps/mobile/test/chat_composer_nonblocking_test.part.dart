@@ -508,6 +508,119 @@ void _registerNonBlockingComposerTests() {
     },
     timeout: const Timeout(Duration(seconds: 30)),
   );
+
+  testWidgets(
+    'the composer keeps focus and the keyboard through a send and its bubble',
+    (tester) async {
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      _addHarnessTearDown(tester, harness);
+      await tester.pumpWidget(harness.app(inRoomScreen: true));
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+      );
+      final hold = Completer<void>();
+      harness.capabilitiesHold.add(hold);
+      addTearDown(() {
+        if (!hold.isCompleted) hold.complete();
+      });
+      final focus = tester
+          .widget<TextField>(find.byKey(const Key('chat-composer')))
+          .focusNode!;
+
+      await _typeAndSend(tester, 'one');
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const Key('chat-pending-provisional-1'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      expect(focus.hasFocus, isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      // The next line goes in without tapping the field again.
+      tester.testTextInput.enterText('two');
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('send-message-gesture')));
+      await tester.pump();
+      expect(_composer(tester).text, isEmpty);
+      expect(focus.hasFocus, isTrue);
+
+      hold.complete();
+      await _pumpUntil(tester, () => harness.sentMessages.length == 2);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 10));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+      }
+
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('chat-composer')))
+            .focusNode,
+        same(focus),
+      );
+      expect(focus.hasFocus, isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+      expect(harness.sentMessages, ['one', 'two']);
+      expect(tester.takeException(), isNull);
+      await _unmountComposer(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  // The framework drops the field's focus, and the soft keyboard with it, for
+  // a pointer-down outside the field from a mouse, a stylus or a device of
+  // unknown kind. adb's `input tap` is the last: it reported every send tap on
+  // a phone as one that closed the keyboard.
+  for (final kind in [
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.unknown,
+  ]) {
+    testWidgets(
+      'a ${kind.name} tap on send leaves the focus and keyboard on the composer',
+      (tester) async {
+        final harness = (await tester.runAsync(_ComposerHarness.create))!;
+        _addHarnessTearDown(tester, harness);
+        await tester.pumpWidget(harness.app(inRoomScreen: true));
+        await _pumpUntil(
+          tester,
+          () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+        );
+        final focus = tester
+            .widget<TextField>(find.byKey(const Key('chat-composer')))
+            .focusNode!;
+        await tester.enterText(find.byKey(const Key('chat-composer')), 'one');
+        await tester.pump();
+        expect(focus.hasFocus, isTrue);
+
+        await tester.tap(
+          find.byKey(const Key('send-message-gesture')),
+          kind: kind,
+        );
+        await tester.pump();
+        expect(_composer(tester).text, isEmpty);
+        expect(focus.hasFocus, isTrue);
+        expect(tester.testTextInput.isVisible, isTrue);
+
+        await _pumpUntil(tester, () => harness.sentMessages.length == 1);
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 10));
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 5)),
+          );
+        }
+        expect(focus.hasFocus, isTrue);
+        expect(tester.testTextInput.isVisible, isTrue);
+        expect(tester.takeException(), isNull);
+        await _unmountComposer(tester);
+      },
+      timeout: const Timeout(Duration(seconds: 30)),
+    );
+  }
 }
 
 Future<void> _typeAndSend(WidgetTester tester, String text) async {

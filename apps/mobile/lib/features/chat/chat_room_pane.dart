@@ -824,35 +824,40 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final trailingComposerActions = <Widget>[
       SizedBox.square(
         dimension: 48,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            IconButton.filled(
-              key: const Key('send-message'),
-              onPressed: _sending ? null : _send,
-              tooltip: strings.sendMessage,
-              icon: _sending
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send_rounded),
-            ),
-            GestureDetector(
-              key: const Key('send-message-gesture'),
-              behavior: HitTestBehavior.opaque,
-              excludeFromSemantics: true,
-              onTap: _sending ? null : _send,
-              onLongPress: _sending
-                  ? null
-                  : () => unawaited(
-                      _openSendOptions(
-                        canSendSilently: canSendSilently,
-                        canSchedule: profileCanSchedule,
+        // Part of the field's own tap region: a tap here is not "outside" it,
+        // so a mouse, stylus or injected pointer no longer drops the focus,
+        // and with it the soft keyboard, before the send is even handled.
+        child: TextFieldTapRegion(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              IconButton.filled(
+                key: const Key('send-message'),
+                onPressed: _sending ? null : _send,
+                tooltip: strings.sendMessage,
+                icon: _sending
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send_rounded),
+              ),
+              GestureDetector(
+                key: const Key('send-message-gesture'),
+                behavior: HitTestBehavior.opaque,
+                excludeFromSemantics: true,
+                onTap: _sending ? null : _send,
+                onLongPress: _sending
+                    ? null
+                    : () => unawaited(
+                        _openSendOptions(
+                          canSendSilently: canSendSilently,
+                          canSchedule: profileCanSchedule,
+                        ),
                       ),
-                    ),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     ];
