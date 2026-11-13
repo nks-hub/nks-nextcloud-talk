@@ -1,16 +1,29 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/generated/app_localizations.dart';
-import 'text_prompt_dialog.dart';
+import 'color_picker_dialog.dart';
 
-/// Colours offered wherever a colour is chosen: six light ones, six dark ones.
+/// Colours offered wherever a colour is chosen, in rows of six: two rows of
+/// light tints, one of vivid colours and one of deep ones.
 const List<String> colorPaletteHexes = [
   '#FFFFFF',
   '#F8EBB0',
   '#CFEBD8',
   '#CDE3F7',
   '#F7D0D8',
+  '#E3D7F5',
+  '#FBD9C0',
+  '#C9EFEF',
+  '#DCE8C8',
+  '#EFE3CF',
+  '#E6E8EB',
+  '#D7E3FC',
   '#2F6FEB',
+  '#0F9D8A',
+  '#2E9E5B',
+  '#F2994A',
+  '#D64545',
+  '#8E44D9',
   '#1E3A5F',
   '#1F4D3A',
   '#4A2C5E',
@@ -27,7 +40,19 @@ String? colorPaletteName(AppLocalizations strings, String? hex) =>
       '#CFEBD8' => strings.colorNameMint,
       '#CDE3F7' => strings.colorNameSky,
       '#F7D0D8' => strings.colorNamePink,
+      '#E3D7F5' => strings.colorNameLavender,
+      '#FBD9C0' => strings.colorNamePeach,
+      '#C9EFEF' => strings.colorNameAqua,
+      '#DCE8C8' => strings.colorNameSage,
+      '#EFE3CF' => strings.colorNameSand,
+      '#E6E8EB' => strings.colorNameLightGrey,
+      '#D7E3FC' => strings.colorNamePeriwinkle,
       '#2F6FEB' => strings.colorNameBlue,
+      '#0F9D8A' => strings.colorNameTeal,
+      '#2E9E5B' => strings.colorNameGreen,
+      '#F2994A' => strings.colorNameOrange,
+      '#D64545' => strings.colorNameRed,
+      '#8E44D9' => strings.colorNamePurple,
       '#1E3A5F' => strings.colorNameNavy,
       '#1F4D3A' => strings.colorNameForest,
       '#4A2C5E' => strings.colorNamePlum,
@@ -132,6 +157,29 @@ final class _Swatch extends StatelessWidget {
   }
 }
 
+/// The icon for a custom colour: a small colour wheel.
+final class ColorWheelIcon extends StatelessWidget {
+  const ColorWheelIcon({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+        gradient: SweepGradient(
+          colors: [
+            for (var step = 0; step <= 6; step++)
+              HSVColor.fromAHSV(1, step * 60 % 360, 0.8, 0.95).toColor(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 sealed class ColorPaletteChoice {
   const ColorPaletteChoice();
 }
@@ -185,7 +233,7 @@ Future<ColorPaletteChoice?> showColorPaletteDialog({
               ListTile(
                 key: const Key('color-palette-custom'),
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.tune),
+                leading: const ColorWheelIcon(),
                 title: Text(strings.colorPaletteCustom),
                 subtitle: current != null && !inPalette
                     ? Text(current.toUpperCase())
@@ -255,7 +303,7 @@ Future<ColorPick?> pickColor({
       return (value: null);
     case ColorPaletteCustom():
       final strings = AppLocalizations.of(context);
-      final text = await showTextPromptDialog(
+      final text = await showColorPickerDialog(
         context: context,
         title: title,
         initialValue: current ?? '#00679E',
@@ -266,7 +314,6 @@ Future<ColorPick?> pickColor({
         dialogKey: promptKey,
         fieldKey: fieldKey,
         confirmKey: confirmKey,
-        maxLength: 7,
       );
       if (text == null) {
         return null;

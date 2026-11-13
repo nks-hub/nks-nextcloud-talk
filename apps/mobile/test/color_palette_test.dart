@@ -56,9 +56,9 @@ void main() {
   }
 
   group('palette dialog', () {
-    testWidgets('offers twelve distinct swatches', (tester) async {
+    testWidgets('offers twenty-four distinct swatches', (tester) async {
       await open(tester, onResult: (_) {});
-      expect(colorPaletteHexes.toSet(), hasLength(12));
+      expect(colorPaletteHexes.toSet(), hasLength(24));
       for (final hex in colorPaletteHexes) {
         expect(find.byKey(Key('color-swatch-$hex')), findsOneWidget);
       }

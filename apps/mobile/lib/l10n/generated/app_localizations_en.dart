@@ -4091,6 +4091,53 @@ class AppLocalizationsEn extends AppLocalizations {
   String get colorNameBlack => 'Black';
 
   @override
+  String get colorNameLavender => 'Lavender';
+
+  @override
+  String get colorNamePeach => 'Peach';
+
+  @override
+  String get colorNameAqua => 'Aqua';
+
+  @override
+  String get colorNameSage => 'Sage';
+
+  @override
+  String get colorNameSand => 'Sand';
+
+  @override
+  String get colorNameLightGrey => 'Light grey';
+
+  @override
+  String get colorNamePeriwinkle => 'Periwinkle';
+
+  @override
+  String get colorNameTeal => 'Teal';
+
+  @override
+  String get colorNameGreen => 'Green';
+
+  @override
+  String get colorNameOrange => 'Orange';
+
+  @override
+  String get colorNameRed => 'Red';
+
+  @override
+  String get colorNamePurple => 'Purple';
+
+  @override
+  String get colorPickerHue => 'Hue';
+
+  @override
+  String get colorPickerShade => 'Saturation and brightness';
+
+  @override
+  String colorPickerPreview(String hex) {
+    return 'Colour preview $hex';
+  }
+
+  @override
   String get ownTalkSharedBackgroundAll => 'Background for everyone';
 
   @override
@@ -4119,6 +4166,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ownTalkPresetGrid => 'Grid';
+
+  @override
+  String get ownTalkPresetLavender => 'Lavender';
+
+  @override
+  String get ownTalkPresetPeach => 'Peach';
+
+  @override
+  String get ownTalkPresetMint => 'Mint';
+
+  @override
+  String get ownTalkPresetNebula => 'Nebula';
+
+  @override
+  String get ownTalkPresetBokeh => 'Bokeh';
+
+  @override
+  String get ownTalkPresetWaves => 'Waves';
+
+  @override
+  String get ownTalkPresetDunes => 'Dunes';
+
+  @override
+  String get ownTalkPresetTopo => 'Contours';
+
+  @override
+  String get ownTalkPresetStars => 'Stars';
+
+  @override
+  String get ownTalkPresetConfetti => 'Confetti';
 
   @override
   String get ownTalkBackgroundPhotoSet => 'Your photo';
