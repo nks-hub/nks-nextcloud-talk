@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import '../identifiers.dart';
 import '../protocol_exception.dart';
 
 /// Where a server offers Nextcloud's Client Push service and what it carries.
@@ -100,6 +103,63 @@ ClientPushEvent? parseClientPushFrame(String frame) {
     'notify_file' || 'notify_file_id' => ClientPushEvent.file,
     _ => null,
   };
+}
+
+/// Frame name the OwnTalk Extensions server app pushes through `notify_push`
+/// after every successful write of a conversation's shared settings.
+const String ownTalkRoomSettingsFrameName = 'owntalk_room_settings';
+
+/// `owntalk_room_settings {"token":"<roomToken>","revision":<int>}`: the
+/// shared settings of [roomToken] reached [revision] on the server.
+///
+/// A hint only. It carries no settings, so a forged or stale one costs at most
+/// one conditional re-read of a document the user may already read.
+final class OwnTalkRoomSettingsSignal {
+  const OwnTalkRoomSettingsSignal({
+    required this.roomToken,
+    required this.revision,
+  });
+
+  final ConversationToken roomToken;
+  final int revision;
+
+  @override
+  String toString() => 'OwnTalkRoomSettingsSignal(revision: $revision)';
+}
+
+/// Parses an `owntalk_room_settings` frame, or null for any other frame and
+/// for one whose body is oversized, not a JSON object, or lacks a valid room
+/// token and a non-negative integer revision.
+OwnTalkRoomSettingsSignal? parseOwnTalkRoomSettingsFrame(String frame) {
+  final trimmed = frame.trim();
+  if (trimmed.isEmpty || trimmed.length > 256) {
+    return null;
+  }
+  final split = trimmed.indexOf(RegExp(r'\s'));
+  if (split < 0 || trimmed.substring(0, split) != ownTalkRoomSettingsFrameName) {
+    return null;
+  }
+  final Object? body;
+  try {
+    body = jsonDecode(trimmed.substring(split));
+  } on FormatException {
+    return null;
+  }
+  if (body is! Map<String, Object?>) {
+    return null;
+  }
+  final revision = body['revision'];
+  if (revision is! int || revision < 0) {
+    return null;
+  }
+  try {
+    return OwnTalkRoomSettingsSignal(
+      roomToken: ConversationToken.parse(body['token'], path: r'$.token'),
+      revision: revision,
+    );
+  } on TalkProtocolException {
+    return null;
+  }
 }
 
 /// The two frames a client sends after connecting, in order.

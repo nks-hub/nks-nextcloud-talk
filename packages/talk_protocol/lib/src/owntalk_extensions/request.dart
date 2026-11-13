@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../bootstrap/capabilities.dart';
+import '../chat/request.dart' show chatV1Path;
 import '../identifiers.dart';
 import '../protocol_exception.dart';
 import '../server_base.dart';
@@ -254,6 +255,75 @@ final class FetchOwnTalkRoomImageRequest {
 
   @override
   String toString() => 'FetchOwnTalkRoomImageRequest()';
+}
+
+/// Start of the `referenceId` of the silent chat message that announces a
+/// shared-appearance change; the rest is the new document revision. Talk keeps
+/// the value verbatim (up to 64 characters), other clients ignore it.
+const String ownTalkAppearanceReferencePrefix = 'owntalk-appearance-';
+
+/// Whether [referenceId] marks a message that announces a shared-appearance
+/// change.
+bool isOwnTalkAppearanceReferenceId(String referenceId) =>
+    referenceId.startsWith(ownTalkAppearanceReferencePrefix);
+
+/// Posts the silent chat message that tells clients without a live channel
+/// that the shared appearance of a conversation changed. Talk is asked not to
+/// notify anybody, so a server that cannot do that is refused up front instead
+/// of pinging the whole room.
+final class OwnTalkAppearanceNoticeRequest {
+  OwnTalkAppearanceNoticeRequest({
+    required this.accountId,
+    required this.server,
+    required this.roomToken,
+    required CapabilitySnapshot capabilities,
+    required this.revision,
+    required this.message,
+    this.userAgent = ownTalkExtensionsContractUserAgent,
+  }) {
+    _requireCapability(capabilities);
+    if (!capabilities.supportsTalk('chat-reference-id')) {
+      protocolFailure(_requestCode, r'$.capabilities.chat-reference-id');
+    }
+    if (!capabilities.supportsTalk('silent-send')) {
+      protocolFailure(_requestCode, r'$.capabilities.silent-send');
+    }
+    if (revision < 0 || revision > 0x7fffffff) {
+      protocolFailure(_requestCode, r'$.body.referenceId');
+    }
+    if (message.trim().isEmpty || message.length > 256) {
+      protocolFailure(_requestCode, r'$.body.message');
+    }
+    _validateUserAgent(userAgent);
+  }
+
+  final AccountId accountId;
+  final ServerBase server;
+  final ConversationToken roomToken;
+  final int revision;
+  final String message;
+  final String userAgent;
+
+  String get referenceId => '$ownTalkAppearanceReferencePrefix$revision';
+
+  String get httpMethod => 'POST';
+
+  Uri get uri => server.uri.replace(
+    path: '${server.basePath}$chatV1Path/${roomToken.value}',
+    queryParameters: const {'format': 'json'},
+  );
+
+  Map<String, String> get headers =>
+      UnmodifiableMapView({'OCS-APIRequest': 'true', 'User-Agent': userAgent});
+
+  Map<String, String> get formBody => UnmodifiableMapView({
+    'message': message,
+    'referenceId': referenceId,
+    'silent': 'true',
+  });
+
+  @override
+  String toString() => 'OwnTalkAppearanceNoticeRequest(revision: $revision)';
 }
 
 Map<OwnTalkSettingField, String?> _validatedChanges(
