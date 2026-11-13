@@ -123,6 +123,10 @@ void main() {
 
   test('revalidates with the ETag the server sent, so a role change behind '
       'the same revision reaches the screen', () async {
+    // Only the explicit refreshes below may reach the server: a timed poll
+    // in between would send the newer ETag first on a slow machine.
+    container.dispose();
+    container = open(interval: const Duration(minutes: 5));
     watch();
     await until(() => shown().settings != null);
     expect(shown().canEdit, isTrue);
@@ -141,6 +145,8 @@ void main() {
 
   test('sends the ETag opaquely and sends none when the header was missing '
       'or garbled', () async {
+    container.dispose();
+    container = open(interval: const Duration(minutes: 5));
     server.omitEtag = true;
     watch();
     await until(() => shown().settings != null);
