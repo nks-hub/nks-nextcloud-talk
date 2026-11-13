@@ -164,6 +164,8 @@ A validation error, a stale anchor or a simulated DB failure returns the whole c
 
 Before the admission, the client creates a lowercase UUID `referenceId`. Talk truncates it server-side to 64 characters, but before the save it does not look up an existing comment by it. The value therefore correlates the local operation and is not an idempotency key.
 
+An emoji-only message sent by holding the quick-emoji button carries its display size in the same field, as `oes1.<step>.<uuid>` with `step` 1 to 3 (43 characters). The text stays the plain emoji, so other clients show an ordinary message; this client reads the step back from the `referenceId` Talk returns and renders the emoji larger. The id stays unique and is matched by the outbox like a plain one.
+
 A confirmed response must have:
 
 - HTTP 201 and a successful OCS envelope;
