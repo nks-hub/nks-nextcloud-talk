@@ -434,11 +434,11 @@ final class _WallpaperPainter extends CustomPainter {
     }
   }
 
-  /// Small dots and a few four-pointed sparkles, as many per area on a
-  /// thumbnail as on a full screen.
+  /// Small dots and a few four-pointed sparkles at a fixed density, with a
+  /// floor of 28 so a preset tile still reads as a starfield.
   void _paintStars(Canvas canvas, Size size) {
     final random = math.Random(11);
-    final count = (size.width * size.height / 2600).clamp(6, 900).round();
+    final count = (size.width * size.height / 2600).clamp(28, 900).round();
     for (var index = 0; index < count; index++) {
       final center = Offset(
         random.nextDouble() * size.width,
@@ -469,7 +469,7 @@ final class _WallpaperPainter extends CustomPainter {
 
   void _paintConfetti(Canvas canvas, Size size) {
     final random = math.Random(5);
-    final count = (size.width * size.height / 5200).clamp(5, 500).round();
+    final count = (size.width * size.height / 5200).clamp(18, 500).round();
     final shapes = colors.length - 2;
     for (var index = 0; index < count; index++) {
       final paint = Paint()..color = colors[2 + index % shapes];
