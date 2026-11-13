@@ -767,7 +767,7 @@ final class _SendOrQuickEmojiButton extends StatelessWidget {
   final bool sending;
   final bool Function() hasAttachment;
   final Widget sendButton;
-  final ValueChanged<String> onSendEmoji;
+  final void Function(String emoji, int? sizeStep) onSendEmoji;
 
   @override
   Widget build(BuildContext context) {
@@ -786,25 +786,13 @@ final class _SendOrQuickEmojiButton extends StatelessWidget {
             ? strings.ownTalkQuickEmojiSend
             : strings.ownTalkQuickEmojiSendNamed(name);
         // Bare glyph like the reaction shortcut in other messengers: a filled
-        // send-button disc behind a colour emoji reads as a sticker.
-        return SizedBox.square(
-          dimension: 48,
-          child: IconButton(
-            key: const Key('send-quick-emoji'),
-            onPressed: sending ? null : () => onSendEmoji(emoji),
-            tooltip: label,
-            padding: EdgeInsets.zero,
-            icon: ExcludeSemantics(
-              child: Opacity(
-                opacity: sending ? 0.38 : 1,
-                child: Text(
-                  emoji,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 30, height: 1),
-                ),
-              ),
-            ),
-          ),
+        // send-button disc behind a colour emoji reads as a sticker. Holding it
+        // sends the emoji enlarged.
+        return QuickEmojiHoldButton(
+          emoji: emoji,
+          tooltip: label,
+          enabled: !sending,
+          onSend: onSendEmoji,
         );
       },
     );

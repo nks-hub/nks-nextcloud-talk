@@ -6,6 +6,11 @@ const int _enlargedEmojiLimit = 8;
 /// Font size for a message that is nothing but emoji.
 const double enlargedEmojiFontSize = 40;
 
+/// Font size for an emoji-only message sent with a long press, [step] being
+/// 1 to `ChatEmojiSizeReference.maxStep`.
+double enlargedEmojiFontSizeForStep(int step) =>
+    enlargedEmojiFontSize + 24 * step;
+
 /// Whether [text] is nothing but emoji, so the bubble can show it enlarged.
 ///
 /// The check is deliberately conservative: a message mixing emoji with any

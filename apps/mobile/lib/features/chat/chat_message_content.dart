@@ -123,14 +123,15 @@ final class ChatMessageContent extends StatelessWidget {
                 if (attachments.isEmpty &&
                     parsed.messageParameters.isEmpty &&
                     isEmojiOnlyMessage(parsed.message))
-                  Text(
-                    parsed.message.trim(),
+                  _EnlargedEmoji(
                     key: Key('chat-enlarged-emoji-${parsed.messageId}'),
-                    style: TextStyle(
-                      color: foregroundColor,
-                      fontSize: enlargedEmojiFontSize,
-                      height: 1.15,
-                    ),
+                    text: parsed.message.trim(),
+                    color: foregroundColor,
+                    step:
+                        ChatEmojiSizeReference.tryParse(
+                          parsed.referenceId,
+                        )?.step ??
+                        0,
                   )
                 else
                   RichChatDocumentContent(
@@ -176,6 +177,40 @@ final class ChatMessageContent extends StatelessWidget {
               _ReactionSummary(message: parsed, onTap: onReactionTap),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// An emoji-only message at the jumbo size, or at the larger size the sender
+/// picked with [step] (0 for none). Scaled down rather than wrapped when the
+/// bubble is too narrow for it, whatever the text scale.
+final class _EnlargedEmoji extends StatelessWidget {
+  const _EnlargedEmoji({
+    super.key,
+    required this.text,
+    required this.color,
+    required this.step,
+  });
+
+  final String text;
+  final Color color;
+  final int step;
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: step == 0
+              ? enlargedEmojiFontSize
+              : enlargedEmojiFontSizeForStep(step),
+          height: 1.15,
         ),
       ),
     );

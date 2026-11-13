@@ -317,6 +317,10 @@ final class ChatService {
   /// [replyTo] answers a specific root message. Talk turns that into a thread,
   /// so it is mutually exclusive with sending inside an existing [threadId].
   ///
+  /// [emojiSizeStep] (1 to [ChatEmojiSizeReference.maxStep]) marks an
+  /// emoji-only message to be shown enlarged by this client; it rides in the
+  /// `referenceId` and does not change the message text.
+  ///
   /// Completes once the message is durably in the outbox, not once it reaches
   /// the server: the composer is free for the next line while this one is
   /// still on the wire. Delivery continues on the room lane, so the outbox is
@@ -334,6 +338,7 @@ final class ChatService {
     int? replyTo,
     String? replyToToken,
     PrivateReplyEligibilitySnapshot? privateReplyEligibility,
+    int? emojiSizeStep,
   }) {
     final key = _roomKey(accountId, roomToken);
     // Admission has a lane of its own. On the room lane it would queue behind
@@ -414,12 +419,20 @@ final class ChatService {
           throw const ChatServiceException(ChatServiceError.invalidResponse);
         }
         final operationId = _uuid.v4();
+        final referenceUuid = _uuid.v4();
         await _chat.admitTextSend(
           accountId: accountId,
           roomToken: prepared.room.token,
           authority: prepared.authority,
           operationId: ChatOperationId.parse(operationId),
-          referenceId: ChatReferenceId.parse(_uuid.v4()),
+          referenceId: ChatReferenceId.parse(
+            emojiSizeStep == null
+                ? referenceUuid
+                : ChatEmojiSizeReference(
+                    uuid: referenceUuid,
+                    step: emojiSizeStep,
+                  ).referenceId,
+          ),
           message: normalized,
           silent: silent,
           replyTo: effectiveReplyTo,

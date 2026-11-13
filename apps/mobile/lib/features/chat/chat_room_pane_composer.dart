@@ -383,13 +383,16 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
   /// Sends the conversation's quick emoji as an ordinary message. A file that
   /// is waiting in the composer still wins, exactly as it does for the send
   /// button the emoji replaces.
-  Future<void> _sendQuickEmoji(String emoji) async {
+  ///
+  /// [sizeStep] is the enlargement picked by holding the button; null is the
+  /// ordinary size.
+  Future<void> _sendQuickEmoji(String emoji, {int? sizeStep}) async {
     if (_mediaComposerController.hasPreparedAttachment ||
         _composer.text.trim().isNotEmpty) {
       await _send();
       return;
     }
-    await _sendMessage(emoji, clearComposer: false);
+    await _sendMessage(emoji, clearComposer: false, emojiSizeStep: sizeStep);
   }
 
   Future<void> _sendGiphyForScope(
@@ -421,6 +424,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     String message, {
     required bool clearComposer,
     ChatRoomProviderKey? expectedKey,
+    int? emojiSizeStep,
   }) async {
     final targetKey = _key;
     if (expectedKey != null && expectedKey != targetKey) {
@@ -478,6 +482,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             silent: _silentSend,
             threadId: targetKey.threadId,
             replyTo: rootReply?.messageId,
+            emojiSizeStep: emojiSizeStep,
           );
       if (mounted) {
         _update(() => provisional.operationId = operationId);
