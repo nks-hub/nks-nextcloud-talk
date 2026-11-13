@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/desktop_metrics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -202,80 +203,93 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
     const avatarGap = 10.0;
     return Scaffold(
       key: const Key('chat-room-screen'),
-      appBar: AppBar(
-        titleSpacing: 0,
-        // Everything lives in the title, actions included, because only there
-        // is the width known: `AppBar` hands its actions whatever they ask for
-        // and gives the title the leftovers, which on a phone is nothing.
-        title: LayoutBuilder(
-          builder: (context, box) => Row(
-            children: [
-              ExcludeSemantics(
-                child: ConversationAvatar(
-                  account: account,
-                  conversation: current,
-                  radius: avatarRadius,
-                ),
-              ),
-              const SizedBox(width: avatarGap),
-              Expanded(
-                child: ConversationPresenceTitle(
-                  conversation: current,
-                  // The same size the wide header already uses. `AppBar`'s own
-                  // `titleLarge` is 22sp, and next to the avatar, the back
-                  // affordance and three actions it left a 1080 px phone
-                  // showing eleven characters of the name - measured on an
-                  // API 34 device, where "NCloudTalk Test 2" read
-                  // "NCloudTal...". The room's name is what the screen is
-                  // about, so it gets the size that fits it.
-                  titleStyle: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              ...conversationHeaderActions(
-                _headerActions(context, ref, account, current),
-                width: box.maxWidth,
-                actionExtent: actionExtentOf(context),
-                titleFloor: conversationTitleFloor(
-                  context,
-                  avatarExtent: avatarRadius * 2,
-                  gap: avatarGap,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
       body: SafeArea(
         top: false,
-        child: Column(
-          children: [
-            ConversationUpcomingEventBanner(
-              account: account,
-              conversation: current,
+        child: ChatBackgroundSurface(
+          accountId: account.id,
+          roomToken: current.token,
+          sharedSettings: ownTalkConversationCanShare(
+            roomType: current.roomType,
+            rawJson: current.rawJson,
+          ),
+          header: (context, tinted) => AppBar(
+            backgroundColor: tinted ? Colors.transparent : null,
+            surfaceTintColor: tinted ? Colors.transparent : null,
+            scrolledUnderElevation: tinted ? 0 : null,
+            // A transparent bar would otherwise pick light status bar icons.
+            systemOverlayStyle: tinted ? _overlayStyleFor(context) : null,
+            titleSpacing: 0,
+            // Everything lives in the title, actions included, because only there
+            // is the width known: `AppBar` hands its actions whatever they ask for
+            // and gives the title the leftovers, which on a phone is nothing.
+            title: LayoutBuilder(
+              builder: (context, box) => Row(
+                children: [
+                  ExcludeSemantics(
+                    child: ConversationAvatar(
+                      account: account,
+                      conversation: current,
+                      radius: avatarRadius,
+                    ),
+                  ),
+                  const SizedBox(width: avatarGap),
+                  Expanded(
+                    child: ConversationPresenceTitle(
+                      conversation: current,
+                      // The same size the wide header already uses. `AppBar`'s own
+                      // `titleLarge` is 22sp, and next to the avatar, the back
+                      // affordance and three actions it left a 1080 px phone
+                      // showing eleven characters of the name - measured on an
+                      // API 34 device, where "NCloudTalk Test 2" read
+                      // "NCloudTal...". The room's name is what the screen is
+                      // about, so it gets the size that fits it.
+                      titleStyle: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  ...conversationHeaderActions(
+                    _headerActions(context, ref, account, current),
+                    width: box.maxWidth,
+                    actionExtent: actionExtentOf(context),
+                    titleFloor: conversationTitleFloor(
+                      context,
+                      avatarExtent: avatarRadius * 2,
+                      gap: avatarGap,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            ConversationAbsenceBanner(account: account, conversation: current),
-            OngoingCallBanner(account: account, conversation: current),
-            Expanded(
-              child: ChatBackgroundSurface(
-                accountId: account.id,
-                roomToken: current.token,
-                sharedSettings: ownTalkConversationCanShare(
-                  roomType: current.roomType,
-                  rawJson: current.rawJson,
-                ),
+          ),
+          child: Column(
+            children: [
+              ConversationUpcomingEventBanner(
+                account: account,
+                conversation: current,
+              ),
+              ConversationAbsenceBanner(
+                account: account,
+                conversation: current,
+              ),
+              OngoingCallBanner(account: account, conversation: current),
+              Expanded(
                 child: ChatRoomPane(
                   account: account,
                   conversation: current,
                   jumpToMessageId: jumpToMessageId,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
+SystemUiOverlayStyle _overlayStyleFor(BuildContext context) =>
+    Theme.of(context).colorScheme.brightness == Brightness.dark
+    ? SystemUiOverlayStyle.light
+    : SystemUiOverlayStyle.dark;
 
 final class PresenceChatRoomPane extends ConsumerWidget {
   const PresenceChatRoomPane({
@@ -315,100 +329,101 @@ final class PresenceChatRoomPane extends ConsumerWidget {
     final leadingExtent =
         (onToggleList == null ? 0.0 : kMinInteractiveDimension + 4) +
         (onClose == null ? 0.0 : kMinInteractiveDimension + 4);
-    return Column(
-      children: [
-        Container(
-          key: const Key('chat-room-header'),
-          constraints: BoxConstraints(minHeight: context.paneHeaderHeight),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
+    return ChatBackgroundSurface(
+      accountId: account.id,
+      roomToken: conversation.token,
+      sharedSettings: ownTalkConversationCanShare(
+        roomType: conversation.roomType,
+        rawJson: conversation.rawJson,
+      ),
+      header: (context, tinted) => Container(
+        key: const Key('chat-room-header'),
+        constraints: BoxConstraints(minHeight: context.paneHeaderHeight),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant,
             ),
           ),
-          child: LayoutBuilder(
-            builder: (context, box) => Row(
-              children: [
-                if (onToggleList != null) ...[
-                  IconButton(
-                    key: const Key('toggle-conversation-list'),
-                    tooltip: listCollapsed
-                        ? strings.showConversationList
-                        : strings.hideConversationList,
-                    icon: Icon(
-                      listCollapsed
-                          ? Icons.menu_open_rounded
-                          : Icons.menu_rounded,
-                    ),
-                    onPressed: onToggleList,
+        ),
+        child: LayoutBuilder(
+          builder: (context, box) => Row(
+            children: [
+              if (onToggleList != null) ...[
+                IconButton(
+                  key: const Key('toggle-conversation-list'),
+                  tooltip: listCollapsed
+                      ? strings.showConversationList
+                      : strings.hideConversationList,
+                  icon: Icon(
+                    listCollapsed
+                        ? Icons.menu_open_rounded
+                        : Icons.menu_rounded,
                   ),
-                  const SizedBox(width: 4),
-                ],
-                if (onClose != null) ...[
-                  IconButton(
-                    key: const Key('close-conversation'),
-                    tooltip: MaterialLocalizations.of(
-                      context,
-                    ).backButtonTooltip,
-                    icon: const BackButtonIcon(),
-                    onPressed: onClose,
-                  ),
-                  const SizedBox(width: 4),
-                ],
-                ExcludeSemantics(
-                  child: ConversationAvatar(
-                    account: account,
-                    conversation: conversation,
-                  ),
+                  onPressed: onToggleList,
                 ),
-                const SizedBox(width: avatarGap),
-                Expanded(
-                  child: ConversationPresenceTitle(
-                    conversation: conversation,
-                    titleStyle: Theme.of(context).textTheme.titleMedium,
-                    fallbackSubtitle: conversation.description,
-                  ),
-                ),
-                ...conversationHeaderActions(
-                  _headerActions(
-                    context,
-                    ref,
-                    account,
-                    conversation,
-                    onOpenDetails: onOpenDetails,
-                  ),
-                  width: box.maxWidth - leadingExtent,
-                  actionExtent: actionExtentOf(context),
-                  titleFloor: conversationTitleFloor(
-                    context,
-                    avatarExtent: avatarExtent,
-                    gap: avatarGap,
-                  ),
-                ),
+                const SizedBox(width: 4),
               ],
-            ),
+              if (onClose != null) ...[
+                IconButton(
+                  key: const Key('close-conversation'),
+                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                  icon: const BackButtonIcon(),
+                  onPressed: onClose,
+                ),
+                const SizedBox(width: 4),
+              ],
+              ExcludeSemantics(
+                child: ConversationAvatar(
+                  account: account,
+                  conversation: conversation,
+                ),
+              ),
+              const SizedBox(width: avatarGap),
+              Expanded(
+                child: ConversationPresenceTitle(
+                  conversation: conversation,
+                  titleStyle: Theme.of(context).textTheme.titleMedium,
+                  fallbackSubtitle: conversation.description,
+                ),
+              ),
+              ...conversationHeaderActions(
+                _headerActions(
+                  context,
+                  ref,
+                  account,
+                  conversation,
+                  onOpenDetails: onOpenDetails,
+                ),
+                width: box.maxWidth - leadingExtent,
+                actionExtent: actionExtentOf(context),
+                titleFloor: conversationTitleFloor(
+                  context,
+                  avatarExtent: avatarExtent,
+                  gap: avatarGap,
+                ),
+              ),
+            ],
           ),
         ),
-        ConversationUpcomingEventBanner(
-          account: account,
-          conversation: conversation,
-        ),
-        ConversationAbsenceBanner(account: account, conversation: conversation),
-        OngoingCallBanner(account: account, conversation: conversation),
-        Expanded(
-          child: ChatBackgroundSurface(
-            accountId: account.id,
-            roomToken: conversation.token,
-            sharedSettings: ownTalkConversationCanShare(
-              roomType: conversation.roomType,
-              rawJson: conversation.rawJson,
-            ),
+      ),
+      child: Column(
+        children: [
+          ConversationUpcomingEventBanner(
+            account: account,
+            conversation: conversation,
+          ),
+          ConversationAbsenceBanner(
+            account: account,
+            conversation: conversation,
+          ),
+          OngoingCallBanner(account: account, conversation: conversation),
+          Expanded(
             child: ChatRoomPane(account: account, conversation: conversation),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -28,7 +28,7 @@ final Uint8List _pixel = base64Decode(
 
 void main() {
   group('presets', () {
-    test('the client draws exactly the six IDs the server documents', () {
+    test('the client draws exactly the IDs the server documents', () {
       expect(chatWallpaperPresets.map((preset) => preset.id), [
         'aurora',
         'sunset',
@@ -36,6 +36,16 @@ void main() {
         'ocean',
         'dots',
         'grid',
+        'lavender',
+        'peach',
+        'mint',
+        'nebula',
+        'bokeh',
+        'waves',
+        'dunes',
+        'topo',
+        'stars',
+        'confetti',
       ]);
     });
 
@@ -306,6 +316,7 @@ void main() {
       bool imageProvider = false,
       Uint8List? imageBytes,
       ThemeData? theme,
+      List<bool>? headerTints,
     }) => ProviderScope(
       overrides: overrides(
         local: local,
@@ -318,6 +329,12 @@ void main() {
           accountId: 'account-a',
           roomToken: ownTalkTestToken,
           sharedSettings: shared,
+          header: headerTints == null
+              ? null
+              : (context, tinted) {
+                  headerTints.add(tinted);
+                  return const SizedBox(key: Key('chat-header'), height: 56);
+                },
           child: const SizedBox.expand(key: Key('chat-child')),
         ),
       ),
@@ -364,6 +381,40 @@ void main() {
       );
       expect(photoLayer, findsNothing);
       expect(surfaceColor(tester), schemeOf(tester).surface);
+      await unmount(tester);
+    });
+
+    testWidgets('the header shares the background and is veiled over a '
+        'preset only', (tester) async {
+      final tints = <bool>[];
+      await pumpSurface(tester, surface(headerTints: tints));
+      expect(find.byKey(const Key('chat-header')), findsOneWidget);
+      expect(tints.last, isFalse);
+      expect(find.byKey(const Key('chat-header-veil')), findsNothing);
+      expect(
+        tester.getTopLeft(find.byKey(const Key('chat-child'))).dy,
+        tester.getBottomLeft(find.byKey(const Key('chat-header'))).dy,
+        reason: 'the chat starts below the header',
+      );
+      await unmount(tester);
+
+      server.setExternally({'chat.backgroundPreset': 'nebula'});
+      await tester.pumpWidget(surface(headerTints: tints));
+      await pumpUntilCondition(
+        tester,
+        () => presetLayer.evaluate().isNotEmpty,
+        reason: 'the preset never appeared',
+      );
+      expect(tints.last, isTrue);
+      final veil = tester.widget<ColoredBox>(
+        find.byKey(const Key('chat-header-veil')),
+      );
+      expect(veil.color, schemeOf(tester).surface.withValues(alpha: 0.35));
+      expect(
+        tester.getTopLeft(presetLayer).dy,
+        tester.getTopLeft(find.byKey(const Key('chat-header'))).dy,
+        reason: 'the wallpaper reaches up behind the header',
+      );
       await unmount(tester);
     });
 

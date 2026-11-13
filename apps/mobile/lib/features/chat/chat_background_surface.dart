@@ -32,6 +32,7 @@ final class ChatBackgroundSurface extends ConsumerWidget {
     required this.roomToken,
     required this.sharedSettings,
     required this.child,
+    this.header,
   });
 
   final String accountId;
@@ -41,6 +42,12 @@ final class ChatBackgroundSurface extends ConsumerWidget {
   /// extension is neither asked nor applied.
   final bool sharedSettings;
   final Widget child;
+
+  /// The conversation header, laid out above [child] on the same background
+  /// so a colour, wallpaper or photo reaches up behind it. `tinted` is true
+  /// when something other than the theme surface is behind the header; it
+  /// should then leave its own background transparent.
+  final Widget Function(BuildContext context, bool tinted)? header;
 
   /// Background precedence: this device's own colour, then the photo shared by
   /// the conversation, then its wallpaper, then its colour, then the theme.
@@ -67,6 +74,15 @@ final class ChatBackgroundSurface extends ConsumerWidget {
     // A colour of this device hides the shared layers, so their photo is not
     // even downloaded.
     final wallpaper = local == null ? _sharedWallpaper(ref, shared) : null;
+    final layer = Positioned.fill(
+      child: wallpaper == null
+          ? const SizedBox.shrink()
+          : RepaintBoundary(
+              child: ExcludeSemantics(child: IgnorePointer(child: wallpaper)),
+            ),
+    );
+    final chat = ChatWallpaperScope(active: wallpaper != null, child: child);
+    final header = this.header;
     return SharedChatAppearance.fromExtras(
       shared,
       child: Material(
@@ -74,23 +90,50 @@ final class ChatBackgroundSurface extends ConsumerWidget {
         color: background,
         // The layer slot stays in the tree whether or not there is a
         // wallpaper, so the chat below keeps its state when one appears.
-        child: Stack(
-          fit: StackFit.passthrough,
-          children: [
-            Positioned.fill(
-              child: wallpaper == null
-                  ? const SizedBox.shrink()
-                  : RepaintBoundary(
-                      child: ExcludeSemantics(
-                        child: IgnorePointer(child: wallpaper),
+        child: header == null
+            ? Stack(fit: StackFit.passthrough, children: [layer, chat])
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  layer,
+                  Column(
+                    children: [
+                      _HeaderVeil(
+                        // A photo can be anything; the header text gets the
+                        // same protection as text on a chip.
+                        alpha: _hasPhoto(ref, shared, local)
+                            ? wallpaperChipAlpha(scheme)
+                            : wallpaper != null
+                            ? 0.35
+                            : 0,
+                        child: header(
+                          context,
+                          requested != null || wallpaper != null,
+                        ),
                       ),
-                    ),
-            ),
-            ChatWallpaperScope(active: wallpaper != null, child: child),
-          ],
-        ),
+                      Expanded(child: chat),
+                    ],
+                  ),
+                ],
+              ),
       ),
     );
+  }
+
+  bool _hasPhoto(WidgetRef ref, OwnTalkRoomExtras shared, Color? local) {
+    final sha = shared.valueOf(OwnTalkSettingField.chatBackgroundImage);
+    return local == null &&
+        sha != null &&
+        ref
+                .watch(
+                  ownTalkRoomImageProvider((
+                    accountId: accountId,
+                    roomToken: roomToken,
+                    sha256: sha,
+                  )),
+                )
+                .valueOrNull !=
+            null;
   }
 
   Widget? _sharedWallpaper(WidgetRef ref, OwnTalkRoomExtras shared) {
@@ -126,6 +169,26 @@ final class ChatBackgroundSurface extends ConsumerWidget {
             bytes: bytes,
           ),
       ],
+    );
+  }
+}
+
+/// A veil of the theme surface at [alpha] behind the header.
+final class _HeaderVeil extends StatelessWidget {
+  const _HeaderVeil({required this.alpha, required this.child});
+
+  final double alpha;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (alpha == 0) {
+      return child;
+    }
+    return ColoredBox(
+      key: const Key('chat-header-veil'),
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: alpha),
+      child: child,
     );
   }
 }
