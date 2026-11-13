@@ -354,6 +354,8 @@ final class _EmojiPickerState extends State<EmojiPicker> {
         // vertical padding so the grid keeps some rows.
         final wide = constraints.maxWidth >= 600;
         final compact = constraints.maxHeight < 360;
+        // Below this the title row would leave the grid a single clipped row.
+        final tight = constraints.maxHeight < 240;
         final cell = wide ? 56.0 : 48.0;
         return _buildPicker(
           context,
@@ -363,6 +365,7 @@ final class _EmojiPickerState extends State<EmojiPicker> {
           scheme: scheme,
           cell: cell,
           compact: compact,
+          tight: tight,
         );
       },
     );
@@ -376,44 +379,103 @@ final class _EmojiPickerState extends State<EmojiPicker> {
     required ColorScheme scheme,
     required double cell,
     required bool compact,
+    required bool tight,
   }) {
+    final actions = <Widget>[
+      IconButton(
+        key: const Key('emoji-manage-favorites'),
+        tooltip: _managingFavorites
+            ? widget.labels.finishManagingFavorites
+            : widget.labels.manageFavorites,
+        onPressed: _usageLoaded && !_updatingUsage
+            ? _toggleFavoriteManagement
+            : null,
+        icon: Icon(
+          _managingFavorites ? Icons.done_rounded : Icons.star_outline,
+        ),
+      ),
+      IconButton(
+        key: const Key('emoji-close'),
+        tooltip: widget.labels.closeTooltip,
+        onPressed: widget.onClose,
+        icon: const Icon(Icons.close_rounded),
+      ),
+    ];
+    final search = TextField(
+      key: const Key('emoji-search'),
+      controller: _searchController,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: widget.labels.searchHint,
+        prefixIcon: const Icon(Icons.search_rounded),
+        border: const OutlineInputBorder(),
+        isDense: compact,
+      ),
+    );
+    final categories = SizedBox(
+      height: 48,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        children: [
+          for (final category in _categories)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: ChoiceChip(
+                key: Key('emoji-category-${category.name}'),
+                label: Text(widget.labels.categoryLabels[category] ?? ''),
+                selected: category == _category,
+                selectedColor: scheme.primaryContainer,
+                labelStyle: category == _category
+                    ? TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onPrimaryContainer,
+                      )
+                    : null,
+                onSelected: (_) => setState(() {
+                  _category = category;
+                  _categoryExplicitlySelected = true;
+                }),
+              ),
+            ),
+        ],
+      ),
+    );
     return Column(
       children: [
-        SizedBox(
-          height: compact ? 48 : 56,
-          child: Row(
-            children: [
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsetsDirectional.only(start: 16),
-                  child: Text(
-                    widget.labels.title,
-                    style: Theme.of(context).textTheme.titleLarge,
+        if (tight)
+          Padding(
+            padding: const EdgeInsetsDirectional.only(start: 4, top: 4),
+            child: Row(
+              children: [
+                // Sideways the width is spare, so the categories share the
+                // search row and the grid keeps the height.
+                Expanded(flex: 2, child: search),
+                if (query.isEmpty) Expanded(flex: 3, child: categories),
+                ...actions,
+              ],
+            ),
+          )
+        else ...[
+          SizedBox(
+            height: compact ? 48 : 56,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsetsDirectional.only(start: 16),
+                    child: Text(
+                      widget.labels.title,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                   ),
                 ),
-              ),
-              IconButton(
-                key: const Key('emoji-manage-favorites'),
-                tooltip: _managingFavorites
-                    ? widget.labels.finishManagingFavorites
-                    : widget.labels.manageFavorites,
-                onPressed: _usageLoaded && !_updatingUsage
-                    ? _toggleFavoriteManagement
-                    : null,
-                icon: Icon(
-                  _managingFavorites ? Icons.done_rounded : Icons.star_outline,
-                ),
-              ),
-              IconButton(
-                key: const Key('emoji-close'),
-                tooltip: widget.labels.closeTooltip,
-                onPressed: widget.onClose,
-                icon: const Icon(Icons.close_rounded),
-              ),
-            ],
+                ...actions,
+              ],
+            ),
           ),
-        ),
-        const Divider(height: 1),
+          const Divider(height: 1),
+        ],
         if (_managingFavorites)
           Container(
             key: const Key('emoji-favorite-mode-hint'),
@@ -428,50 +490,9 @@ final class _EmojiPickerState extends State<EmojiPicker> {
               ],
             ),
           ),
-        Padding(
-          padding: EdgeInsets.all(compact ? 4 : 8),
-          child: TextField(
-            key: const Key('emoji-search'),
-            controller: _searchController,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: widget.labels.searchHint,
-              prefixIcon: const Icon(Icons.search_rounded),
-              border: const OutlineInputBorder(),
-              isDense: compact,
-            ),
-          ),
-        ),
-        if (query.isEmpty)
-          SizedBox(
-            height: 48,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              children: [
-                for (final category in _categories)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    child: ChoiceChip(
-                      key: Key('emoji-category-${category.name}'),
-                      label: Text(widget.labels.categoryLabels[category] ?? ''),
-                      selected: category == _category,
-                      selectedColor: scheme.primaryContainer,
-                      labelStyle: category == _category
-                          ? TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: scheme.onPrimaryContainer,
-                            )
-                          : null,
-                      onSelected: (_) => setState(() {
-                        _category = category;
-                        _categoryExplicitlySelected = true;
-                      }),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+        if (!tight)
+          Padding(padding: EdgeInsets.all(compact ? 4 : 8), child: search),
+        if (query.isEmpty && !tight) categories,
         Expanded(
           child:
               _unsupported == null ||

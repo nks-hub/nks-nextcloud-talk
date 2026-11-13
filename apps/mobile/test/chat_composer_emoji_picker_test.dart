@@ -176,6 +176,50 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('a panel as short as a phone held sideways keeps two rows', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              key: const Key('panel'),
+              height: 185,
+              child: EmojiPicker(
+                accountId: AccountId.parse('account-a'),
+                usageStore: _MemoryEmojiUsageStore(),
+                labels: labels,
+                catalog: EmojiCatalog(<EmojiChoice>[
+                  for (var i = 0; i < 40; i++)
+                    EmojiChoice(
+                      glyph: String.fromCharCode(0x1F600 + i),
+                      name: 'Face $i',
+                      keywords: const <String>['face'],
+                      category: EmojiCategory.smileys,
+                    ),
+                ]),
+                onClose: () {},
+                onSelected: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Emoji'), findsNothing);
+    expect(find.byKey(const Key('emoji-search')), findsOneWidget);
+    expect(find.byKey(const Key('emoji-close')), findsOneWidget);
+    final panelBottom = tester.getBottomLeft(find.byKey(const Key('panel'))).dy;
+    final firstRow = tester
+        .getTopLeft(find.byKey(const Key('emoji-choice-face-0')))
+        .dy;
+    expect(panelBottom - firstRow, greaterThanOrEqualTo(2 * 48));
+  });
+
   testWidgets('wide layout enlarges the cells and marks the selected one', (
     tester,
   ) async {
