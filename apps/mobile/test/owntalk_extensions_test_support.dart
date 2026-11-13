@@ -1,23 +1,47 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 const String ownTalkTestToken = 'rooma123';
 
+/// A JPEG-looking body: the client checks the magic bytes of a download.
+Uint8List ownTalkTestJpeg([int seed = 1]) =>
+    Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, seed, 2, 3, 4, 5, 6, 7, 8]);
+
+String ownTalkTestSha(Uint8List bytes) => sha256.convert(bytes).toString();
+
 Map<String, Object?> ownTalkCapabilityJson({
   List<String> features = const [
     'appearance.colors',
     'appearance.bubbles',
+    'appearance.presets',
+    'appearance.image',
     'composer.quickEmoji',
   ],
   String acl = 'roles',
+  List<String>? presets = const [
+    'aurora',
+    'sunset',
+    'forest',
+    'ocean',
+    'dots',
+    'grid',
+  ],
+  Map<String, Object?>? limits = const {
+    'maxImageBytes': 10485760,
+    'maxImageEdge': 2560,
+  },
 }) => {
-  'version': '0.1.0',
+  'version': '0.3.0',
   'api': 1,
   'features': features,
   'acl': acl,
   'roomTypes': ['one2one', 'group', 'public'],
+  'presets': ?presets,
+  'limits': ?limits,
 };
 
 http.Response ocsResponse(
@@ -61,9 +85,23 @@ final class FakeOwnTalkServer {
     'bubble.ownTextColor': null,
     'bubble.otherColor': null,
     'bubble.otherTextColor': null,
+    'chat.backgroundPreset': null,
+    'chat.backgroundImage': null,
     'composer.quickEmoji': null,
   };
   final Map<String, int> fieldRevisions = {};
+
+  /// Stored background photos by SHA-256.
+  final Map<String, Uint8List> images = {};
+
+  /// Answers every image upload with this status while set.
+  int? failUploadWith;
+
+  /// The `data.error` code of that answer.
+  String failUploadError = 'x';
+
+  /// Answers every image download with this status while set.
+  int? failDownloadWith;
 
   /// Answers every settings request with this status while set.
   int? failSettingsWith;
@@ -84,6 +122,12 @@ final class FakeOwnTalkServer {
 
   List<http.Request> get settingsRequests =>
       requests.where((r) => r.url.path.endsWith('/settings')).toList();
+
+  List<http.Request> get uploads =>
+      requests.where((r) => r.url.path.endsWith('/settings/image')).toList();
+
+  List<http.Request> get downloads =>
+      requests.where((r) => r.url.path.contains('/settings/image/')).toList();
 
   late final http.Client client = MockClient(handle);
 
@@ -147,7 +191,74 @@ final class FakeOwnTalkServer {
       }
       return request.method == 'PATCH' ? _patch(request) : _get(request);
     }
+    if (path.endsWith('/room/$ownTalkTestToken/settings/image') &&
+        request.method == 'PUT') {
+      return _put(request);
+    }
+    if (path.contains('/room/$ownTalkTestToken/settings/image/')) {
+      return _download(request);
+    }
     return http.Response('', 404);
+  }
+
+  http.Response _download(http.Request request) {
+    final failure = failDownloadWith;
+    if (failure != null) {
+      return http.Response('', failure);
+    }
+    final sha = request.url.pathSegments.last;
+    final bytes = images[sha];
+    if (bytes == null || settings['chat.backgroundImage'] != sha) {
+      return ocsResponse(404, {'error': 'not_found'});
+    }
+    return http.Response.bytes(
+      bytes,
+      200,
+      headers: {'content-type': 'image/jpeg', 'etag': '"$sha"'},
+    );
+  }
+
+  http.Response _put(http.Request request) {
+    beforePatch?.call();
+    beforePatch = null;
+    final failure = failUploadWith;
+    if (failure != null) {
+      return ocsResponse(failure, {'error': failUploadError});
+    }
+    if (!canEdit) {
+      return ocsResponse(403, {'error': 'field_forbidden'});
+    }
+    final match = RegExp(
+      r'^"r(\d+)"$',
+    ).firstMatch(request.headers['If-Match'] ?? '');
+    if (match == null) {
+      return ocsResponse(428, {'error': 'precondition_required'});
+    }
+    if (!{
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    }.contains(request.headers['Content-Type'])) {
+      return ocsResponse(415, {'error': 'unsupported_media_type'});
+    }
+    if ((fieldRevisions['chat.backgroundImage'] ?? 0) >
+        int.parse(match.group(1)!)) {
+      return ocsResponse(412, {
+        'error': 'revision_conflict',
+        'current': document(),
+        'fields': ['chat.backgroundImage'],
+      });
+    }
+    final sha = ownTalkTestSha(request.bodyBytes);
+    images[sha] = request.bodyBytes;
+    revision++;
+    settings['chat.backgroundImage'] = sha;
+    fieldRevisions['chat.backgroundImage'] = revision;
+    return ocsResponse(
+      200,
+      document(),
+      headers: omitEtag ? const {} : {'etag': etag},
+    );
   }
 
   http.Response _get(http.Request request) {

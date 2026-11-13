@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -142,7 +143,10 @@ final class OwnTalkRoomController
     }
     _etag = cached.etag;
     _set(
-      OwnTalkRoomExtras(capability: state.capability, settings: cached.document),
+      OwnTalkRoomExtras(
+        capability: state.capability,
+        settings: cached.document,
+      ),
     );
   }
 
@@ -252,7 +256,41 @@ final class OwnTalkRoomController
   Future<OwnTalkSettingsUpdateResult> save(
     Map<OwnTalkSettingField, String?> changes, {
     int? baseRevision,
-  }) {
+  }) => _write(
+    (service, base) => service.update(
+      accountId: _key.accountId,
+      roomToken: _key.roomToken,
+      changes: changes,
+      baseRevision: base,
+    ),
+    baseRevision,
+  );
+
+  /// Uploads a background image through the same queue, revision rule and
+  /// conflict handling as [save]; it changes `chat.backgroundImage`.
+  Future<OwnTalkSettingsUpdateResult> uploadImage({
+    required Uint8List bytes,
+    required String contentType,
+    int? baseRevision,
+  }) => _write(
+    (service, base) => service.uploadImage(
+      accountId: _key.accountId,
+      roomToken: _key.roomToken,
+      bytes: bytes,
+      contentType: contentType,
+      baseRevision: base,
+    ),
+    baseRevision,
+  );
+
+  Future<OwnTalkSettingsUpdateResult> _write(
+    Future<OwnTalkSettingsUpdateResult> Function(
+      OwnTalkExtensionsService service,
+      int baseRevision,
+    )
+    run,
+    int? baseRevision,
+  ) {
     final completer = Completer<OwnTalkSettingsUpdateResult>();
     unawaited(
       _enqueue(() async {
@@ -263,14 +301,10 @@ final class OwnTalkRoomController
               OwnTalkExtensionsError.unavailable,
             );
           }
-          final result = await ref
-              .read(ownTalkExtensionsServiceProvider)
-              .update(
-                accountId: _key.accountId,
-                roomToken: _key.roomToken,
-                changes: changes,
-                baseRevision: baseRevision ?? state.settings?.revision ?? 0,
-              );
+          final result = await run(
+            ref.read(ownTalkExtensionsServiceProvider),
+            baseRevision ?? state.settings?.revision ?? 0,
+          );
           switch (result) {
             case OwnTalkSettingsSaved(:final document, :final etag):
               await _adopt(document, capability, etag);

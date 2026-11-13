@@ -17,7 +17,7 @@ void _registerBackgroundTests() {
       ],
     );
     await tester.tap(find.byKey(const Key('room-details-chat-background')));
-    await tester.tap(find.byKey(const Key('room-details-chat-background')));
+    await _openCustomBackground(tester);
     await _pumpUntil(
       tester,
       () =>
@@ -59,6 +59,49 @@ void _registerBackgroundTests() {
     expect(await tester.runAsync(() => store.read(key)), isNull);
   });
 
+  testWidgets('a palette swatch sets the colour and the theme entry clears '
+      'it', (tester) async {
+    final key = (accountId: account.id, roomToken: conversation.token);
+    final store = _temporaryBackgroundStore(tester);
+    await openDetails(
+      tester,
+      forAccount: account,
+      forConversation: conversation,
+      client: participantsClient(const <Object?>[]),
+      overrides: [
+        chatBackgroundStoreProvider.overrideWith((ref) async => store),
+        chatBackgroundProvider(key).overrideWith((ref) => store.watch(key)),
+      ],
+    );
+    await tester.tap(find.byKey(const Key('room-details-chat-background')));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('color-swatch-#1E3A5F')).evaluate().isNotEmpty,
+    );
+    await tester.tap(find.byKey(const Key('color-swatch-#1E3A5F')));
+    await _pumpUntil(
+      tester,
+      () =>
+          _textByKey(tester, 'room-details-chat-background-subtitle') ==
+          '#1E3A5F',
+    );
+    expect(await tester.runAsync(() => store.read(key)), '#1E3A5F');
+
+    await tester.tap(find.byKey(const Key('room-details-chat-background')));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('color-palette-theme')).evaluate().isNotEmpty,
+    );
+    await tester.tap(find.byKey(const Key('color-palette-theme')));
+    await _pumpUntil(
+      tester,
+      () =>
+          _textByKey(tester, 'room-details-chat-background-subtitle') ==
+          'Follow light or dark mode',
+    );
+    expect(await tester.runAsync(() => store.read(key)), isNull);
+  });
+
   testWidgets('invalid chat background is rejected without replacing state', (
     tester,
   ) async {
@@ -77,6 +120,7 @@ void _registerBackgroundTests() {
       ],
     );
     await tester.tap(find.byKey(const Key('room-details-chat-background')));
+    await _openCustomBackground(tester);
     await _pumpUntil(
       tester,
       () =>
@@ -116,6 +160,7 @@ void _registerBackgroundTests() {
       ],
     );
     await tester.tap(find.byKey(const Key('room-details-chat-background')));
+    await _openCustomBackground(tester);
     await _pumpUntil(
       tester,
       () =>
@@ -131,6 +176,15 @@ void _registerBackgroundTests() {
     expect(find.byType(SnackBar), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+/// The hex field sits behind the "Custom" entry of the palette.
+Future<void> _openCustomBackground(WidgetTester tester) async {
+  await _pumpUntil(
+    tester,
+    () => find.byKey(const Key('color-palette-custom')).evaluate().isNotEmpty,
+  );
+  await tester.tap(find.byKey(const Key('color-palette-custom')));
 }
 
 ChatBackgroundStore _temporaryBackgroundStore(WidgetTester tester) {

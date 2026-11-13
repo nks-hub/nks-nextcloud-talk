@@ -2018,5 +2018,56 @@
         "type": "String"
       }
     }
+  },
+  "colorPaletteCustom": "Custom…",
+  "colorNameWhite": "White",
+  "colorNameLemon": "Light yellow",
+  "colorNameMint": "Mint",
+  "colorNameSky": "Light blue",
+  "colorNamePink": "Pink",
+  "colorNameBlue": "Blue",
+  "colorNameNavy": "Navy blue",
+  "colorNameForest": "Forest green",
+  "colorNamePlum": "Plum",
+  "colorNameBurgundy": "Burgundy",
+  "colorNameGraphite": "Graphite",
+  "colorNameBlack": "Black",
+  "ownTalkSharedBackgroundAll": "Background for everyone",
+  "ownTalkBackgroundTabColor": "Colour",
+  "ownTalkBackgroundTabPreset": "Wallpaper",
+  "ownTalkBackgroundTabPhoto": "Photo",
+  "ownTalkPresetAurora": "Aurora",
+  "ownTalkPresetSunset": "Sunset",
+  "ownTalkPresetForest": "Forest",
+  "ownTalkPresetOcean": "Ocean",
+  "ownTalkPresetDots": "Dots",
+  "ownTalkPresetGrid": "Grid",
+  "ownTalkBackgroundPhotoSet": "Your photo",
+  "ownTalkBackgroundPhotoPick": "Choose a photo",
+  "ownTalkBackgroundPhotoChange": "Change photo",
+  "ownTalkBackgroundPhotoRemove": "Remove photo",
+  "ownTalkBackgroundPhotoHint": "JPEG, PNG or WebP, up to {size} MB. The server scales it down.",
+  "@ownTalkBackgroundPhotoHint": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "ownTalkBackgroundPhotoPreview": "Preview of the background photo",
+  "ownTalkBackgroundUploading": "Uploading the photo…",
+  "ownTalkPhotoRejectedType": "The server accepts only JPEG, PNG or WebP photos.",
+  "ownTalkPhotoRejectedImage": "That file could not be read as an image.",
+  "ownTalkPhotoTooLargeServer": "The server rejected the photo as too large.",
+  "ownTalkPhotoQuota": "The background storage on this server is full.",
+  "ownTalkPhotoRateLimited": "Too many uploads. Try again later.",
+  "ownTalkPhotoUnreadable": "The photo could not be read.",
+  "ownTalkPhotoTooLargeLocal": "The photo could not be reduced below {size} MB.",
+  "@ownTalkPhotoTooLargeLocal": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
   }
 }

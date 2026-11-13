@@ -7189,6 +7189,228 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Send emoji {name}'**
   String ownTalkQuickEmojiSendNamed(String name);
+
+  /// No description provided for @colorPaletteCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom…'**
+  String get colorPaletteCustom;
+
+  /// No description provided for @colorNameWhite.
+  ///
+  /// In en, this message translates to:
+  /// **'White'**
+  String get colorNameWhite;
+
+  /// No description provided for @colorNameLemon.
+  ///
+  /// In en, this message translates to:
+  /// **'Light yellow'**
+  String get colorNameLemon;
+
+  /// No description provided for @colorNameMint.
+  ///
+  /// In en, this message translates to:
+  /// **'Mint'**
+  String get colorNameMint;
+
+  /// No description provided for @colorNameSky.
+  ///
+  /// In en, this message translates to:
+  /// **'Light blue'**
+  String get colorNameSky;
+
+  /// No description provided for @colorNamePink.
+  ///
+  /// In en, this message translates to:
+  /// **'Pink'**
+  String get colorNamePink;
+
+  /// No description provided for @colorNameBlue.
+  ///
+  /// In en, this message translates to:
+  /// **'Blue'**
+  String get colorNameBlue;
+
+  /// No description provided for @colorNameNavy.
+  ///
+  /// In en, this message translates to:
+  /// **'Navy blue'**
+  String get colorNameNavy;
+
+  /// No description provided for @colorNameForest.
+  ///
+  /// In en, this message translates to:
+  /// **'Forest green'**
+  String get colorNameForest;
+
+  /// No description provided for @colorNamePlum.
+  ///
+  /// In en, this message translates to:
+  /// **'Plum'**
+  String get colorNamePlum;
+
+  /// No description provided for @colorNameBurgundy.
+  ///
+  /// In en, this message translates to:
+  /// **'Burgundy'**
+  String get colorNameBurgundy;
+
+  /// No description provided for @colorNameGraphite.
+  ///
+  /// In en, this message translates to:
+  /// **'Graphite'**
+  String get colorNameGraphite;
+
+  /// No description provided for @colorNameBlack.
+  ///
+  /// In en, this message translates to:
+  /// **'Black'**
+  String get colorNameBlack;
+
+  /// No description provided for @ownTalkSharedBackgroundAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Background for everyone'**
+  String get ownTalkSharedBackgroundAll;
+
+  /// No description provided for @ownTalkBackgroundTabColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour'**
+  String get ownTalkBackgroundTabColor;
+
+  /// No description provided for @ownTalkBackgroundTabPreset.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallpaper'**
+  String get ownTalkBackgroundTabPreset;
+
+  /// No description provided for @ownTalkBackgroundTabPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get ownTalkBackgroundTabPhoto;
+
+  /// No description provided for @ownTalkPresetAurora.
+  ///
+  /// In en, this message translates to:
+  /// **'Aurora'**
+  String get ownTalkPresetAurora;
+
+  /// No description provided for @ownTalkPresetSunset.
+  ///
+  /// In en, this message translates to:
+  /// **'Sunset'**
+  String get ownTalkPresetSunset;
+
+  /// No description provided for @ownTalkPresetForest.
+  ///
+  /// In en, this message translates to:
+  /// **'Forest'**
+  String get ownTalkPresetForest;
+
+  /// No description provided for @ownTalkPresetOcean.
+  ///
+  /// In en, this message translates to:
+  /// **'Ocean'**
+  String get ownTalkPresetOcean;
+
+  /// No description provided for @ownTalkPresetDots.
+  ///
+  /// In en, this message translates to:
+  /// **'Dots'**
+  String get ownTalkPresetDots;
+
+  /// No description provided for @ownTalkPresetGrid.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid'**
+  String get ownTalkPresetGrid;
+
+  /// No description provided for @ownTalkBackgroundPhotoSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Your photo'**
+  String get ownTalkBackgroundPhotoSet;
+
+  /// No description provided for @ownTalkBackgroundPhotoPick.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a photo'**
+  String get ownTalkBackgroundPhotoPick;
+
+  /// No description provided for @ownTalkBackgroundPhotoChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change photo'**
+  String get ownTalkBackgroundPhotoChange;
+
+  /// No description provided for @ownTalkBackgroundPhotoRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get ownTalkBackgroundPhotoRemove;
+
+  /// No description provided for @ownTalkBackgroundPhotoHint.
+  ///
+  /// In en, this message translates to:
+  /// **'JPEG, PNG or WebP, up to {size} MB. The server scales it down.'**
+  String ownTalkBackgroundPhotoHint(String size);
+
+  /// No description provided for @ownTalkBackgroundPhotoPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview of the background photo'**
+  String get ownTalkBackgroundPhotoPreview;
+
+  /// No description provided for @ownTalkBackgroundUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading the photo…'**
+  String get ownTalkBackgroundUploading;
+
+  /// No description provided for @ownTalkPhotoRejectedType.
+  ///
+  /// In en, this message translates to:
+  /// **'The server accepts only JPEG, PNG or WebP photos.'**
+  String get ownTalkPhotoRejectedType;
+
+  /// No description provided for @ownTalkPhotoRejectedImage.
+  ///
+  /// In en, this message translates to:
+  /// **'That file could not be read as an image.'**
+  String get ownTalkPhotoRejectedImage;
+
+  /// No description provided for @ownTalkPhotoTooLargeServer.
+  ///
+  /// In en, this message translates to:
+  /// **'The server rejected the photo as too large.'**
+  String get ownTalkPhotoTooLargeServer;
+
+  /// No description provided for @ownTalkPhotoQuota.
+  ///
+  /// In en, this message translates to:
+  /// **'The background storage on this server is full.'**
+  String get ownTalkPhotoQuota;
+
+  /// No description provided for @ownTalkPhotoRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many uploads. Try again later.'**
+  String get ownTalkPhotoRateLimited;
+
+  /// No description provided for @ownTalkPhotoUnreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo could not be read.'**
+  String get ownTalkPhotoUnreadable;
+
+  /// No description provided for @ownTalkPhotoTooLargeLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo could not be reduced below {size} MB.'**
+  String ownTalkPhotoTooLargeLocal(String size);
 }
 
 class _AppLocalizationsDelegate

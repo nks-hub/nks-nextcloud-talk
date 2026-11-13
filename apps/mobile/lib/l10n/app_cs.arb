@@ -1449,5 +1449,56 @@
         "type": "String"
       }
     }
+  },
+  "colorPaletteCustom": "Vlastní…",
+  "colorNameWhite": "Bílá",
+  "colorNameLemon": "Světle žlutá",
+  "colorNameMint": "Mátová",
+  "colorNameSky": "Světle modrá",
+  "colorNamePink": "Růžová",
+  "colorNameBlue": "Modrá",
+  "colorNameNavy": "Námořnická modrá",
+  "colorNameForest": "Lesní zelená",
+  "colorNamePlum": "Švestková",
+  "colorNameBurgundy": "Vínová",
+  "colorNameGraphite": "Grafitová",
+  "colorNameBlack": "Černá",
+  "ownTalkSharedBackgroundAll": "Pozadí pro všechny",
+  "ownTalkBackgroundTabColor": "Barva",
+  "ownTalkBackgroundTabPreset": "Tapeta",
+  "ownTalkBackgroundTabPhoto": "Fotka",
+  "ownTalkPresetAurora": "Polární záře",
+  "ownTalkPresetSunset": "Západ slunce",
+  "ownTalkPresetForest": "Les",
+  "ownTalkPresetOcean": "Oceán",
+  "ownTalkPresetDots": "Tečky",
+  "ownTalkPresetGrid": "Mřížka",
+  "ownTalkBackgroundPhotoSet": "Vlastní fotka",
+  "ownTalkBackgroundPhotoPick": "Vybrat fotku",
+  "ownTalkBackgroundPhotoChange": "Změnit fotku",
+  "ownTalkBackgroundPhotoRemove": "Odebrat fotku",
+  "ownTalkBackgroundPhotoHint": "JPEG, PNG nebo WebP, nejvýše {size} MB. Server fotku zmenší.",
+  "@ownTalkBackgroundPhotoHint": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "ownTalkBackgroundPhotoPreview": "Náhled fotky na pozadí",
+  "ownTalkBackgroundUploading": "Nahrávám fotku…",
+  "ownTalkPhotoRejectedType": "Server přijímá jen fotky ve formátu JPEG, PNG nebo WebP.",
+  "ownTalkPhotoRejectedImage": "Soubor se nepodařilo přečíst jako obrázek.",
+  "ownTalkPhotoTooLargeServer": "Server fotku odmítl, je příliš velká.",
+  "ownTalkPhotoQuota": "Úložiště pro pozadí na serveru je plné.",
+  "ownTalkPhotoRateLimited": "Příliš mnoho nahrávání. Zkuste to později.",
+  "ownTalkPhotoUnreadable": "Fotku se nepodařilo načíst.",
+  "ownTalkPhotoTooLargeLocal": "Fotku se nepodařilo zmenšit pod {size} MB.",
+  "@ownTalkPhotoTooLargeLocal": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
   }
 }

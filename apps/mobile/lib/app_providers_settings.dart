@@ -15,6 +15,37 @@ final Provider<RemoteWipeService> remoteWipeServiceProvider =
       );
     });
 
+/// Drops everything an account left behind for chat backgrounds: this device's
+/// colours, the cached shared settings and the cached shared photos. Each part
+/// is tried even when another one fails.
+final accountAppearanceCleanupProvider = Provider<AccountBackgroundCleanup>((
+  ref,
+) {
+  return (accountId) async {
+    Object? failure;
+    for (final clear in <Future<void> Function()>[
+      () async => (await ref.read(
+        chatBackgroundStoreProvider.future,
+      )).removeAccount(accountId),
+      () async => (await ref.read(
+        ownTalkSettingsStoreProvider.future,
+      )).removeAccount(accountId),
+      () async => (await ref.read(
+        ownTalkImageCacheProvider.future,
+      )).removeAccount(accountId),
+    ]) {
+      try {
+        await clear();
+      } on Object catch (error) {
+        failure ??= error;
+      }
+    }
+    if (failure != null) {
+      throw failure;
+    }
+  };
+});
+
 final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
   return AccountRemovalService(
     accounts: ref.watch(accountRepositoryProvider),
@@ -23,12 +54,7 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
     mediaCache: ref.watch(chatMediaCacheProvider),
     mediaDiskCache: ref.watch(chatMediaDiskCacheProvider),
     emojiUsage: ref.watch(emojiUsageStoreProvider),
-    clearChatBackgrounds: (accountId) async {
-      final backgrounds = await ref.read(chatBackgroundStoreProvider.future);
-      await backgrounds.removeAccount(accountId);
-      final shared = await ref.read(ownTalkSettingsStoreProvider.future);
-      await shared.removeAccount(accountId);
-    },
+    clearChatBackgrounds: ref.watch(accountAppearanceCleanupProvider),
     voiceDirectory: ref.watch(chatVoiceCacheDirectoryProvider),
     chatAttachmentDirectory: getApplicationCacheDirectory,
     attachmentSources: () => ref.read(attachmentSourceProvider.future),

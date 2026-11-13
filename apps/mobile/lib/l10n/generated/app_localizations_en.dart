@@ -4046,4 +4046,123 @@ class AppLocalizationsEn extends AppLocalizations {
   String ownTalkQuickEmojiSendNamed(String name) {
     return 'Send emoji $name';
   }
+
+  @override
+  String get colorPaletteCustom => 'Custom…';
+
+  @override
+  String get colorNameWhite => 'White';
+
+  @override
+  String get colorNameLemon => 'Light yellow';
+
+  @override
+  String get colorNameMint => 'Mint';
+
+  @override
+  String get colorNameSky => 'Light blue';
+
+  @override
+  String get colorNamePink => 'Pink';
+
+  @override
+  String get colorNameBlue => 'Blue';
+
+  @override
+  String get colorNameNavy => 'Navy blue';
+
+  @override
+  String get colorNameForest => 'Forest green';
+
+  @override
+  String get colorNamePlum => 'Plum';
+
+  @override
+  String get colorNameBurgundy => 'Burgundy';
+
+  @override
+  String get colorNameGraphite => 'Graphite';
+
+  @override
+  String get colorNameBlack => 'Black';
+
+  @override
+  String get ownTalkSharedBackgroundAll => 'Background for everyone';
+
+  @override
+  String get ownTalkBackgroundTabColor => 'Colour';
+
+  @override
+  String get ownTalkBackgroundTabPreset => 'Wallpaper';
+
+  @override
+  String get ownTalkBackgroundTabPhoto => 'Photo';
+
+  @override
+  String get ownTalkPresetAurora => 'Aurora';
+
+  @override
+  String get ownTalkPresetSunset => 'Sunset';
+
+  @override
+  String get ownTalkPresetForest => 'Forest';
+
+  @override
+  String get ownTalkPresetOcean => 'Ocean';
+
+  @override
+  String get ownTalkPresetDots => 'Dots';
+
+  @override
+  String get ownTalkPresetGrid => 'Grid';
+
+  @override
+  String get ownTalkBackgroundPhotoSet => 'Your photo';
+
+  @override
+  String get ownTalkBackgroundPhotoPick => 'Choose a photo';
+
+  @override
+  String get ownTalkBackgroundPhotoChange => 'Change photo';
+
+  @override
+  String get ownTalkBackgroundPhotoRemove => 'Remove photo';
+
+  @override
+  String ownTalkBackgroundPhotoHint(String size) {
+    return 'JPEG, PNG or WebP, up to $size MB. The server scales it down.';
+  }
+
+  @override
+  String get ownTalkBackgroundPhotoPreview => 'Preview of the background photo';
+
+  @override
+  String get ownTalkBackgroundUploading => 'Uploading the photo…';
+
+  @override
+  String get ownTalkPhotoRejectedType =>
+      'The server accepts only JPEG, PNG or WebP photos.';
+
+  @override
+  String get ownTalkPhotoRejectedImage =>
+      'That file could not be read as an image.';
+
+  @override
+  String get ownTalkPhotoTooLargeServer =>
+      'The server rejected the photo as too large.';
+
+  @override
+  String get ownTalkPhotoQuota =>
+      'The background storage on this server is full.';
+
+  @override
+  String get ownTalkPhotoRateLimited => 'Too many uploads. Try again later.';
+
+  @override
+  String get ownTalkPhotoUnreadable => 'The photo could not be read.';
+
+  @override
+  String ownTalkPhotoTooLargeLocal(String size) {
+    return 'The photo could not be reduced below $size MB.';
+  }
 }

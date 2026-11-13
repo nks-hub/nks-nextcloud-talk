@@ -1,5 +1,7 @@
 // ignore_for_file: prefer_initializing_formals
 
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -133,6 +135,72 @@ final class OwnTalkExtensionsService {
     return _call(
       () => _api.updateOwnTalkRoomSettings(
         settingsRequest: request,
+        loginName: session.loginName,
+        appPassword: session.appPassword,
+      ),
+    );
+  }
+
+  /// Uploads a background image on top of [baseRevision]; answers like
+  /// [update].
+  Future<OwnTalkSettingsUpdateResult> uploadImage({
+    required String accountId,
+    required String roomToken,
+    required Uint8List bytes,
+    required String contentType,
+    required int baseRevision,
+  }) async {
+    final session = await _availableSession(accountId);
+    final UploadOwnTalkRoomImageRequest request;
+    try {
+      request = UploadOwnTalkRoomImageRequest(
+        accountId: AccountId.parse(accountId),
+        server: session.server,
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        capabilities: session.snapshot,
+        bytes: bytes,
+        contentType: contentType,
+        baseRevision: baseRevision,
+      );
+    } on TalkProtocolException {
+      throw const OwnTalkExtensionsException(
+        OwnTalkExtensionsError.invalidResponse,
+      );
+    }
+    return _call(
+      () => _api.uploadOwnTalkRoomImage(
+        uploadRequest: request,
+        loginName: session.loginName,
+        appPassword: session.appPassword,
+      ),
+    );
+  }
+
+  /// Downloads the current background image of a conversation. The caller
+  /// checks the bytes against [sha256].
+  Future<OwnTalkImageFetchResult> fetchImage({
+    required String accountId,
+    required String roomToken,
+    required String sha256,
+  }) async {
+    final session = await _availableSession(accountId);
+    final FetchOwnTalkRoomImageRequest request;
+    try {
+      request = FetchOwnTalkRoomImageRequest(
+        accountId: AccountId.parse(accountId),
+        server: session.server,
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        capabilities: session.snapshot,
+        sha256: sha256,
+      );
+    } on TalkProtocolException {
+      throw const OwnTalkExtensionsException(
+        OwnTalkExtensionsError.invalidResponse,
+      );
+    }
+    return _call(
+      () => _api.fetchOwnTalkRoomImage(
+        imageRequest: request,
         loginName: session.loginName,
         appPassword: session.appPassword,
       ),

@@ -18,7 +18,7 @@ import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'owntalk_extensions_test_support.dart';
 import 'test_support.dart';
 
-const _background = Key('owntalk-shared-chat-backgroundcolor');
+const _background = Key('owntalk-shared-background');
 const _ownBubble = Key('owntalk-shared-bubble-owncolor');
 const _quickEmoji = Key('owntalk-shared-composer-quickemoji');
 
@@ -83,6 +83,14 @@ void main() {
 
   Future<void> pumpUntil(WidgetTester tester, bool Function() condition) =>
       pumpUntilCondition(tester, condition);
+
+  /// The hex field sits behind the "Custom" entry of the palette or sheet.
+  Future<void> openCustom(WidgetTester tester, Key custom) async {
+    await pumpUntil(tester, () => find.byKey(custom).evaluate().isNotEmpty);
+    // Let a bottom sheet finish sliding in before it is tapped.
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.byKey(custom));
+  }
 
   String? subtitleOf(WidgetTester tester, Key row) {
     final tile = find.byKey(row);
@@ -151,6 +159,7 @@ void main() {
       expect(subtitleOf(tester, _background), 'Follow the theme');
 
       await tester.tap(find.byKey(_background));
+      await openCustom(tester, const Key('owntalk-color-custom'));
       await pumpUntil(
         tester,
         () =>
@@ -180,6 +189,7 @@ void main() {
         () => find.byKey(_background).evaluate().isNotEmpty,
       );
       await tester.tap(find.byKey(_background));
+      await openCustom(tester, const Key('owntalk-color-custom'));
       await pumpUntil(
         tester,
         () =>
@@ -213,10 +223,9 @@ void main() {
       await pumpUntil(
         tester,
         () =>
-            find.byKey(const Key('owntalk-shared-field')).evaluate().isNotEmpty,
+            find.byKey(const Key('color-palette-theme')).evaluate().isNotEmpty,
       );
-      await tester.enterText(find.byKey(const Key('owntalk-shared-field')), '');
-      await tester.tap(find.byKey(const Key('owntalk-shared-save')));
+      await tester.tap(find.byKey(const Key('color-palette-theme')));
       await pumpUntil(
         tester,
         () => subtitleOf(tester, _ownBubble) == 'Follow the theme',
@@ -292,10 +301,7 @@ void main() {
         find.text('Only moderators can change the shared appearance.'),
         findsNothing,
       );
-      expect(
-        find.textContaining('cannot read Talk roles'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('cannot read Talk roles'), findsOneWidget);
       await unmount(tester);
     });
   });
@@ -313,6 +319,7 @@ void main() {
             server.setExternally({'bubble.ownColor': '#00FF00'});
 
         await tester.tap(find.byKey(_ownBubble));
+        await openCustom(tester, const Key('color-palette-custom'));
         await pumpUntil(
           tester,
           () => find
@@ -364,6 +371,7 @@ void main() {
           server.setExternally({'bubble.ownColor': '#FF0000'});
 
       await tester.tap(find.byKey(_ownBubble));
+      await openCustom(tester, const Key('color-palette-custom'));
       await pumpUntil(
         tester,
         () =>
@@ -392,6 +400,7 @@ void main() {
       server.beforePatch = () =>
           server.setExternally({'bubble.ownColor': '#00FF00'});
       await tester.tap(find.byKey(_ownBubble));
+      await openCustom(tester, const Key('color-palette-custom'));
       await pumpUntil(
         tester,
         () =>
