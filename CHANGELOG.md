@@ -8,6 +8,11 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.0.35 (103) — 13 November 2026
+
+- A change to the shared look of a conversation reaches the other participants at once. With the OwnTalk Extensions 0.4.0 server app and `notify_push`, their app reloads the settings as soon as the change is saved. The person who made the change also sends a silent "🎨 The conversation look has changed" message, which tells the others and refreshes OwnTalk even without `notify_push`.
+- Saving the shared look on a desktop no longer reports "Cannot save without a connection" for a change the server had already saved. Opening the conversation details re-enters the room, and the answer to a save in progress was thrown away; the next save then met its own change as a conflict.
+
 ## 1.0.34 (102) — 13 November 2026
 
 - Messages typed one after another no longer wait for the previous one to be sent. Each shows up at once as "Waiting to send" and they go out in the order they were typed. The keyboard stays open after sending, also when the send button is clicked with a mouse or pen.
