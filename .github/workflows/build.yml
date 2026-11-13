@@ -544,8 +544,10 @@ jobs:
         run: pip install --quiet google-api-python-client google-auth
       # Play rejects a version code it already has, but only after the whole
       # AAB has been uploaded. Asking first turns a late upload error into an
-      # immediate one.
+      # immediate one. A code already on Play was uploaded by hand from the
+      # release machine, so the upload is skipped instead of failing the run.
       - name: Check the version code is new
+        id: code
         env:
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         run: |
@@ -565,9 +567,14 @@ jobs:
                        for r in t.get("releases", []) for c in r.get("versionCodes", [])}
           finally:
               svc.edits().delete(packageName=pkg, editId=edit).execute()
-          if str(want) in {str(c) for c in taken}:
-              raise SystemExit(f"version code {want} is already on Play: {sorted(taken)}")
-          print(f"version code {want} is free; Play has {sorted(taken)}")
+          already = str(want) in {str(c) for c in taken}
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"already={'true' if already else 'false'}
+")
+          if already:
+              print(f"::notice::version code {want} is already on Play, upload skipped")
+          else:
+              print(f"version code {want} is free; Play has {sorted(taken)}")
           PY
       # Committed notes win when they exist - the ones earlier releases shipped
       # were written by hand, and `apps/mobile/release-notes` holds them again.
@@ -577,6 +584,7 @@ jobs:
       # at 500 BYTES, which can split a multi-byte character in half. Keep the
       # committed files under the cap and the fallback never runs.
       - name: Collect the release notes
+        if: steps.code.outputs.already != 'true'
         run: |
           mkdir -p whatsnew
           if [ -d apps/mobile/release-notes ]; then
@@ -591,6 +599,7 @@ jobs:
             echo "$f: $(wc -c < "$f") bytes"
           done
       - uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.3
+        if: steps.code.outputs.already != 'true'
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.nkshub.nextcloudtalk
