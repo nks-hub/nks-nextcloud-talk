@@ -14,8 +14,17 @@ barev a rychlé emoji (`GET`/`PATCH`), capability, anonymizace smazaného
 uživatele a noční úklid smazaných konverzací. Brány S0 a S0b prošly integrační
 sadou `tests/integration/acl_test.py` na NC 34.0.5 + Talk 24.0.7 i NC 35.0.2 +
 Talk 25.0.7 (47/47, v režimu bez rolí 41/41). Klient je ve větvi
-`feat/owntalk-extensions` a prošel E2E na dvou telefonech. Přezdívky, osobní
-preference, obrázky a `/revisions` zatím chybí. Zjištění z běhu:
+`feat/owntalk-extensions` a prošel E2E na dvou telefonech.
+
+Stav k 13. 11. 2026: verze 0.3.0 přidala přednastavené tapety
+(`chat.backgroundPreset`) a vlastní fotku pozadí (kap. 6.5, 16.7): nahrání
+s `If-Match`, kontrola typu podle obsahu, limity 10 MiB a 25 Mpx, otočení podle
+EXIF, zmenšení na 2560 px a překódování do JPEG bez metadat, kvóta
+`image_quota_bytes`, noční úklid nepoužitých fotek. Odstranění fotky jde přes
+`PATCH` s `null`, samostatný `DELETE` se nezavedl. Integrační sada má 71
+kontrol a prošla na NC 34 i NC 35. Klient umí paletu barev, tapety a fotku
+a prošel E2E na dvou telefonech. Přezdívky, osobní preference a `/revisions`
+zatím chybí. Zjištění z běhu:
 Talk přidá pozvaného účastníka 1:1 až první zprávou, do té doby vrací 404
 i Talk sám. Tvrzení o Nextcloudu
 a Talku jsou vázaná na SHA nebo dokumentaci uvedenou v textu. Co nebylo
@@ -488,7 +497,8 @@ sdílená nastavení (merge patch, `If-Match`, konflikt po polích). Klíč
   `image/jpeg`, `image/png` nebo `image/webp`, plus `If-Match` dokumentu
   sdílených nastavení. Validace a překódování v kap. 16.7.
 - Úspěch nastaví pole `chat.backgroundImage`, zvýší revizi.
-- `DELETE /room/{token}/settings/image` s `If-Match` pole vynuluje.
+- Pole vynuluje `PATCH` s `chat.backgroundImage: null` a `If-Match`
+  (implementace 0.3.0 místo samostatného `DELETE`).
 - `GET /room/{token}/settings/image/{sha256}`: binární odpověď (ne OCS
   obálka), stejná autorizace jako GET nastavení. `ETag: "{sha256}"`,
   `Cache-Control: private, max-age=31536000, immutable`,
