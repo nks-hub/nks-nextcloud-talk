@@ -140,6 +140,93 @@ void _registerChatRoomPaneQuickEmojiTests() {
     await unmountPane(tester);
   });
 
+  Future<void> receiveMessage(
+    WidgetTester tester,
+    int id,
+    String referenceId,
+  ) => tester.runAsync(
+    () => _insertCachedMessage(database, {
+      ..._messageJson(
+        id: id,
+        actorId: 'someone-else',
+        actorDisplayName: 'Other person',
+        timestamp: 1724300000 + id,
+        message: 'x',
+      ),
+      'referenceId': referenceId,
+    }, displayText: 'x'),
+  );
+
+  testWidgets('a new announcing message makes the open room re-read the '
+      'shared settings, and nothing is sent back', (tester) async {
+    final server = FakeOwnTalkServer()
+      ..talkFeatures = ['chat-reference-id', 'silent-send']
+      ..setExternally({'composer.quickEmoji': '\u{1F44D}'});
+    await openPane(tester, server: server);
+    await pumpUntilCondition(
+      tester,
+      () => find.byKey(const Key('send-quick-emoji')).evaluate().isNotEmpty,
+    );
+    expect(server.settingsRequests, hasLength(1));
+
+    // Another participant changes the emoji; only the message tells us.
+    server.setExternally({'composer.quickEmoji': '\u{1F389}'});
+    await receiveMessage(tester, 11, 'owntalk-appearance-2');
+    await _pumpUntil(tester, () => server.settingsRequests.length == 2);
+    await _pumpUntil(
+      tester,
+      () => find.text('\u{1F389}').evaluate().isNotEmpty,
+    );
+
+    // A marker that is not newer than the shown revision, a plain message,
+    // and a marker inside older history ask for nothing.
+    await receiveMessage(tester, 12, 'owntalk-appearance-2');
+    await receiveMessage(tester, 13, 'plain-reference');
+    await receiveMessage(tester, 5, 'owntalk-appearance-9');
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+    expect(server.settingsRequests, hasLength(2));
+    expect(server.chatPosts, isEmpty);
+    expect(tester.takeException(), isNull);
+    await unmountPane(tester);
+  });
+
+  testWidgets('an announcing message already in the cache when the room opens '
+      'adds no read of its own', (tester) async {
+    await database
+        .into(database.cachedChatMessages)
+        .insert(
+          CachedChatMessagesCompanion.insert(
+            accountId: account.id,
+            roomToken: conversation.token,
+            messageId: 9,
+            actorType: 'users',
+            actorId: 'someone-else',
+            actorDisplayName: 'Other person',
+            timestamp: 1724299000,
+            systemMessage: '',
+            messageType: 'comment',
+            referenceId: 'owntalk-appearance-7',
+            displayText: 'x',
+            deleted: false,
+            rawJson: '{}',
+          ),
+        );
+    final server = FakeOwnTalkServer()
+      ..setExternally({'composer.quickEmoji': '\u{1F44D}'});
+    await openPane(tester, server: server);
+    await pumpUntilCondition(
+      tester,
+      () => find.byKey(const Key('send-quick-emoji')).evaluate().isNotEmpty,
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(server.settingsRequests, hasLength(1));
+    await unmountPane(tester);
+  });
+
   Color bubbleColor(WidgetTester tester) {
     final container = tester.widget<AnimatedContainer>(
       find.descendant(

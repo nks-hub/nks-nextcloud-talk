@@ -1423,6 +1423,7 @@
   "ownTalkSharedClearHint": "Prázdné pole znamená podle motivu.",
   "ownTalkSharedInvalidValue": "Tuto hodnotu nelze použít.",
   "ownTalkSharedSaved": "Sdílený vzhled je uložený.",
+  "ownTalkAppearanceChangedNotice": "🎨 Vzhled konverzace se změnil",
   "ownTalkSharedSaveOffline": "Bez připojení nelze uložit. Zkuste to znovu, až budete online.",
   "ownTalkSharedSaveFailed": "Sdílený vzhled se nepodařilo uložit.",
   "ownTalkLocalBackgroundAction": "Pozadí chatu jen na tomto zařízení",

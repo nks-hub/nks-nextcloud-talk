@@ -88,6 +88,8 @@ The client procedure:
 2. Connect `wss://…/push/ws`, send an **empty user name** and then that token. The app password never travels over the socket.
 3. The server answers `authenticated` and then sends frames. `notify_notification` means "something arrived, synchronize".
 
+With the optional OwnTalk Extensions server app the socket also carries `owntalk_room_settings {"token":"<roomToken>","revision":<int>}` after every write of a conversation's shared appearance. The client re-reads that room's settings when it is open and the revision is newer than the shown one; a malformed or oversized frame is ignored. Clients without a live channel get the same hint from a silent chat message whose `referenceId` is `owntalk-appearance-<revision>`, posted by the writing client one per 10 s burst; receiving such a message in an open room triggers the same re-read. Neither path ever sends anything back.
+
 Implementation: the protocol in `packages/talk_protocol/lib/src/client_push/`, the connection and coordination in `apps/mobile/lib/features/push/client_push_*.dart`. The endpoint from the capabilities must belong to the same host as the account, otherwise the token is not sent anywhere; `ws` without TLS is rejected and frames delivered before the token is accepted are discarded.
 
 Verifying that the channel is really running is done from the server, not from the application log:

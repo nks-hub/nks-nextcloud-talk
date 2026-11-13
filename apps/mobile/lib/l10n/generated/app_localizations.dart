@@ -7130,6 +7130,12 @@ abstract class AppLocalizations {
   /// **'Shared appearance saved.'**
   String get ownTalkSharedSaved;
 
+  /// No description provided for @ownTalkAppearanceChangedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'🎨 The conversation look has changed'**
+  String get ownTalkAppearanceChangedNotice;
+
   /// No description provided for @ownTalkSharedSaveOffline.
   ///
   /// In en, this message translates to:

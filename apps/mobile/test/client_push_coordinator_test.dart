@@ -128,6 +128,74 @@ void main() {
     await coordinator.dispose();
   });
 
+  test('a room settings signal reaches the callback with the account whose '
+      'socket carried it', () async {
+    final connector = _Connector();
+    final received = <String>[];
+    final coordinator = ClientPushCoordinator(
+      resolve: (_, _) async => _endpoints(),
+      fetchToken: (_, _, _) async => 'token',
+      connector: connector,
+      onWakeUp: (_) {},
+      onRoomSettings: (accountId, signal) =>
+          received.add('$accountId:${signal.roomToken.value}:${signal.revision}'),
+    );
+
+    coordinator.follow('account-a');
+    await _settle();
+    coordinator.follow('account-b');
+    await _settle();
+    expect(connector.sockets, hasLength(2));
+
+    connector.sockets[1].emit(
+      'owntalk_room_settings {"token":"abc123xy","revision":3}',
+    );
+    connector.sockets[0].emit(
+      'owntalk_room_settings {"token":"zzz999yy","revision":9}',
+    );
+    connector.sockets[0].emit('owntalk_room_settings garbage');
+    await _settle();
+    expect(received, <String>['account-b:abc123xy:3', 'account-a:zzz999yy:9']);
+
+    await coordinator.unfollow('account-b');
+    connector.sockets[1].emit(
+      'owntalk_room_settings {"token":"abc123xy","revision":4}',
+    );
+    await _settle();
+    expect(received, hasLength(2));
+    await coordinator.dispose();
+  });
+
+  test('a failing room settings callback does not take the channel down',
+      () async {
+    final connector = _Connector();
+    var calls = 0;
+    final woken = <String>[];
+    final coordinator = ClientPushCoordinator(
+      resolve: (_, _) async => _endpoints(),
+      fetchToken: (_, _, _) async => 'token',
+      connector: connector,
+      onWakeUp: woken.add,
+      onRoomSettings: (_, _) {
+        calls++;
+        throw StateError('no provider');
+      },
+    );
+
+    coordinator.follow('account-a');
+    await _settle();
+    connector.sockets.single.emit(
+      'owntalk_room_settings {"token":"abc123xy","revision":3}',
+    );
+    connector.sockets.single.emit('notify_notification');
+    await _settle();
+
+    expect(calls, 1);
+    expect(connector.sockets, hasLength(1));
+    expect(woken, <String>['account-a', 'account-a']);
+    await coordinator.dispose();
+  });
+
   test('a server without the live channel is left alone', () async {
     final connector = _Connector();
     final woken = <String>[];

@@ -80,6 +80,83 @@ void main() {
     });
   });
 
+  group('parseOwnTalkRoomSettingsFrame', () {
+    test('reads the room token and the revision', () {
+      final signal = parseOwnTalkRoomSettingsFrame(
+        'owntalk_room_settings {"token":"abc123xy","revision":7}',
+      )!;
+      expect(signal.roomToken.value, 'abc123xy');
+      expect(signal.revision, 7);
+    });
+
+    test('tolerates surrounding whitespace and extra keys', () {
+      final signal = parseOwnTalkRoomSettingsFrame(
+        '  owntalk_room_settings   {"token":"abc123xy","revision":0,"x":[1]}\n',
+      )!;
+      expect(signal.revision, 0);
+    });
+
+    test('does not touch the frames parseClientPushFrame knows', () {
+      const frame = 'owntalk_room_settings {"token":"abc123xy","revision":7}';
+      expect(parseClientPushFrame(frame), isNull);
+      for (final other in <String>[
+        'authenticated',
+        'notify_notification',
+        'notify_file_id [1,2,3]',
+        'notify_activity',
+      ]) {
+        expect(parseOwnTalkRoomSettingsFrame(other), isNull, reason: other);
+      }
+      expect(
+        parseOwnTalkRoomSettingsFrame(
+          'owntalk_room_settings_v2 {"token":"abc123xy","revision":7}',
+        ),
+        isNull,
+      );
+    });
+
+    test('ignores malformed bodies instead of throwing', () {
+      for (final frame in <String>[
+        'owntalk_room_settings',
+        'owntalk_room_settings ',
+        'owntalk_room_settings not json',
+        'owntalk_room_settings {"token":"abc123xy"',
+        'owntalk_room_settings []',
+        'owntalk_room_settings "abc123xy"',
+        'owntalk_room_settings null',
+        'owntalk_room_settings {"revision":7}',
+        'owntalk_room_settings {"token":"abc123xy"}',
+        'owntalk_room_settings {"token":"abc123xy","revision":"7"}',
+        'owntalk_room_settings {"token":"abc123xy","revision":7.5}',
+        'owntalk_room_settings {"token":"abc123xy","revision":-1}',
+        'owntalk_room_settings {"token":7,"revision":7}',
+        'owntalk_room_settings {"token":"a b","revision":7}',
+        'owntalk_room_settings {"token":"../etc","revision":7}',
+        'owntalk_room_settings {"token":"abc","revision":7}',
+        'owntalk_room_settings {"token":"","revision":7}',
+      ]) {
+        expect(parseOwnTalkRoomSettingsFrame(frame), isNull, reason: frame);
+      }
+    });
+
+    test('ignores an oversized frame', () {
+      final padding = ' ' * 300;
+      expect(
+        parseOwnTalkRoomSettingsFrame(
+          'owntalk_room_settings {"token":"abc123xy",$padding"revision":7}',
+        ),
+        isNull,
+      );
+      final token = 'a' * 250;
+      expect(
+        parseOwnTalkRoomSettingsFrame(
+          'owntalk_room_settings {"token":"$token","revision":7}',
+        ),
+        isNull,
+      );
+    });
+  });
+
   group('clientPushHandshake', () {
     test('sends an empty username and then the token', () {
       expect(clientPushHandshake(preAuthToken: 'abc123'), <String>['', 'abc123']);

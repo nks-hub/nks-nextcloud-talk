@@ -4018,6 +4018,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get ownTalkSharedSaved => 'Sdílený vzhled je uložený.';
 
   @override
+  String get ownTalkAppearanceChangedNotice => '🎨 Vzhled konverzace se změnil';
+
+  @override
   String get ownTalkSharedSaveOffline =>
       'Bez připojení nelze uložit. Zkuste to znovu, až budete online.';
 

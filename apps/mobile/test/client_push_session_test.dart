@@ -73,6 +73,39 @@ void main() {
     expect(received, contains(ClientPushEvent.notification));
   });
 
+  test('room settings frames arrive as signals only after the handshake and '
+      'only when well formed', () async {
+    const frame = 'owntalk_room_settings {"token":"abc123xy","revision":4}';
+    final socket = _FakeSocket();
+    final opening = ClientPushSession.open(
+      connector: _FakeConnector(socket),
+      endpoints: _endpoints(),
+      preAuthToken: 'token-abc',
+    );
+    await Future<void>.delayed(Duration.zero);
+    socket.emit(frame);
+    socket.emit('authenticated');
+    final session = await opening;
+
+    final signals = <OwnTalkRoomSettingsSignal>[];
+    final events = <ClientPushEvent>[];
+    final signalSubscription = session.roomSettingsSignals.listen(signals.add);
+    final eventSubscription = session.events.listen(events.add);
+    socket.emit('owntalk_room_settings {"token":"abc123xy"');
+    socket.emit('owntalk_room_settings {"token":"abc123xy","revision":-2}');
+    socket.emit(frame);
+    socket.emit('notify_notification');
+    await Future<void>.delayed(Duration.zero);
+    await signalSubscription.cancel();
+    await eventSubscription.cancel();
+    await session.close();
+
+    expect(signals, hasLength(1));
+    expect(signals.single.roomToken.value, 'abc123xy');
+    expect(signals.single.revision, 4);
+    expect(events, <ClientPushEvent>[ClientPushEvent.notification]);
+  });
+
   test('a server that never accepts the token is a failure', () async {
     final socket = _FakeSocket();
     await expectLater(

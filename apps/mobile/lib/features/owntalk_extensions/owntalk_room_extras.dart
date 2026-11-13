@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -89,6 +91,140 @@ final ownTalkSettingsStoreProvider = FutureProvider<OwnTalkSettingsStore>((
   return OwnTalkSettingsStore.openApplicationSupport();
 });
 
+/// How long writes are collected before one silent chat message announces
+/// them to the room.
+const Duration ownTalkAppearanceNoticeWindow = Duration(seconds: 10);
+
+/// Overridable so tests need not wait ten real seconds.
+final ownTalkAppearanceNoticeWindowProvider = Provider<Duration>(
+  (ref) => ownTalkAppearanceNoticeWindow,
+);
+
+/// Sends the silent "the look changed" chat message for shared-appearance
+/// writes, one per conversation per [window]: writes that land while a notice
+/// is pending only raise the revision it carries.
+///
+/// Lives outside the per-room controller, which goes away when the user leaves
+/// the chat, so a notice queued by the last write before leaving still goes
+/// out. Best effort: a failed post is dropped, never retried and never shown.
+final class OwnTalkAppearanceNoticer {
+  OwnTalkAppearanceNoticer({
+    required this.window,
+    required Future<void> Function(
+      OwnTalkRoomKey key,
+      int revision,
+      String message,
+    )
+    send,
+  }) : _send = send;
+
+  final Duration window;
+  final Future<void> Function(OwnTalkRoomKey key, int revision, String message)
+  _send;
+  final Map<OwnTalkRoomKey, _PendingNotice> _pending =
+      <OwnTalkRoomKey, _PendingNotice>{};
+
+  void announce(OwnTalkRoomKey key, int revision, String message) {
+    final pending = _pending[key];
+    if (pending != null) {
+      if (revision > pending.revision) {
+        pending.revision = revision;
+      }
+      pending.message = message;
+      return;
+    }
+    final created = _PendingNotice(revision, message);
+    created.timer = Timer(window, () {
+      _pending.remove(key);
+      unawaited(
+        _send(
+          key,
+          created.revision,
+          created.message,
+        ).then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+      );
+    });
+    _pending[key] = created;
+  }
+
+  void dispose() {
+    for (final pending in _pending.values) {
+      pending.timer?.cancel();
+    }
+    _pending.clear();
+  }
+}
+
+final class _PendingNotice {
+  _PendingNotice(this.revision, this.message);
+
+  int revision;
+  String message;
+  Timer? timer;
+}
+
+final ownTalkAppearanceNoticerProvider = Provider<OwnTalkAppearanceNoticer>((
+  ref,
+) {
+  final noticer = OwnTalkAppearanceNoticer(
+    window: ref.watch(ownTalkAppearanceNoticeWindowProvider),
+    send: (key, revision, message) => ref
+        .read(ownTalkExtensionsServiceProvider)
+        .announceAppearanceChange(
+          accountId: key.accountId,
+          roomToken: key.roomToken,
+          revision: revision,
+          message: message,
+        ),
+  );
+  ref.onDispose(noticer.dispose);
+  return noticer;
+});
+
+/// Spots the chat messages that announce a shared-appearance change and
+/// arrived after the list was first seen, so scrolling back through history
+/// never counts as news.
+final class OwnTalkAppearanceMarkerWatch {
+  int? _baseline;
+
+  /// The `referenceId`s of announcing messages in [messages] newer than every
+  /// message seen so far. Feed it each emission of the room's message list.
+  List<String> fresh(Iterable<({int messageId, String referenceId})> messages) {
+    final baseline = _baseline;
+    final markers = <String>[];
+    var highest = baseline ?? 0;
+    for (final message in messages) {
+      if (message.messageId > highest) {
+        highest = message.messageId;
+      }
+      if (baseline != null &&
+          message.messageId > baseline &&
+          isOwnTalkAppearanceReferenceId(message.referenceId)) {
+        markers.add(message.referenceId);
+      }
+    }
+    _baseline = highest;
+    return markers;
+  }
+}
+
+/// Hands a signal pushed over [accountId]'s `notify_push` socket to the
+/// controller of that account and room, when one is alive. A room nobody is
+/// looking at needs nothing: it reads the document when it is opened.
+void deliverOwnTalkRoomSettingsSignal(
+  Ref ref,
+  String accountId,
+  OwnTalkRoomSettingsSignal signal,
+) {
+  final provider = ownTalkRoomExtrasProvider((
+    accountId: accountId,
+    roomToken: signal.roomToken.value,
+  ));
+  if (ref.exists(provider)) {
+    unawaited(ref.read(provider.notifier).refreshIfNewer(signal.revision));
+  }
+}
+
 /// Fetches, caches and polls the shared settings of one conversation while
 /// something is watching it. Without the capability it never requests an
 /// extension endpoint, and a failure leaves what is already shown in place.
@@ -153,6 +289,35 @@ final class OwnTalkRoomController
   /// Reads the capability and then the document, once. Safe to call at any
   /// time; calls run one after another.
   Future<void> refresh() => _enqueue(_refresh);
+
+  /// [refresh], unless the shown document already is at [revision] or newer.
+  /// The check runs when the call's turn in the queue comes, so a write that
+  /// is still in flight is taken into account.
+  Future<void> refreshIfNewer(int revision) => _enqueue(() async {
+    final shown = state.settings?.revision;
+    if (shown != null && shown >= revision) {
+      return;
+    }
+    await _refresh();
+  });
+
+  /// Reacts to chat messages that announce a shared-appearance change, given
+  /// as their `referenceId`s. Only ever reads: a refresh sends nothing.
+  Future<void> refreshForAppearanceMarkers(Iterable<String> referenceIds) {
+    int? newest;
+    for (final id in referenceIds) {
+      final revision = int.tryParse(
+        id.substring(ownTalkAppearanceReferencePrefix.length),
+      );
+      if (revision == null) {
+        return refresh();
+      }
+      if (newest == null || revision > newest) {
+        newest = revision;
+      }
+    }
+    return newest == null ? Future<void>.value() : refreshIfNewer(newest);
+  }
 
   Future<void> _refresh() async {
     if (_disposed) {
@@ -253,9 +418,13 @@ final class OwnTalkRoomController
   /// Applies a merge patch on top of [baseRevision], the revision the user
   /// saw when they started editing; it defaults to the one shown now. A `412`
   /// still updates the shown document, because it carries the server's.
+  ///
+  /// With [announcement], a successful write also queues the silent chat
+  /// message that tells the other participants' clients to re-read.
   Future<OwnTalkSettingsUpdateResult> save(
     Map<OwnTalkSettingField, String?> changes, {
     int? baseRevision,
+    String? announcement,
   }) => _write(
     (service, base) => service.update(
       accountId: _key.accountId,
@@ -264,6 +433,7 @@ final class OwnTalkRoomController
       baseRevision: base,
     ),
     baseRevision,
+    announcement,
   );
 
   /// Uploads a background image through the same queue, revision rule and
@@ -272,6 +442,7 @@ final class OwnTalkRoomController
     required Uint8List bytes,
     required String contentType,
     int? baseRevision,
+    String? announcement,
   }) => _write(
     (service, base) => service.uploadImage(
       accountId: _key.accountId,
@@ -281,6 +452,7 @@ final class OwnTalkRoomController
       baseRevision: base,
     ),
     baseRevision,
+    announcement,
   );
 
   Future<OwnTalkSettingsUpdateResult> _write(
@@ -290,6 +462,7 @@ final class OwnTalkRoomController
     )
     run,
     int? baseRevision,
+    String? announcement,
   ) {
     final completer = Completer<OwnTalkSettingsUpdateResult>();
     unawaited(
@@ -308,6 +481,11 @@ final class OwnTalkRoomController
           switch (result) {
             case OwnTalkSettingsSaved(:final document, :final etag):
               await _adopt(document, capability, etag);
+              if (announcement != null) {
+                ref
+                    .read(ownTalkAppearanceNoticerProvider)
+                    .announce(_key, document.revision, announcement);
+              }
             case OwnTalkSettingsConflict(:final current):
               await _adopt(current, capability, null);
             case OwnTalkSettingsUpdateFailure(:final kind):

@@ -4010,6 +4010,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ownTalkSharedSaved => 'Shared appearance saved.';
 
   @override
+  String get ownTalkAppearanceChangedNotice =>
+      '🎨 The conversation look has changed';
+
+  @override
   String get ownTalkSharedSaveOffline =>
       'Cannot save without a connection. Try again when you are online.';
 

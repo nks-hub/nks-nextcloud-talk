@@ -132,6 +132,29 @@ mixin _NextcloudApiOwnTalkExtensions on _HttpNextcloudApiBase {
     );
   }
 
+  /// Posts the silent appearance notice. Never retried: a repeat after an
+  /// unseen success would announce the same change twice. Anything but `201`
+  /// throws.
+  Future<void> postOwnTalkAppearanceNotice({
+    required OwnTalkAppearanceNoticeRequest noticeRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('POST', noticeRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...noticeRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyFields = noticeRequest.formBody;
+    await _sendBody(
+      request,
+      allowedStatusCodes: const {201},
+      maximumBytes: chatMaximumResponseBytes,
+    );
+  }
+
   Future<OwnTalkImageFetchResult> fetchOwnTalkRoomImage({
     required FetchOwnTalkRoomImageRequest imageRequest,
     required String loginName,

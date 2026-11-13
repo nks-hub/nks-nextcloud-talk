@@ -1992,6 +1992,7 @@
   "ownTalkSharedClearHint": "Leave empty to follow the theme.",
   "ownTalkSharedInvalidValue": "That value is not accepted.",
   "ownTalkSharedSaved": "Shared appearance saved.",
+  "ownTalkAppearanceChangedNotice": "🎨 The conversation look has changed",
   "ownTalkSharedSaveOffline": "Cannot save without a connection. Try again when you are online.",
   "ownTalkSharedSaveFailed": "The shared appearance could not be saved.",
   "ownTalkLocalBackgroundAction": "Chat background, only on this device",
