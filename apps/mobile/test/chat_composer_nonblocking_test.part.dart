@@ -352,6 +352,162 @@ void _registerNonBlockingComposerTests() {
     },
     timeout: const Timeout(Duration(seconds: 30)),
   );
+
+  testWidgets(
+    'lines waiting for admission show as pending bubbles at once, in order, '
+    'and are replaced one for one',
+    (tester) async {
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      _addHarnessTearDown(tester, harness);
+      await tester.pumpWidget(harness.app());
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+      );
+      final hold = Completer<void>();
+      harness.capabilitiesHold.add(hold);
+      addTearDown(() {
+        if (!hold.isCompleted) hold.complete();
+      });
+
+      for (final line in ['one', 'two', 'three']) {
+        await _typeAndSend(tester, line);
+      }
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const Key('chat-pending-provisional-3'))
+            .evaluate()
+            .isNotEmpty,
+      );
+
+      // Nothing has been admitted, yet all three are on screen, newest last.
+      expect(harness.chatSendStarted, isEmpty);
+      expect(find.text('Waiting to send'), findsNWidgets(3));
+      final tops = [
+        for (final line in ['one', 'two', 'three'])
+          tester.getTopLeft(find.text(line)).dy,
+      ];
+      expect(tops, orderedEquals([...tops]..sort()));
+      expect(tops.toSet(), hasLength(3));
+
+      hold.complete();
+      // Frame by frame, no line is ever drawn twice: not as its stand-in next
+      // to its outbox row, and not as the row next to the message it became.
+      void expectNoDuplicates() {
+        for (final line in ['one', 'two', 'three']) {
+          expect(find.text(line).evaluate().length, lessThanOrEqualTo(1));
+        }
+      }
+
+      for (var i = 0; i < 400 && harness.sentMessages.length < 3; i++) {
+        await tester.pump(const Duration(milliseconds: 5));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 1)),
+        );
+        expectNoDuplicates();
+      }
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 10));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+        expectNoDuplicates();
+      }
+
+      // The stand-ins are gone and the server saw each line once.
+      expect(find.byKey(const Key('chat-pending-provisional-1')), findsNothing);
+      expect(find.byKey(const Key('chat-pending-provisional-3')), findsNothing);
+      expect(harness.sentMessages, ['one', 'two', 'three']);
+      expect(tester.takeException(), isNull);
+      await _unmountComposer(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
+    'a refused admission takes the stand-in away and gives the text back',
+    (tester) async {
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      _addHarnessTearDown(tester, harness);
+      await tester.pumpWidget(harness.app());
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+      );
+      final hold = Completer<void>();
+      harness.capabilitiesHold.add(hold);
+      harness.capabilitiesStatus.add(404);
+      addTearDown(() {
+        if (!hold.isCompleted) hold.complete();
+      });
+
+      await _typeAndSend(tester, 'not lost');
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const Key('chat-pending-provisional-1'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      expect(_composer(tester).text, isEmpty);
+
+      hold.complete();
+      await _pumpUntil(tester, () => _composer(tester).text == 'not lost');
+
+      expect(find.byKey(const Key('chat-pending-provisional-1')), findsNothing);
+      expect(harness.chatSendStarted, isEmpty);
+      expect(tester.takeException(), isNull);
+      await _unmountComposer(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
+    'a refused admission under a new draft stays as a failed line',
+    (tester) async {
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      _addHarnessTearDown(tester, harness);
+      await tester.pumpWidget(harness.app());
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+      );
+      final hold = Completer<void>();
+      harness.capabilitiesHold.add(hold);
+      harness.capabilitiesStatus.add(404);
+      addTearDown(() {
+        if (!hold.isCompleted) hold.complete();
+      });
+
+      await _typeAndSend(tester, 'first');
+      await tester.enterText(
+        find.byKey(const Key('chat-composer')),
+        'typed meanwhile',
+      );
+      await tester.pump();
+      hold.complete();
+      await _pumpUntil(
+        tester,
+        () => find.text('Message could not be sent').evaluate().isNotEmpty,
+      );
+
+      // The new draft is untouched and the refused line is still on screen.
+      expect(_composer(tester).text, 'typed meanwhile');
+      expect(find.text('first'), findsOneWidget);
+      expect(harness.chatSendStarted, isEmpty);
+
+      await tester.tap(find.byKey(const Key('chat-cancel-provisional-1')));
+      await tester.pump();
+
+      expect(find.byKey(const Key('chat-pending-provisional-1')), findsNothing);
+      expect(_composer(tester).text, 'typed meanwhile');
+      expect(harness.chatSendStarted, isEmpty);
+      expect(tester.takeException(), isNull);
+      await _unmountComposer(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
 }
 
 Future<void> _typeAndSend(WidgetTester tester, String text) async {

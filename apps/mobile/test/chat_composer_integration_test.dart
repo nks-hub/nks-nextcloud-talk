@@ -511,6 +511,7 @@ final class _ComposerHarness {
     required this.attachmentUploadStarted,
     required this.chatSendHold,
     required this.capabilitiesHold,
+    required this.capabilitiesStatus,
     required this.chatSendFailures,
     required this.attachmentUploadHold,
     required this.sourceStore,
@@ -541,6 +542,9 @@ final class _ComposerHarness {
   /// a test can look at the composer with a send still on the wire.
   final List<Completer<void>> chatSendHold;
   final List<Completer<void>> capabilitiesHold;
+
+  /// When not empty, the capabilities request is answered with this status.
+  final List<int> capabilitiesStatus;
   final List<Completer<void>> attachmentUploadHold;
 
   /// Messages whose send request dies on the wire instead of being answered.
@@ -596,6 +600,7 @@ final class _ComposerHarness {
     final attachmentUploadStarted = <int>[];
     final chatSendHold = <Completer<void>>[];
     final capabilitiesHold = <Completer<void>>[];
+    final capabilitiesStatus = <int>[];
     final chatSendFailures = <String>{};
     final attachmentUploadHold = <Completer<void>>[];
     final uploadedAttachments = <List<int>>[];
@@ -651,6 +656,9 @@ final class _ComposerHarness {
           if (capabilitiesHold.isNotEmpty) {
             await capabilitiesHold.first.future;
           }
+          if (capabilitiesStatus.isNotEmpty) {
+            return http.Response('', capabilitiesStatus.first);
+          }
           return http.Response(jsonEncode(_attachmentCapabilities()), 200);
         }
         if (request.method == 'POST') {
@@ -701,6 +709,7 @@ final class _ComposerHarness {
       attachmentUploadStarted: attachmentUploadStarted,
       chatSendHold: chatSendHold,
       capabilitiesHold: capabilitiesHold,
+      capabilitiesStatus: capabilitiesStatus,
       chatSendFailures: chatSendFailures,
       attachmentUploadHold: attachmentUploadHold,
       sourceStore: sourceStore,

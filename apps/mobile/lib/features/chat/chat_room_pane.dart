@@ -151,6 +151,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   // Text sends overlap, so unlike _sendGeneration this only moves when the
   // room changes or the pane goes away.
   int _textSendGeneration = 0;
+  final List<_ProvisionalSend> _provisionalSends = <_ProvisionalSend>[];
+  int _provisionalCounter = 0;
   int _giphyGeneration = 0;
   bool _syncing = false;
   bool _loadingOlder = false;
@@ -658,9 +660,32 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           in statusesValue.valueOrNull ?? const <OutgoingMessageStatus>[])
         if (status.messageId != null) status.messageId!: status.state,
     };
-    final pending = operations
-        .where((operation) => operation.outboxState != 'completed')
-        .toList(growable: false);
+    // A line still waiting for admission has no outbox row yet. Its stand-in
+    // goes after every real row, which is where admission will put it, and
+    // drops out the moment the row it was admitted as shows up.
+    final operationIds = {
+      for (final operation in operations) operation.operationId,
+    };
+    if (_provisionalSends.any(
+      (send) =>
+          send.operationId != null && operationIds.contains(send.operationId),
+    )) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _provisionalSends.removeWhere(
+          (send) =>
+              send.operationId != null &&
+              operationIds.contains(send.operationId),
+        );
+      });
+    }
+    final pending = <StoredTextSendOperation>[
+      ...operations.where((operation) => operation.outboxState != 'completed'),
+      for (final send in _provisionalSends)
+        if (send.key == _key &&
+            !(send.operationId != null &&
+                operationIds.contains(send.operationId)))
+          send.asOperation(widget.account.id),
+    ];
     final pendingAttachments = pendingAttachmentBatches(
       attachmentJobs,
       serverUrl: widget.account.serverUrl,
