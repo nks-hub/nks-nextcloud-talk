@@ -945,7 +945,7 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
             child: EmojiPicker(
               accountId: AccountId.parse(_key.accountId),
               usageStore: ref.read(emojiUsageStoreProvider),
-              labels: _emojiPickerLabels(strings),
+              labels: emojiPickerLabelsFor(strings),
               onClose: () => Navigator.of(sheetContext).pop(),
               onSelected: (choice) {
                 Navigator.of(sheetContext).pop();

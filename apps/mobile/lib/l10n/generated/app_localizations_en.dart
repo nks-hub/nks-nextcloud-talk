@@ -3994,7 +3994,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ownTalkSharedColorLabel => 'Colour (#RRGGBB)';
 
   @override
-  String get ownTalkSharedEmojiLabel => 'One emoji';
+  String get ownTalkEmojiCurrent => 'Current choice';
+
+  @override
+  String get ownTalkEmojiReset => 'Use theme default';
 
   @override
   String get ownTalkSharedReadOnlyMembership =>

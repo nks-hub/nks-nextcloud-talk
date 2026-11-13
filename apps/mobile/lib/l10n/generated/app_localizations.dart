@@ -7100,11 +7100,17 @@ abstract class AppLocalizations {
   /// **'Colour (#RRGGBB)'**
   String get ownTalkSharedColorLabel;
 
-  /// No description provided for @ownTalkSharedEmojiLabel.
+  /// No description provided for @ownTalkEmojiCurrent.
   ///
   /// In en, this message translates to:
-  /// **'One emoji'**
-  String get ownTalkSharedEmojiLabel;
+  /// **'Current choice'**
+  String get ownTalkEmojiCurrent;
+
+  /// No description provided for @ownTalkEmojiReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Use theme default'**
+  String get ownTalkEmojiReset;
 
   /// No description provided for @ownTalkSharedReadOnlyMembership.
   ///

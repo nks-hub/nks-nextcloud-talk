@@ -139,6 +139,10 @@ void main() {
   });
 
   testWidgets('choice is semantic button with a 48dp target', (tester) async {
+    tester.view
+      ..physicalSize = const Size(400, 800)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
       MaterialApp(
@@ -169,6 +173,62 @@ void main() {
     expect(semanticsData.label, 'Grinning face');
     expect(semanticsData.flagsCollection.isButton, isTrue);
     expect(semanticsData.hasAction(ui.SemanticsAction.tap), isTrue);
+    semantics.dispose();
+  });
+
+  testWidgets('wide layout enlarges the cells and marks the selected one', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(900, 800)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: EmojiPicker(
+            accountId: AccountId.parse('account-a'),
+            usageStore: _MemoryEmojiUsageStore(),
+            labels: labels,
+            selectedGlyph: '😀',
+            catalog: EmojiCatalog(const <EmojiChoice>[
+              EmojiChoice(
+                glyph: '😀',
+                name: 'Grinning face',
+                keywords: <String>['smile'],
+                category: EmojiCategory.smileys,
+              ),
+              EmojiChoice(
+                glyph: '😂',
+                name: 'Face with tears of joy',
+                keywords: <String>['laugh'],
+                category: EmojiCategory.smileys,
+              ),
+            ]),
+            onClose: () {},
+            onSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final current = find.byKey(const Key('emoji-choice-grinning-face'));
+    final other = find.byKey(const Key('emoji-choice-face-with-tears-of-joy'));
+    expect(tester.getSize(current), const Size.square(56));
+    expect(
+      tester
+          .getSemantics(current)
+          .getSemanticsData()
+          .flagsCollection
+          .isSelected,
+      ui.Tristate.isTrue,
+    );
+    expect(
+      tester.getSemantics(other).getSemanticsData().flagsCollection.isSelected,
+      isNot(ui.Tristate.isTrue),
+    );
     semantics.dispose();
   });
 

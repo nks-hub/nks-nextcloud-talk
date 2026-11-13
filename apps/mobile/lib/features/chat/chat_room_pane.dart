@@ -70,6 +70,7 @@ import 'composer/chat_media_composer.dart';
 import 'composer/composer_text_editing.dart';
 import 'composer/pasted_image.dart';
 import 'composer/emoji_picker.dart';
+import 'composer/emoji_picker_labels.dart';
 import 'composer/emoji_usage_store.dart';
 import 'composer/giphy.dart';
 import 'composer/mention_suggestions.dart';
@@ -1017,7 +1018,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
             _InlineEmojiPanel(
               accountId: AccountId.parse(_key.accountId),
               usageStore: ref.read(emojiUsageStoreProvider),
-              labels: _emojiPickerLabels(strings),
+              labels: emojiPickerLabelsFor(strings),
               onClose: _closeEmojiPicker,
               onSelected: _insertEmoji,
             ),

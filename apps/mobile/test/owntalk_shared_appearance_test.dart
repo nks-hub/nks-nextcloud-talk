@@ -9,11 +9,13 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/chat/chat_background_surface.dart';
 import 'package:nextcloudtalk/features/chat/chat_background_theme.dart';
+import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
 import 'package:nextcloudtalk/features/owntalk_extensions/chat_appearance.dart';
 import 'package:nextcloudtalk/features/owntalk_extensions/owntalk_room_extras.dart';
 import 'package:nextcloudtalk/features/owntalk_extensions/owntalk_settings_store.dart';
 import 'package:nextcloudtalk/features/owntalk_extensions/shared_appearance_section.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 import 'owntalk_extensions_test_support.dart';
 import 'test_support.dart';
@@ -57,6 +59,8 @@ void main() {
     appLifecycleResumeEventsProvider.overrideWithValue(
       const Stream<void>.empty(),
     ),
+    // The real store writes files, which never completes in the test clock.
+    emojiUsageStoreProvider.overrideWithValue(_MemoryEmojiUsageStore()),
   ];
 
   Widget sectionApp({int roomType = 2, bool federated = false}) =>
@@ -234,28 +238,106 @@ void main() {
       await unmount(tester);
     });
 
-    testWidgets('saves the quick emoji', (tester) async {
-      await tester.pumpWidget(sectionApp());
+    Future<void> openEmojiSheet(WidgetTester tester) async {
       await pumpUntil(
         tester,
         () => find.byKey(_quickEmoji).evaluate().isNotEmpty,
       );
+      await tester.ensureVisible(find.byKey(_quickEmoji));
+      await tester.pump();
       await tester.tap(find.byKey(_quickEmoji));
       await pumpUntil(
         tester,
-        () =>
-            find.byKey(const Key('owntalk-shared-field')).evaluate().isNotEmpty,
+        () => find.byKey(const Key('emoji-search')).evaluate().isNotEmpty,
       );
+      // Let the sheet finish sliding in before it is tapped.
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    testWidgets('saves the quick emoji picked from the sheet', (tester) async {
+      await tester.pumpWidget(sectionApp());
+      await openEmojiSheet(tester);
+
+      expect(find.byKey(const Key('owntalk-emoji-reset')), findsNothing);
       await tester.enterText(
-        find.byKey(const Key('owntalk-shared-field')),
-        '\u{1F44D}',
+        find.byKey(const Key('emoji-search')),
+        'thumbs up',
       );
-      await tester.tap(find.byKey(const Key('owntalk-shared-save')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('emoji-choice-thumbs-up')));
       await pumpUntil(
         tester,
         () => server.settings['composer.quickEmoji'] != null,
       );
       expect(server.settings['composer.quickEmoji'], '\u{1F44D}');
+      await pumpUntil(
+        tester,
+        () => find.byKey(const Key('owntalk-emoji-sheet')).evaluate().isEmpty,
+      );
+      await unmount(tester);
+    });
+
+    testWidgets('shows the current emoji and clears it', (tester) async {
+      server.setExternally({'composer.quickEmoji': '\u{1F44D}'});
+      await tester.pumpWidget(sectionApp());
+      await pumpUntil(
+        tester,
+        () => subtitleOf(tester, _quickEmoji) == '\u{1F44D}',
+      );
+      await openEmojiSheet(tester);
+
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('owntalk-emoji-current')),
+          matching: find.text('\u{1F44D}'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('owntalk-emoji-reset')));
+      await pumpUntil(
+        tester,
+        () => subtitleOf(tester, _quickEmoji) == 'Follow the theme',
+      );
+      expect(server.settings['composer.quickEmoji'], isNull);
+      await unmount(tester);
+    });
+
+    testWidgets('leaves the setting alone when the sheet is dismissed', (
+      tester,
+    ) async {
+      await tester.pumpWidget(sectionApp());
+      await openEmojiSheet(tester);
+      await tester.tap(find.byKey(const Key('emoji-close')));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      await pumpUntil(
+        tester,
+        () => find.byKey(const Key('owntalk-emoji-sheet')).evaluate().isEmpty,
+      );
+      expect(server.settings['composer.quickEmoji'], isNull);
+      await unmount(tester);
+    });
+
+    testWidgets('stays usable on a phone held sideways', (tester) async {
+      tester.view
+        ..physicalSize = const Size(780, 360)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(sectionApp());
+      await openEmojiSheet(tester);
+
+      expect(tester.takeException(), isNull);
+      final cell = find.byKey(const Key('emoji-choice-grinning-face'));
+      expect(cell, findsOneWidget);
+      final size = tester.getSize(cell);
+      expect(size.width, greaterThanOrEqualTo(48));
+      expect(size.height, greaterThanOrEqualTo(48));
+      await tester.tap(cell);
+      await pumpUntil(
+        tester,
+        () => server.settings['composer.quickEmoji'] != null,
+      );
+      expect(server.settings['composer.quickEmoji'], '\u{1F600}');
       await unmount(tester);
     });
   });
@@ -622,4 +704,20 @@ void main() {
       }
     });
   });
+}
+
+final class _MemoryEmojiUsageStore implements EmojiUsageStore {
+  @override
+  Future<void> delete(AccountId accountId) async {}
+
+  @override
+  Future<EmojiUsage> read(AccountId accountId) async => EmojiUsage.empty;
+
+  @override
+  Future<EmojiUsage> recordSelection(AccountId accountId, String glyph) async =>
+      EmojiUsage.empty;
+
+  @override
+  Future<EmojiUsage> toggleFavorite(AccountId accountId, String glyph) async =>
+      EmojiUsage.empty;
 }

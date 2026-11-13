@@ -667,35 +667,6 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     _composerFocusNode.requestFocus();
   }
 
-  EmojiPickerLabels _emojiPickerLabels(AppLocalizations strings) {
-    return EmojiPickerLabels(
-      title: strings.emojiPickerTitle,
-      closeTooltip: strings.emojiPickerCloseTooltip,
-      manageFavorites: strings.emojiManageFavorites,
-      finishManagingFavorites: strings.emojiFinishManagingFavorites,
-      favoriteModeHint: strings.emojiFavoriteModeHint,
-      addFavoriteLabel: strings.emojiAddFavoriteLabel,
-      removeFavoriteLabel: strings.emojiRemoveFavoriteLabel,
-      searchHint: strings.emojiSearchHint,
-      noResults: strings.emojiNoResults,
-      noRecents: strings.emojiNoRecents,
-      noFavorites: strings.emojiNoFavorites,
-      categoryLabels: <EmojiCategory, String>{
-        EmojiCategory.favorites: strings.emojiCategoryFavorites,
-        EmojiCategory.recent: strings.emojiCategoryRecent,
-        EmojiCategory.smileys: strings.emojiCategorySmileys,
-        EmojiCategory.people: strings.emojiCategoryPeople,
-        EmojiCategory.animals: strings.emojiCategoryAnimals,
-        EmojiCategory.food: strings.emojiCategoryFood,
-        EmojiCategory.activities: strings.emojiCategoryActivities,
-        EmojiCategory.travel: strings.emojiCategoryTravel,
-        EmojiCategory.objects: strings.emojiCategoryObjects,
-        EmojiCategory.symbols: strings.emojiCategorySymbols,
-        EmojiCategory.flags: strings.emojiCategoryFlags,
-      },
-    );
-  }
-
   Future<void> _requestGiphy({bool refresh = false}) async {
     if (_sending || _isReadOnlyNow()) {
       return;

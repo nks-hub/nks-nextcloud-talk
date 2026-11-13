@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import '../../app_providers.dart';
 import '../../core/color_palette.dart';
 import '../../core/text_prompt_dialog.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../chat/chat_background_theme.dart';
 import '../chat/chat_wallpaper.dart';
 import 'background_sheet.dart';
+import 'emoji_sheet.dart';
 import 'owntalk_background_photo.dart';
 import 'owntalk_extensions_service.dart';
 import 'owntalk_room_extras.dart';
@@ -433,31 +435,20 @@ final class _OwnTalkSharedAppearanceSectionState
         ref.read(ownTalkRoomExtrasProvider(_key)).settings?.revision ?? 0;
     final String? next;
     if (field.isEmoji) {
-      final result = await showTextPromptDialog(
+      final choice = await showOwnTalkEmojiSheet(
         context: context,
-        title: _fieldTitle(strings, field),
-        initialValue: current ?? '',
-        fieldLabel: strings.ownTalkSharedEmojiLabel,
-        helperText: strings.ownTalkSharedClearHint,
-        cancelLabel: strings.cancel,
-        confirmLabel: strings.roomDetailsSave,
-        dialogKey: const Key('owntalk-shared-dialog'),
-        fieldKey: const Key('owntalk-shared-field'),
-        confirmKey: const Key('owntalk-shared-save'),
-        maxLength: 16,
+        accountId: AccountId.parse(widget.accountId),
+        usageStore: ref.read(emojiUsageStoreProvider),
+        current: current,
       );
-      if (!mounted || result == null) {
+      if (!mounted || choice == null) {
         return;
       }
-      final text = result.trim();
-      if (text.isEmpty) {
-        next = null;
-      } else {
-        next = normalizeOwnTalkSettingValue(field, text);
-        if (next == null) {
-          _message(strings.ownTalkSharedInvalidValue);
-          return;
-        }
+      final glyph = choice.glyph;
+      next = glyph == null ? null : normalizeOwnTalkSettingValue(field, glyph);
+      if (glyph != null && next == null) {
+        _message(strings.ownTalkSharedInvalidValue);
+        return;
       }
     } else {
       final pick = await pickColor(
@@ -493,11 +484,7 @@ final class _OwnTalkSharedAppearanceSectionState
     return _apply(
       (revision) => ref
           .read(ownTalkRoomExtrasProvider(_key).notifier)
-          .save(
-            changes,
-            baseRevision: revision,
-            announcement: announcement,
-          ),
+          .save(changes, baseRevision: revision, announcement: announcement),
       baseRevision,
       fields: changes.keys.toList(),
       wanted: changes,

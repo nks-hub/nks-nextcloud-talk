@@ -161,6 +161,7 @@ final class EmojiPicker extends StatefulWidget {
     required this.onClose,
     required this.onSelected,
     this.catalog,
+    this.selectedGlyph,
     super.key,
   });
 
@@ -170,6 +171,9 @@ final class EmojiPicker extends StatefulWidget {
   final VoidCallback onClose;
   final ValueChanged<EmojiChoice> onSelected;
   final EmojiCatalog? catalog;
+
+  /// The glyph currently in effect, drawn highlighted in the grid.
+  final String? selectedGlyph;
 
   @override
   State<EmojiPicker> createState() => _EmojiPickerState();
@@ -318,10 +322,40 @@ final class _EmojiPickerState extends State<EmojiPicker> {
     final locale = Localizations.maybeLocaleOf(context);
     final query = _searchController.text.trim();
     final choices = _visibleChoices(query);
+    final scheme = Theme.of(context).colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Wide windows get larger glyphs; a phone held sideways drops the
+        // vertical padding so the grid keeps some rows.
+        final wide = constraints.maxWidth >= 600;
+        final compact = constraints.maxHeight < 360;
+        final cell = wide ? 56.0 : 48.0;
+        return _buildPicker(
+          context,
+          locale: locale,
+          query: query,
+          choices: choices,
+          scheme: scheme,
+          cell: cell,
+          compact: compact,
+        );
+      },
+    );
+  }
+
+  Widget _buildPicker(
+    BuildContext context, {
+    required Locale? locale,
+    required String query,
+    required List<EmojiChoice> choices,
+    required ColorScheme scheme,
+    required double cell,
+    required bool compact,
+  }) {
     return Column(
       children: [
         SizedBox(
-          height: 56,
+          height: compact ? 48 : 56,
           child: Row(
             children: [
               Expanded(
@@ -370,7 +404,7 @@ final class _EmojiPickerState extends State<EmojiPicker> {
             ),
           ),
         Padding(
-          padding: const EdgeInsets.all(8),
+          padding: EdgeInsets.all(compact ? 4 : 8),
           child: TextField(
             key: const Key('emoji-search'),
             controller: _searchController,
@@ -379,6 +413,7 @@ final class _EmojiPickerState extends State<EmojiPicker> {
               hintText: widget.labels.searchHint,
               prefixIcon: const Icon(Icons.search_rounded),
               border: const OutlineInputBorder(),
+              isDense: compact,
             ),
           ),
         ),
@@ -396,6 +431,13 @@ final class _EmojiPickerState extends State<EmojiPicker> {
                       key: Key('emoji-category-${category.name}'),
                       label: Text(widget.labels.categoryLabels[category] ?? ''),
                       selected: category == _category,
+                      selectedColor: scheme.primaryContainer,
+                      labelStyle: category == _category
+                          ? TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: scheme.onPrimaryContainer,
+                            )
+                          : null,
                       onSelected: (_) => setState(() {
                         _category = category;
                         _categoryExplicitlySelected = true;
@@ -415,14 +457,15 @@ final class _EmojiPickerState extends State<EmojiPicker> {
               ? Center(child: Text(_emptyLabel(query)))
               : GridView.builder(
                   padding: const EdgeInsets.all(8),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 56,
-                    mainAxisExtent: 48,
+                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: cell + 8,
+                    mainAxisExtent: cell,
                   ),
                   itemCount: choices.length,
                   itemBuilder: (context, index) {
                     final choice = choices[index];
                     final favorite = _usage.favorites.contains(choice.glyph);
+                    final current = choice.glyph == widget.selectedGlyph;
                     final semanticsLabel = _managingFavorites
                         ? '${choice.nameFor(locale)}. ${favorite ? widget.labels.removeFavoriteLabel : widget.labels.addFavoriteLabel}'
                         : choice.nameFor(locale);
@@ -432,42 +475,57 @@ final class _EmojiPickerState extends State<EmojiPicker> {
                         container: true,
                         button: true,
                         label: semanticsLabel,
-                        selected: _managingFavorites && favorite,
+                        selected: _managingFavorites ? favorite : current,
                         onTap: () => unawaited(_activate(choice)),
                         child: SizedBox.square(
-                          dimension: 48,
-                          child: InkWell(
-                            excludeFromSemantics: true,
-                            borderRadius: BorderRadius.circular(24),
-                            onTap: _updatingUsage
-                                ? null
-                                : () => unawaited(_activate(choice)),
-                            child: Stack(
-                              children: [
-                                Center(
-                                  child: ExcludeSemantics(
-                                    child: Text(
-                                      choice.glyph,
-                                      style: const TextStyle(fontSize: 26),
-                                    ),
-                                  ),
-                                ),
-                                if (favorite)
-                                  PositionedDirectional(
-                                    top: 1,
-                                    end: 1,
-                                    child: Icon(
-                                      Icons.star_rounded,
-                                      key: Key(
-                                        'emoji-favorite-${choice.keyName}',
+                          dimension: cell,
+                          child: Ink(
+                            decoration: BoxDecoration(
+                              color: current && !_managingFavorites
+                                  ? scheme.primaryContainer
+                                  : null,
+                              shape: BoxShape.circle,
+                              border: current && !_managingFavorites
+                                  ? Border.all(color: scheme.primary, width: 2)
+                                  : null,
+                            ),
+                            child: InkWell(
+                              key: Key('emoji-cell-${choice.keyName}'),
+                              excludeFromSemantics: true,
+                              customBorder: const CircleBorder(),
+                              hoverColor: scheme.primary.withValues(
+                                alpha: 0.12,
+                              ),
+                              onTap: _updatingUsage
+                                  ? null
+                                  : () => unawaited(_activate(choice)),
+                              child: Stack(
+                                children: [
+                                  Center(
+                                    child: ExcludeSemantics(
+                                      child: Text(
+                                        choice.glyph,
+                                        style: TextStyle(fontSize: cell * 0.54),
                                       ),
-                                      size: 13,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
                                     ),
                                   ),
-                              ],
+                                  if (favorite)
+                                    PositionedDirectional(
+                                      top: 1,
+                                      end: 1,
+                                      child: Icon(
+                                        Icons.star_rounded,
+                                        key: Key(
+                                          'emoji-favorite-${choice.keyName}',
+                                        ),
+                                        size: 13,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         ),

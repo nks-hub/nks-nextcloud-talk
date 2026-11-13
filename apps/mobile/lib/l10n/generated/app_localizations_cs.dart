@@ -4002,7 +4002,10 @@ class AppLocalizationsCs extends AppLocalizations {
   String get ownTalkSharedColorLabel => 'Barva (#RRGGBB)';
 
   @override
-  String get ownTalkSharedEmojiLabel => 'Jedno emoji';
+  String get ownTalkEmojiCurrent => 'Aktuální volba';
+
+  @override
+  String get ownTalkEmojiReset => 'Podle motivu';
 
   @override
   String get ownTalkSharedReadOnlyMembership =>
