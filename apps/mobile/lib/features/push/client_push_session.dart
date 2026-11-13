@@ -82,12 +82,17 @@ final class ClientPushException implements Exception {
 /// pre-auth token over the authenticated HTTPS API and only that token is
 /// sent, which is exactly the flow `notify_push` documents.
 final class ClientPushSession {
-  ClientPushSession._(this._socket, this.events);
+  ClientPushSession._(this._socket, this.events, this.roomSettingsSignals);
 
   final ClientPushSocket _socket;
 
   /// Events after the server accepted the handshake.
   final Stream<ClientPushEvent> events;
+
+  /// `owntalk_room_settings` frames after the handshake, parsed and validated.
+  /// Separate from [events] because they carry a payload the wake-up enum
+  /// cannot.
+  final Stream<OwnTalkRoomSettingsSignal> roomSettingsSignals;
 
   static Future<ClientPushSession> open({
     required ClientPushConnector connector,
@@ -123,6 +128,7 @@ final class ClientPushSession {
       socket = result as ClientPushSocket;
     }
     final controller = StreamController<ClientPushEvent>.broadcast();
+    final signals = StreamController<OwnTalkRoomSettingsSignal>.broadcast();
     final authenticated = Completer<void>();
     late final StreamSubscription<String> subscription;
 
@@ -130,6 +136,10 @@ final class ClientPushSession {
       (frame) {
         final event = parseClientPushFrame(frame);
         if (event == null) {
+          final signal = parseOwnTalkRoomSettingsFrame(frame);
+          if (signal != null && authenticated.isCompleted) {
+            signals.add(signal);
+          }
           return;
         }
         if (event == ClientPushEvent.authenticated) {
@@ -163,6 +173,7 @@ final class ClientPushSession {
           );
         }
         controller.close();
+        signals.close();
       },
     );
 
@@ -182,11 +193,12 @@ final class ClientPushSession {
     } on Object {
       await _release(subscription, socket);
       await controller.close();
+      await signals.close();
       throw const ClientPushException(ClientPushFailure.rejected);
     }
 
     unawaited(controller.done.then((_) => _release(subscription, socket)));
-    return ClientPushSession._(socket, controller.stream);
+    return ClientPushSession._(socket, controller.stream, signals.stream);
   }
 
   Future<void> close() => _release(null, _socket);

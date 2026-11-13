@@ -28,6 +28,8 @@ final class ClientPushCoordinator {
     fetchToken,
     required ClientPushConnector connector,
     required void Function(String accountId) onWakeUp,
+    void Function(String accountId, OwnTalkRoomSettingsSignal signal)?
+        onRoomSettings,
     Duration firstRetry = const Duration(seconds: 2),
     Duration maximumRetry = const Duration(minutes: 5),
     Future<void> Function(Duration)? delay,
@@ -35,6 +37,7 @@ final class ClientPushCoordinator {
        _fetchToken = fetchToken,
        _connector = connector,
        _onWakeUp = onWakeUp,
+       _onRoomSettings = onRoomSettings,
        _firstRetry = firstRetry,
        _maximumRetry = maximumRetry,
        _delay = delay ?? _sleep;
@@ -55,6 +58,8 @@ final class ClientPushCoordinator {
   _fetchToken;
   final ClientPushConnector _connector;
   final void Function(String accountId) _onWakeUp;
+  final void Function(String accountId, OwnTalkRoomSettingsSignal signal)?
+  _onRoomSettings;
   final Duration _firstRetry;
   final Duration _maximumRetry;
   final Future<void> Function(Duration) _delay;
@@ -125,6 +130,15 @@ final class ClientPushCoordinator {
         _onWakeUp(accountId);
         backoff = _firstRetry;
         final events = StreamIterator<ClientPushEvent>(session.events);
+        // Bound to this session's account, so a signal can only ever reach a
+        // room of the account whose socket carried it.
+        final signals = session.roomSettingsSignals.listen((signal) {
+          try {
+            _onRoomSettings?.call(accountId, signal);
+          } on Object {
+            // A hint that could not be applied is not worth the channel.
+          }
+        });
         try {
           while (!channel.stopped) {
             final hasEvent = await Future.any<bool>([
@@ -139,6 +153,7 @@ final class ClientPushCoordinator {
             }
           }
         } finally {
+          await signals.cancel();
           await events.cancel();
         }
       } on Object {

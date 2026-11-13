@@ -410,6 +410,7 @@ final class _OwnTalkSharedAppearanceSectionState
               bytes: chosen.bytes,
               contentType: chosen.contentType,
               baseRevision: revision,
+              announcement: strings.ownTalkAppearanceChangedNotice,
             ),
         base,
         fields: const [OwnTalkSettingField.chatBackgroundImage],
@@ -485,14 +486,23 @@ final class _OwnTalkSharedAppearanceSectionState
   Future<void> _applyChanges(
     Map<OwnTalkSettingField, String?> changes,
     int baseRevision,
-  ) => _apply(
-    (revision) => ref
-        .read(ownTalkRoomExtrasProvider(_key).notifier)
-        .save(changes, baseRevision: revision),
-    baseRevision,
-    fields: changes.keys.toList(),
-    wanted: changes,
-  );
+  ) {
+    final announcement = AppLocalizations.of(
+      context,
+    ).ownTalkAppearanceChangedNotice;
+    return _apply(
+      (revision) => ref
+          .read(ownTalkRoomExtrasProvider(_key).notifier)
+          .save(
+            changes,
+            baseRevision: revision,
+            announcement: announcement,
+          ),
+      baseRevision,
+      fields: changes.keys.toList(),
+      wanted: changes,
+    );
+  }
 
   /// Runs one write against [baseRevision] and reports the outcome. [wanted],
   /// when known, lets a conflict that already holds those values count as

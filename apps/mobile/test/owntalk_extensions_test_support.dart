@@ -111,6 +111,12 @@ final class FakeOwnTalkServer {
   /// Answers the capability request with this status while set.
   int? failCapabilitiesWith;
 
+  /// Talk features the capability document advertises.
+  List<String> talkFeatures = const <String>[];
+
+  /// Answers every chat message post with this status while set.
+  int? failChatWith;
+
   /// Leaves the `ETag` header out of every answer.
   bool omitEtag = false;
 
@@ -122,6 +128,15 @@ final class FakeOwnTalkServer {
 
   List<http.Request> get settingsRequests =>
       requests.where((r) => r.url.path.endsWith('/settings')).toList();
+
+  /// Chat messages posted to the test room.
+  List<http.Request> get chatPosts => requests
+      .where(
+        (r) =>
+            r.method == 'POST' &&
+            r.url.path.endsWith('/apps/spreed/api/v1/chat/$ownTalkTestToken'),
+      )
+      .toList();
 
   List<http.Request> get uploads =>
       requests.where((r) => r.url.path.endsWith('/settings/image')).toList();
@@ -172,13 +187,18 @@ final class FakeOwnTalkServer {
           'extendedSupport': false,
         },
         'capabilities': {
-          'spreed': {'features': <Object?>[]},
+          'spreed': {'features': talkFeatures},
           if (capability != null)
             'owntalk_extensions': capability is _DefaultCapability
                 ? ownTalkCapabilityJson()
                 : capability,
         },
       });
+    }
+    if (request.method == 'POST' &&
+        path.endsWith('/apps/spreed/api/v1/chat/$ownTalkTestToken')) {
+      final failure = failChatWith;
+      return ocsResponse(failure ?? 201, {'id': 1});
     }
     if (path.endsWith('/room/$ownTalkTestToken/settings')) {
       final failure = failSettingsWith;

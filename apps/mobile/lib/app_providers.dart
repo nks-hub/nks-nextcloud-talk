@@ -467,6 +467,8 @@ final clientPushCoordinatorProvider = Provider<ClientPushCoordinator?>((ref) {
       );
     },
     connector: const IoClientPushConnector(),
+    onRoomSettings: (accountId, signal) =>
+        deliverOwnTalkRoomSettingsSignal(ref, accountId, signal),
     onWakeUp: (accountId) => unawaited(
       // `unawaited` marks the future as deliberately not awaited; it does not
       // handle its failure. A sync that failed here escaped to the zone and

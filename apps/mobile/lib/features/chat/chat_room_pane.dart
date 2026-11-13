@@ -180,6 +180,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// keep them pinned there.
   int? _anchorMessageId;
   bool _silentSend = false;
+  OwnTalkAppearanceMarkerWatch _appearanceMarkers =
+      OwnTalkAppearanceMarkerWatch();
   final Object _typingSource = Object();
   ChatTypingRoomKey? _activeTypingKey;
   bool _typingCanPost = false;
@@ -334,6 +336,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _emojiPickerOpen = false;
     _emojiPickerPending = false;
     _incomingAnnouncements.reset();
+    _appearanceMarkers = OwnTalkAppearanceMarkerWatch();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_restoreDraft(_key));
       unawaited(_restartLiveSync());
@@ -512,6 +515,41 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     };
   }
 
+  /// A message announcing a shared-appearance change, from anyone including
+  /// this user's other devices, makes the room re-read the shared settings.
+  /// Deferred past the frame: the re-read moves another provider's state.
+  void _refreshOnAppearanceMarkers(List<CachedChatMessage>? messages) {
+    if (messages == null) {
+      return;
+    }
+    final markers = _appearanceMarkers.fresh(
+      messages.map(
+        (message) =>
+            (messageId: message.messageId, referenceId: message.referenceId),
+      ),
+    );
+    if (markers.isEmpty ||
+        !ownTalkConversationCanShare(
+          roomType: widget.conversation.roomType,
+          rawJson: widget.conversation.rawJson,
+        )) {
+      return;
+    }
+    final room = (
+      accountId: widget.account.id,
+      roomToken: widget.conversation.token,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(
+          ref
+              .read(ownTalkRoomExtrasProvider(room).notifier)
+              .refreshForAppearanceMarkers(markers),
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen(windowActiveProvider, (_, _) {
@@ -519,6 +557,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     });
     final interactionKey = _key;
     final messagesValue = ref.watch(chatMessagesProvider(_key));
+    _refreshOnAppearanceMarkers(messagesValue.valueOrNull);
     final operationsValue = ref.watch(textSendOperationsProvider(_key));
     final attachmentJobs =
         ref.watch(attachmentRoomJobsProvider(_key)).asData?.value ??

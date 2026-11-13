@@ -176,6 +176,40 @@ final class OwnTalkExtensionsService {
     );
   }
 
+  /// Posts the silent chat message announcing that the shared appearance
+  /// reached [revision]. Throws [OwnTalkExtensionsException] when the server
+  /// lacks the extension or Talk's silent send, or when the post fails.
+  Future<void> announceAppearanceChange({
+    required String accountId,
+    required String roomToken,
+    required int revision,
+    required String message,
+  }) async {
+    final session = await _availableSession(accountId);
+    final OwnTalkAppearanceNoticeRequest request;
+    try {
+      request = OwnTalkAppearanceNoticeRequest(
+        accountId: AccountId.parse(accountId),
+        server: session.server,
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        capabilities: session.snapshot,
+        revision: revision,
+        message: message,
+      );
+    } on TalkProtocolException {
+      throw const OwnTalkExtensionsException(
+        OwnTalkExtensionsError.unavailable,
+      );
+    }
+    await _call(
+      () => _api.postOwnTalkAppearanceNotice(
+        noticeRequest: request,
+        loginName: session.loginName,
+        appPassword: session.appPassword,
+      ),
+    );
+  }
+
   /// Downloads the current background image of a conversation. The caller
   /// checks the bytes against [sha256].
   Future<OwnTalkImageFetchResult> fetchImage({
