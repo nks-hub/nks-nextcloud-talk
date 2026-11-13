@@ -4,6 +4,7 @@ import 'package:emojis/emoji.dart' as unicode;
 import 'package:flutter/material.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import '../../../platform/emoji_glyph_support.dart';
 import 'emoji_usage_store.dart';
 
 part 'emoji_czech_names.g.dart';
@@ -161,6 +162,7 @@ final class EmojiPicker extends StatefulWidget {
     required this.onClose,
     required this.onSelected,
     this.catalog,
+    this.glyphSupport,
     this.selectedGlyph,
     super.key,
   });
@@ -171,6 +173,9 @@ final class EmojiPicker extends StatefulWidget {
   final VoidCallback onClose;
   final ValueChanged<EmojiChoice> onSelected;
   final EmojiCatalog? catalog;
+
+  /// Decides which emoji the device font cannot draw; defaults to the system.
+  final EmojiGlyphSupport? glyphSupport;
 
   /// The glyph currently in effect, drawn highlighted in the grid.
   final String? selectedGlyph;
@@ -188,6 +193,7 @@ final class _EmojiPickerState extends State<EmojiPicker> {
   bool _updatingUsage = false;
   bool _categoryExplicitlySelected = false;
   int _loadGeneration = 0;
+  Set<String>? _unsupported;
 
   EmojiCatalog get _catalog => widget.catalog ?? EmojiCatalog.standard();
 
@@ -203,6 +209,7 @@ final class _EmojiPickerState extends State<EmojiPicker> {
     _searchController = TextEditingController()..addListener(_onSearchChanged);
     _category = _catalog.categories.firstOrNull;
     unawaited(_loadUsage());
+    unawaited(_loadGlyphSupport());
   }
 
   @override
@@ -231,6 +238,16 @@ final class _EmojiPickerState extends State<EmojiPicker> {
 
   void _onSearchChanged() => setState(() {});
 
+  Future<void> _loadGlyphSupport() async {
+    final support = widget.glyphSupport ?? EmojiGlyphSupport.system;
+    final unsupported = await support.unsupported(<String>[
+      for (final choice in _catalog.choices) choice.glyph,
+    ]);
+    if (mounted) {
+      setState(() => _unsupported = unsupported);
+    }
+  }
+
   Future<void> _loadUsage() async {
     final generation = ++_loadGeneration;
     final usage = await widget.usageStore.read(widget.accountId);
@@ -253,15 +270,23 @@ final class _EmojiPickerState extends State<EmojiPicker> {
       : _catalog.categories.firstOrNull;
 
   List<EmojiChoice> _visibleChoices(String query) {
-    if (query.isNotEmpty) {
-      return _catalog.search(query);
-    }
-    return switch (_category) {
-      EmojiCategory.favorites => _catalog.resolveGlyphs(_usage.favorites),
-      EmojiCategory.recent => _catalog.resolveGlyphs(_usage.recent),
-      final EmojiCategory category => _catalog.inCategory(category),
-      null => _catalog.choices,
-    };
+    final choices = query.isNotEmpty
+        ? _catalog.search(query)
+        : switch (_category) {
+            EmojiCategory.favorites => _catalog.resolveGlyphs(_usage.favorites),
+            EmojiCategory.recent => _catalog.resolveGlyphs(_usage.recent),
+            final EmojiCategory category => _catalog.inCategory(category),
+            null => _catalog.choices,
+          };
+    final unsupported = _unsupported ?? const <String>{};
+    return unsupported.isEmpty
+        ? choices
+        : choices
+              .where(
+                (choice) =>
+                    EmojiGlyphSupport.isDrawable(choice.glyph, unsupported),
+              )
+              .toList(growable: false);
   }
 
   String _emptyLabel(String query) {
@@ -449,9 +474,10 @@ final class _EmojiPickerState extends State<EmojiPicker> {
           ),
         Expanded(
           child:
-              !_usageLoaded &&
-                  (_category == EmojiCategory.recent ||
-                      _category == EmojiCategory.favorites)
+              _unsupported == null ||
+                  (!_usageLoaded &&
+                      (_category == EmojiCategory.recent ||
+                          _category == EmojiCategory.favorites))
               ? const Center(child: CircularProgressIndicator())
               : choices.isEmpty
               ? Center(child: Text(_emptyLabel(query)))
