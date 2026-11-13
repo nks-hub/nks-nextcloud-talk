@@ -8,6 +8,12 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.0.34 (102) — 13 November 2026
+
+- Messages typed one after another no longer wait for the previous one to be sent. Each shows up at once as "Waiting to send" and they go out in the order they were typed. The keyboard stays open after sending, also when the send button is clicked with a mouse or pen.
+- With the OwnTalk Extensions app installed on the Nextcloud server, everyone in a conversation sees the same look: a background colour, one of six wallpapers or a photo, bubble colours and a quick emoji button. Colours are picked from a palette or entered as a code. Owners and moderators change them in a group, both people in a one-to-one chat. Without the server app nothing changes.
+- The settings button in the image viewer no longer fails after the viewer was closed.
+
 ## 1.0.33 (101) — 31 October 2026
 
 - On iOS, signing in now opens inside the app in a Safari sheet instead of sending you to the browser app. The sheet closes by itself when the sign-in finishes or is cancelled.

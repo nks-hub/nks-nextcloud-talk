@@ -1,1 +1,1 @@
-Changed: on iPhone and iPad, signing in now opens inside the app instead of switching to the browser, and closes by itself when you are signed in.
+New: messages can be sent one after another without waiting for the previous one. Each shows up at once as "Waiting to send" and they go out in the order typed. The keyboard stays open after sending. With the OwnTalk Extensions app on the server, everyone in a conversation sees the same background (colour, wallpaper or photo), bubble colours and a quick emoji button.
