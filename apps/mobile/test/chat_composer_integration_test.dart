@@ -4,7 +4,8 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNull;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart' show PointerDeviceKind;
+import 'package:flutter/gestures.dart'
+    show PointerDeviceKind, kLongPressTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,6 +23,7 @@ import 'package:nextcloudtalk/features/chat/composer/chat_media_composer.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy_attachment.dart';
 import 'package:nextcloudtalk/features/chat/location_share_service.dart';
+import 'package:nextcloudtalk/features/chat/quick_emoji_hold_button.dart';
 import 'package:nextcloudtalk/features/owntalk_extensions/owntalk_room_extras.dart';
 import 'package:nextcloudtalk/features/owntalk_extensions/owntalk_settings_store.dart';
 import 'package:nextcloudtalk/network/attachment_transport.dart';

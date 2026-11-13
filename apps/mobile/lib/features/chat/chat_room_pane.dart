@@ -58,6 +58,7 @@ import '../settings/reply_layout_preference.dart';
 import 'chat_thread_context.dart';
 import 'chat_room_signaling.dart';
 import 'chat_typing_indicator.dart';
+import 'quick_emoji_hold_button.dart';
 import 'incoming_message_announcement.dart';
 import 'outgoing_message_status.dart';
 import 'media/proportional_image.dart';
@@ -926,7 +927,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                 hasAttachment: () =>
                     _mediaComposerController.hasPreparedAttachment,
                 sendButton: sendButton,
-                onSendEmoji: (emoji) => unawaited(_sendQuickEmoji(emoji)),
+                onSendEmoji: (emoji, sizeStep) =>
+                    unawaited(_sendQuickEmoji(emoji, sizeStep: sizeStep)),
               ),
       ),
     ];
