@@ -148,6 +148,11 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   StreamSubscription<void>? _connectivityWakeSubscription;
   int _syncGeneration = 0;
   int _sendGeneration = 0;
+  // Text sends overlap, so unlike _sendGeneration this only moves when the
+  // room changes or the pane goes away.
+  int _textSendGeneration = 0;
+  final List<_ProvisionalSend> _provisionalSends = <_ProvisionalSend>[];
+  int _provisionalCounter = 0;
   int _giphyGeneration = 0;
   bool _syncing = false;
   bool _loadingOlder = false;
@@ -309,6 +314,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _loadingOlder = false;
     _scrollController.resetExtentTracking();
     _sendGeneration++;
+    _textSendGeneration++;
     _composerFocusGeneration++;
     _giphyGeneration++;
     _jumpGeneration++;
@@ -389,6 +395,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _view = null;
     _syncGeneration++;
     _sendGeneration++;
+    _textSendGeneration++;
     _composerFocusGeneration++;
     _giphyGeneration++;
     _jumpGeneration++;
@@ -653,9 +660,32 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           in statusesValue.valueOrNull ?? const <OutgoingMessageStatus>[])
         if (status.messageId != null) status.messageId!: status.state,
     };
-    final pending = operations
-        .where((operation) => operation.outboxState != 'completed')
-        .toList(growable: false);
+    // A line still waiting for admission has no outbox row yet. Its stand-in
+    // goes after every real row, which is where admission will put it, and
+    // drops out the moment the row it was admitted as shows up.
+    final operationIds = {
+      for (final operation in operations) operation.operationId,
+    };
+    if (_provisionalSends.any(
+      (send) =>
+          send.operationId != null && operationIds.contains(send.operationId),
+    )) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _provisionalSends.removeWhere(
+          (send) =>
+              send.operationId != null &&
+              operationIds.contains(send.operationId),
+        );
+      });
+    }
+    final pending = <StoredTextSendOperation>[
+      ...operations.where((operation) => operation.outboxState != 'completed'),
+      for (final send in _provisionalSends)
+        if (send.key == _key &&
+            !(send.operationId != null &&
+                operationIds.contains(send.operationId)))
+          send.asOperation(widget.account.id),
+    ];
     final pendingAttachments = pendingAttachmentBatches(
       attachmentJobs,
       serverUrl: widget.account.serverUrl,
@@ -794,35 +824,40 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final trailingComposerActions = <Widget>[
       SizedBox.square(
         dimension: 48,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            IconButton.filled(
-              key: const Key('send-message'),
-              onPressed: _sending ? null : _send,
-              tooltip: strings.sendMessage,
-              icon: _sending
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send_rounded),
-            ),
-            GestureDetector(
-              key: const Key('send-message-gesture'),
-              behavior: HitTestBehavior.opaque,
-              excludeFromSemantics: true,
-              onTap: _sending ? null : _send,
-              onLongPress: _sending
-                  ? null
-                  : () => unawaited(
-                      _openSendOptions(
-                        canSendSilently: canSendSilently,
-                        canSchedule: profileCanSchedule,
+        // Part of the field's own tap region: a tap here is not "outside" it,
+        // so a mouse, stylus or injected pointer no longer drops the focus,
+        // and with it the soft keyboard, before the send is even handled.
+        child: TextFieldTapRegion(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              IconButton.filled(
+                key: const Key('send-message'),
+                onPressed: _sending ? null : _send,
+                tooltip: strings.sendMessage,
+                icon: _sending
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send_rounded),
+              ),
+              GestureDetector(
+                key: const Key('send-message-gesture'),
+                behavior: HitTestBehavior.opaque,
+                excludeFromSemantics: true,
+                onTap: _sending ? null : _send,
+                onLongPress: _sending
+                    ? null
+                    : () => unawaited(
+                        _openSendOptions(
+                          canSendSilently: canSendSilently,
+                          canSchedule: profileCanSchedule,
+                        ),
                       ),
-                    ),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     ];

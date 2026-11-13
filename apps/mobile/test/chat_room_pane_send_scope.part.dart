@@ -52,6 +52,9 @@ void _registerChatRoomPaneSendScopeTests() {
           }
           expect(heldVault.started.isCompleted, isTrue);
           expect(tester.widget<TextField>(composer).controller!.text, isEmpty);
+          await tester.pump();
+          const standIn = Key('chat-pending-provisional-1');
+          expect(find.byKey(standIn), findsOneWidget);
           final originalState = tester.state(find.byType(ChatRoomPane));
           if (switchRoom) {
             selected.value = conversation.copyWith(
@@ -63,6 +66,7 @@ void _registerChatRoomPaneSendScopeTests() {
               identical(tester.state(find.byType(ChatRoomPane)), originalState),
               isTrue,
             );
+            expect(find.byKey(standIn), findsNothing);
           } else {
             await tester.pumpWidget(const SizedBox.shrink());
           }
@@ -81,6 +85,7 @@ void _registerChatRoomPaneSendScopeTests() {
             );
           }
           expect(tester.takeException(), isNull);
+          expect(find.byKey(standIn), findsNothing);
           if (switchRoom) {
             expect(
               tester.widget<TextField>(composer).controller!.text,

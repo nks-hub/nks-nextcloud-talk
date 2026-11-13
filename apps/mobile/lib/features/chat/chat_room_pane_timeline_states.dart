@@ -1,5 +1,49 @@
 part of 'chat_room_pane.dart';
 
+const _provisionalOperationPrefix = 'provisional-';
+
+/// A line the user sent that the outbox has not admitted yet.
+///
+/// Display only: nothing here is ever sent. The outbox row stays the one
+/// record of what goes to the server, and this entry is dropped when that row
+/// appears or the admission fails.
+final class _ProvisionalSend {
+  _ProvisionalSend({
+    required this.id,
+    required this.key,
+    required this.message,
+    this.restorableDraft,
+  });
+
+  final int id;
+  final ChatRoomProviderKey key;
+  final String message;
+
+  /// The composer text this line came from, when it can be put back.
+  final String? restorableDraft;
+  String? operationId;
+  bool failed = false;
+
+  StoredTextSendOperation asOperation(String accountId) {
+    return StoredTextSendOperation(
+      accountId: accountId,
+      operationId: '$_provisionalOperationPrefix$id',
+      roomToken: key.roomToken,
+      referenceId: '',
+      message: message,
+      replayContractRevision: '',
+      silent: false,
+      enqueueSequence: id,
+      outboxState: failed ? 'failed' : 'queued',
+      attemptCount: 0,
+      messageIdsJson: '[]',
+      duplicateRiskAcknowledged: false,
+      createdAtMillis: 0,
+      updatedAtMillis: 0,
+    );
+  }
+}
+
 final class _PendingMessageBubble extends StatelessWidget {
   const _PendingMessageBubble({
     super.key,
@@ -28,6 +72,11 @@ final class _PendingMessageBubble extends StatelessWidget {
       'failed' => strings.outboxFailed,
       _ => strings.outboxFailed,
     };
+    // An admission cannot be called back, so the stand-in has nothing to
+    // cancel until it fails.
+    final cancelable =
+        !operation.operationId.startsWith(_provisionalOperationPrefix) ||
+        operation.outboxState == 'failed';
     final retryable = operation.outboxState == 'retryable';
     final ambiguous = operation.outboxState == 'awaitingConfirmation';
     final resourceUrl = exactGiphyResource(operation.message);
@@ -116,13 +165,14 @@ final class _PendingMessageBubble extends StatelessWidget {
                             ),
                           // Every pending state stays cancelable. Ambiguous
                           // sends can refuse it with a visible explanation.
-                          IconButton(
-                            key: Key('chat-cancel-${operation.operationId}'),
-                            onPressed: onCancel,
-                            tooltip: strings.cancelSend,
-                            iconSize: 18,
-                            icon: const Icon(Icons.close_rounded),
-                          ),
+                          if (cancelable)
+                            IconButton(
+                              key: Key('chat-cancel-${operation.operationId}'),
+                              onPressed: onCancel,
+                              tooltip: strings.cancelSend,
+                              iconSize: 18,
+                              icon: const Icon(Icons.close_rounded),
+                            ),
                         ],
                       ),
                     ),

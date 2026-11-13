@@ -322,8 +322,10 @@ final class ChatService {
   /// still on the wire. Delivery continues on the room lane, so the outbox is
   /// still emptied in admission order and a later message cannot overtake an
   /// earlier one. Everything after admission is reported through the
-  /// operation's own state, not by this future.
-  Future<void> sendText({
+  /// operation's own state, not by this future. The value is the id the
+  /// operation was admitted under, so a caller showing a provisional entry
+  /// can tell when the outbox row has taken its place.
+  Future<String> sendText({
     required String accountId,
     required String roomToken,
     required String message,
@@ -337,8 +339,8 @@ final class ChatService {
     // Admission has a lane of its own. On the room lane it would queue behind
     // the previous message's request, and a send into a tunnel would hold the
     // composer for as long as that request takes to fail.
-    return _serializeRoom<void>(_admissionKey(key), () {
-      return _withRoomErrorPersistence(accountId, roomToken, () async {
+    return _serializeRoom<String>(_admissionKey(key), () {
+      return _withRoomErrorPersistence<String>(accountId, roomToken, () async {
         final normalized = message.trim();
         if (normalized.isEmpty) {
           throw const ChatServiceException(ChatServiceError.invalidResponse);
@@ -411,11 +413,12 @@ final class ChatService {
         } else if (replyToToken != null || privateReplyEligibility != null) {
           throw const ChatServiceException(ChatServiceError.invalidResponse);
         }
+        final operationId = _uuid.v4();
         await _chat.admitTextSend(
           accountId: accountId,
           roomToken: prepared.room.token,
           authority: prepared.authority,
-          operationId: ChatOperationId.parse(_uuid.v4()),
+          operationId: ChatOperationId.parse(operationId),
           referenceId: ChatReferenceId.parse(_uuid.v4()),
           message: normalized,
           silent: silent,
@@ -428,6 +431,7 @@ final class ChatService {
         if (prepared.capabilitiesVerifiedOnline) {
           unawaited(_deliverPending(prepared, threadId: threadId));
         }
+        return operationId;
       }, threadId: threadId);
     });
   }
