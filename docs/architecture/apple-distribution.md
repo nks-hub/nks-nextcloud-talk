@@ -122,6 +122,24 @@ Nad hotovým `nks-talk-macos-<verze>-<build>.zip` spusťte `python3 tool/macos_a
 Vedle ZIPu vznikne podepsaný `appcast.xml`. Nahrajte jej do stejného GitHub release společně se ZIPem a aktualizovaným `SHA256SUMS`.
 Bez tohoto souboru novější klient nemůže aktualizaci nainstalovat.
 
+## Release order
+
+CI creates the GitHub release for a `v*` tag as a **draft** with the Android, Windows and Linux files. A draft is never `latest`, so the desktop updaters keep offering the previous complete release until the Apple files are in.
+
+On the build Mac, from `apps/mobile` at the tag and with the login keychain unlocked:
+
+```sh
+bash tool/release_macos.sh <telemetry.env> <build.env> <AuthKey.p8> <key-id> <issuer>
+```
+
+It builds, signs every embedded framework and the app with the Developer ID identity, notarizes with the App Store Connect key, staples, and writes `build/macos-release/nks-talk-macos-<version>-<build>.zip` with its signed `appcast.xml`. Upload both to the draft, add the zip's line to `SHA256SUMS`, then:
+
+```sh
+python3 tool/publish_release.py v<version>+<build>
+```
+
+The script refuses to publish while any platform file or its checksum line is missing. Release 1.0.32 went out without the Mac files: the Mac app saw a newer build it could not install.
+
 Veřejný klíč `SUPublicEDKey` v `Info.plist` patří do Gitu. Soukromý klíč je v Klíčence sestavovacího Macu pod účtem `com.nkshub.nextcloudtalk`; do Gitu nepatří.
 Při přesunu sestavování přeneste existující klíč zabezpečeně pomocí `generate_keys -x` a `generate_keys -f`. Negenerujte náhradní klíč bez postupu pro jeho výměnu.
 Buildy 81 a 82 mají nefunkční původní instalátor. První verzi s opravou je nutné nainstalovat ručně.

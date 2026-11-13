@@ -150,6 +150,7 @@ jobs:
           python3 tool/test_release_license_gate.py
           cd "$GITHUB_WORKSPACE"
           python3 tool/test_changelog_section.py
+          python3 tool/test_publish_release.py
       # This repository is public: nothing that names the operator's hosts,
       # machines, accounts or identifiers may be committed (CONTRIBUTING.md).
       #
@@ -504,12 +505,16 @@ jobs:
             echo "The Apple builds are added after this run, from the maintainer's Apple Silicon host, because no macOS runner takes part here. The macOS zip is Developer ID signed, notarized and stapled. The iOS file is the App Store build: it installs through TestFlight, not by being downloaded. Both are appended to \`SHA256SUMS\` when they land."
           } > notes.md
           cat notes.md
+      # A draft, never `latest`: the desktop updaters read `releases/latest`,
+      # and until the Mac adds its zip and appcast the release is incomplete.
+      # tool/publish_release.py publishes it once every platform is attached.
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: ${{ env.RELEASE_NAME }}
           body_path: notes.md
           files: release/*
           fail_on_unmatched_files: true
+          draft: true
 
   # Publishing, on a release tag only. `v*` alone would let a stray tag ship to
   # testers, and pulling a build back off Play is not a clean operation, so the
