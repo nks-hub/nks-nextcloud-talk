@@ -213,13 +213,41 @@ Future<ColorPaletteChoice?> showColorPaletteDialog({
     builder: (dialogContext) {
       final strings = AppLocalizations.of(dialogContext);
       final inPalette = colorPaletteName(strings, current) != null;
+      // 12 swatches a row: two rows leave both options in view on a phone
+      // held sideways instead of below the fold.
+      final wide = MediaQuery.sizeOf(dialogContext).width >= 700;
+      final custom = ListTile(
+        key: const Key('color-palette-custom'),
+        contentPadding: EdgeInsets.zero,
+        leading: const ColorWheelIcon(),
+        title: Text(strings.colorPaletteCustom),
+        subtitle: current != null && !inPalette
+            ? Text(current.toUpperCase())
+            : null,
+        trailing: current != null && !inPalette
+            ? const Icon(Icons.check)
+            : null,
+        selected: current != null && !inPalette,
+        onTap: () =>
+            Navigator.of(dialogContext).pop(const ColorPaletteCustom()),
+      );
+      final theme = ListTile(
+        key: const Key('color-palette-theme'),
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.format_color_reset_outlined),
+        title: Text(strings.ownTalkSharedThemeDefault),
+        trailing: current == null ? const Icon(Icons.check) : null,
+        selected: current == null,
+        onTap: () =>
+            Navigator.of(dialogContext).pop(const ColorPaletteTheme()),
+      );
       return AlertDialog(
         key: dialogKey,
         title: Text(title),
         scrollable: true,
         contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
         content: SizedBox(
-          width: 312,
+          width: wide ? 620 : 312,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -230,31 +258,15 @@ Future<ColorPaletteChoice?> showColorPaletteDialog({
                     Navigator.of(dialogContext).pop(ColorPaletteColor(hex)),
               ),
               const SizedBox(height: 8),
-              ListTile(
-                key: const Key('color-palette-custom'),
-                contentPadding: EdgeInsets.zero,
-                leading: const ColorWheelIcon(),
-                title: Text(strings.colorPaletteCustom),
-                subtitle: current != null && !inPalette
-                    ? Text(current.toUpperCase())
-                    : null,
-                trailing: current != null && !inPalette
-                    ? const Icon(Icons.check)
-                    : null,
-                selected: current != null && !inPalette,
-                onTap: () =>
-                    Navigator.of(dialogContext).pop(const ColorPaletteCustom()),
-              ),
-              ListTile(
-                key: const Key('color-palette-theme'),
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.format_color_reset_outlined),
-                title: Text(strings.ownTalkSharedThemeDefault),
-                trailing: current == null ? const Icon(Icons.check) : null,
-                selected: current == null,
-                onTap: () =>
-                    Navigator.of(dialogContext).pop(const ColorPaletteTheme()),
-              ),
+              if (wide)
+                Row(
+                  children: [
+                    Expanded(child: custom),
+                    const SizedBox(width: 16),
+                    Expanded(child: theme),
+                  ],
+                )
+              else ...[custom, theme],
             ],
           ),
         ),

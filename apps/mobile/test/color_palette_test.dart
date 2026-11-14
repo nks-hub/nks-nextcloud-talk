@@ -194,6 +194,31 @@ void main() {
       expect(result, isNull);
     });
 
+    testWidgets('sideways (740 x 360) both options show without scrolling', (
+      tester,
+    ) async {
+      tester.view
+        ..physicalSize = const Size(740, 360)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await open(tester, onResult: (_) {});
+      final viewport = tester.getRect(
+        find
+            .descendant(
+              of: find.byKey(const Key('palette')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      for (final key in ['color-palette-custom', 'color-palette-theme']) {
+        expect(
+          tester.getBottomLeft(find.byKey(Key(key))).dy,
+          lessThanOrEqualTo(viewport.bottom),
+          reason: key,
+        );
+      }
+    });
+
     for (final scale in [1.0, 2.0]) {
       testWidgets('fits a phone held sideways (640 x 360) at text scale $scale '
           'and every swatch can be reached', (tester) async {
