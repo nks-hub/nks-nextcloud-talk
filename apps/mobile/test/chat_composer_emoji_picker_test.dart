@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:emojis/emoji.dart' as unicode;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/chat/composer/emoji_picker.dart';
 import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
@@ -186,6 +187,7 @@ void main() {
             alignment: Alignment.topCenter,
             child: SizedBox(
               key: const Key('panel'),
+              width: 520,
               height: 185,
               child: EmojiPicker(
                 accountId: AccountId.parse('account-a'),
@@ -218,6 +220,23 @@ void main() {
         .getTopLeft(find.byKey(const Key('emoji-choice-face-0')))
         .dy;
     expect(panelBottom - firstRow, greaterThanOrEqualTo(2 * 48));
+    expect(
+      tester
+          .renderObject<RenderParagraph>(find.text('Search emoji'))
+          .didExceedMaxLines,
+      isFalse,
+    );
+
+    await tester.tap(find.byKey(const Key('emoji-search')));
+    await tester.enterText(find.byKey(const Key('emoji-search')), 'f');
+    await tester.pumpAndSettle();
+    final field = tester.widget<EditableText>(
+      find.descendant(
+        of: find.byKey(const Key('emoji-search')),
+        matching: find.byType(EditableText),
+      ),
+    );
+    expect(field.focusNode.hasFocus, isTrue);
   });
 
   testWidgets('wide layout enlarges the cells and marks the selected one', (

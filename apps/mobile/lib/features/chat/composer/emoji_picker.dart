@@ -366,6 +366,7 @@ final class _EmojiPickerState extends State<EmojiPicker> {
           cell: cell,
           compact: compact,
           tight: tight,
+          width: constraints.maxWidth,
         );
       },
     );
@@ -380,6 +381,7 @@ final class _EmojiPickerState extends State<EmojiPicker> {
     required double cell,
     required bool compact,
     required bool tight,
+    required double width,
   }) {
     final actions = <Widget>[
       IconButton(
@@ -407,11 +409,28 @@ final class _EmojiPickerState extends State<EmojiPicker> {
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
         hintText: widget.labels.searchHint,
-        prefixIcon: const Icon(Icons.search_rounded),
+        prefixIcon: tight ? null : const Icon(Icons.search_rounded),
         border: const OutlineInputBorder(),
         isDense: compact,
+        contentPadding: tight
+            ? const EdgeInsets.symmetric(horizontal: 12, vertical: 12)
+            : null,
       ),
     );
+    // Sized to its hint, so the hint is never cut short next to the chips.
+    final hintWidth =
+        (TextPainter(
+                text: TextSpan(
+                  text: widget.labels.searchHint,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                textScaler: MediaQuery.textScalerOf(context),
+                textDirection: Directionality.of(context),
+                maxLines: 1,
+              )..layout())
+            .width;
+    // 24 of content padding plus room for the border and cursor.
+    final searchWidth = (hintWidth + 40).clamp(0.0, width * 0.5);
     final categories = SizedBox(
       height: 48,
       child: ListView(
@@ -450,8 +469,10 @@ final class _EmojiPickerState extends State<EmojiPicker> {
               children: [
                 // Sideways the width is spare, so the categories share the
                 // search row and the grid keeps the height.
-                Expanded(flex: 2, child: search),
-                if (query.isEmpty) Expanded(flex: 3, child: categories),
+                SizedBox(width: searchWidth, child: search),
+                Expanded(
+                  child: query.isEmpty ? categories : const SizedBox.shrink(),
+                ),
                 ...actions,
               ],
             ),
