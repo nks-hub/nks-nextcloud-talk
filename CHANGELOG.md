@@ -8,6 +8,13 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.0.36 (104) — 14 November 2026
+
+- Holding the quick emoji button sends the emoji enlarged: the longer the hold, the bigger it grows, in three steps. OwnTalk shows it at that size to everyone in the conversation; other Talk clients show an ordinary emoji. The shared quick emoji is now chosen from the full emoji picker.
+- The shared look of a conversation offers ten more painted wallpapers (with the OwnTalk Extensions 0.5.0 server app), a palette of 24 colours and a colour picker with a shade field and a hue bar. The background now also runs behind the conversation header, under a veil that keeps the title readable.
+- On Android, the emoji picker leaves out emoji the phone's font cannot draw, so older phones no longer show empty boxes.
+- On a phone held sideways, the emoji panel keeps at least two rows of emoji with the full search hint, the colour palette shows its options without scrolling, and a vertical drag in the colour picker picks a shade instead of scrolling the dialog.
+
 ## 1.0.35 (103) — 13 November 2026
 
 - A change to the shared look of a conversation reaches the other participants at once. With the OwnTalk Extensions 0.4.0 server app and `notify_push`, their app reloads the settings as soon as the change is saved. The person who made the change also sends a silent "🎨 The conversation look has changed" message, which tells the others and refreshes OwnTalk even without `notify_push`.
