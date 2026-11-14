@@ -25,7 +25,6 @@ export 'src/chat/location_share.dart';
 export 'src/chat/merge.dart';
 export 'src/chat/models.dart';
 export 'src/chat/outbox.dart';
-export 'src/chat/emoji_size.dart';
 export 'src/chat/photo_album.dart';
 export 'src/chat/private_reply.dart';
 export 'src/chat/profile.dart';
