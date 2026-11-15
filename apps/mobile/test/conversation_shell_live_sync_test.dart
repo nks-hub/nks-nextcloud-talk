@@ -19,6 +19,10 @@ import 'test_support.dart';
 
 void main() {
   _registerVisibleListPaceTest();
+  testWidgets(
+    'a hidden list keeps the failure backoff',
+    _verifyHiddenListBackoff,
+  );
   testWidgets('manual refresh queues a full sync during foreground progress', (
     tester,
   ) async {
@@ -159,6 +163,111 @@ void _registerVisibleListPaceTest() {
     'once a minute',
     _verifyVisibleListPace,
   );
+}
+
+Future<void> _verifyHiddenListBackoff(WidgetTester tester) async {
+  // A phone: once a room is selected the list is not on screen.
+  tester.view.physicalSize = const Size(400, 900);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  final database = openTestDatabase();
+  addTearDown(database.close);
+  final accounts = AccountRepository(database);
+  final vault = MemoryCredentialVault();
+  final account = await accounts.upsertAccount(
+    accountId: 'account-a',
+    serverUrl: 'https://cloud.example.invalid',
+    loginName: 'fixture-user',
+    serverProductName: 'Nextcloud',
+    createdAt: DateTime.utc(2026, 1, 1),
+  );
+  vault.values[account.id] = 'fixture-app-password-never-use';
+  await database
+      .into(database.cachedConversations)
+      .insert(
+        CachedConversationsCompanion.insert(
+          accountId: account.id,
+          token: 'roomhidden',
+          displayName: 'Hidden list room',
+          description: '',
+          lastActivity: 1724300000,
+          unreadMessages: 0,
+          favorite: false,
+          rawJson: '{}',
+        ),
+      );
+
+  var attempts = 0;
+  final api = HttpNextcloudApi(
+    client: _CallbackClient((request) async {
+      if (request.url.path.endsWith('/cloud/capabilities')) {
+        attempts++;
+      }
+      return _response('', 503);
+    }),
+  );
+  addTearDown(api.close);
+  final service = ConversationSyncService(
+    accounts: accounts,
+    credentials: vault,
+    api: api,
+  );
+
+  Future<void> advance(Duration duration) async {
+    for (var second = 0; second < duration.inSeconds; second++) {
+      await tester.pump(const Duration(seconds: 1));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 1)),
+      );
+    }
+  }
+
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        clientPushEnabledProvider.overrideWithValue(false),
+        credentialVaultProvider.overrideWithValue(vault),
+        nextcloudApiProvider.overrideWithValue(api),
+        conversationSyncServiceProvider.overrideWithValue(service),
+        accountsProvider.overrideWith((ref) => Stream.value([account])),
+        selectedAccountProvider.overrideWith((ref) => Stream.value(account)),
+        // The room is selected but not listed, so no chat pane is built.
+        conversationsProvider.overrideWith(
+          (ref, accountId) => Stream.value(const <CachedConversation>[]),
+        ),
+      ],
+      child: localizedTestApp(home: const ConversationShell()),
+    ),
+  );
+  addTearDown(() async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+  await _pumpUntil(tester, () => attempts >= 1);
+  final workspace = find.byType(ConversationWorkspace);
+  tester.widget<ConversationWorkspace>(workspace).onOpenCreatedConversation!(
+    'roomhidden',
+  );
+  await _pumpUntil(
+    tester,
+    () =>
+        tester
+            .widget<ConversationWorkspace>(workspace)
+            .selectedConversationToken ==
+        'roomhidden',
+  );
+
+  // Long enough for the backoff to reach its 30 s ceiling.
+  await advance(const Duration(seconds: 80));
+  final before = attempts;
+  await advance(const Duration(seconds: 90));
+
+  // 24 to 30 s apart at the ceiling. Skipped rounds that count as successes
+  // would bring a request about every 12 s.
+  expect(attempts - before, inInclusiveRange(2, 5));
+  expect(tester.takeException(), isNull);
 }
 
 Future<void> _verifyVisibleListPace(WidgetTester tester) async {

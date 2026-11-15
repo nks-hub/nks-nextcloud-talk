@@ -380,6 +380,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     }
 
     var round = 0;
+    var lastFailed = false;
     final loop = ForegroundSyncLoop(
       task: (cancellation) async {
         final current = round++;
@@ -388,15 +389,19 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           _syncOtherAccounts(accountId);
         }
         // Behind an open chat on a phone nobody sees the list, so it keeps
-        // the slower pace it had before.
-        if (!_conversationListVisible() &&
+        // the slower pace it had before. Never right after a failure: a
+        // skipped round counts as a success and would restart the backoff.
+        if (!lastFailed &&
+            !_conversationListVisible() &&
             current % _hiddenListSyncRounds != 0) {
           return;
         }
         try {
+          lastFailed = true;
           await ref
               .read(conversationSyncServiceProvider)
               .sync(accountId, abortTrigger: cancellation);
+          lastFailed = false;
         } on ConversationSyncException catch (error) {
           if (_isPermanentConversationSyncError(error.code)) {
             finishCycle();
