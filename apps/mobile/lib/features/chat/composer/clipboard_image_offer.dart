@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -11,7 +12,9 @@ import 'clipboard_image_source.dart';
 import 'pasted_image.dart';
 
 /// Offers the image waiting on the clipboard — usually a screenshot copied a
-/// moment ago — above the message field, to be sent or dismissed in one tap.
+/// moment ago — as a tile floating over the end of the message list, to be
+/// sent or dismissed in one tap. It takes no room in the composer: nothing
+/// moves when it comes or goes.
 ///
 /// The clipboard is only looked at while the field has focus and the app is
 /// in front, and its content is only read for a clip that was not offered
@@ -64,7 +67,8 @@ typedef _Offer = ({String id, PastedImage image, ui.Image thumbnail});
 
 final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
     with WidgetsBindingObserver {
-  static const _thumbnailHeight = 72.0;
+  final LayerLink _anchor = LayerLink();
+  final OverlayPortalController _portal = OverlayPortalController();
 
   /// The clip the user already answered, in any room: it is not offered again
   /// until something new is copied. Restored from [ClipboardOfferMemory] the
@@ -81,6 +85,7 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
   void initState() {
     super.initState();
     _source = ref.read(clipboardImageSourceProvider);
+    _portal.show();
     final state = WidgetsBinding.instance.lifecycleState;
     _foreground = state == null || state == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
@@ -185,7 +190,7 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
       if (image != null) {
         thumbnail = await _decodeThumbnail(
           image.bytes,
-          (_thumbnailHeight * pixelRatio).round(),
+          (ClipboardImageOfferCard.thumbnailExtent * pixelRatio).round(),
         );
       }
     } on Object {
@@ -205,9 +210,19 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
   }
 
   /// The picture at the size it is shown, decoded by the engine off the UI
-  /// thread; the full screenshot never becomes a bitmap here.
-  static Future<ui.Image> _decodeThumbnail(Uint8List bytes, int height) async {
-    final codec = await ui.instantiateImageCodec(bytes, targetHeight: height);
+  /// thread; the full screenshot never becomes a bitmap here. [extent] is
+  /// what the shorter side needs, the most the cropped tile can show of it.
+  static Future<ui.Image> _decodeThumbnail(Uint8List bytes, int extent) async {
+    final codec = await ui.instantiateImageCodecWithSize(
+      await ui.ImmutableBuffer.fromUint8List(bytes),
+      getTargetSize: (width, height) {
+        final scale = math.min(1.0, extent / math.min(width, height));
+        return ui.TargetImageSize(
+          width: math.max(1, (width * scale).round()),
+          height: math.max(1, (height * scale).round()),
+        );
+      },
+    );
     try {
       return (await codec.getNextFrame()).image;
     } finally {
@@ -268,46 +283,81 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
 
   @override
   Widget build(BuildContext context) {
+    // Nothing of the offer takes part in the composer's layout: this is a
+    // point at the composer's top edge, and the tile hangs above it in the
+    // overlay, over the end of the message list.
+    return CompositedTransformTarget(
+      link: _anchor,
+      child: OverlayPortal(
+        controller: _portal,
+        overlayChildBuilder: _buildOverlay,
+        child: const SizedBox(width: double.infinity),
+      ),
+    );
+  }
+
+  Widget _buildOverlay(BuildContext context) {
     final offer = _offer;
+    final rtl = Directionality.of(context) == TextDirection.rtl;
     final child = offer == null
         ? const SizedBox.shrink()
-        // Part of the field's own tap region, so a tap on the card does not
+        // Part of the field's own tap region, so a tap on the tile does not
         // take the focus, and with it the soft keyboard, away.
         : TextFieldTapRegion(
             key: ValueKey<String>(offer.id),
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: ClipboardImageOfferCard(
-                thumbnail: offer.thumbnail,
-                onAttach: () => unawaited(_take(send: false)),
-                onDismiss: _dismiss,
-                onSend: widget.sending
-                    ? null
-                    : () => unawaited(_take(send: true)),
-              ),
+            child: ClipboardImageOfferCard(
+              thumbnail: offer.thumbnail,
+              onAttach: () => unawaited(_take(send: false)),
+              onDismiss: _dismiss,
+              onSend: widget.sending
+                  ? null
+                  : () => unawaited(_take(send: true)),
             ),
           );
-    // Leaving the foreground skips the exit transition too: the frames that
-    // would play it are not coming.
-    if (MediaQuery.disableAnimationsOf(context) ||
-        (offer == null && !_foreground)) {
-      return child;
-    }
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 180),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      transitionBuilder: (child, animation) => SizeTransition(
-        sizeFactor: animation,
-        alignment: Alignment.bottomCenter,
-        child: FadeTransition(opacity: animation, child: child),
+    return Positioned(
+      left: 0,
+      top: 0,
+      child: CompositedTransformFollower(
+        link: _anchor,
+        showWhenUnlinked: false,
+        targetAnchor: rtl ? Alignment.topLeft : Alignment.topRight,
+        followerAnchor: rtl ? Alignment.bottomLeft : Alignment.bottomRight,
+        // The anchor sits inside the composer's 8 dp padding; the tile keeps
+        // another 8 dp clear of the composer itself.
+        offset: const Offset(0, -16),
+        // Leaving the foreground skips the exit transition too: the frames
+        // that would play it are not coming.
+        child:
+            MediaQuery.disableAnimationsOf(context) ||
+                (offer == null && !_foreground)
+            ? child
+            : AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                layoutBuilder: (current, previous) => Stack(
+                  alignment: AlignmentDirectional.bottomEnd,
+                  children: [...previous, ?current],
+                ),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: 0.6, end: 1).animate(animation),
+                    alignment: rtl
+                        ? Alignment.bottomLeft
+                        : Alignment.bottomRight,
+                    child: child,
+                  ),
+                ),
+                child: child,
+              ),
       ),
-      child: child,
     );
   }
 }
 
-/// The suggestion itself: the picture, what it is, and the two answers.
+/// The suggestion itself: the picture, with a close badge on one corner and
+/// the send button on the opposite one.
 ///
 /// Owns [thumbnail] and disposes it when it leaves the tree.
 final class ClipboardImageOfferCard extends StatefulWidget {
@@ -318,6 +368,9 @@ final class ClipboardImageOfferCard extends StatefulWidget {
     required this.onSend,
     super.key,
   });
+
+  /// The longer side of the picture on screen.
+  static const double thumbnailExtent = 112;
 
   final ui.Image thumbnail;
 
@@ -335,7 +388,10 @@ final class ClipboardImageOfferCard extends StatefulWidget {
 
 final class _ClipboardImageOfferCardState
     extends State<ClipboardImageOfferCard> {
-  static const _thumbnailHeight = _ClipboardImageOfferState._thumbnailHeight;
+  // How far the two buttons reach past the picture. Both are 48 dp targets:
+  // the badge is centred on its corner, the send button sits a quarter out.
+  static const _badgeOverhang = 18.0;
+  static const _sendOverhang = 12.0;
 
   @override
   void dispose() {
@@ -346,114 +402,100 @@ final class _ClipboardImageOfferCardState
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     final image = widget.thumbnail;
-    // The picture keeps its shape; only a panorama or a very tall capture is
-    // cropped to stay a thumbnail.
-    final thumbnailWidth = (_thumbnailHeight * image.width / image.height)
-        .clamp(48.0, _thumbnailHeight * 1.5);
-    final thumbnail = Tooltip(
-      message: strings.clipboardImageOfferAttach,
-      child: Semantics(
-        button: true,
-        child: Material(
-          color: scheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(12),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            key: const Key('clipboard-image-offer-attach'),
-            onTap: widget.onAttach,
-            child: RawImage(
-              image: image,
-              width: thumbnailWidth,
-              height: _thumbnailHeight,
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
-      ),
-    );
-    final title = Text(
-      strings.clipboardImageOfferTitle,
-      maxLines: 2,
-      overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.titleSmall?.copyWith(color: scheme.onSurface),
-    );
-    final actions = <Widget>[
-      IconButton(
-        key: const Key('clipboard-image-offer-dismiss'),
-        tooltip: strings.clipboardImageOfferDismiss,
-        onPressed: widget.onDismiss,
-        icon: const Icon(Icons.close_rounded),
-      ),
-      SizedBox.square(
-        dimension: 48,
-        child: IconButton.filled(
-          key: const Key('clipboard-image-offer-send'),
-          tooltip: strings.clipboardImageOfferSend,
-          onPressed: widget.onSend,
-          icon: const Icon(Icons.send_rounded),
-        ),
-      ),
-    ];
+    // The picture keeps its shape up to 16:9 either way; a panorama or a
+    // very tall capture is cropped to stay a tile.
+    final aspect = (image.width / image.height).clamp(9 / 16, 16 / 9);
+    const extent = ClipboardImageOfferCard.thumbnailExtent;
+    final size = aspect >= 1
+        ? Size(extent, extent / aspect)
+        : Size(extent * aspect, extent);
     return Semantics(
       container: true,
       liveRegion: true,
-      child: Material(
+      label: strings.clipboardImageOfferTitle,
+      child: SizedBox(
         key: const Key('clipboard-image-offer'),
-        color: scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsetsDirectional.fromSTEB(8, 8, 4, 8),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // What is left for the words beside the picture and the two
-              // buttons. In a split view, with a wide picture or with large
-              // text that is a column a few letters wide, so the title moves
-              // above the row instead.
-              final beside = constraints.maxWidth - thumbnailWidth - 12 - 96;
-              final needed = MediaQuery.textScalerOf(context).scale(14) * 8.5;
-              if (beside < needed) {
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsetsDirectional.fromSTEB(4, 0, 8, 8),
-                      child: title,
+        width: _badgeOverhang + size.width + _sendOverhang,
+        height: _badgeOverhang + size.height + _sendOverhang,
+        child: Stack(
+          children: [
+            PositionedDirectional(
+              start: _badgeOverhang,
+              top: _badgeOverhang,
+              child: Tooltip(
+                message: strings.clipboardImageOfferAttach,
+                child: Semantics(
+                  button: true,
+                  child: Material(
+                    color: scheme.surfaceContainerHigh,
+                    elevation: 6,
+                    shadowColor: scheme.shadow,
+                    surfaceTintColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: scheme.outlineVariant),
                     ),
-                    Row(children: [thumbnail, const Spacer(), ...actions]),
-                  ],
-                );
-              }
-              return Row(
-                children: [
-                  thumbnail,
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        title,
-                        const SizedBox(height: 2),
-                        Text(
-                          strings.clipboardImageOfferHint,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      key: const Key('clipboard-image-offer-attach'),
+                      onTap: widget.onAttach,
+                      child: RawImage(
+                        image: image,
+                        width: size.width,
+                        height: size.height,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
-                  ...actions,
-                ],
-              );
-            },
-          ),
+                ),
+              ),
+            ),
+            PositionedDirectional(
+              start: 0,
+              top: 0,
+              child: IconButton(
+                key: const Key('clipboard-image-offer-dismiss'),
+                tooltip: strings.clipboardImageOfferDismiss,
+                onPressed: widget.onDismiss,
+                iconSize: 16,
+                // A 24 dp disc inside the full 48 dp touch target.
+                style: IconButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize.padded,
+                  minimumSize: const Size.square(24),
+                  fixedSize: const Size.square(24),
+                  padding: EdgeInsets.zero,
+                  backgroundColor: scheme.surfaceContainerHighest,
+                  foregroundColor: scheme.onSurface,
+                  elevation: 2,
+                  shadowColor: scheme.shadow,
+                  side: BorderSide(color: scheme.outlineVariant),
+                ),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ),
+            PositionedDirectional(
+              end: 0,
+              bottom: 0,
+              child: IconButton.filled(
+                key: const Key('clipboard-image-offer-send'),
+                tooltip: strings.clipboardImageOfferSend,
+                onPressed: widget.onSend,
+                // Smaller than the composer's own send button, so the two
+                // are not read as one control; the target stays 48 dp.
+                style: IconButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize.padded,
+                  minimumSize: const Size.square(40),
+                  fixedSize: const Size.square(40),
+                  iconSize: 20,
+                  elevation: 3,
+                  shadowColor: scheme.shadow,
+                ),
+                icon: const Icon(Icons.send_rounded),
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -482,6 +482,17 @@ final class _ChatComposer extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // First, so the floating tile hangs from the composer's
+                    // top edge whatever else is shown inside it.
+                    ClipboardImageOffer(
+                      key: ValueKey<ChatRoomProviderKey>(roomKey),
+                      focusNode: focusNode,
+                      blocked: () => sending || media.isBusy,
+                      refresh: media.changes,
+                      sending: sending,
+                      onAttach: onPasteImage,
+                      onSend: onSubmit,
+                    ),
                     if (replyTo != null)
                       _ReplyBanner(message: replyTo!, onCancel: onCancelReply),
                     MentionSuggestionsBar(
@@ -492,15 +503,6 @@ final class _ChatComposer extends ConsumerWidget {
                         noResults: strings.mentionSuggestionsEmpty,
                         error: strings.mentionSuggestionsError,
                       ),
-                    ),
-                    ClipboardImageOffer(
-                      key: ValueKey<ChatRoomProviderKey>(roomKey),
-                      focusNode: focusNode,
-                      blocked: () => sending || media.isBusy,
-                      refresh: media.changes,
-                      sending: sending,
-                      onAttach: onPasteImage,
-                      onSend: onSubmit,
                     ),
                     Focus(
                       onKeyEvent: (node, event) => _handleKey(

@@ -14,6 +14,7 @@ import 'test_support.dart';
 
 const _card = Key('clipboard-image-offer');
 const _field = Key('field');
+const _timeline = Key('timeline');
 
 void main() {
   late FakeClipboardImageSource clipboard;
@@ -70,6 +71,8 @@ void main() {
   Future<void> pumpComposer(
     WidgetTester tester, {
     bool reduceMotion = false,
+    bool rtl = false,
+    VoidCallback? onTimelineTap,
     Object room = 'room-a',
   }) async {
     addTearDown(() => toForeground(tester));
@@ -88,22 +91,32 @@ void main() {
                 data: MediaQuery.of(
                   context,
                 ).copyWith(disableAnimations: reduceMotion),
-                child: Column(
-                  children: [
-                    ClipboardImageOffer(
-                      key: ValueKey<Object>(room),
-                      focusNode: focus,
-                      blocked: () => blocked.value,
-                      refresh: blocked,
-                      sending: false,
-                      onAttach: (image) async {
-                        attached.add(image);
-                        return true;
-                      },
-                      onSend: () => sends++,
-                    ),
-                    TextField(key: _field, focusNode: focus),
-                  ],
+                child: Directionality(
+                  textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          key: _timeline,
+                          behavior: HitTestBehavior.opaque,
+                          onTap: onTimelineTap,
+                        ),
+                      ),
+                      ClipboardImageOffer(
+                        key: ValueKey<Object>(room),
+                        focusNode: focus,
+                        blocked: () => blocked.value,
+                        refresh: blocked,
+                        sending: false,
+                        onAttach: (image) async {
+                          attached.add(image);
+                          return true;
+                        },
+                        onSend: () => sends++,
+                      ),
+                      TextField(key: _field, focusNode: focus),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -145,7 +158,7 @@ void main() {
     clipboard.copyImage('clip-1', tinyPng);
     await settle(tester);
     expect(find.byKey(_card), findsOneWidget);
-    expect(find.text('Paste image from clipboard'), findsOneWidget);
+    expect(find.bySemanticsLabel('Paste image from clipboard'), findsOneWidget);
     expect(clipboard.reads, 1);
   });
 
@@ -289,7 +302,11 @@ void main() {
 
     lifecycle(tester, const [AppLifecycleState.inactive]);
     await settle(tester);
-    expect(find.byKey(_card), findsOneWidget, reason: 'a lost focus is no exit');
+    expect(
+      find.byKey(_card),
+      findsOneWidget,
+      reason: 'a lost focus is no exit',
+    );
     lifecycle(tester, const [AppLifecycleState.resumed]);
 
     // One frame, no exit animation: a hidden app may not get a second one.
@@ -390,19 +407,76 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a narrow pane moves the title above the row', (tester) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(260, 600);
+  testWidgets('the tile floats: nothing in the layout moves when it comes '
+      'or goes', (tester) async {
+    await pumpComposer(tester);
+    await focusField(tester);
+    final field = tester.getRect(find.byKey(_field));
+    final timeline = tester.getRect(find.byKey(_timeline));
+
+    clipboard.copyImage('clip-1', tinyPng);
+    await settle(tester);
+    final tile = tester.getRect(find.byKey(_card));
+    expect(tester.getRect(find.byKey(_field)), field);
+    expect(tester.getRect(find.byKey(_timeline)), timeline);
+    expect(tile.bottom, lessThanOrEqualTo(field.top - 8));
+    expect(tile.right, lessThanOrEqualTo(field.right));
+    expect(tile.overlaps(timeline), isTrue, reason: 'it hangs over the list');
+
+    await tester.tap(find.byKey(const Key('clipboard-image-offer-dismiss')));
+    await settle(tester);
+    expect(tester.getRect(find.byKey(_field)), field);
+    expect(tester.getRect(find.byKey(_timeline)), timeline);
+  });
+
+  testWidgets('the tile follows the composer when the keyboard opens', (
+    tester,
+  ) async {
     addTearDown(tester.view.reset);
     clipboard.copyImage('clip-1', tinyPng);
     await pumpComposer(tester);
     await focusField(tester);
-    expect(find.text('Tap the preview to add a caption'), findsNothing);
+    final gap =
+        tester.getTopLeft(find.byKey(_field)).dy -
+        tester.getBottomLeft(find.byKey(_card)).dy;
+    final before = tester.getTopLeft(find.byKey(_field)).dy;
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 900);
+    await settle(tester);
+    final after = tester.getTopLeft(find.byKey(_field)).dy;
+    expect(after, lessThan(before - 200));
     expect(
-      tester.getBottomLeft(find.text('Paste image from clipboard')).dy,
-      lessThan(tester.getTopLeft(find.byType(RawImage)).dy),
+      after - tester.getBottomLeft(find.byKey(_card)).dy,
+      moreOrLessEquals(gap),
     );
-    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a tap beside the tile reaches what is under it', (tester) async {
+    var taps = 0;
+    clipboard.copyImage('clip-1', tinyPng);
+    await pumpComposer(tester, onTimelineTap: () => taps++);
+    await focusField(tester);
+    final tile = tester.getRect(find.byKey(_card));
+
+    // Level with the tile, on the other side of the pane.
+    await tester.tapAt(Offset(40, tile.center.dy));
+    // In the tile's own box, but on the corner neither button covers.
+    await tester.tapAt(tile.topRight + const Offset(-4, 4));
+    expect(taps, 2);
+    expect(find.byKey(_card), findsOneWidget);
+    expect(attached, isEmpty);
+  });
+
+  testWidgets('the tile mirrors to the start edge in a right-to-left pane', (
+    tester,
+  ) async {
+    clipboard.copyImage('clip-1', tinyPng);
+    await pumpComposer(tester, rtl: true);
+    await focusField(tester);
+    final tile = tester.getRect(find.byKey(_card));
+    final field = tester.getRect(find.byKey(_field));
+    expect(tile.left, moreOrLessEquals(field.left));
+    expect(tile.bottom, lessThanOrEqualTo(field.top - 8));
   });
 
   testWidgets('both actions are full-size touch targets with labels', (
@@ -413,7 +487,9 @@ void main() {
     await pumpComposer(tester);
     await focusField(tester);
     for (final key in const ['dismiss', 'send', 'attach']) {
-      final size = tester.getSize(find.byKey(Key('clipboard-image-offer-$key')));
+      final size = tester.getSize(
+        find.byKey(Key('clipboard-image-offer-$key')),
+      );
       expect(size.width, greaterThanOrEqualTo(48), reason: key);
       expect(size.height, greaterThanOrEqualTo(48), reason: key);
     }

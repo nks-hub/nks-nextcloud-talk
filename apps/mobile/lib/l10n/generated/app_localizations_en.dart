@@ -298,9 +298,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clipboardImageOfferTitle => 'Paste image from clipboard';
 
   @override
-  String get clipboardImageOfferHint => 'Tap the preview to add a caption';
-
-  @override
   String get clipboardImageOfferAttach => 'Add the image to the message';
 
   @override

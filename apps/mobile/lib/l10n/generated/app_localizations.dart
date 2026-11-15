@@ -602,12 +602,6 @@ abstract class AppLocalizations {
   /// **'Paste image from clipboard'**
   String get clipboardImageOfferTitle;
 
-  /// No description provided for @clipboardImageOfferHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Tap the preview to add a caption'**
-  String get clipboardImageOfferHint;
-
   /// No description provided for @clipboardImageOfferAttach.
   ///
   /// In en, this message translates to:

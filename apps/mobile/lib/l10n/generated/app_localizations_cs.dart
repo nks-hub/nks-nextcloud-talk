@@ -301,9 +301,6 @@ class AppLocalizationsCs extends AppLocalizations {
   String get clipboardImageOfferTitle => 'Vložit obrázek ze schránky';
 
   @override
-  String get clipboardImageOfferHint => 'Klepnutím na náhled přidáte popisek';
-
-  @override
   String get clipboardImageOfferAttach => 'Přidat obrázek ke zprávě';
 
   @override

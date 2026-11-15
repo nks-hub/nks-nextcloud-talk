@@ -93,7 +93,6 @@
   "sendMessage": "Send message",
   "openEmojiPicker": "Open emoji picker",
   "clipboardImageOfferTitle": "Paste image from clipboard",
-  "clipboardImageOfferHint": "Tap the preview to add a caption",
   "clipboardImageOfferAttach": "Add the image to the message",
   "clipboardImageOfferDismiss": "Dismiss the clipboard image",
   "clipboardImageOfferSend": "Send the image",
