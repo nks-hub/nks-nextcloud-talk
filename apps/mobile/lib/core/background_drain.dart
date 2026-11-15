@@ -72,6 +72,81 @@ class BackgroundDrainSchedule {
   }
 }
 
+/// How long the process is kept reachable after the app was left with text
+/// still waiting to be sent.
+const unsentTextHoldWindow = Duration(minutes: 3);
+
+/// Keeps the process reachable for a while after the app is left with text
+/// waiting to be sent.
+///
+/// In battery saver Android cuts a background app off the network, so the
+/// scheduled wake never sees one and a message written in a tunnel waits for
+/// the app to be opened. A process holding a foreground service keeps its
+/// network, and its own retry timer and connectivity wake then deliver.
+///
+/// Bounded twice: released as soon as nothing is waiting, and after [window]
+/// at the latest, when [onWindowEnd] hands the rest to the scheduled wake.
+/// Only [paused] may take the hold. The platform refuses a service started
+/// once the app is in the background, so text admitted later is not held.
+final class UnsentTextHold {
+  UnsentTextHold({
+    required this.watchPending,
+    required this.hold,
+    required this.onWindowEnd,
+    this.window = unsentTextHoldWindow,
+  });
+
+  final Stream<bool> Function() watchPending;
+  final void Function(bool active) hold;
+  final void Function() onWindowEnd;
+  final Duration window;
+
+  StreamSubscription<bool>? _pending;
+  Timer? _windowEnd;
+  bool _held = false;
+  int _generation = 0;
+
+  /// The app left the screen.
+  void paused() {
+    _release();
+    final generation = _generation;
+    var first = true;
+    _pending = watchPending().listen((pending) {
+      if (generation != _generation) {
+        return;
+      }
+      if (first && pending) {
+        _held = true;
+        hold(true);
+        _windowEnd = Timer(window, () {
+          _release();
+          onWindowEnd();
+        });
+      } else if (!pending || !_held) {
+        _release();
+      }
+      first = false;
+    }, onError: (Object _) => _release());
+  }
+
+  /// The app is back in front, where sending needs no help.
+  void resumed() => _release();
+
+  void dispose() => _release();
+
+  void _release() {
+    _generation++;
+    unawaited(_pending?.cancel());
+    _pending = null;
+    _windowEnd?.cancel();
+    _windowEnd = null;
+    if (_held) {
+      _held = false;
+      hold(false);
+    }
+  }
+}
+
 /// How long one headless drain may take before the wake is rescheduled.
 ///
 /// Shorter than the window Android and iOS give a background job, so the app

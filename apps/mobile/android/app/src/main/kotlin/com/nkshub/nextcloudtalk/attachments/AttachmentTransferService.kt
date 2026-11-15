@@ -33,6 +33,46 @@ class AttachmentTransferService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val notification = notification(intent?.getBooleanExtra(EXTRA_WAITING, false) == true)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            running = this
+        } catch (error: RuntimeException) {
+            // Started from the background, or the daily dataSync budget is
+            // spent: the upload still runs, it just is not protected.
+            stopSelf(startId)
+        }
+        // Not sticky: without the Dart engine there is nothing to keep alive.
+        return START_NOT_STICKY
+    }
+
+    override fun onDestroy() {
+        if (running === this) {
+            running = null
+        }
+        super.onDestroy()
+    }
+
+    /** Changes what the running service says it is doing. */
+    fun show(waiting: Boolean) {
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, notification(waiting))
+    }
+
+    /**
+     * [waiting] is the state after the app was left with a message that
+     * cannot go out yet: nothing is being sent, the process only stays
+     * reachable for the moment it can be.
+     */
+    private fun notification(waiting: Boolean): Notification {
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
@@ -56,29 +96,20 @@ class AttachmentTransferService : Service() {
                 ),
             )
         }
-        val notification = builder
+        return builder
             .setSmallIcon(android.R.drawable.stat_sys_upload)
-            .setContentTitle(getString(R.string.attachment_upload_title))
+            .setContentTitle(
+                getString(
+                    if (waiting) {
+                        R.string.unsent_message_title
+                    } else {
+                        R.string.attachment_upload_title
+                    },
+                ),
+            )
             .setCategory(Notification.CATEGORY_PROGRESS)
             .setOngoing(true)
             .build()
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
-                )
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
-            }
-        } catch (error: RuntimeException) {
-            // Started from the background, or the daily dataSync budget is
-            // spent: the upload still runs, it just is not protected.
-            stopSelf(startId)
-        }
-        // Not sticky: without the Dart engine there is nothing to keep alive.
-        return START_NOT_STICKY
     }
 
     /** Android 15 caps dataSync; past it the service must leave on its own. */
@@ -88,6 +119,10 @@ class AttachmentTransferService : Service() {
 
     companion object {
         const val CHANNEL_NAME = "com.nkshub.nextcloudtalk/attachment_transfer"
+        const val EXTRA_WAITING = "waiting"
+
+        /** The service while it is in the foreground, main thread only. */
+        internal var running: AttachmentTransferService? = null
         private const val CHANNEL_ID = "attachment-upload"
         private const val NOTIFICATION_ID = 4111
     }
@@ -100,6 +135,16 @@ class AttachmentTransferChannel(private val context: Context) : MethodChannel.Me
         val intent = Intent(context, AttachmentTransferService::class.java)
         when (call.method) {
             "start" -> {
+                val waiting = call.argument<Boolean>("waiting") == true
+                intent.putExtra(AttachmentTransferService.EXTRA_WAITING, waiting)
+                val running = AttachmentTransferService.running
+                if (running != null) {
+                    // Already in the foreground: only its text changes, and a
+                    // second start from the background would be refused.
+                    running.show(waiting)
+                    result.success(null)
+                    return
+                }
                 runCatching {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         context.startForegroundService(intent)

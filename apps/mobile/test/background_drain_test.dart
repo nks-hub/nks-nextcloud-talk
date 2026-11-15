@@ -15,6 +15,7 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
+import 'package:nextcloudtalk/features/chat/attachment_transfer_keep_alive.dart';
 import 'package:nextcloudtalk/features/chat/chat_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -123,6 +124,93 @@ void main() {
         BackgroundDrainSchedule(channel: platform.channel).ensure(),
         completes,
       );
+    });
+  });
+
+  group('UnsentTextHold', () {
+    late StreamController<bool> pending;
+    late List<bool> held;
+    late int windowEnds;
+
+    UnsentTextHold holdWith({Duration window = const Duration(minutes: 3)}) {
+      final hold = UnsentTextHold(
+        watchPending: () => pending.stream,
+        hold: held.add,
+        onWindowEnd: () => windowEnds++,
+        window: window,
+      );
+      addTearDown(hold.dispose);
+      return hold;
+    }
+
+    setUp(() {
+      pending = StreamController<bool>.broadcast();
+      held = <bool>[];
+      windowEnds = 0;
+    });
+
+    tearDown(() => pending.close());
+
+    test('leaving with text waiting holds until it is delivered', () async {
+      final hold = holdWith();
+      expect(unsentTextHoldWindow, const Duration(minutes: 3));
+
+      hold.paused();
+      pending.add(true);
+      await pumpEventQueue();
+      expect(held, [true]);
+
+      pending.add(false);
+      await pumpEventQueue();
+      expect(held, [true, false]);
+      expect(windowEnds, 0, reason: 'nothing is left for the scheduled wake');
+    });
+
+    test('the hold ends with its window and hands over what is left', () async {
+      final hold = holdWith(window: const Duration(milliseconds: 40));
+
+      hold.paused();
+      pending.add(true);
+      await pumpEventQueue();
+      expect(held, [true]);
+
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      expect(held, [true, false]);
+      expect(windowEnds, 1);
+
+      // Still unsent, and still not held again in this stay in the background.
+      pending.add(true);
+      await pumpEventQueue();
+      expect(held, [true, false]);
+    });
+
+    test('leaving with an empty outbox never holds, whatever is written '
+        'afterwards', () async {
+      final hold = holdWith();
+
+      hold.paused();
+      pending.add(false);
+      await pumpEventQueue();
+      // A reply from a notification: the app is already in the background,
+      // where the platform would refuse the service.
+      pending.add(true);
+      await pumpEventQueue();
+
+      expect(held, isEmpty);
+      expect(windowEnds, 0);
+    });
+
+    test('coming back releases the hold', () async {
+      final hold = holdWith(window: const Duration(milliseconds: 40));
+
+      hold.paused();
+      pending.add(true);
+      await pumpEventQueue();
+      hold.resumed();
+      expect(held, [true, false]);
+
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      expect(windowEnds, 0, reason: 'the window went with the hold');
     });
   });
 
@@ -409,6 +497,90 @@ void main() {
       platform.runDrain();
       await pumpEventQueue(times: 200);
       expect(wakeRequests(), hasLength(1));
+    });
+
+    test('text waiting when the app is left keeps the process held, as '
+        'waiting, until a drain has delivered it', () async {
+      const transfer = MethodChannel('test/attachment_transfer');
+      final transferCalls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(transfer, (call) async {
+            transferCalls.add(call);
+            return null;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(transfer, null),
+      );
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(capabilitiesJson(talkFeatures: _talkFeatures.toList())),
+            200,
+          );
+        }
+        if (request.method == 'GET') {
+          return http.Response('', 304);
+        }
+        final fixture =
+            readFixtureJson(
+                  'chat-messages/fixtures/send-success.response.json',
+                )!
+                as Map<String, Object?>;
+        final data =
+            (fixture['ocs']! as Map<String, Object?>)['data']!
+                as Map<String, Object?>;
+        data['referenceId'] = request.bodyFields['referenceId'];
+        data['message'] = request.bodyFields['message'];
+        return http.Response(jsonEncode(fixture), 201);
+      });
+      addTearDown(client.close);
+      final api = HttpNextcloudApi(client: client);
+      addTearDown(api.close);
+      final container = ProviderContainer(
+        overrides: <Override>[
+          appDatabaseProvider.overrideWithValue(database),
+          credentialVaultProvider.overrideWithValue(credentials),
+          nextcloudApiProvider.overrideWithValue(api),
+          connectivityWakeEventsProvider.overrideWithValue(
+            const Stream<void>.empty(),
+          ),
+          appLifecycleResumeEventsProvider.overrideWithValue(
+            const Stream<void>.empty(),
+          ),
+          attachmentServiceProvider.overrideWith((ref) => attachments.future),
+          transferKeepAliveProvider.overrideWith((ref) {
+            final keepAlive = AttachmentTransferKeepAlive(
+              channel: transfer,
+              linger: Duration.zero,
+            );
+            ref.onDispose(keepAlive.dispose);
+            return keepAlive;
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+      container.read(outboxDrainProvider);
+      await pumpEventQueue(times: 200);
+      await queueOfflineSend();
+
+      leaveTheApp();
+      await pumpEventQueue(times: 200);
+      expect(transferCalls.map((call) => call.method), ['start']);
+      expect(transferCalls.single.arguments, {'waiting': true});
+
+      // The network is back, which the held process is told by itself.
+      platform.runDrain();
+      for (var i = 0; i < 100 && transferCalls.last.method != 'stop'; i++) {
+        await pumpEventQueue(times: 50);
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(
+        (await database.select(database.textSendOperations).getSingle())
+            .outboxState,
+        'completed',
+      );
+      expect(transferCalls.last.method, 'stop');
     });
 
     test('the app registers its wake with the platform on start', () async {

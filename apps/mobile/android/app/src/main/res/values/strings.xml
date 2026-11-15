@@ -10,4 +10,5 @@
     <string name="push_action_mark_read_failed">The conversation could not be marked as read. Tap to open it.</string>
     <string name="attachment_upload_channel">Sending messages and attachments</string>
     <string name="attachment_upload_title">Sending…</string>
+    <string name="unsent_message_title">Waiting to send a message</string>
 </resources>

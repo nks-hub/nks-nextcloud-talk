@@ -114,8 +114,24 @@ final outboxDrainProvider = Provider<void>((ref) {
       events.listen((_) => unawaited(drain())),
   ];
   final readers = chat.readerWakeEvents.listen((_) => unawaited(drain()));
+  final waitingHold = ref
+      .watch(transferKeepAliveProvider)
+      ?.holder(waiting: true);
+  final unsentHold = waitingHold == null
+      ? null
+      : UnsentTextHold(
+          watchPending: ref
+              .watch(chatRepositoryProvider)
+              .watchHasPendingTextSends,
+          hold: waitingHold,
+          onWindowEnd: () => unawaited(requestWakeForUnsentText(ref)),
+        );
   final leaving = AppLifecycleListener(
-    onPause: () => unawaited(requestWakeForUnsentText(ref)),
+    onPause: () {
+      unawaited(requestWakeForUnsentText(ref));
+      unsentHold?.paused();
+    },
+    onResume: unsentHold?.resumed,
   );
   final channel = ref.watch(backgroundDrainChannelProvider);
   channel.setMethodCallHandler((call) async {
@@ -131,6 +147,7 @@ final outboxDrainProvider = Provider<void>((ref) {
   ref.onDispose(() {
     channel.setMethodCallHandler(null);
     leaving.dispose();
+    unsentHold?.dispose();
     unawaited(readers.cancel());
     for (final wake in wakes) {
       unawaited(wake.cancel());

@@ -93,25 +93,7 @@ final class ChatRepository {
   Future<List<({String accountId, String roomToken})>>
   roomsWithPendingTextSends() async {
     final operations = _database.textSendOperations;
-    final rows =
-        await (_database.selectOnly(operations, distinct: true)
-              ..addColumns([operations.accountId, operations.roomToken])
-              ..where(
-                operations.outboxState.isIn(const [
-                      'queued',
-                      'retryable',
-                      'sending',
-                    ]) |
-                    (operations.outboxState.equals(
-                          TextSendOutboxState.awaitingConfirmation.name,
-                        ) &
-                        operations.nextAttemptAt.isNotNull() &
-                        operations.messageIdsJson.equals('[]') &
-                        operations.automaticResendCount.isSmallerThanValue(
-                          textSendMaximumAutomaticResends,
-                        )),
-              ))
-            .get();
+    final rows = await _pendingTextSendRooms().get();
     return [
       for (final row in rows)
         (
@@ -119,6 +101,27 @@ final class ChatRepository {
           roomToken: row.read(operations.roomToken)!,
         ),
     ];
+  }
+
+  /// Whether any room holds such a send, kept current.
+  Stream<bool> watchHasPendingTextSends() =>
+      _pendingTextSendRooms().watch().map((rows) => rows.isNotEmpty).distinct();
+
+  JoinedSelectStatement<HasResultSet, dynamic> _pendingTextSendRooms() {
+    final operations = _database.textSendOperations;
+    return _database.selectOnly(operations, distinct: true)
+      ..addColumns([operations.accountId, operations.roomToken])
+      ..where(
+        operations.outboxState.isIn(const ['queued', 'retryable', 'sending']) |
+            (operations.outboxState.equals(
+                  TextSendOutboxState.awaitingConfirmation.name,
+                ) &
+                operations.nextAttemptAt.isNotNull() &
+                operations.messageIdsJson.equals('[]') &
+                operations.automaticResendCount.isSmallerThanValue(
+                  textSendMaximumAutomaticResends,
+                )),
+      );
   }
 
   Stream<List<StoredOutgoingTextMessage>> watchOutgoingTextMessages({

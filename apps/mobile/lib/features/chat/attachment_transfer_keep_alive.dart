@@ -24,30 +24,41 @@ final class AttachmentTransferKeepAlive {
   final MethodChannel _channel;
   final Duration linger;
   final Set<Object> _holders = <Object>{};
+  final Set<Object> _waitingHolders = <Object>{};
   Timer? _stopTimer;
   bool _running = false;
+  bool _shownWaiting = false;
 
   /// A reporter of its own. The service runs while any holder is active, so
   /// one sender finishing does not release it under another.
-  void Function(bool active) holder() {
+  ///
+  /// A [waiting] holder sends nothing itself: it keeps the process reachable
+  /// for a message that cannot leave yet. The notification says so for as
+  /// long as nobody else is actually sending.
+  void Function(bool active) holder({bool waiting = false}) {
     final key = Object();
+    final holders = waiting ? _waitingHolders : _holders;
     return (active) {
       if (active) {
-        _holders.add(key);
+        holders.add(key);
       } else {
-        _holders.remove(key);
+        holders.remove(key);
       }
-      report(_holders.isNotEmpty);
+      report(_holders.isNotEmpty || _waitingHolders.isNotEmpty);
     };
   }
+
+  bool get _onlyWaiting => _holders.isEmpty && _waitingHolders.isNotEmpty;
 
   void report(bool active) {
     if (active) {
       _stopTimer?.cancel();
       _stopTimer = null;
-      if (!_running) {
+      // A running service takes `start` again as a change of its text.
+      if (!_running || _shownWaiting != _onlyWaiting) {
         _running = true;
-        unawaited(_invoke('start'));
+        _shownWaiting = _onlyWaiting;
+        unawaited(_invoke('start', {'waiting': _shownWaiting}));
       }
       return;
     }
@@ -70,9 +81,9 @@ final class AttachmentTransferKeepAlive {
     }
   }
 
-  Future<void> _invoke(String method) async {
+  Future<void> _invoke(String method, [Map<String, Object?>? arguments]) async {
     try {
-      await _channel.invokeMethod<void>(method);
+      await _channel.invokeMethod<void>(method, arguments);
     } on MissingPluginException {
       // Not Android, or no engine attached: nothing to keep alive.
     } on PlatformException {

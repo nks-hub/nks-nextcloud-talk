@@ -9,4 +9,5 @@
     <string name="push_action_mark_read_failed">Konverzaci se nepodařilo označit jako přečtenou. Klepnutím ji otevřete.</string>
     <string name="attachment_upload_channel">Odesílání zpráv a příloh</string>
     <string name="attachment_upload_title">Odesílám…</string>
+    <string name="unsent_message_title">Čekám na odeslání zprávy</string>
 </resources>
