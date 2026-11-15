@@ -519,6 +519,8 @@ final class ChatRepository {
         .go();
   }
 
+  /// The stored composer text of a room, unless the outbox already holds
+  /// it as a send made after it was stored; such a leftover is removed.
   Future<String?> readDraft({
     required String accountId,
     required String roomToken,
@@ -533,7 +535,38 @@ final class ChatRepository {
             ))
             .getSingleOrNull();
     final text = row?.draftText;
-    return text == null || text.isEmpty ? null : text;
+    if (row == null || text == null || text.isEmpty) {
+      return null;
+    }
+    // The draft is cleared after a send is admitted, in a write of its own.
+    // A process killed between the two leaves the text both in the outbox
+    // and here, one tap away from being sent twice. An outbox row with the
+    // same text that is not older than the draft is that send; a draft typed
+    // again after it is newer than the row and stays.
+    final sends = _database.textSendOperations;
+    final admitted =
+        await (_database.selectOnly(sends)
+              ..addColumns([sends.operationId])
+              ..where(
+                sends.accountId.equals(accountId) &
+                    sends.roomToken.equals(roomToken) &
+                    sends.message.equals(text) &
+                    sends.createdAtMillis.isBiggerOrEqualValue(
+                      row.updatedAtMillis,
+                    ),
+              )
+              ..limit(1))
+            .get();
+    if (admitted.isEmpty) {
+      return text;
+    }
+    await saveDraft(
+      accountId: accountId,
+      roomToken: roomToken,
+      threadId: threadId,
+      text: '',
+    );
+    return null;
   }
 
   /// Stores composer text that is not admitted to the outbox yet. Empty text

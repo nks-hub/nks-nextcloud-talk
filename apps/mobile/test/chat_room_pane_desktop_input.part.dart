@@ -179,6 +179,86 @@ void _registerChatRoomPaneDesktopInputTests() {
     await tester.pump(const Duration(milliseconds: 1));
   }, variant: TargetPlatformVariant.desktop());
 
+  for (final (name, sentAfterDraft, sentBeforeDraft) in const [
+    ('a draft whose send is already in the outbox', true, false),
+    ('a draft whose send never reached the outbox', false, false),
+    ('a draft typed again after the same text was sent', false, true),
+  ]) {
+    testWidgets(
+      '$name ${sentAfterDraft ? 'is not offered again' : 'is back in the field'}',
+      (tester) async {
+        // What a killed process leaves behind: the text of a send kept as the
+        // draft until its admission, and the outbox row if admission made it.
+        final drafts = ChatRepository(database);
+        await tester.runAsync(() async {
+          if (sentBeforeDraft) {
+            await _insertPendingOperation(
+              database,
+              account,
+              conversation,
+              operationId: 'op-earlier',
+              outboxState: 'completed',
+              message: 'kill-s1',
+            );
+          }
+          await drafts.saveDraft(
+            accountId: account.id,
+            roomToken: conversation.token,
+            text: 'kill-s1',
+          );
+          if (sentAfterDraft) {
+            await _insertPendingOperation(
+              database,
+              account,
+              conversation,
+              operationId: 'op-admitted',
+              outboxState: 'queued',
+              message: 'kill-s1',
+              createdAtMillis: DateTime.now().millisecondsSinceEpoch + 1000,
+            );
+          }
+        });
+
+        await pumpRoom(tester);
+        String composerText() => tester
+            .widget<TextField>(find.byKey(const Key('chat-composer')))
+            .controller!
+            .text;
+        await _pumpUntil(
+          tester,
+          () => sentAfterDraft
+              ? find
+                    .byKey(const Key('chat-pending-op-admitted'))
+                    .evaluate()
+                    .isNotEmpty
+              : composerText() == 'kill-s1',
+        );
+        // Room for a draft that should not come back to come back.
+        for (var i = 0; i < 20; i++) {
+          await tester.pump(const Duration(milliseconds: 10));
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 1)),
+          );
+        }
+
+        expect(composerText(), sentAfterDraft ? isEmpty : 'kill-s1');
+        if (sentAfterDraft) {
+          expect(find.text('kill-s1'), findsOneWidget);
+        }
+        final stored = await tester.runAsync(
+          () => database.select(database.chatDrafts).get(),
+        );
+        expect(stored!.map((row) => row.draftText), [
+          if (!sentAfterDraft) 'kill-s1',
+        ]);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(milliseconds: 1));
+      },
+      variant: TargetPlatformVariant.desktop(),
+    );
+  }
+
   testWidgets(
     'leaving straight after typing still keeps the draft',
     (tester) async {
