@@ -738,10 +738,24 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
 
   /// Watches the freshest cached row for this room, falling back to the
   /// snapshot the pane was constructed with until Drift emits its first row.
+  ///
+  /// Selects the one row: the provider carries every conversation of the
+  /// account, and watching it whole rebuilt the pane, composer included,
+  /// whenever any other room changed.
   CachedConversation _watchLiveConversation() {
-    return _resolveLiveConversation(
-      ref.watch(conversationsProvider(widget.account.id)).valueOrNull,
-    );
+    final token = widget.conversation.token;
+    return ref.watch(
+          conversationsProvider(widget.account.id).select((conversations) {
+            for (final conversation
+                in conversations.valueOrNull ?? const <CachedConversation>[]) {
+              if (conversation.token == token) {
+                return conversation;
+              }
+            }
+            return null;
+          }),
+        ) ??
+        widget.conversation;
   }
 
   /// Reads the same row for event-time admission checks. A sheet or menu can
