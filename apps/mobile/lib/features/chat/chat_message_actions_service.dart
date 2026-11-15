@@ -79,60 +79,80 @@ final class ChatMessageActionsService {
     required String roomToken,
     required int messageId,
     required String message,
-  }) async {
-    final context = await _resolve(accountId: accountId, roomToken: roomToken);
-    _requireWritable(context);
-    final request = _buildRequest(
-      () => RichChatRequest.editMessage(
-        accountId: AccountId.parse(accountId),
-        requestId: ChatRequestId.parse(_uuid.v4()),
-        server: context.server,
-        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
-        profile: context.profile,
-        messageId: messageId,
-        message: message,
-      ),
-    );
-    final response = await _send(
-      accountId: accountId,
-      context: context,
-      request: request,
-    );
-    await _applyParentMutation(
-      accountId: accountId,
-      context: context,
-      response: response,
-    );
-  }
+  }) => _optimistically(
+    accountId: accountId,
+    roomToken: roomToken,
+    messageId: messageId,
+    change: (current) =>
+        ChatMessage.fromJson({...current.wire, 'message': message}),
+    request: () async {
+      final context = await _resolve(
+        accountId: accountId,
+        roomToken: roomToken,
+      );
+      _requireWritable(context);
+      final request = _buildRequest(
+        () => RichChatRequest.editMessage(
+          accountId: AccountId.parse(accountId),
+          requestId: ChatRequestId.parse(_uuid.v4()),
+          server: context.server,
+          roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+          profile: context.profile,
+          messageId: messageId,
+          message: message,
+        ),
+      );
+      final response = await _send(
+        accountId: accountId,
+        context: context,
+        request: request,
+      );
+      await _applyParentMutation(
+        accountId: accountId,
+        context: context,
+        response: response,
+      );
+    },
+  );
 
   Future<void> deleteMessage({
     required String accountId,
     required String roomToken,
     required int messageId,
-  }) async {
-    final context = await _resolve(accountId: accountId, roomToken: roomToken);
-    _requireWritable(context);
-    final request = _buildRequest(
-      () => RichChatRequest.deleteMessage(
-        accountId: AccountId.parse(accountId),
-        requestId: ChatRequestId.parse(_uuid.v4()),
-        server: context.server,
-        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
-        profile: context.profile,
-        messageId: messageId,
-      ),
-    );
-    final response = await _send(
-      accountId: accountId,
-      context: context,
-      request: request,
-    );
-    await _applyParentMutation(
-      accountId: accountId,
-      context: context,
-      response: response,
-    );
-  }
+  }) => _optimistically(
+    accountId: accountId,
+    roomToken: roomToken,
+    messageId: messageId,
+    change: (current) =>
+        ChatMessage.fromJson({...current.wire, 'deleted': true}),
+    request: () async {
+      final context = await _resolve(
+        accountId: accountId,
+        roomToken: roomToken,
+      );
+      _requireWritable(context);
+      final request = _buildRequest(
+        () => RichChatRequest.deleteMessage(
+          accountId: AccountId.parse(accountId),
+          requestId: ChatRequestId.parse(_uuid.v4()),
+          server: context.server,
+          roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+          profile: context.profile,
+          messageId: messageId,
+        ),
+      );
+      final response = await _send(
+        accountId: accountId,
+        context: context,
+        request: request,
+      );
+      await _applyParentMutation(
+        accountId: accountId,
+        context: context,
+        response: response,
+      );
+    },
+  );
 
   /// Adds [reaction] on behalf of the current account. Adding a reaction the
   /// account already placed is a no-op server-side; toggling it off is
@@ -146,6 +166,8 @@ final class ChatMessageActionsService {
     accountId: accountId,
     roomToken: roomToken,
     messageId: messageId,
+    reaction: reaction,
+    add: true,
     build: (context, actor) => RichChatRequest.addReaction(
       accountId: AccountId.parse(accountId),
       requestId: ChatRequestId.parse(_uuid.v4()),
@@ -167,6 +189,8 @@ final class ChatMessageActionsService {
     accountId: accountId,
     roomToken: roomToken,
     messageId: messageId,
+    reaction: reaction,
+    add: false,
     build: (context, actor) => RichChatRequest.deleteReaction(
       accountId: AccountId.parse(accountId),
       requestId: ChatRequestId.parse(_uuid.v4()),
@@ -498,64 +522,152 @@ final class ChatMessageActionsService {
     );
   }
 
+  /// Runs [request] with [change] already written to the cache, so the
+  /// timeline answers the tap and not the server. A failed request puts the
+  /// previous message back and is reported exactly as before.
+  ///
+  /// [change] returns null when there is nothing to show ahead of the answer.
+  Future<void> _optimistically({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+    required ChatMessage? Function(ChatMessage current) change,
+    required Future<void> Function() request,
+  }) async {
+    ({ServerBase server, ChatMessage before, ChatMessage after})? local;
+    try {
+      final account = await _accounts.getAccount(accountId);
+      final cached = await _chat.getMessage(
+        accountId: accountId,
+        roomToken: roomToken,
+        messageId: messageId,
+      );
+      if (account != null && cached != null) {
+        final server = ServerBase.parse(account.serverUrl);
+        final before = ChatMessage.fromJson(jsonDecode(cached.rawJson));
+        final after = change(before);
+        if (after != null) {
+          await _chat.applyMessageMutation(
+            accountId: accountId,
+            server: server,
+            message: after,
+          );
+          local = (server: server, before: before, after: after);
+        }
+      }
+    } on TalkProtocolException {
+      // Nothing shown early; the request below still decides and reports.
+    } on FormatException {
+      // As above.
+    }
+    try {
+      await request();
+    } on Object {
+      if (local != null) {
+        final cached = await _chat.getMessage(
+          accountId: accountId,
+          roomToken: roomToken,
+          messageId: messageId,
+        );
+        // A row a sync replaced in the meantime is newer than either side.
+        if (cached != null && cached.rawJson == jsonEncode(local.after.wire)) {
+          await _chat.applyMessageMutation(
+            accountId: accountId,
+            server: local.server,
+            message: local.before,
+          );
+        }
+      }
+      rethrow;
+    }
+  }
+
   Future<void> _mutateReaction({
     required String accountId,
     required String roomToken,
     required int messageId,
+    required String reaction,
+    required bool add,
     required RichChatRequest Function(
       _MessageActionContext context,
       RichChatActorIdentity actor,
     )
     build,
-  }) async {
-    final context = await _resolve(accountId: accountId, roomToken: roomToken);
-    // Nextcloud Talk actor identities for a logged-in account are always
-    // `users`/loginName, matching the convention already used to detect the
-    // account's own messages elsewhere in the chat pane.
-    final actor = RichChatActorIdentity(
-      actorType: 'users',
-      actorId: context.account.loginName,
-    );
-    final request = _buildRequest(() => build(context, actor));
-    final response = await _send(
-      accountId: accountId,
-      context: context,
-      request: request,
-    );
-    final aggregate = response.reactionAggregate;
-    if (aggregate == null) {
-      throw const ChatMessageActionException(
-        ChatMessageActionError.invalidResponse,
+  }) => _optimistically(
+    accountId: accountId,
+    roomToken: roomToken,
+    messageId: messageId,
+    change: (current) {
+      if (current.reactionsSelf.contains(reaction) == add) {
+        return null;
+      }
+      final counts = Map.of(current.reactions);
+      final count = (counts[reaction] ?? 0) + (add ? 1 : -1);
+      if (count > 0) {
+        counts[reaction] = count;
+      } else {
+        counts.remove(reaction);
+      }
+      return current.withReactionAggregate(
+        reactions: counts,
+        reactionsSelf: add
+            ? [...current.reactionsSelf, reaction]
+            : current.reactionsSelf.where((own) => own != reaction),
       );
-    }
-    final cached = await _chat.getMessage(
-      accountId: accountId,
-      roomToken: roomToken,
-      messageId: messageId,
-    );
-    if (cached == null) {
-      throw const ChatMessageActionException(
-        ChatMessageActionError.messageMissing,
+    },
+    request: () async {
+      final context = await _resolve(
+        accountId: accountId,
+        roomToken: roomToken,
       );
-    }
-    final ChatMessage current;
-    try {
-      current = ChatMessage.fromJson(jsonDecode(cached.rawJson));
-    } on Object {
-      throw const ChatMessageActionException(
-        ChatMessageActionError.invalidResponse,
+      // Nextcloud Talk actor identities for a logged-in account are always
+      // `users`/loginName, matching the convention already used to detect the
+      // account's own messages elsewhere in the chat pane.
+      final actor = RichChatActorIdentity(
+        actorType: 'users',
+        actorId: context.account.loginName,
       );
-    }
-    final updated = current.withReactionAggregate(
-      reactions: aggregate.counts,
-      reactionsSelf: aggregate.reactionsSelf,
-    );
-    await _chat.applyMessageMutation(
-      accountId: accountId,
-      server: context.server,
-      message: updated,
-    );
-  }
+      final request = _buildRequest(() => build(context, actor));
+      final response = await _send(
+        accountId: accountId,
+        context: context,
+        request: request,
+      );
+      final aggregate = response.reactionAggregate;
+      if (aggregate == null) {
+        throw const ChatMessageActionException(
+          ChatMessageActionError.invalidResponse,
+        );
+      }
+      final cached = await _chat.getMessage(
+        accountId: accountId,
+        roomToken: roomToken,
+        messageId: messageId,
+      );
+      if (cached == null) {
+        throw const ChatMessageActionException(
+          ChatMessageActionError.messageMissing,
+        );
+      }
+      final ChatMessage current;
+      try {
+        current = ChatMessage.fromJson(jsonDecode(cached.rawJson));
+      } on Object {
+        throw const ChatMessageActionException(
+          ChatMessageActionError.invalidResponse,
+        );
+      }
+      final updated = current.withReactionAggregate(
+        reactions: aggregate.counts,
+        reactionsSelf: aggregate.reactionsSelf,
+      );
+      await _chat.applyMessageMutation(
+        accountId: accountId,
+        server: context.server,
+        message: updated,
+      );
+    },
+  );
 
   Future<void> _applyParentMutation({
     required String accountId,
@@ -703,12 +815,16 @@ final class ChatMessageActionsService {
     Object? talkLocalFeatures = const <Object?>[];
     var translationAvailable = false;
     CapabilitySnapshot? capabilities;
+    var capabilitiesAreFresh = false;
     try {
-      capabilities = await _api.getAuthenticatedCapabilities(
+      final read = await _api.getAuthenticatedCapabilitiesWithSource(
         server: server,
         loginName: account.loginName,
         appPassword: appPassword,
       );
+      capabilities = read.snapshot;
+      capabilitiesAreFresh =
+          read.source != CapabilitySnapshotSource.memoryCache;
     } on NextcloudApiException catch (error) {
       if (error.statusCode == 401) {
         await _chat.markReauthenticationRequired(accountId);
@@ -736,16 +852,19 @@ final class ChatMessageActionsService {
           ChatMessageActionError.talkUnavailable,
         );
       }
-      await _accounts.updateCapabilities(
-        accountId,
-        capabilities.talkFeatures,
-        serverThemeColor: capabilities.serverThemeColor,
-      );
-      await _chat.recordCapabilities(
-        accountId: accountId,
-        talkFeatures: capabilities.talkFeatures,
-        observedAt: DateTime.now().toUtc(),
-      );
+      // A snapshot served from memory was stored by the read that fetched it.
+      if (capabilitiesAreFresh) {
+        await _accounts.updateCapabilities(
+          accountId,
+          capabilities.talkFeatures,
+          serverThemeColor: capabilities.serverThemeColor,
+        );
+        await _chat.recordCapabilities(
+          accountId: accountId,
+          talkFeatures: capabilities.talkFeatures,
+          observedAt: DateTime.now().toUtc(),
+        );
+      }
       // `scheduled-messages` is only ever announced under `features-local`,
       // so passing an empty local set here would gate scheduling away on
       // every server that supports it.

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
@@ -653,6 +654,104 @@ void main() {
     expect(wire['reactions'], isEmpty);
     expect(wire['reactionsSelf'], isEmpty);
   });
+
+  // The timeline reads the cache, so what the cache holds while the request
+  // is still out is what the user sees after the tap.
+  for (final (name, act, shown)
+      in <
+        (
+          String,
+          Future<void> Function(ChatMessageActionsService),
+          void Function(CachedChatMessage),
+        )
+      >[
+        (
+          'a reaction',
+          (service) => service.addReaction(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            messageId: 5,
+            reaction: '👍',
+          ),
+          (row) {
+            final wire = jsonDecode(row.rawJson) as Map<String, Object?>;
+            expect(wire['reactions'], {'👍': 1});
+            expect(wire['reactionsSelf'], ['👍']);
+          },
+        ),
+        (
+          'an edit',
+          (service) => service.editMessage(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            messageId: 5,
+            message: 'Updated text',
+          ),
+          (row) => expect(row.displayText, 'Updated text'),
+        ),
+        (
+          'a delete',
+          (service) => service.deleteMessage(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            messageId: 5,
+          ),
+          (row) => expect(row.deleted, isTrue),
+        ),
+      ]) {
+    test('$name is cached before the server answers and undone when it '
+        'refuses', () async {
+      final requested = Completer<void>();
+      final answer = Completer<http.Response>();
+      final api = _api((request) {
+        if (request.url.path.endsWith('/capabilities')) {
+          return Future.value(
+            http.Response(
+              jsonEncode(
+                capabilitiesJson(
+                  talkFeatures: const [
+                    'chat-v2',
+                    'reactions',
+                    'edit-messages',
+                    'delete-messages',
+                  ],
+                ),
+              ),
+              200,
+            ),
+          );
+        }
+        requested.complete();
+        return answer.future;
+      });
+      addTearDown(api.close);
+      final service = ChatMessageActionsService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      Future<CachedChatMessage> row() async => (await chat.getMessage(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        messageId: 5,
+      ))!;
+      final before = await row();
+
+      final outcome = expectLater(
+        act(service),
+        throwsA(isA<ChatMessageActionException>()),
+      );
+      await requested.future;
+      shown(await row());
+
+      answer.complete(http.Response('{}', 500));
+      await outcome;
+      expect((await row()).rawJson, before.rawJson);
+      expect((await row()).deleted, before.deleted);
+      expect((await row()).displayText, before.displayText);
+    });
+  }
 
   test('an expired session is reported as reauthentication required', () async {
     final api = _api(
