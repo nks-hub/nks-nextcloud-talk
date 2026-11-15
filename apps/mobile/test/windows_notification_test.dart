@@ -62,11 +62,13 @@ void main() {
 
   Future<WindowsNotificationService> build({
     Future<List<Map<String, Object?>>?> Function(String, Future<void>)? fetch,
+    Duration listChangeInterval = const Duration(seconds: 10),
   }) async {
     final service = WindowsNotificationService(
       accounts: accounts,
       channel: WindowsNotificationChannel(channel: channel),
       fetchNotifications: fetch ?? (id, _) async => responses[id],
+      listChangeInterval: listChangeInterval,
     );
     addTearDown(service.dispose);
     await service.follow('account-a');
@@ -172,6 +174,41 @@ void main() {
 
     expect(fetches, 2);
     expect(shown, hasLength(1));
+  });
+
+  test('list changes in quick succession share one refresh', () async {
+    var fetches = 0;
+    await build(
+      fetch: (id, _) async {
+        fetches++;
+        return responses[id];
+      },
+      listChangeInterval: const Duration(milliseconds: 300),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    fetches = 0;
+
+    for (var write = 0; write < 4; write++) {
+      await database
+          .into(database.cachedConversations)
+          .insert(
+            CachedConversationsCompanion.insert(
+              accountId: 'account-a',
+              token: 'room$write',
+              displayName: 'Room',
+              description: '',
+              lastActivity: 20,
+              unreadMessages: 0,
+              favorite: false,
+              rawJson: '{}',
+            ),
+          );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+    expect(fetches, 0, reason: 'still inside the interval');
+
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    expect(fetches, 1);
   });
 
   test('a failed fetch neither notifies nor advances the baseline', () async {

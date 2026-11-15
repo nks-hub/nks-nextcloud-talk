@@ -158,6 +158,7 @@ final class WindowsNotificationService {
       Future<void> abortTrigger,
     )
     fetchNotifications,
+    this.listChangeInterval = const Duration(seconds: 10),
   }) : _accounts = accounts,
        _channel = channel,
        _fetchNotifications = fetchNotifications;
@@ -171,6 +172,11 @@ final class WindowsNotificationService {
   _fetchNotifications;
   final Map<String, _DesktopNotificationAccount> _watched = {};
 
+  /// The least time between two refreshes caused by the conversation list
+  /// changing. The list is rewritten by every poll, as often as every 5 s,
+  /// and each refresh is a request to the server.
+  final Duration listChangeInterval;
+
   WindowsNotificationChannel get channel => _channel;
 
   Future<void> follow(String accountId) {
@@ -180,7 +186,7 @@ final class WindowsNotificationService {
     account.subscription = _accounts
         .watchConversations(accountId)
         .listen(
-          (_) => unawaited(refresh(accountId)),
+          (_) => _refreshForListChange(accountId, account),
           onError: (Object _, StackTrace _) {},
         );
     // A room sync can arrive before the server stores its notification.
@@ -190,14 +196,40 @@ final class WindowsNotificationService {
     return refresh(accountId);
   }
 
+  /// Refreshes now if the last list-driven refresh is old enough, otherwise
+  /// once when it becomes so; changes in between share that one refresh.
+  void _refreshForListChange(
+    String accountId,
+    _DesktopNotificationAccount account,
+  ) {
+    if (account.listChangeTimer != null) {
+      return;
+    }
+    final since = account.sinceListRefresh;
+    final wait = since == null
+        ? Duration.zero
+        : listChangeInterval - since.elapsed;
+    if (wait <= Duration.zero) {
+      account.sinceListRefresh = Stopwatch()..start();
+      unawaited(refresh(accountId));
+      return;
+    }
+    account.listChangeTimer = Timer(wait, () {
+      account.listChangeTimer = null;
+      account.sinceListRefresh = Stopwatch()..start();
+      unawaited(refresh(accountId));
+    });
+  }
+
   Future<void> refresh(String accountId) {
     final account = _watched[accountId];
     if (account == null) return Future<void>.value();
     final running = account.refreshing;
     if (running == null) {
-      return account.refreshing = _refresh(accountId, account).whenComplete(
-        () => account.refreshing = null,
-      );
+      return account.refreshing = _refresh(
+        accountId,
+        account,
+      ).whenComplete(() => account.refreshing = null);
     }
     // The running round may already have read the list, so every trigger
     // that arrives meanwhile shares one more round right after it.
@@ -275,6 +307,7 @@ final class WindowsNotificationService {
     if (account == null) return;
     account.cancelled.complete();
     account.timer?.cancel();
+    account.listChangeTimer?.cancel();
     await account.subscription?.cancel();
   }
 
@@ -292,5 +325,7 @@ final class _DesktopNotificationAccount {
   Timer? timer;
   Future<void>? refreshing;
   Future<void>? queued;
+  Timer? listChangeTimer;
+  Stopwatch? sinceListRefresh;
   int? highestId;
 }
