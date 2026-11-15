@@ -132,16 +132,20 @@ final class _QuickEmojiHoldButtonState extends State<QuickEmojiHoldButton>
               type: MaterialType.transparency,
               child: AnimatedBuilder(
                 animation: _grow,
-                builder: (context, _) => Text(
-                  widget.emoji,
-                  key: const Key('quick-emoji-hold-preview'),
-                  textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize:
-                        _glyphSize +
-                        (enlargedEmojiFontSizeForStep(_maxStep) - _glyphSize) *
-                            _grow.value,
-                    height: 1,
+                // Snapped to the step a release would send, so the preview
+                // never shows a size other than the one that goes out.
+                builder: (context, _) => TweenAnimationBuilder<double>(
+                  tween: Tween(
+                    begin: _glyphSize,
+                    end: enlargedEmojiFontSizeForStep(_step),
+                  ),
+                  duration: const Duration(milliseconds: 150),
+                  curve: Curves.easeOut,
+                  builder: (context, fontSize, _) => Text(
+                    widget.emoji,
+                    key: const Key('quick-emoji-hold-preview'),
+                    textScaler: TextScaler.noScaling,
+                    style: TextStyle(fontSize: fontSize, height: 1),
                   ),
                 ),
               ),

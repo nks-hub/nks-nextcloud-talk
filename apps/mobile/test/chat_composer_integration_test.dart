@@ -22,6 +22,7 @@ import 'package:nextcloudtalk/features/conversations/conversation_presence.dart'
 import 'package:nextcloudtalk/features/chat/composer/chat_media_composer.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy_attachment.dart';
+import 'package:nextcloudtalk/features/chat/emoji_only_message.dart';
 import 'package:nextcloudtalk/features/chat/location_share_service.dart';
 import 'package:nextcloudtalk/features/chat/quick_emoji_hold_button.dart';
 import 'package:nextcloudtalk/features/owntalk_extensions/owntalk_room_extras.dart';

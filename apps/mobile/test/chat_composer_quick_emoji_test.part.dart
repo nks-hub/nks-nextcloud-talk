@@ -114,6 +114,35 @@ void _registerQuickEmojiComposerTests() {
     await _unmountComposer(tester);
   });
 
+  testWidgets('the hold preview shows the size that release would send', (
+    tester,
+  ) async {
+    final harness = await openQuickEmojiComposer(tester);
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const Key('send-quick-emoji'))),
+    );
+    await tester.pump(kLongPressTimeout);
+    await tester.pump(QuickEmojiHoldButton.growDuration * 0.4);
+    // Let the preview finish moving to the step it has reached.
+    await tester.pump(const Duration(milliseconds: 200));
+    final preview = find.byKey(const Key('quick-emoji-hold-preview'));
+    expect(
+      tester.widget<Text>(preview).style!.fontSize,
+      enlargedEmojiFontSizeForStep(2),
+    );
+    await gesture.up();
+    await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
+
+    expect(
+      ChatEmojiSizeReference.tryParse(
+        harness.chatSendFields.single['referenceId']!,
+      )?.step,
+      2,
+    );
+    await _unmountComposer(tester);
+  });
+
   testWidgets('dragging away while holding cancels the send', (tester) async {
     final harness = await openQuickEmojiComposer(tester);
 
