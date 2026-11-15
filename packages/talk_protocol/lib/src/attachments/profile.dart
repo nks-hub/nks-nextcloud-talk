@@ -64,12 +64,34 @@ final class AttachmentCapabilityProfile {
       }
     }
 
-    final features = snapshot.talkFeatures;
+    return AttachmentCapabilityProfile._fromFeatures(
+      snapshot.talkFeatures,
+      configAllows: attachmentsAllowed && conversationSubfolders,
+      federated: federated,
+    );
+  }
+
+  /// The profile of a server that cannot be asked right now.
+  ///
+  /// Only the feature list is stored with an account. The two attachment
+  /// switches live in the capability config, so they are taken as on; a
+  /// server that has one off refuses the folder probe and the job fails there.
+  factory AttachmentCapabilityProfile.fromStoredFeatures(
+    Iterable<String> features, {
+    required bool federated,
+  }) => AttachmentCapabilityProfile._fromFeatures(
+    features.toSet(),
+    configAllows: true,
+    federated: federated,
+  );
+
+  factory AttachmentCapabilityProfile._fromFeatures(
+    Set<String> features, {
+    required bool configAllows,
+    required bool federated,
+  }) {
     final enabled =
-        attachmentsAllowed &&
-        conversationSubfolders &&
-        features.contains('chat-reference-id') &&
-        !federated;
+        configAllows && features.contains('chat-reference-id') && !federated;
     return AttachmentCapabilityProfile._(
       federated: federated,
       enabled: enabled,

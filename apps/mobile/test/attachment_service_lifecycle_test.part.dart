@@ -51,6 +51,31 @@ void _registerAttachmentServiceLifecycleTests() {
     },
   );
 
+  test('an attachment admitted without a network stays queued as a durable '
+      'job', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final service = fixture.service(
+      MockClient((request) async {
+        throw http.ClientException('Synthetic offline');
+      }),
+    );
+    addTearDown(service.close);
+
+    final session = await service.enqueue(fixture.request(normalMaximum: 32));
+    final retryable = await session.events.firstWhere(
+      (event) => event.phase == AttachmentJobPhase.retryable,
+    );
+
+    expect(retryable.resumePhase, AttachmentJobPhase.localPrepared);
+    final stored = await fixture.repository.getStoredJob(
+      accountId: 'account-a',
+      jobId: session.jobId.value,
+    );
+    expect(stored, isNotNull);
+    expect(await fixture.sourceFile.exists(), isTrue);
+  });
+
   test(
     'chunk upload executes FIFO ranges and moves before finalizing',
     () async {

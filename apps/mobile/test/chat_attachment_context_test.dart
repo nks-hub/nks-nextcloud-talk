@@ -76,6 +76,75 @@ void main() {
     expect(request.policy, same(uploadPolicy));
   });
 
+  test(
+    'queues on the stored features when the server cannot be reached',
+    () async {
+      var online = true;
+      final api = _api((request) async {
+        if (!online) {
+          throw http.ClientException('Synthetic offline');
+        }
+        return http.Response(jsonEncode(_attachmentCapabilities()), 200);
+      });
+      addTearDown(api.close);
+      final resolver = _resolver(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+        uploadPolicy: uploadPolicy,
+      );
+      resolve() => resolver.resolve(
+        accountId: AccountId.parse('account-a'),
+        roomToken: _roomToken(),
+        source: _source(),
+        metadata: _metadata(),
+      );
+      final live = await resolve();
+
+      online = false;
+      final queued = await resolve();
+
+      expect(queued.profile.enabled, isTrue);
+      expect(queued.davUserId, live.davUserId);
+      expect(queued.credentialGeneration, live.credentialGeneration);
+      expect(queued.capabilityGeneration, live.capabilityGeneration);
+    },
+  );
+
+  test(
+    'refuses offline when nothing was ever stored for the account',
+    () async {
+      final api = _api((request) async {
+        throw http.ClientException('Synthetic offline');
+      });
+      addTearDown(api.close);
+      final resolver = _resolver(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+        uploadPolicy: uploadPolicy,
+      );
+
+      await expectLater(
+        resolver.resolve(
+          accountId: AccountId.parse('account-a'),
+          roomToken: _roomToken(),
+          source: _source(),
+          metadata: _metadata(),
+        ),
+        throwsA(
+          isA<ChatAttachmentContextException>().having(
+            (error) => error.code,
+            'code',
+            ChatAttachmentContextError.capabilitiesUnavailable,
+          ),
+        ),
+      );
+    },
+  );
+
   test('resolves a fresh voice capability profile before recording', () async {
     final api = _api(
       (_) async => http.Response(jsonEncode(_attachmentCapabilities()), 200),

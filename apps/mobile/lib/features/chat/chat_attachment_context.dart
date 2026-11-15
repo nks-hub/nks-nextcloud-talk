@@ -194,6 +194,13 @@ final class ChatAttachmentContextResolver {
           ChatAttachmentContextError.reauthenticationRequired,
         );
       }
+      // Without a network the attachment is queued like a text message, on
+      // what the last live read stored; the upload itself retries and wakes
+      // with connectivity.
+      final stored = await _storedAuthority(initial, accountId, server);
+      if (stored != null) {
+        return stored;
+      }
       throw const ChatAttachmentContextException(
         ChatAttachmentContextError.capabilitiesUnavailable,
       );
@@ -270,6 +277,46 @@ final class ChatAttachmentContextResolver {
       profile: profile,
       credentialGeneration: storedCapabilities.credentialGeneration,
       capabilityGeneration: storedCapabilities.generation,
+    );
+  }
+
+  Future<_ResolvedAttachmentAuthority?> _storedAuthority(
+    _LocalAttachmentContext context,
+    AccountId accountId,
+    ServerBase server,
+  ) async {
+    final List<String> features;
+    try {
+      final decoded = jsonDecode(context.account.talkFeaturesJson);
+      if (decoded is! List<Object?>) {
+        return null;
+      }
+      features = decoded.whereType<String>().toList();
+    } on FormatException {
+      return null;
+    }
+    final capability = await _chat.getReadyCapabilitySnapshot(accountId.value);
+    if (features.isEmpty || capability == null) {
+      return null;
+    }
+    await _verifyIdentity(context.account, accountId);
+    final DavUserId davUserId;
+    try {
+      davUserId = DavUserId.parse(context.account.loginName);
+    } on TalkProtocolException {
+      throw const ChatAttachmentContextException(
+        ChatAttachmentContextError.identityUnverified,
+      );
+    }
+    return _ResolvedAttachmentAuthority(
+      server: server,
+      davUserId: davUserId,
+      profile: AttachmentCapabilityProfile.fromStoredFeatures(
+        features,
+        federated: context.room.isFederated,
+      ),
+      credentialGeneration: capability.credentialGeneration,
+      capabilityGeneration: capability.generation,
     );
   }
 
