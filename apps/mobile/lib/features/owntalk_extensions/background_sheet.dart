@@ -268,12 +268,10 @@ final class _BackgroundSheetState extends State<_BackgroundSheet> {
     final presets = offeredChatWallpaperPresets(widget.capability.presets);
     return LayoutBuilder(
       builder: (context, box) {
-        const gap = 12.0;
-        final columns = (box.maxWidth / 130).floor().clamp(3, 6);
-        final width = (box.maxWidth - gap * (columns - 1)) / columns;
+        final (:columns, :width) = presetTileGrid(box.maxWidth);
         return Wrap(
-          spacing: gap,
-          runSpacing: gap,
+          spacing: _presetGap,
+          runSpacing: _presetGap,
           children: [
             for (final preset in presets)
               _PresetTile(
@@ -340,6 +338,18 @@ final class _BackgroundSheetState extends State<_BackgroundSheet> {
       ],
     );
   }
+}
+
+const _presetGap = 12.0;
+
+/// Column count and tile width for [maxWidth]. The width is floored so that
+/// rounding never pushes the last tile of a row onto the next run.
+@visibleForTesting
+({int columns, double width}) presetTileGrid(double maxWidth) {
+  final columns = (maxWidth / 130).floor().clamp(3, 6);
+  final width = ((maxWidth - _presetGap * (columns - 1)) / columns)
+      .floorToDouble();
+  return (columns: columns, width: width);
 }
 
 final class _PresetTile extends StatelessWidget {
