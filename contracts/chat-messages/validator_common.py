@@ -172,7 +172,7 @@ REQUIRED_OUTBOX_IDS = {
     "cross-room-reply-admission-rejected",
     "deterministic-rejection-fails",
     "duplicate-local-reference-rejects-admission",
-    "duplicate-reference-stays-ambiguous",
+    "duplicate-reference-completes-with-oldest",
     "http-confirmation-context-mismatch-rejected",
     "manual-resend-requires-duplicate-warning",
     "manual-resend-respects-scheduler",

@@ -103,17 +103,7 @@
           "accountId": "account-a",
           "operationId": "aaaaaaaa-0000-4000-8000-000000000034",
           "fixture": "duplicate-reference-id",
-          "expectedOutcome": "ambiguous-match",
-          "expectedAccountLane": "ready",
-          "expectedOperation": {
-            "state": "awaitingConfirmation",
-            "attemptCount": 1,
-            "messageIds": [
-              116,
-              117
-            ],
-            "duplicateRiskAcknowledged": false,
-            "errorClass": "multiple-reference-matches",
+          "expectedOutcome": "completed",          "expectedAccountLane": "ready",          "expectedOperation": {            "state": "completed",            "attemptCount": 1,            "messageIds": [              116            ],            "duplicateRiskAcknowledged": false,            "errorClass": null,
             "nextAttemptAt": null,
             "replyTo": null,
             "threadId": null,
@@ -129,14 +119,7 @@
           "expectedOutcome": "rejected",
           "expectedAccountLane": "ready",
           "expectedOperation": {
-            "state": "awaitingConfirmation",
-            "attemptCount": 1,
-            "messageIds": [
-              116,
-              117
-            ],
-            "duplicateRiskAcknowledged": false,
-            "errorClass": "multiple-reference-matches",
+            "state": "completed",            "attemptCount": 1,            "messageIds": [              116            ],            "duplicateRiskAcknowledged": false,            "errorClass": null,
             "nextAttemptAt": null,
             "replyTo": null,
             "threadId": null,

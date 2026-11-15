@@ -218,10 +218,11 @@ The admission rejects an unknown kind, a different revision or a missing capabil
 | The body may have been sent | awaitingConfirmation | No automatic POST |
 | A restart in sending | awaitingConfirmation | The process does not know the server outcome |
 | HTTP 400 `error=message` | awaitingConfirmation | The same code can also arise after the comment was saved |
-| HTTP 429 `error=mentions` | retryable | The error arises before the save; Retry-After or a local bounded backoff is used |
-| HTTP 5xx or another unclear OCS error | awaitingConfirmation | It does not prove that the save did not happen |
+| HTTP 429 or 503 | retryable | The request is refused before the save (rate limit, maintenance mode); Retry-After or a local bounded backoff is used |
+| HTTP 403, 404 or 412 | failed | Permission, missing room or actor, and the lobby refuse the request before the save |
+| Another HTTP 5xx or an unclear OCS error | awaitingConfirmation | It does not prove that the save did not happen |
 | One authoritative match | completed | The specific messageId is stored |
-| Several referenceId matches | awaitingConfirmation | All IDs and the ambiguity are preserved |
+| Several referenceId matches | completed | The lowest ID is the message; the copies come from a repeated ambiguous send and must not block the room |
 | A deterministic rejection | failed | The operation stays visible |
 | HTTP 401 | retryable + reauthRequired | Only that account is suspended |
 

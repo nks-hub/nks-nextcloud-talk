@@ -376,7 +376,7 @@ def classify_send_response(
     error_code = raw_data.get("error") if isinstance(raw_data, dict) else None
     if status == "401":
         return {"classification": "reauth", "messages": [], "messageId": None}
-    if status == "429" and error_code == "mentions":
+    if status in {"429", "503"}:
         raw_retry_after = lookup_header(headers, "Retry-After")
         retry_after_seconds = None
         if raw_retry_after is not None and DECIMAL_CURSOR.fullmatch(raw_retry_after):
@@ -391,8 +391,8 @@ def classify_send_response(
             "retryAfterSeconds": retry_after_seconds,
         }
     if (
-        (status in {"400", "403"} and error_code == "reply-to")
-        or (status == "404" and error_code == "actor")
+        status in {"403", "404", "412"}
+        or (status == "400" and error_code == "reply-to")
         or (status == "413" and error_code == "message")
     ):
         return {

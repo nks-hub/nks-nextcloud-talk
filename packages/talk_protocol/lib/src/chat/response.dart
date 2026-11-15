@@ -349,9 +349,7 @@ ChatRelayEvent decodeChatRelayEvent(
   if (entries.length > 200) {
     _responseFailure(r'$.chat.comments');
   }
-  final comments = entries
-      .map(ChatMessage.fromJson)
-      .toList(growable: false)
+  final comments = entries.map(ChatMessage.fromJson).toList(growable: false)
     ..sort((left, right) => left.messageId.compareTo(right.messageId));
   final ids = <int>{};
   for (final comment in comments) {
@@ -509,25 +507,31 @@ ChatSendResponse decodeChatSendResponse({
   ChatResponseHeaders? headers,
 }) {
   final responseHeaders = headers ?? ChatResponseHeaders.fromMap(const {});
-  final envelope = _decodeOcsEnvelope(body);
-  final errorCode = envelope.data is Map<String, Object?>
-      ? (envelope.data! as Map<String, Object?>)['error']
-      : null;
+  // Decided on the status alone, before the body is parsed: these answers come
+  // from in front of the controller (authentication, permission, lobby, rate
+  // limit, maintenance mode), often without an OCS body, and none of them
+  // stored the message.
   if (statusCode == 401) {
     return _sendResult(
       request,
       ChatSendClassification.reauthenticationRequired,
     );
   }
-  if (statusCode == 429 && errorCode == 'mentions') {
+  if (statusCode == 429 || statusCode == 503) {
     return _sendResult(
       request,
       ChatSendClassification.rateLimited,
       retryAfterSeconds: responseHeaders.retryAfterSeconds,
     );
   }
-  if ((<int>{400, 403}.contains(statusCode) && errorCode == 'reply-to') ||
-      (statusCode == 404 && errorCode == 'actor') ||
+  if (const <int>{403, 404, 412}.contains(statusCode)) {
+    return _sendResult(request, ChatSendClassification.deterministicFailure);
+  }
+  final envelope = _decodeOcsEnvelope(body);
+  final errorCode = envelope.data is Map<String, Object?>
+      ? (envelope.data! as Map<String, Object?>)['error']
+      : null;
+  if ((statusCode == 400 && errorCode == 'reply-to') ||
       (statusCode == 413 && errorCode == 'message')) {
     return _sendResult(request, ChatSendClassification.deterministicFailure);
   }

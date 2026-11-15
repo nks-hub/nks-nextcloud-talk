@@ -286,6 +286,71 @@ void main() {
     }
   });
 
+  group('chat send status classification', () {
+    final request = _sendRequest('send-status', const <String, Object?>{
+      'roomToken': 'rooma123',
+      'referenceId': '11111111-1111-4111-8111-111111111111',
+    });
+    ChatSendClassification classify(int statusCode, String body) =>
+        decodeChatSendResponse(
+          request: request,
+          statusCode: statusCode,
+          body: Uint8List.fromList(utf8.encode(body)),
+        ).classification;
+    const proxyPage = '<html>Service unavailable</html>';
+    String ocsFailure(int statusCode) => jsonEncode({
+      'ocs': {
+        'meta': {'status': 'failure', 'statuscode': statusCode, 'message': ''},
+        'data': <Object?>[],
+      },
+    });
+
+    test('a refusal before the save needs no OCS body', () {
+      expect(
+        classify(401, proxyPage),
+        ChatSendClassification.reauthenticationRequired,
+      );
+      for (final statusCode in [403, 404, 412]) {
+        expect(
+          classify(statusCode, proxyPage),
+          ChatSendClassification.deterministicFailure,
+          reason: '$statusCode',
+        );
+        expect(
+          classify(statusCode, ocsFailure(statusCode)),
+          ChatSendClassification.deterministicFailure,
+          reason: '$statusCode',
+        );
+      }
+      for (final statusCode in [429, 503]) {
+        expect(
+          classify(statusCode, proxyPage),
+          ChatSendClassification.rateLimited,
+          reason: '$statusCode',
+        );
+      }
+    });
+
+    test('an answer that may follow the save stays ambiguous', () {
+      for (final statusCode in [500, 502, 504]) {
+        expect(
+          classify(statusCode, ocsFailure(statusCode)),
+          ChatSendClassification.serverError,
+          reason: '$statusCode',
+        );
+        expect(
+          () => classify(statusCode, proxyPage),
+          throwsA(isA<TalkProtocolException>()),
+          reason: '$statusCode',
+        );
+      }
+      expect(
+        () => classify(201, proxyPage),
+        throwsA(isA<TalkProtocolException>()),
+      );
+    });
+  });
+
   group('chat request manifest fixtures', () {
     final fixtures = manifestFixtures.where(
       (fixture) => fixture['direction'] == 'request',

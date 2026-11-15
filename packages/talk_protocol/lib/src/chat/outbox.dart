@@ -664,7 +664,9 @@ _Reconciliation _reconcileOperation(
           .toList()
         ..sort();
   if (operation.state == TextSendOutboxState.completed) {
-    if (matches.isEmpty || _sameIds(operation.messageIds, matches)) {
+    if (matches.isEmpty ||
+        (operation.messageIds.length == 1 &&
+            operation.messageIds.single == matches.first)) {
       return const _Reconciliation(ChatOutboxOutcome.unchanged, null);
     }
     return const _Reconciliation(
@@ -675,22 +677,14 @@ _Reconciliation _reconcileOperation(
   if (matches.isEmpty) {
     return const _Reconciliation(ChatOutboxOutcome.unchanged, null);
   }
-  if (matches.length > 1) {
-    return _Reconciliation(
-      ChatOutboxOutcome.ambiguousMatch,
-      operation.copyWith(
-        state: TextSendOutboxState.awaitingConfirmation,
-        messageIds: matches,
-        errorClass: 'multiple-reference-matches',
-        nextAttemptAt: null,
-      ),
-    );
-  }
   return _Reconciliation(
     ChatOutboxOutcome.completed,
     operation.copyWith(
       state: TextSendOutboxState.completed,
-      messageIds: matches,
+      // Several server copies carry this reference when an ambiguous send was
+      // repeated. The oldest one is the message; holding out for a single
+      // match would leave the operation, and the room behind it, stuck.
+      messageIds: <int>[matches.first],
       errorClass: null,
       nextAttemptAt: null,
     ),
@@ -888,18 +882,6 @@ _OperationBinding? _operation(
   return account == null || operation == null
       ? null
       : _OperationBinding(account, operation);
-}
-
-bool _sameIds(List<int> left, List<int> right) {
-  if (left.length != right.length) {
-    return false;
-  }
-  for (var index = 0; index < left.length; index++) {
-    if (left[index] != right[index]) {
-      return false;
-    }
-  }
-  return true;
 }
 
 Never _outboxFailure(String path) =>

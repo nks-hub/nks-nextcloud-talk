@@ -498,7 +498,7 @@
       ]
     },
     {
-      "id": "duplicate-reference-stays-ambiguous",
+      "id": "duplicate-reference-completes-with-oldest",
       "initialAccounts": {
         "account-a": {
           "laneState": "ready",
@@ -523,17 +523,7 @@
           "accountId": "account-a",
           "operationId": "aaaaaaaa-0000-4000-8000-000000000011",
           "fixture": "duplicate-reference-id",
-          "expectedOutcome": "ambiguous-match",
-          "expectedAccountLane": "ready",
-          "expectedOperation": {
-            "state": "awaitingConfirmation",
-            "attemptCount": 1,
-            "messageIds": [
-              116,
-              117
-            ],
-            "duplicateRiskAcknowledged": false,
-            "errorClass": "multiple-reference-matches",
+          "expectedOutcome": "completed",          "expectedAccountLane": "ready",          "expectedOperation": {            "state": "completed",            "attemptCount": 1,            "messageIds": [              116            ],            "duplicateRiskAcknowledged": false,            "errorClass": null,
             "nextAttemptAt": null,
             "replyTo": null,
             "threadId": null,

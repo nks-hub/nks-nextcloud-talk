@@ -304,19 +304,13 @@ def apply_authoritative_messages(
         if authoritative_message_matches_operation(message, operation)
     )
     if operation["state"] == "completed":
-        if not matches or operation["messageIds"] == matches:
+        if not matches or operation["messageIds"] == matches[:1]:
             return "unchanged"
         return "conflict-after-completion"
     if len(matches) == 0:
         return "unchanged"
-    if len(matches) > 1:
-        operation["state"] = "awaitingConfirmation"
-        operation["messageIds"] = matches
-        operation["errorClass"] = "multiple-reference-matches"
-        operation["nextAttemptAt"] = None
-        return "ambiguous-match"
     operation["state"] = "completed"
-    operation["messageIds"] = matches
+    operation["messageIds"] = matches[:1]
     operation["errorClass"] = None
     operation["nextAttemptAt"] = None
     return "completed"
