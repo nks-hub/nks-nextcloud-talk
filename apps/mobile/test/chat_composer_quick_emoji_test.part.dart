@@ -147,7 +147,7 @@ void _registerQuickEmojiComposerTests() {
       'size from the first frame', (tester) async {
     final harness = await openQuickEmojiComposer(tester);
     final hold = Completer<void>();
-    harness.capabilitiesHold.add(hold);
+    harness.admissionHold.add(hold);
     addTearDown(() {
       if (!hold.isCompleted) hold.complete();
     });

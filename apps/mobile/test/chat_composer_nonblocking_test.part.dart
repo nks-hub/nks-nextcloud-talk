@@ -189,11 +189,11 @@ void _registerNonBlockingComposerTests() {
         tester,
         () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
       );
-      // Admission starts with a capabilities read against the server. Held,
-      // the first line never reaches the outbox, which is what a slow link
-      // looks like to the composer.
+      // Admission starts with a read of the stored password. Held, the first
+      // line never reaches the outbox, which is what a slow device looks like
+      // to the composer. The server is not asked before the write any more.
       final hold = Completer<void>();
-      harness.capabilitiesHold.add(hold);
+      harness.admissionHold.add(hold);
       addTearDown(() {
         if (!hold.isCompleted) hold.complete();
       });
@@ -318,7 +318,7 @@ void _registerNonBlockingComposerTests() {
       expect(find.byKey(const Key('chat-reply-banner')), findsOneWidget);
 
       final hold = Completer<void>();
-      harness.capabilitiesHold.add(hold);
+      harness.admissionHold.add(hold);
       addTearDown(() {
         if (!hold.isCompleted) hold.complete();
       });
@@ -346,6 +346,8 @@ void _registerNonBlockingComposerTests() {
       // and not another reply to the same one.
       expect(rows.map((row) => row.message), ['answer', 'follow-up']);
       expect(rows.map((row) => row.replyTo), [109, null]);
+      // The request follows the write; it no longer comes before it.
+      await _pumpUntil(tester, () => harness.chatSendFields.isNotEmpty);
       expect(harness.chatSendFields.first['replyTo'], '109');
       expect(tester.takeException(), isNull);
       await _unmountComposer(tester);
@@ -365,7 +367,7 @@ void _registerNonBlockingComposerTests() {
         () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
       );
       final hold = Completer<void>();
-      harness.capabilitiesHold.add(hold);
+      harness.admissionHold.add(hold);
       addTearDown(() {
         if (!hold.isCompleted) hold.complete();
       });
@@ -436,8 +438,8 @@ void _registerNonBlockingComposerTests() {
         () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
       );
       final hold = Completer<void>();
-      harness.capabilitiesHold.add(hold);
-      harness.capabilitiesStatus.add(404);
+      harness.admissionHold.add(hold);
+      harness.admissionRefused = true;
       addTearDown(() {
         if (!hold.isCompleted) hold.complete();
       });
@@ -474,8 +476,8 @@ void _registerNonBlockingComposerTests() {
         () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
       );
       final hold = Completer<void>();
-      harness.capabilitiesHold.add(hold);
-      harness.capabilitiesStatus.add(404);
+      harness.admissionHold.add(hold);
+      harness.admissionRefused = true;
       addTearDown(() {
         if (!hold.isCompleted) hold.complete();
       });
@@ -520,7 +522,7 @@ void _registerNonBlockingComposerTests() {
         () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
       );
       final hold = Completer<void>();
-      harness.capabilitiesHold.add(hold);
+      harness.admissionHold.add(hold);
       addTearDown(() {
         if (!hold.isCompleted) hold.complete();
       });

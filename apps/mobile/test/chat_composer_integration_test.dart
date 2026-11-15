@@ -16,6 +16,7 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/attachment_repository.dart';
+import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
@@ -520,8 +521,6 @@ final class _ComposerHarness {
     required this.chatSendFields,
     required this.attachmentUploadStarted,
     required this.chatSendHold,
-    required this.capabilitiesHold,
-    required this.capabilitiesStatus,
     required this.chatSendFailures,
     required this.attachmentUploadHold,
     required this.sourceStore,
@@ -551,10 +550,16 @@ final class _ComposerHarness {
   /// While one of these is pending, the matching fixture request stays open, so
   /// a test can look at the composer with a send still on the wire.
   final List<Completer<void>> chatSendHold;
-  final List<Completer<void>> capabilitiesHold;
 
-  /// When not empty, the capabilities request is answered with this status.
-  final List<int> capabilitiesStatus;
+  /// While not empty, every read of the stored password waits for the first
+  /// of these. A send is admitted only after such a read, so this is what a
+  /// slow admission looks like.
+  final List<Completer<void>> admissionHold = <Completer<void>>[];
+
+  /// Whether a password read finds nothing, which refuses the admission that
+  /// asked for it.
+  bool admissionRefused = false;
+
   final List<Completer<void>> attachmentUploadHold;
 
   /// Messages whose send request dies on the wire instead of being answered.
@@ -609,8 +614,6 @@ final class _ComposerHarness {
     final chatSendFields = <Map<String, String>>[];
     final attachmentUploadStarted = <int>[];
     final chatSendHold = <Completer<void>>[];
-    final capabilitiesHold = <Completer<void>>[];
-    final capabilitiesStatus = <int>[];
     final chatSendFailures = <String>{};
     final attachmentUploadHold = <Completer<void>>[];
     final uploadedAttachments = <List<int>>[];
@@ -661,8 +664,9 @@ final class _ComposerHarness {
     );
     await attachmentService.ready;
     final api = HttpNextcloudApi(
-      // No snapshot outlives its read, so a held capabilities answer still
-      // holds an admission the way a cold cache on a slow link does.
+      // No snapshot outlives its read, so every send here is admitted the way
+      // a cold start admits it: from the stored capabilities, with the server
+      // asked afterwards.
       capabilityCacheTtl: Duration.zero,
       client: MockClient((request) async {
         if (ownTalk != null &&
@@ -670,12 +674,6 @@ final class _ComposerHarness {
           return ownTalk.handle(request);
         }
         if (request.url.path.endsWith('/cloud/capabilities')) {
-          if (capabilitiesHold.isNotEmpty) {
-            await capabilitiesHold.first.future;
-          }
-          if (capabilitiesStatus.isNotEmpty) {
-            return http.Response('', capabilitiesStatus.first);
-          }
           final capabilities = _attachmentCapabilities();
           if (ownTalk != null) {
             (((capabilities['ocs']! as Map<String, Object?>)['data']!
@@ -732,8 +730,6 @@ final class _ComposerHarness {
       chatSendFields: chatSendFields,
       attachmentUploadStarted: attachmentUploadStarted,
       chatSendHold: chatSendHold,
-      capabilitiesHold: capabilitiesHold,
-      capabilitiesStatus: capabilitiesStatus,
       chatSendFailures: chatSendFailures,
       attachmentUploadHold: attachmentUploadHold,
       sourceStore: sourceStore,
@@ -782,7 +778,7 @@ final class _ComposerHarness {
     return ProviderScope(
       overrides: <Override>[
         appDatabaseProvider.overrideWithValue(database),
-        credentialVaultProvider.overrideWithValue(vault),
+        credentialVaultProvider.overrideWithValue(_GatedVault(this)),
         nextcloudApiProvider.overrideWithValue(api),
         attachmentSourceProvider.overrideWith((ref) async => sourceStore),
         attachmentServiceProvider.overrideWith(
@@ -1002,6 +998,31 @@ String _giphyResponse() => jsonEncode(<String, Object?>{
     },
   },
 });
+
+/// The harness vault behind the gates a test may close on admission.
+final class _GatedVault implements CredentialVault {
+  _GatedVault(this._harness);
+
+  final _ComposerHarness _harness;
+
+  @override
+  Future<String?> readAppPassword(String accountId) async {
+    if (_harness.admissionHold.isNotEmpty) {
+      await _harness.admissionHold.first.future;
+    }
+    return _harness.admissionRefused
+        ? null
+        : _harness.vault.readAppPassword(accountId);
+  }
+
+  @override
+  Future<void> writeAppPassword(String accountId, String appPassword) =>
+      _harness.vault.writeAppPassword(accountId, appPassword);
+
+  @override
+  Future<void> deleteAppPassword(String accountId) =>
+      _harness.vault.deleteAppPassword(accountId);
+}
 
 final class _ControlledGiphyClient extends http.BaseClient {
   final requestStarted = Completer<void>();
