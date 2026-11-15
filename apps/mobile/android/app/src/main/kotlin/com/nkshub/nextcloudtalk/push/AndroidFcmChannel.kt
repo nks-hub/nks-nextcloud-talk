@@ -212,6 +212,7 @@ internal class AndroidFcmChannel(private val context: Context) :
         internal const val FIRST_INSTALL_RESET_COMPLETE = "firstInstallResetComplete"
         private val ACCOUNT_ID = Regex("^[0-9a-fA-F-]{1,64}$")
         private val listeners = CopyOnWriteArrayList<(String) -> Unit>()
+        private val messageListeners = CopyOnWriteArrayList<(String) -> Unit>()
         private val resetLock = Any()
         private var sharedFirstInstallReset: FirstInstallFcmTokenReset? = null
 
@@ -221,6 +222,25 @@ internal class AndroidFcmChannel(private val context: Context) :
 
         fun detach(listener: (String) -> Unit) {
             listeners.remove(listener)
+        }
+
+        fun attachMessages(listener: (String) -> Unit) {
+            messageListeners.add(listener)
+        }
+
+        fun detachMessages(listener: (String) -> Unit) {
+            messageListeners.remove(listener)
+        }
+
+        /**
+         * Tells a running app that [accountId] just received a push, so it
+         * syncs now instead of at its next poll. Nobody listens while no
+         * Flutter engine is attached, and then this does nothing.
+         */
+        fun messageReceived(accountId: String) {
+            for (listener in messageListeners) {
+                listener(accountId)
+            }
         }
 
         fun tokenRefreshed(token: String) {
@@ -309,6 +329,7 @@ class NksFirebaseMessagingService : FirebaseMessagingService() {
         // shared rather than reimplemented.
         val payload = AndroidWebPushPayloadParser.parse(plaintext, decrypted = true)
         AndroidSystemNotifications.apply(applicationContext, accountId, payload)
+        AndroidFcmChannel.messageReceived(accountId)
     }
 
     private companion object {

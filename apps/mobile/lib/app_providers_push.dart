@@ -203,7 +203,20 @@ final androidPushRegistrationCoordinatorProvider =
         tokenHandlePrefix: 'fcm-token',
         pushProvider: PushGatewayProvider.fcm,
       );
-      final fcm = AndroidFcmChannel(onToken: coordinator.installToken);
+      final fcm = AndroidFcmChannel(
+        onToken: coordinator.installToken,
+        // The native side only shows the notification; without this the
+        // list and badges would wait for the next poll.
+        onPushReceived: (accountId) => unawaited(
+          ref
+              .read(conversationSyncServiceProvider)
+              .sync(accountId)
+              .catchError(
+                (Object _, StackTrace _) {},
+                test: (error) => error is ConversationSyncException,
+              ),
+        ),
+      );
       var fcmDisposed = false;
       Future<void>? fcmStart;
       void startFcm() {
@@ -276,6 +289,24 @@ final androidPushRegistrationCoordinatorProvider =
         startFcm();
       }, fireImmediately: true);
       return coordinator;
+    });
+
+/// Tells Android which account and room are on screen, or nulls for none, so
+/// it does not raise a notification for a message the user is reading.
+final androidOpenRoomReporterProvider =
+    Provider<void Function(String? accountId, String? roomToken)>((ref) {
+      if (!Platform.isAndroid) {
+        return (_, _) {};
+      }
+      const channel = MethodChannel(AndroidWebPushBridge.channelName);
+      return (accountId, roomToken) => unawaited(
+        channel
+            .invokeMethod<void>('setOpenRoom', <String, Object?>{
+              'accountId': accountId,
+              'roomToken': roomToken,
+            })
+            .catchError((Object _) {}),
+      );
     });
 
 Future<void> _startAndroidFcmWithRetry(

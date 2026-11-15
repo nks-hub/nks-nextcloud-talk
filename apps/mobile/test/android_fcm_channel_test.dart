@@ -56,6 +56,33 @@ void main() {
     expect(tokens, ['single-flight-token']);
   });
 
+  test('a delivered push reports its account while the app runs', () async {
+    final accounts = <String>[];
+    final tokens = <String>[];
+    final bridge = AndroidFcmChannel(
+      channel: channel,
+      onToken: tokens.add,
+      onPushReceived: accounts.add,
+    );
+    addTearDown(bridge.dispose);
+
+    Future<void> fromNative(String method, Object? argument) async {
+      await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .handlePlatformMessage(
+            channel.name,
+            channel.codec.encodeMethodCall(MethodCall(method, argument)),
+            (_) {},
+          );
+    }
+
+    await fromNative('pushReceived', 'account-a');
+    await fromNative('pushReceived', '');
+    await fromNative('pushReceived', 7);
+
+    expect(accounts, ['account-a']);
+    expect(tokens, isEmpty);
+  });
+
   test('dispose suppresses a token that arrives after teardown', () async {
     final token = Completer<String>();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

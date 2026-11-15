@@ -68,6 +68,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   var _handlingApplePushOpen = false;
   var _handlingWindowsPushOpen = false;
   var _handlingDeepLink = false;
+  ({String accountId, String roomToken})? _reportedOpenRoom;
 
   @override
   void initState() {
@@ -466,8 +467,37 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     }
   }
 
+  /// Keeps the platform's "room on screen" in step with what is shown, so a
+  /// push for that room raises no notification.
+  void _reportOpenRoom({required bool onScreen}) {
+    final accountId = _selectedAccountId;
+    final roomToken = _selectedConversationToken;
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    final open =
+        onScreen &&
+            accountId != null &&
+            roomToken != null &&
+            (lifecycle == null || lifecycle == AppLifecycleState.resumed)
+        ? (accountId: accountId, roomToken: roomToken)
+        : null;
+    if (open == _reportedOpenRoom) {
+      return;
+    }
+    _reportedOpenRoom = open;
+    ref.read(androidOpenRoomReporterProvider)(open?.accountId, open?.roomToken);
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (mounted) {
+      // Android forgets the room when the activity stops, so leaving and
+      // coming back both have to pass through here.
+      _reportOpenRoom(
+        onScreen:
+            state == AppLifecycleState.resumed &&
+            ModalRoute.isCurrentOf(context) != false,
+      );
+    }
     final allowed = shouldRunForegroundSync(state);
     if (_liveSyncAllowed == allowed) {
       return;
@@ -581,9 +611,13 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
       data: (selected) {
         if (selected == null) {
           _clearSelectedAccount();
+          _reportOpenRoom(onScreen: false);
           return const OnboardingScreen();
         }
         _scheduleInitialSync(selected);
+        // Depends on the route, so a screen pushed over the chat rebuilds
+        // this and the room stops counting as on screen.
+        _reportOpenRoom(onScreen: ModalRoute.isCurrentOf(context) != false);
         final accounts = accountsValue.valueOrNull ?? [selected];
         final conversationsValue = ref.watch(
           conversationsProvider(selected.id),

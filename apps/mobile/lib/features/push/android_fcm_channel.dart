@@ -12,9 +12,13 @@ import 'package:flutter/services.dart';
 /// bridges; the registration itself happens in
 /// `push_registration_coordinator.dart`.
 final class AndroidFcmChannel {
-  AndroidFcmChannel({MethodChannel? channel, void Function(String)? onToken})
-    : _channel = channel ?? const MethodChannel(channelName),
-      _onToken = onToken {
+  AndroidFcmChannel({
+    MethodChannel? channel,
+    void Function(String)? onToken,
+    void Function(String accountId)? onPushReceived,
+  }) : _channel = channel ?? const MethodChannel(channelName),
+       _onToken = onToken,
+       _onPushReceived = onPushReceived {
     _channel.setMethodCallHandler(_handleNativeCall);
   }
 
@@ -22,6 +26,10 @@ final class AndroidFcmChannel {
 
   final MethodChannel _channel;
   final void Function(String)? _onToken;
+
+  /// Called with the account a push was just delivered for while the app is
+  /// running; the native side has already shown the notification.
+  final void Function(String accountId)? _onPushReceived;
   var _started = false;
   var _disposed = false;
   Future<void>? _startFuture;
@@ -72,12 +80,17 @@ final class AndroidFcmChannel {
   }
 
   Future<void> _handleNativeCall(MethodCall call) async {
-    if (call.method != 'tokenRefreshed') {
-      throw MissingPluginException('Unknown FCM callback.');
+    final argument = call.arguments;
+    if (argument is! String || argument.isEmpty) {
+      return;
     }
-    final token = call.arguments;
-    if (token is String && token.isNotEmpty) {
-      _onToken?.call(token);
+    switch (call.method) {
+      case 'tokenRefreshed':
+        _onToken?.call(argument);
+      case 'pushReceived':
+        _onPushReceived?.call(argument);
+      default:
+        throw MissingPluginException('Unknown FCM callback.');
     }
   }
 

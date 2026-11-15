@@ -89,6 +89,7 @@ void main() {
     addTearDown(deepLinkPlatform.dispose);
 
     final selectedAccounts = StreamController<StoredAccount?>();
+    final reportedRooms = <(String?, String?)>[];
     addTearDown(selectedAccounts.close);
 
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
@@ -100,6 +101,9 @@ void main() {
           nextcloudApiProvider.overrideWithValue(api),
           deepLinkPlatformProvider.overrideWithValue(deepLinkPlatform),
           clientPushEnabledProvider.overrideWithValue(false),
+          androidOpenRoomReporterProvider.overrideWithValue(
+            (accountId, roomToken) => reportedRooms.add((accountId, roomToken)),
+          ),
           accountsProvider.overrideWith(
             (ref) => Stream.value([otherAccount, targetAccount]),
           ),
@@ -180,6 +184,9 @@ void main() {
       () => accounts.getAccount(targetAccount.id),
     );
     expect(selected?.selected, isTrue);
+    // The platform is told which room is on screen, so a push for it stays
+    // silent.
+    expect(reportedRooms.last, (targetAccount.id, 'roomtoken1'));
     expect(heldRequests, greaterThan(0));
     expect(serverAnswers.isCompleted, isFalse);
     serverAnswers.complete();

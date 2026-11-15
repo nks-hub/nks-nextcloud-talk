@@ -30,6 +30,16 @@ internal class AndroidWebPushChannel(
                     return
                 }
                 "getLaunchNotification" -> result.success(activity.takeLaunchNotification())
+                "setOpenRoom" -> {
+                    val arguments = requireArguments(call)
+                    AndroidSystemNotifications.setOpenRoom(
+                        (arguments["accountId"] as? String)
+                            ?.takeIf { it.length <= MAX_ACCOUNT_ID_LENGTH },
+                        (arguments["roomToken"] as? String)
+                            ?.takeIf(AndroidSystemNotifications::isValidRoomToken),
+                    )
+                    result.success(null)
+                }
                 "register" -> result.success(register(requireArguments(call)))
                 "commitEndpoint" -> result.success(commitEndpoint(requireArguments(call)))
                 "prepareServerRevocation" -> {
@@ -253,6 +263,7 @@ internal class AndroidWebPushChannel(
             "getNotificationPermission",
             "requestNotificationPermission",
             "getLaunchNotification",
+            "setOpenRoom",
         )
 
         private fun Map<*, *>.requiredAccountId(): String {

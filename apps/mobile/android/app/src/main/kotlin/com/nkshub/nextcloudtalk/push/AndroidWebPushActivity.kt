@@ -71,6 +71,11 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
             fcmChannel?.invokeMethod("tokenRefreshed", token)
         }
     }
+    private val fcmMessageListener: (String) -> Unit = { accountId ->
+        mainHandler.post {
+            fcmChannel?.invokeMethod("pushReceived", accountId)
+        }
+    }
     private var pendingPermissionResult: MethodChannel.Result? = null
     private var pendingCameraPermissionResult: MethodChannel.Result? = null
     private var cameraPermissionChannel: MethodChannel? = null
@@ -188,6 +193,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         fcm.setMethodCallHandler(AndroidFcmChannel(applicationContext))
         fcmChannel = fcm
         AndroidFcmChannel.attach(fcmTokenListener)
+        AndroidFcmChannel.attachMessages(fcmMessageListener)
 
         contactPickerChannel = ContactPickerChannel(
             this,
@@ -454,6 +460,12 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         result.success(registrationPermissionStatus())
     }
 
+    override fun onStop() {
+        // Nothing is on screen any more; Dart reports the room again on resume.
+        AndroidSystemNotifications.setOpenRoom(null, null)
+        super.onStop()
+    }
+
     override fun onDestroy() {
         AndroidWebPushNotifier.detach(notifierListener)
         if (pendingPermissionResult != null) {
@@ -484,6 +496,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         deviceKeyStore?.dispose()
         deviceKeyStore = null
         AndroidFcmChannel.detach(fcmTokenListener)
+        AndroidFcmChannel.detachMessages(fcmMessageListener)
         fcmChannel?.setMethodCallHandler(null)
         fcmChannel = null
         contactPickerChannel?.dispose()

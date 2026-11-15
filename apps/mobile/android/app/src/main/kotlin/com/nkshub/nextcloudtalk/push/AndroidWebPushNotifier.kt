@@ -232,13 +232,42 @@ internal object AndroidSystemNotifications {
     const val ACTION_OPEN_NOTIFICATION =
         "com.nkshub.nextcloudtalk.action.OPEN_PUSH_NOTIFICATION"
 
+    @Volatile
+    private var openRoom: Pair<String, String>? = null
+
+    /**
+     * The account and room the user is looking at, or nulls for none. Kept in
+     * memory only: a process that was killed shows every notification.
+     */
+    fun setOpenRoom(accountId: String?, roomToken: String?) {
+        openRoom = if (accountId != null && roomToken != null) {
+            accountId to roomToken
+        } else {
+            null
+        }
+    }
+
+    /// Only chat messages are redundant for the room on screen. A call or an
+    /// invitation in that same room still has to ring.
+    internal fun isChatInOpenRoom(
+        open: Pair<String, String>?,
+        accountId: String,
+        payload: AndroidWebPushPayload.Message,
+    ): Boolean = open != null &&
+        payload.type == "chat" &&
+        open.first == accountId &&
+        open.second == payload.objectId
+
     fun apply(context: Context, accountId: String, payload: AndroidWebPushPayload) {
         val manager = context.getSystemService(NotificationManager::class.java)
         val store = AndroidWebPushStore(context)
         val groupKey = accountGroupKey(accountId)
         when (payload) {
             is AndroidWebPushPayload.Message -> {
-                if (surfacesAsTalkNotification(payload)) {
+                if (
+                    surfacesAsTalkNotification(payload) &&
+                    !isChatInOpenRoom(openRoom, accountId, payload)
+                ) {
                     show(context, manager, store, accountId, groupKey, payload)
                 }
             }

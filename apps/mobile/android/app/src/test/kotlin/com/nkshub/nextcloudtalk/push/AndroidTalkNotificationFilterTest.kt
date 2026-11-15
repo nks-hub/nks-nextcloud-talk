@@ -30,6 +30,30 @@ class AndroidTalkNotificationFilterTest {
     }
 
     @Test
+    fun onlyChatInTheRoomOnScreenIsRedundant() {
+        val open = "account-a" to "roomtoken"
+        val chat = AndroidWebPushPayload.Message(14L, "spreed", "Someone: hi", "chat", "roomtoken")
+        assertTrue(AndroidSystemNotifications.isChatInOpenRoom(open, "account-a", chat))
+        assertFalse(AndroidSystemNotifications.isChatInOpenRoom(null, "account-a", chat))
+        assertFalse(AndroidSystemNotifications.isChatInOpenRoom(open, "account-b", chat))
+        assertFalse(
+            AndroidSystemNotifications.isChatInOpenRoom(
+                open,
+                "account-a",
+                chat.copy(objectId = "otherroom"),
+            ),
+        )
+        assertFalse(
+            "a call in the open room still rings",
+            AndroidSystemNotifications.isChatInOpenRoom(
+                open,
+                "account-a",
+                chat.copy(type = "call"),
+            ),
+        )
+    }
+
+    @Test
     fun aMissingAppIsNotAssumedToBeTalk() {
         assertFalse(
             AndroidSystemNotifications.surfacesAsTalkNotification(
