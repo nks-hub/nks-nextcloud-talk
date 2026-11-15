@@ -140,6 +140,7 @@ void main() {
   });
 
   _registerConnectivityWakeTest();
+  _registerLiveRetryTest();
   _registerReadMarkerSerializationTest();
   _registerAnnouncementVisibilityTests();
 }

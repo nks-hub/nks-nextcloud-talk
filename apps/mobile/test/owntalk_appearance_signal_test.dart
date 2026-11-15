@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
@@ -268,6 +269,37 @@ void main() {
         server.chatPosts.last.bodyFields['referenceId'],
         'owntalk-appearance-4',
       );
+    });
+
+    test('the notice follows the first write within two seconds', () {
+      expect(ownTalkAppearanceNoticeWindow, const Duration(seconds: 2));
+    });
+
+    testWidgets('a burst is sent once after the window and a failed notice '
+        'is logged', (tester) async {
+      final logged = <String?>[];
+      final previous = debugPrint;
+      debugPrint = (String? message, {int? wrapWidth}) => logged.add(message);
+      try {
+        final sent = <int>[];
+        final noticer = OwnTalkAppearanceNoticer(
+          window: ownTalkAppearanceNoticeWindow,
+          send: (key, revision, message) async {
+            sent.add(revision);
+            throw StateError('synthetic failure');
+          },
+        );
+        noticer.announce(_key, 1, _notice);
+        await tester.pump(const Duration(milliseconds: 1900));
+        noticer.announce(_key, 2, _notice);
+        expect(sent, isEmpty);
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(sent, [2]);
+        expect(logged.single, contains('appearance notice not sent'));
+        noticer.dispose();
+      } finally {
+        debugPrint = previous;
+      }
     });
 
     test('a photo upload announces too', () async {

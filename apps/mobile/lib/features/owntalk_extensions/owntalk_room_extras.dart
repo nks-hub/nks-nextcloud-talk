@@ -93,9 +93,13 @@ final ownTalkSettingsStoreProvider = FutureProvider<OwnTalkSettingsStore>((
 
 /// How long writes are collected before one silent chat message announces
 /// them to the room.
-const Duration ownTalkAppearanceNoticeWindow = Duration(seconds: 10);
+///
+/// Long enough to fold the writes of one edit (a colour and its photo, a few
+/// quick picks) into one message, short enough that the other side sees the
+/// change while the editor is still looking at it.
+const Duration ownTalkAppearanceNoticeWindow = Duration(seconds: 2);
 
-/// Overridable so tests need not wait ten real seconds.
+/// Overridable so tests need not wait real seconds.
 final ownTalkAppearanceNoticeWindowProvider = Provider<Duration>(
   (ref) => ownTalkAppearanceNoticeWindow,
 );
@@ -106,7 +110,8 @@ final ownTalkAppearanceNoticeWindowProvider = Provider<Duration>(
 ///
 /// Lives outside the per-room controller, which goes away when the user leaves
 /// the chat, so a notice queued by the last write before leaving still goes
-/// out. Best effort: a failed post is dropped, never retried and never shown.
+/// out. Best effort: a failed post is logged and dropped, never retried and
+/// never shown.
 final class OwnTalkAppearanceNoticer {
   OwnTalkAppearanceNoticer({
     required this.window,
@@ -137,11 +142,12 @@ final class OwnTalkAppearanceNoticer {
     created.timer = Timer(window, () {
       _pending.remove(key);
       unawaited(
-        _send(
-          key,
-          created.revision,
-          created.message,
-        ).then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+        _send(key, created.revision, created.message).then<void>(
+          (_) {},
+          onError: (Object error, StackTrace _) {
+            debugPrint('[owntalk] appearance notice not sent: $error');
+          },
+        ),
       );
     });
     _pending[key] = created;

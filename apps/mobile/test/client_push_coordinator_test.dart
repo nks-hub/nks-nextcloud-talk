@@ -336,6 +336,59 @@ void main() {
     await coordinator.dispose();
   });
 
+  test('wake reconnects a waiting channel and restarts the backoff', () async {
+    final connector = _Connector();
+    final delays = <Duration>[];
+    var failing = true;
+    final coordinator = ClientPushCoordinator(
+      resolve: (_, _) async {
+        if (failing) {
+          throw const ClientPushException(ClientPushFailure.rejected);
+        }
+        return _endpoints();
+      },
+      fetchToken: (_, _, _) async => 'token',
+      connector: connector,
+      onWakeUp: (_) {},
+      firstRetry: const Duration(seconds: 2),
+      maximumRetry: const Duration(minutes: 5),
+      // The first two retries elapse at once, every later one never does.
+      delay: (duration) {
+        delays.add(duration);
+        return delays.length <= 2
+            ? Future<void>.value()
+            : Completer<void>().future;
+      },
+    );
+
+    coordinator.follow('account-a');
+    await _settle();
+    expect(delays, const [
+      Duration(seconds: 2),
+      Duration(seconds: 4),
+      Duration(seconds: 8),
+    ]);
+    expect(connector.sockets, isEmpty);
+
+    coordinator.wake();
+    await _settle();
+    expect(delays.last, const Duration(seconds: 2));
+    expect(delays, hasLength(4));
+
+    failing = false;
+    coordinator.wake();
+    await _settle();
+    expect(connector.sockets, hasLength(1));
+
+    // Connected: there is no retry wait to end, so nothing reconnects.
+    coordinator.wake();
+    await _settle();
+    expect(connector.sockets, hasLength(1));
+
+    await coordinator.dispose();
+    coordinator.wake();
+  });
+
   test('a removed account stops holding a socket', () async {
     final connector = _Connector();
     final coordinator = ClientPushCoordinator(

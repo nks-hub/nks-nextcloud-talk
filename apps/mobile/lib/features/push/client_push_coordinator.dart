@@ -29,7 +29,7 @@ final class ClientPushCoordinator {
     required ClientPushConnector connector,
     required void Function(String accountId) onWakeUp,
     void Function(String accountId, OwnTalkRoomSettingsSignal signal)?
-        onRoomSettings,
+    onRoomSettings,
     Duration firstRetry = const Duration(seconds: 2),
     Duration maximumRetry = const Duration(minutes: 5),
     Future<void> Function(Duration)? delay,
@@ -91,6 +91,15 @@ final class ClientPushCoordinator {
   Future<void> unfollow(String accountId) async {
     final channel = _channels.remove(accountId);
     await channel?.stop();
+  }
+
+  /// Reconnects every channel that is waiting out a retry delay, starting
+  /// again from the first delay. Meant for "the network is back": without it
+  /// a dropped socket stays down for up to the maximum delay.
+  void wake() {
+    for (final channel in _channels.values) {
+      channel.wake();
+    }
   }
 
   Future<void> dispose() async {
@@ -164,12 +173,20 @@ final class ClientPushCoordinator {
       if (channel.stopped) {
         return;
       }
-      await Future.any<void>([_delay(backoff), channel.cancellation]);
+      final woken = channel.retryWake = Completer<void>();
+      await Future.any<void>([
+        _delay(backoff),
+        channel.cancellation,
+        woken.future,
+      ]);
+      channel.retryWake = null;
       if (channel.stopped) {
         return;
       }
       final doubled = backoff * 2;
-      backoff = doubled > _maximumRetry ? _maximumRetry : doubled;
+      backoff = woken.isCompleted
+          ? _firstRetry
+          : (doubled > _maximumRetry ? _maximumRetry : doubled);
     }
   }
 }
@@ -178,6 +195,16 @@ final class _AccountChannel {
   final _cancellation = Completer<void>();
   Future<void>? runner;
   ClientPushSession? session;
+
+  /// Set only while the channel waits before its next connection attempt.
+  Completer<void>? retryWake;
+
+  void wake() {
+    final waiting = retryWake;
+    if (waiting != null && !waiting.isCompleted) {
+      waiting.complete();
+    }
+  }
 
   bool get stopped => _cancellation.isCompleted;
   Future<void> get cancellation => _cancellation.future;

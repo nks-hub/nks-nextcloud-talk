@@ -42,13 +42,33 @@ final class ForegroundSyncLoop {
 
   Completer<void>? _cancellation;
   Future<void>? _runner;
+  Completer<void>? _wake;
+  bool _wakeRequested = false;
 
   bool get isRunning => _runner != null;
+
+  /// Ends the wait between two cycles and forgets earlier failures, so the
+  /// next cycle starts now and a later failure backs off from the base delay.
+  ///
+  /// Called while a cycle is running, it skips the wait that follows that
+  /// cycle instead. Does nothing once the loop is stopped.
+  void wake() {
+    final cancellation = _cancellation;
+    if (cancellation == null || cancellation.isCompleted) {
+      return;
+    }
+    _wakeRequested = true;
+    final wake = _wake;
+    if (wake != null && !wake.isCompleted) {
+      wake.complete();
+    }
+  }
 
   void start() {
     if (_runner != null) {
       return;
     }
+    _wakeRequested = false;
     final cancellation = Completer<void>();
     _cancellation = cancellation;
     final runner = _run(cancellation);
@@ -96,19 +116,37 @@ final class ForegroundSyncLoop {
         consecutiveFailures = 0;
         onSuccess?.call();
         elapsed.stop();
-        final remaining = successInterval - elapsed.elapsed;
-        if (remaining > Duration.zero) {
-          await _wait(remaining, cancellation.future);
-        }
+        await _pause(successInterval - elapsed.elapsed, cancellation);
       } on Object catch (error) {
         if (cancellation.isCompleted) {
           return;
         }
         consecutiveFailures++;
         onError?.call(error);
-        await _wait(_retryDelay(consecutiveFailures), cancellation.future);
+        if (await _pause(_retryDelay(consecutiveFailures), cancellation)) {
+          consecutiveFailures = 0;
+        }
       }
     }
+  }
+
+  /// Waits for [duration], [stop] or [wake]; true when [wake] ended or
+  /// skipped the wait.
+  Future<bool> _pause(Duration duration, Completer<void> cancellation) async {
+    if (!_wakeRequested && duration > Duration.zero) {
+      final wake = _wake = Completer<void>();
+      try {
+        await _wait(
+          duration,
+          Future.any<void>([cancellation.future, wake.future]),
+        );
+      } finally {
+        _wake = null;
+      }
+    }
+    final woken = _wakeRequested;
+    _wakeRequested = false;
+    return woken;
   }
 
   Duration _retryDelay(int consecutiveFailures) {

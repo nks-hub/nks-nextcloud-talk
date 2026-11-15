@@ -19,6 +19,9 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       return;
     }
     unawaited(_runConnectivityWake(binding, _syncGeneration));
+    // The binding has started its catch-up by now; a loop sitting out a
+    // backoff of up to a minute joins it instead of staying deaf.
+    _syncLoop?.wake();
   }
 
   Future<void> _runConnectivityWake(
@@ -92,7 +95,14 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     var showProgress = true;
     late final ForegroundSyncLoop loop;
     loop = ForegroundSyncLoop(
-      task: (cancellation) => _runLiveCycle(binding, cancellation, generation),
+      task: (cancellation) async {
+        await _runLiveCycle(binding, cancellation, generation);
+        // A round that delivered something is followed by the next one at
+        // once; the pause only paces rounds that changed nothing.
+        if (binding.lastRoundAdvanced) {
+          loop.wake();
+        }
+      },
       successInterval: const Duration(seconds: 1),
       retryBaseDelay: const Duration(seconds: 2),
       retryMaximumDelay: const Duration(minutes: 1),
@@ -153,6 +163,17 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   Future<void> _observeAuthoritativeIncomingMessages(int generation) async {
     final key = _key;
     if (!mounted || !_canAnnounceIncomingMessage(generation, key)) {
+      return;
+    }
+    if (!WidgetsBinding
+        .instance
+        .platformDispatcher
+        .accessibilityFeatures
+        .accessibleNavigation) {
+      // Nothing would be spoken, so the room is not read on every round. The
+      // baseline is dropped so a screen reader switched on later starts from
+      // the messages of that moment.
+      _incomingAnnouncements.reset();
       return;
     }
     final repository = ref.read(chatRepositoryProvider);
@@ -764,8 +785,11 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       ChatServiceError.chatUnsupported ||
       ChatServiceError.sendUnsupported ||
       ChatServiceError.readOnly ||
-      ChatServiceError.reauthenticationRequired ||
-      ChatServiceError.invalidResponse => true,
+      ChatServiceError.reauthenticationRequired => true,
+      // Also a captive portal page or a proxy's own status: retried with the
+      // loop's backoff. A room that is really gone leaves the cache and then
+      // ends the loop as conversationMissing.
+      ChatServiceError.invalidResponse ||
       ChatServiceError.rateLimited ||
       ChatServiceError.serviceUnavailable ||
       ChatServiceError.network => false,

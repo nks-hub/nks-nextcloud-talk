@@ -819,5 +819,78 @@ extension _ChatServicePollCases on _ChatServiceIntegrationSuite {
         expect(dedicatedCursors[firstNamedRequestCount], '109');
       },
     );
+
+    test('only a round that moved the room reports an advance', () async {
+      final responses = <http.Response>[
+        http.Response('', 304),
+        http.Response(
+          jsonEncode(
+            _externalMessageResponse(
+              messageId: 120,
+              timestamp: 1770000120,
+              message: 'Live message',
+            ),
+          ),
+          200,
+          headers: const <String, String>{
+            'X-Chat-Last-Given': '120',
+            'X-Chat-Last-Common-Read': '110',
+          },
+        ),
+        http.Response('', 304),
+        // A server that does not hold the long poll: nothing changed.
+        http.Response('', 304),
+      ];
+      final timeouts = <String?>[];
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                _chatCapabilities(
+                  talkFeatures: const <String>[
+                    'conversation-v4',
+                    'chat-v2',
+                    'chat-reference-id',
+                  ],
+                ),
+              ),
+              200,
+            );
+          }
+          if (request.url.queryParameters['lookIntoFuture'] == '0') {
+            return http.Response('', 304);
+          }
+          timeouts.add(request.url.queryParameters['timeout']);
+          return responses.removeAt(0);
+        }),
+      );
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      final binding = service.bindLiveRoom(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      );
+      addTearDown(binding.close);
+
+      await binding.synchronize();
+      expect(binding.lastRoundAdvanced, isFalse);
+
+      await binding.synchronize();
+      expect(binding.lastRoundAdvanced, isTrue, reason: 'a message arrived');
+
+      await binding.synchronize();
+      expect(binding.lastRoundAdvanced, isTrue, reason: 'catch-up ended');
+
+      await binding.synchronize();
+      expect(binding.lastRoundAdvanced, isFalse);
+      expect(timeouts, ['0', '30', '0', '30']);
+      expect(responses, isEmpty);
+    });
   }
 }

@@ -490,7 +490,13 @@ final clientPushCoordinatorProvider = Provider<ClientPushCoordinator?>((ref) {
           ),
     ),
   );
-  ref.onDispose(() => unawaited(coordinator.dispose()));
+  final connectivityWakes = ref
+      .watch(connectivityWakeEventsProvider)
+      .listen((_) => coordinator.wake());
+  ref.onDispose(() {
+    unawaited(connectivityWakes.cancel());
+    unawaited(coordinator.dispose());
+  });
 
   // Following the same account list the UI shows keeps the sockets in step
   // with sign-in and sign-out without a second place having to remember it,

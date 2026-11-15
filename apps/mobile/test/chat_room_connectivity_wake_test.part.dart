@@ -167,6 +167,143 @@ void _registerConnectivityWakeTest() {
   );
 }
 
+void _registerLiveRetryTest() {
+  testWidgets('an unreadable response is retried and a connectivity wake ends '
+      'the backoff', (tester) async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    final chat = ChatRepository(database);
+    final vault = MemoryCredentialVault();
+    final wakes = StreamController<void>.broadcast();
+    addTearDown(wakes.close);
+    final account = await accounts.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'fixture-user',
+      serverProductName: 'Nextcloud',
+      createdAt: DateTime.utc(2026, 1, 1),
+    );
+    vault.values[account.id] = 'fixture-app-password-never-use';
+    final roomJson = _conversationRoomJson();
+    final room = ConversationRoom.fromJson(roomJson);
+    await database
+        .into(database.cachedConversations)
+        .insert(
+          CachedConversationsCompanion.insert(
+            accountId: account.id,
+            token: room.token.value,
+            displayName: room.displayName,
+            description: room.description,
+            lastActivity: room.lastActivity,
+            unreadMessages: room.unreadMessages,
+            favorite: room.isFavorite,
+            readOnly: Value(room.readOnly),
+            roomType: Value(room.type),
+            roomName: Value(room.name),
+            objectType: Value(room.objectType),
+            avatarVersion: Value(room.avatarVersion),
+            isCustomAvatar: Value(room.isCustomAvatar),
+            rawJson: jsonEncode(roomJson),
+          ),
+        );
+    final conversation = await chat.getConversation(
+      accountId: account.id,
+      roomToken: room.token.value,
+    );
+
+    var captivePortal = true;
+    var unreadable = 0;
+    final longPoll = Completer<http.Response>();
+    final longPollReleased = Completer<void>();
+    var longPolls = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                talkFeatures: const <String>[
+                  'conversation-v4',
+                  'chat-v2',
+                  'chat-reference-id',
+                ],
+              ),
+            ),
+            200,
+          );
+        }
+        if (request.method != 'GET' ||
+            !request.url.path.endsWith('/chat/rooma123')) {
+          return http.Response('', 404);
+        }
+        if (request.url.queryParameters['lookIntoFuture'] == '0') {
+          return http.Response('', 304);
+        }
+        if (captivePortal) {
+          unreadable++;
+          return http.Response('<html>Sign in to this network</html>', 200);
+        }
+        if (request.url.queryParameters['timeout'] != '30') {
+          return http.Response('', 304);
+        }
+        longPolls++;
+        try {
+          return await longPoll.future;
+        } finally {
+          if (!longPollReleased.isCompleted) {
+            longPollReleased.complete();
+          }
+        }
+      }),
+    );
+    addTearDown(api.close);
+
+    Future<void> advanceUntil(bool Function() condition) async {
+      // Up to 12 s of loop time, well past the second retry delay.
+      for (var step = 0; step < 120 && !condition(); step++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 1)),
+        );
+      }
+      expect(condition(), isTrue);
+    }
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          credentialVaultProvider.overrideWithValue(vault),
+          nextcloudApiProvider.overrideWithValue(api),
+          connectivityWakeEventsProvider.overrideWithValue(wakes.stream),
+        ],
+        child: localizedTestApp(
+          home: ChatRoomPane(account: account, conversation: conversation!),
+        ),
+      ),
+    );
+    await _pumpUntil(tester, () => unreadable == 1);
+
+    // The third failure starts a wait of at least 6.4 s.
+    await advanceUntil(() => unreadable == 3);
+
+    captivePortal = false;
+    wakes.add(null);
+    await tester.pump(const Duration(seconds: 1));
+    await _pumpUntil(tester, () => longPolls == 1);
+    expect(unreadable, 3);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    longPoll.complete(http.Response('', 304));
+    await _pumpUntil(tester, () => longPollReleased.isCompleted);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(tester.takeException(), isNull);
+  });
+}
+
 Future<void> _waitForConnectivityCapability(
   WidgetTester tester,
   ChatRepository chat,

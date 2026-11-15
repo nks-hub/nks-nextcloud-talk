@@ -55,6 +55,7 @@ extension _ChatServiceLiveRuntime on ChatService {
       generation: binding._generation,
       cancellation: cancellation,
     );
+    binding._lastRoundAdvanced = false;
     try {
       final prepared = binding._prepared;
       if (prepared == null) {
@@ -145,6 +146,7 @@ extension _ChatServiceLiveRuntime on ChatService {
           }
           probe.ensureActive();
           await _ensureLiveContextCurrent(binding, prepared, probe);
+          binding._lastRoundAdvanced = poll!.advanced;
         }),
         threadId: binding.threadId,
       );
@@ -267,6 +269,10 @@ extension _ChatServiceLiveRuntime on ChatService {
           throw const _ChatSynchronizationStale();
         }
         final outcome = await _applyGetResponse(prepared, response);
+        poll.advanced =
+            (outcome == ChatMergeOutcome.applied &&
+                response.cursor != request.cursor) ||
+            (outcome == ChatMergeOutcome.converged && !scope.futureConverged);
         if (outcome != ChatMergeOutcome.stale &&
             outcome != ChatMergeOutcome.lobby) {
           await _processPending(prepared);
@@ -368,6 +374,15 @@ final class ChatLiveRoomBinding {
   int _generation = 0;
   bool _readerActive;
   Completer<void>? _readerWake;
+  bool _lastRoundAdvanced = false;
+
+  /// Whether the last finished round merged new messages or ended a catch-up.
+  ///
+  /// The server answered such a round because something happened, so the next
+  /// one may open at once. A round that changed nothing (an immediate 304, a
+  /// lobby, a cancelled or stale cycle) keeps the caller's pause, which is
+  /// what stops a server that never holds the request from being hammered.
+  bool get lastRoundAdvanced => _lastRoundAdvanced;
 
   /// Visibility changes suspend legacy reads, not the binding's lifetime.
   void setReaderActive(bool active) {
@@ -534,6 +549,9 @@ final class _SharedLivePoll {
   final Set<ChatLiveRoomBinding> bindings = {};
   bool cancelled = false;
   bool completed = false;
+
+  /// Whether the response moved the future cursor or ended a catch-up.
+  bool advanced = false;
 }
 
 final class _ChatSynchronizationProbe implements _ChatReadGuard {
