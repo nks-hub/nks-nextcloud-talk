@@ -308,6 +308,7 @@ Future<void> _insertPendingOperation(
   required String outboxState,
   required String message,
   int attemptCount = 0,
+  int createdAtMillis = 1,
 }) {
   return database
       .into(database.textSendOperations)
@@ -324,7 +325,7 @@ Future<void> _insertPendingOperation(
           attemptCount: attemptCount,
           messageIdsJson: '[]',
           duplicateRiskAcknowledged: false,
-          createdAtMillis: 1,
+          createdAtMillis: createdAtMillis,
           updatedAtMillis: 1,
         ),
       );

@@ -62,7 +62,7 @@ final class _ProvisionalSend {
   }
 }
 
-final class _PendingMessageBubble extends StatelessWidget {
+final class _PendingMessageBubble extends StatefulWidget {
   const _PendingMessageBubble({
     super.key,
     required this.account,
@@ -77,6 +77,48 @@ final class _PendingMessageBubble extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback onResend;
   final VoidCallback onCancel;
+
+  @override
+  State<_PendingMessageBubble> createState() => _PendingMessageBubbleState();
+}
+
+final class _PendingMessageBubbleState extends State<_PendingMessageBubble> {
+  /// A send that goes straight out is queued for a fraction of a second. Its
+  /// cancel button would only flash and make the bubble jump, so the button
+  /// waits until the message has really been sitting in the queue.
+  static const _queuedGrace = Duration(milliseconds: 1500);
+
+  Timer? _graceTimer;
+
+  StoredAccount get account => widget.account;
+  StoredTextSendOperation get operation => widget.operation;
+  VoidCallback get onRetry => widget.onRetry;
+  VoidCallback get onResend => widget.onResend;
+  VoidCallback get onCancel => widget.onCancel;
+
+  Duration get _queuedFor => Duration(
+    milliseconds:
+        DateTime.now().millisecondsSinceEpoch - operation.createdAtMillis,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    final remaining = _queuedGrace - _queuedFor;
+    if (remaining > Duration.zero) {
+      _graceTimer = Timer(remaining, () {
+        if (mounted) {
+          setState(() {});
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _graceTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -97,13 +139,23 @@ final class _PendingMessageBubble extends StatelessWidget {
     // bubble does not change height when the server confirms it.
     final cancelable =
         operation.outboxState != 'sending' &&
+        (operation.outboxState != 'queued' || _queuedFor >= _queuedGrace) &&
         (!operation.operationId.startsWith(_provisionalOperationPrefix) ||
             operation.outboxState == 'failed');
     final retryable = operation.outboxState == 'retryable';
     final ambiguous = operation.outboxState == 'awaitingConfirmation';
     final resourceUrl = exactGiphyResource(operation.message);
     final isGiphy = resourceUrl != null;
-    final onBubble = scheme.onPrimaryContainer;
+    // The colours a sent outgoing bubble resolves to, the room's shared
+    // appearance included, so confirmation does not recolour the bubble.
+    final shared = SharedChatAppearance.maybeOf(context);
+    final colors = resolveBubbleColors(
+      outgoing: true,
+      scheme: scheme,
+      sharedBubble: shared?.ownBubble,
+      sharedText: shared?.ownText,
+    );
+    final onBubble = colors.foreground;
     final action = IconButtonThemeData(
       style: IconButton.styleFrom(
         // The row, not the text, drove the old height: three default icon
@@ -128,7 +180,7 @@ final class _PendingMessageBubble extends StatelessWidget {
               // Same shape and colour as a sent outgoing bubble, so a message
               // on its way no longer reads as a separate card.
               decoration: BoxDecoration(
-                color: scheme.primaryContainer,
+                color: colors.background,
                 borderRadius: _bubbleRadius(outgoing: true, groupEnd: true),
               ),
               child: Padding(

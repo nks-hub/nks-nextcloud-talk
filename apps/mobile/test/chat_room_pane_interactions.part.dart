@@ -554,6 +554,43 @@ void _registerChatRoomPaneInteractionTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('a send queued a moment ago shows cancel only once it waits', (
+    tester,
+  ) async {
+    await _insertPendingOperation(
+      database,
+      account,
+      conversation,
+      operationId: 'operation-fresh',
+      outboxState: 'queued',
+      message: 'Fresh fixture text',
+      createdAtMillis: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomPane(account: account, conversation: conversation),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Fresh fixture text'), findsOneWidget);
+    // On its way out within the same second: a cancel button here would only
+    // flash and change the bubble's height.
+    expect(find.byKey(const Key('chat-cancel-operation-fresh')), findsNothing);
+
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 1700)),
+    );
+    await tester.pump(const Duration(milliseconds: 1700));
+    expect(
+      find.byKey(const Key('chat-cancel-operation-fresh')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('cancelling a queued send clears the outbox row and bubble', (
     tester,
   ) async {
