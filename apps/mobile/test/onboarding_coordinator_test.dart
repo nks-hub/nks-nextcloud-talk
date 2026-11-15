@@ -93,6 +93,32 @@ void main() {
     },
   );
 
+  test('no poll leaves while the app is in the background', () async {
+    var polls = 0;
+    final api = _onboardingApi(withTalk: true, onPoll: () => polls++);
+    addTearDown(api.close);
+    var background = true;
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pollInterval: const Duration(milliseconds: 5),
+      inBackground: () => background,
+    );
+    final pending = await coordinator.start('https://cloud.example.invalid');
+    await coordinator.openLoginPage(pending);
+    final waiting = coordinator.waitForAccount(pending, CancellationSignal());
+
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    expect(polls, 0, reason: 'the one-time answer must not be asked for yet');
+
+    background = false;
+    final account = await waiting;
+    expect(account.loginName, isNotEmpty);
+    expect(polls, greaterThan(0));
+  });
+
   test('the in-app login page is closed when the login is cancelled', () async {
     final api = _onboardingApi(withTalk: true, onPoll: () {});
     addTearDown(api.close);

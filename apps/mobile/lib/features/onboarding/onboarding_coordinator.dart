@@ -132,7 +132,9 @@ final class OnboardingCoordinator {
     Uuid? uuid,
     this.pollInterval = const Duration(seconds: 2),
     this.loginTimeout = const Duration(minutes: 15),
+    bool Function()? inBackground,
   }) : _api = api,
+       _inBackground = inBackground ?? _never,
        _accounts = accounts,
        _credentials = credentials,
        _launcher = launcher,
@@ -147,6 +149,15 @@ final class OnboardingCoordinator {
   final Uuid _uuid;
   final Duration pollInterval;
   final Duration loginTimeout;
+
+  /// True while the app is off the screen. The server hands the credentials
+  /// out exactly once, and a phone that cuts background apps off the network
+  /// (battery saver) loses that answer: MEASURED on a handset, the poll was
+  /// answered 200 while the browser was in front and every poll after it was
+  /// a 404, so the sign-in spun until it was cancelled.
+  final bool Function() _inBackground;
+
+  static bool _never() => false;
 
   Future<PendingLogin> start(String serverAddress) async {
     final ServerBase server;
@@ -310,6 +321,13 @@ final class OnboardingCoordinator {
     final deadline = DateTime.now().toUtc().add(loginTimeout);
     while (DateTime.now().toUtc().isBefore(deadline)) {
       cancellation.throwIfCancelled();
+      if (_inBackground()) {
+        await Future.any<void>([
+          Future<void>.delayed(pollInterval),
+          cancellation.whenCancelled,
+        ]);
+        continue;
+      }
       final LoginPollResult? result;
       try {
         result = await _api.pollLogin(pending);

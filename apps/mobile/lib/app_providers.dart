@@ -8,7 +8,11 @@ import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/services.dart'
     show MethodChannel, MissingPluginException;
 import 'package:flutter/widgets.dart'
-    show AppLifecycleListener, NavigatorObserver, WidgetsBinding;
+    show
+        AppLifecycleListener,
+        AppLifecycleState,
+        NavigatorObserver,
+        WidgetsBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -287,6 +291,8 @@ final onboardingCoordinatorProvider = Provider<OnboardingCoordinator>((ref) {
     credentials: ref.watch(credentialVaultProvider),
     launcher: ref.watch(loginPageLauncherProvider),
     trust: ref.watch(certificateTrustGateProvider),
+    inBackground: () =>
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.paused,
   );
 });
 
