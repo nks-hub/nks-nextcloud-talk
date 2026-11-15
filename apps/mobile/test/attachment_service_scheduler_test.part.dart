@@ -561,7 +561,9 @@ void _registerAttachmentServiceSchedulerTests() {
         if (request.method == 'POST' &&
             request.url.path.endsWith('/attachment')) {
           finalized++;
-          return http.Response.bytes(_finalizeSuccess(), 200);
+          // Ambiguous on purpose: an accepted finalize no longer holds the
+          // room, only one that may not have reached the server does.
+          throw http.ClientException('Synthetic post-dispatch failure');
         }
         fail('Unexpected request: ${request.method} ${request.url}');
       }),

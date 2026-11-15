@@ -228,4 +228,63 @@ void _registerAttachmentServiceParallelTests() {
       expect(finalized, jobs.map((job) => job.draft.referenceId.value));
     },
   );
+
+  test('an album finalizes in send order without waiting for the chat poll to '
+      'confirm each picture', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final finalized = <String>[];
+    final neverConfirmed = Completer<ChatSynchronizationResult>();
+    final service = fixture.service(
+      MockClient((request) async {
+        if (request.url.path.endsWith('/folder')) {
+          return http.Response.bytes(_probeSuccess(), 200);
+        }
+        if (request.method == 'PUT') {
+          return http.Response('', 201);
+        }
+        if (request.url.path.endsWith('/attachment')) {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          finalized.add(body['referenceId'] as String);
+          return http.Response.bytes(_finalizeSuccess(), 200);
+        }
+        fail('Unexpected request: ${request.method}');
+      }),
+      identifierFactory: const UuidAttachmentIdentifierFactory(),
+      catchUpConfirmation:
+          ({required accountId, required roomToken, required threadId}) =>
+              neverConfirmed.future,
+    );
+    addTearDown(service.close);
+    addTearDown(
+      () => neverConfirmed.complete(ChatSynchronizationResult.converged),
+    );
+
+    final sessions = <DurableAttachmentSession>[];
+    for (var index = 0; index < 4; index++) {
+      final source = await _createDistinctAttachmentSource(
+        fixture,
+        name: 'album-$index.png',
+      );
+      sessions.add(
+        await service.enqueue(
+          fixture.request(normalMaximum: 32, source: source.source),
+        ),
+      );
+    }
+    await Future.wait(
+      sessions.map(
+        (session) => session.events.firstWhere(
+          (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+        ),
+      ),
+    ).timeout(const Duration(seconds: 5));
+
+    final restored = await fixture.repository.loadRuntime();
+    final jobs = restored.snapshot.accounts.values.single.jobs.values.toList()
+      ..sort(
+        (a, b) => a.draft.enqueueSequence.compareTo(b.draft.enqueueSequence),
+      );
+    expect(finalized, jobs.map((job) => job.draft.referenceId.value));
+  });
 }

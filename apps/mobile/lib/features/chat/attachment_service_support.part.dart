@@ -5,6 +5,11 @@ part of 'attachment_service.dart';
 /// exhausted retry, and a confirmation that gave up its automatic catch-up:
 /// all three move only on an explicit retry, so holding the room for them
 /// would block every later attachment for as long as the account exists.
+///
+/// A job the server accepted is exempt as well. Its message already exists,
+/// so the next finalize cannot overtake it, and waiting for the chat poll to
+/// echo it back would deliver an album one picture per poll round. Only an
+/// ambiguous finalize, which may not have reached the server, keeps its place.
 Set<AttachmentJobId> _inactiveFinalizationBlockExemptions(
   _AttachmentServiceRuntime service,
   AttachmentJob current,
@@ -22,7 +27,8 @@ Set<AttachmentJobId> _inactiveFinalizationBlockExemptions(
       continue;
     }
     if (other.phase == AttachmentJobPhase.awaitingConfirmation) {
-      if (other.errorClass == attachmentConfirmationReconciliationRequired) {
+      if (other.errorClass == null ||
+          other.errorClass == attachmentConfirmationReconciliationRequired) {
         result.add(other.jobId);
       }
       continue;
