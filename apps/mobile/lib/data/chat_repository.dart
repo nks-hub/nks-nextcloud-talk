@@ -232,49 +232,63 @@ final class ChatRepository {
                 ]),
               ),
             );
-      } else {
-        await _adoptConversationReadState(viewScope, room, commonRead);
+      } else if (!await _adoptConversationReadState(
+        viewScope,
+        room,
+        commonRead,
+      )) {
+        // Nothing was written, so the row just read is the row to return.
+        return _ensureNetworkRootScope(viewScope, room, commonRead);
       }
       viewScope = (await _rootScope(
         accountId: account.id,
         roomToken: conversation.token,
       ))!;
-
-      final networkScope = await _networkScope(
-        accountId: account.id,
-        roomToken: conversation.token,
-        threadId: null,
-      );
-      if (networkScope == null) {
-        await _migrateLegacyThreadNetworkScopesInCurrentTransaction(
-          accountId: account.id,
-          roomToken: conversation.token,
-        );
-        await _database
-            .into(_database.chatScopes)
-            .insert(
-              ChatScopesCompanion.insert(
-                accountId: account.id,
-                roomToken: conversation.token,
-                scopeKey: _networkRootScopeKey,
-                threadId: const Value(null),
-                historyCursor: viewScope.historyCursor,
-                futureCursor: viewScope.futureCursor,
-                lastCommonRead: viewScope.lastCommonRead,
-                lastReadMessage: viewScope.lastReadMessage,
-                unreadMessages: viewScope.unreadMessages,
-                hasHistory: viewScope.hasHistory,
-                futureConverged: viewScope.futureConverged,
-                blocksJson: viewScope.blocksJson,
-                lastSyncedAtMillis: Value(viewScope.lastSyncedAtMillis),
-                lastSyncError: Value(viewScope.lastSyncError),
-              ),
-            );
-      } else {
-        await _adoptConversationReadState(networkScope, room, commonRead);
-      }
-      return viewScope;
+      return _ensureNetworkRootScope(viewScope, room, commonRead);
     });
+  }
+
+  /// The network twin of the root scope, created from it on first use and
+  /// kept on the conversation's read state afterwards.
+  Future<StoredChatScope> _ensureNetworkRootScope(
+    StoredChatScope viewScope,
+    ConversationRoom room,
+    String commonRead,
+  ) async {
+    final networkScope = await _networkScope(
+      accountId: viewScope.accountId,
+      roomToken: viewScope.roomToken,
+      threadId: null,
+    );
+    if (networkScope == null) {
+      await _migrateLegacyThreadNetworkScopesInCurrentTransaction(
+        accountId: viewScope.accountId,
+        roomToken: viewScope.roomToken,
+      );
+      await _database
+          .into(_database.chatScopes)
+          .insert(
+            ChatScopesCompanion.insert(
+              accountId: viewScope.accountId,
+              roomToken: viewScope.roomToken,
+              scopeKey: _networkRootScopeKey,
+              threadId: const Value(null),
+              historyCursor: viewScope.historyCursor,
+              futureCursor: viewScope.futureCursor,
+              lastCommonRead: viewScope.lastCommonRead,
+              lastReadMessage: viewScope.lastReadMessage,
+              unreadMessages: viewScope.unreadMessages,
+              hasHistory: viewScope.hasHistory,
+              futureConverged: viewScope.futureConverged,
+              blocksJson: viewScope.blocksJson,
+              lastSyncedAtMillis: Value(viewScope.lastSyncedAtMillis),
+              lastSyncError: Value(viewScope.lastSyncError),
+            ),
+          );
+    } else {
+      await _adoptConversationReadState(networkScope, room, commonRead);
+    }
+    return viewScope;
   }
 
   /// Copies the conversation's read state onto a root scope, writing only
@@ -284,7 +298,7 @@ final class ChatRepository {
   /// common-read marker can be older than the one a chat response has already
   /// stored. That marker never moves backwards: it would turn the read ticks
   /// of the user's own messages back into sent ones.
-  Future<void> _adoptConversationReadState(
+  Future<bool> _adoptConversationReadState(
     StoredChatScope scope,
     ConversationRoom room,
     String commonRead,
@@ -297,7 +311,7 @@ final class ChatRepository {
     if (!commonReadAdvanced &&
         scope.lastReadMessage == room.lastReadMessage &&
         scope.unreadMessages == room.unreadMessages) {
-      return;
+      return false;
     }
     await (_database.update(_database.chatScopes)..where(
           (row) =>
@@ -314,6 +328,7 @@ final class ChatRepository {
             unreadMessages: Value(room.unreadMessages),
           ),
         );
+    return true;
   }
 
   Future<void> _migrateLegacyThreadNetworkScopesInCurrentTransaction({
