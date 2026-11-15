@@ -26,6 +26,7 @@ import com.nkshub.nextcloudtalk.calls.CallTelecom
 import com.nkshub.nextcloudtalk.calls.ScreenShareChannel
 import com.nkshub.nextcloudtalk.calls.ScreenShareService
 import com.nkshub.nextcloudtalk.attachments.ChatAttachmentSaver
+import com.nkshub.nextcloudtalk.clipboard.ClipboardImageChannel
 import com.nkshub.nextcloudtalk.contacts.ContactPickerChannel
 import com.nkshub.nextcloudtalk.emoji.EmojiGlyphChannel
 import com.nkshub.nextcloudtalk.updates.AndroidInstallSource
@@ -51,6 +52,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
     private var fcmChannel: MethodChannel? = null
     private var contactPickerChannel: ContactPickerChannel? = null
     private var emojiGlyphChannel: EmojiGlyphChannel? = null
+    private var clipboardImageChannel: ClipboardImageChannel? = null
     private var installSourceChannel: MethodChannel? = null
     private var backgroundDrainChannel: MethodChannel? = null
     private var shortcutChannel: MethodChannel? = null
@@ -201,6 +203,11 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         )
         emojiGlyphChannel?.dispose()
         emojiGlyphChannel = EmojiGlyphChannel(flutterEngine.dartExecutor.binaryMessenger)
+        clipboardImageChannel?.dispose()
+        clipboardImageChannel = ClipboardImageChannel(
+            applicationContext,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
         attachmentSaver?.dispose()
         attachmentSaver = ChatAttachmentSaver(
             this,
@@ -508,6 +515,8 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         contactPickerChannel = null
         emojiGlyphChannel?.dispose()
         emojiGlyphChannel = null
+        clipboardImageChannel?.dispose()
+        clipboardImageChannel = null
         BackgroundDrain.attachForeground(null)
         backgroundDrainChannel?.setMethodCallHandler(null)
         backgroundDrainChannel = null
