@@ -257,7 +257,6 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         _localError = null;
       });
     }
-    _syncRounds.value++;
     _startPendingJump();
     _scheduleVisibleReadMarker(generation);
   }

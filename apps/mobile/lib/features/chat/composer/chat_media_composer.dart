@@ -147,7 +147,7 @@ final class ChatMediaComposerController {
   /// send button or is on its way out.
   bool get isBusy => _isBusy?.call() ?? false;
 
-  /// Ticks when [isBusy] may answer differently.
+  /// Ticks when [isBusy] or [hasPreparedAttachment] may answer differently.
   Listenable get changes => _changes;
 
   /// Whether [attachImageBytes] can take a file right now: the room accepts
@@ -299,6 +299,14 @@ final class ChatMediaComposer extends StatefulWidget {
 }
 
 final class _ChatMediaComposerState extends State<ChatMediaComposer> {
+  /// Every change of the prepared attachments is a rebuild of this state,
+  /// so the rebuild is what the controller announces.
+  @override
+  void setState(VoidCallback fn) {
+    super.setState(fn);
+    widget.controller?._changes.value++;
+  }
+
   static const _submittedConfirmationDuration = Duration(milliseconds: 900);
   static const _admissionResumeTimeout = Duration(seconds: 15);
 

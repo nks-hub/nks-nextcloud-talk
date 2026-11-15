@@ -465,7 +465,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _highlightTimer?.cancel();
     _incomingAnnouncements.dispose();
     _attachmentMenuActions_.dispose();
-    _syncRounds.dispose();
     _scrollController
       ..removeListener(_handleScroll)
       ..dispose();
@@ -483,12 +482,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// rebuilt from scratch underneath it.
   final ValueNotifier<List<AttachmentMenuAction>> _attachmentMenuActions_ =
       ValueNotifier<List<AttachmentMenuAction>>(const <AttachmentMenuAction>[]);
-
-  /// Ticks once per finished live round.
-  // shortcut: the send/quick-emoji button re-reads the prepared attachment
-  // on this tick because the media composer does not announce it; listen to
-  // ChatMediaComposerController instead once it is a Listenable.
-  final ValueNotifier<int> _syncRounds = ValueNotifier<int>(0);
 
   List<AttachmentMenuAction> _publishedMenuActions =
       const <AttachmentMenuAction>[];
@@ -1090,7 +1083,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
             ? sendButton
             : _SendOrQuickEmojiButton(
                 composer: _composer,
-                refresh: _syncRounds,
+                refresh: _mediaComposerController.changes,
                 emoji: quickEmoji,
                 sending: _sending,
                 hasAttachment: () =>
