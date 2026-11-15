@@ -339,10 +339,22 @@ void main() {
 
     void leaveTheApp() {
       final binding = TestWidgetsFlutterBinding.instance;
-      addTearDown(
-        () => binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed),
-      );
-      binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      addTearDown(() {
+        for (final state in const [
+          AppLifecycleState.hidden,
+          AppLifecycleState.inactive,
+          AppLifecycleState.resumed,
+        ]) {
+          binding.handleAppLifecycleStateChanged(state);
+        }
+      });
+      for (final state in const [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+      ]) {
+        binding.handleAppLifecycleStateChanged(state);
+      }
     }
 
     Iterable<String> wakeRequests() => platform.calls
