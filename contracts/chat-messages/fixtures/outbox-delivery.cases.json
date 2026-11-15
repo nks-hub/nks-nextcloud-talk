@@ -305,7 +305,7 @@
       ]
     },
     {
-      "id": "possible-send-never-auto-replays",
+      "id": "possible-send-is-never-claimed",
       "initialAccounts": {
         "account-a": {
           "laneState": "ready",

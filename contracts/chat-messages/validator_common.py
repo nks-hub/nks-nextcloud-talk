@@ -16,6 +16,9 @@ USER_AGENT = "com.nkshub.nextcloudtalk chat-messages-contract/0.1"
 TEXT_SEND_REVISION = "talk-chat-text-send-f2958bb-f9b9e947-r2"
 MAX_LIVE_RESPONSE_BYTES = 8 * 1024 * 1024
 MAX_RETRY_AFTER_SECONDS = 24 * 60 * 60
+# Mirrors textSendAbsenceGraceSeconds and textSendMaximumAutomaticResends.
+ABSENCE_GRACE_SECONDS = 30
+MAX_AUTOMATIC_RESENDS = 3
 BASE_RATE_LIMIT_RETRY_SECONDS = 5
 MAX_RATE_LIMIT_BACKOFF_SECONDS = 5 * 60
 SEND_CONTEXT_FIELDS = (
@@ -33,6 +36,7 @@ OUTBOX_SUMMARY_FIELDS = (
     "duplicateRiskAcknowledged",
     "errorClass",
     "nextAttemptAt",
+    "automaticResendCount",
     "replyTo",
     "threadId",
     "replyToToken",
@@ -166,6 +170,12 @@ REQUIRED_OUTBOX_IDS = {
     "account-scope-isolated",
     "ambiguous-bad-request-enters-awaiting-confirmation",
     "auth-failure-preserves-operation-state-matrix",
+    "automatic-resend-after-verified-absence",
+    "automatic-resend-guards-scope-capability-and-order",
+    "automatic-resend-needs-a-read-after-the-grace",
+    "automatic-resend-never-follows-a-recorded-match",
+    "automatic-resend-stops-at-the-limit",
+    "automatic-resend-yields-to-a-found-reference",
     "catch-up-absence-keeps-awaiting",
     "completed-late-multiple-matches-reports-conflict",
     "confirmation-transaction-failure-rolls-back",
@@ -187,7 +197,7 @@ REQUIRED_OUTBOX_IDS = {
     "named-thread-survives-restart",
     "null-response-enters-awaiting-confirmation",
     "per-room-ordering-and-single-flight",
-    "possible-send-never-auto-replays",
+    "possible-send-is-never-claimed",
     "plain-operation-does-not-match-thread-message",
     "pre-body-failure-is-retryable",
     "queued-claim-and-http-confirmation",

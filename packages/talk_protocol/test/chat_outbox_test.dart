@@ -27,10 +27,10 @@ void main() {
       .toList(growable: false);
 
   test('covers all executable outbox scenarios', () {
-    expect(cases.length, 43);
+    expect(cases.length, 49);
     expect(
       cases.expand((testCase) => testCase['steps']! as List<Object?>).length,
-      83,
+      106,
     );
   });
 
@@ -117,6 +117,69 @@ void main() {
     }
   });
 
+  test('a silent send is not resent by itself once silent-send is gone', () {
+    final operationId = ChatOperationId.parse(
+      'aaaaaaaa-0000-4000-8000-000000000091',
+    );
+    final accountId = AccountId.parse('account-a');
+    final snapshot = ChatRuntimeSnapshot(
+      accounts: {
+        accountId: ChatAccountState(
+          accountId: accountId,
+          server: ServerBase.parse('https://account-a.example.invalid'),
+          lane: ChatAccountLane.ready,
+          credentialGeneration: 1,
+          capabilityGeneration: 1,
+          scopes: const {},
+          operations: {
+            operationId: TextSendOutboxOperation(
+              operationId: operationId,
+              roomToken: _token('rooma123'),
+              referenceId: ChatReferenceId.parse(
+                '11111111-1111-4111-8111-111111111111',
+              ),
+              message: 'Synthetic silent send',
+              replayContractRevision: textSendReplayContractRevision,
+              enqueueSequence: 1,
+              state: TextSendOutboxState.awaitingConfirmation,
+              attemptCount: 1,
+              messageIds: const [],
+              duplicateRiskAcknowledged: false,
+              errorClass: 'ambiguous-transport',
+              nextAttemptAt: 1000 + textSendAbsenceGraceSeconds,
+              replyTo: null,
+              threadId: null,
+              replyToToken: null,
+              parentRoomToken: null,
+              silent: true,
+            ),
+          },
+        ),
+      },
+    );
+    ChatOutboxOutcome resend(List<Object?> features) =>
+        resendTextSendAfterVerifiedAbsence(
+          snapshot,
+          accountId: accountId,
+          authority: _replayAuthority(snapshot.accounts[accountId]!, {
+            'capabilities': features,
+          }),
+          operationId: operationId,
+          readThreadId: null,
+          readStartedAt: 1031,
+          now: 1031,
+        ).outcome;
+
+    expect(
+      resend(const ['chat-v2', 'chat-reference-id']),
+      ChatOutboxOutcome.rejected,
+    );
+    expect(
+      resend(const ['chat-v2', 'chat-reference-id', 'silent-send']),
+      ChatOutboxOutcome.queued,
+    );
+  });
+
   test('outbox plan is single-use and source-bound', () {
     final snapshot = _snapshot(_object(cases.first['initialAccounts']));
     final step = _object((cases.first['steps']! as List<Object?>).first);
@@ -196,11 +259,26 @@ ChatOutboxResult _applyStep(
           ? ChatTransportBodyState.notSent
           : ChatTransportBodyState.possiblySent,
       nextAttemptAt: step['nextAttemptAt'] as int?,
+      now: step['now'] as int?,
     ),
     'restart' => recoverTextSendAfterRestart(
       snapshot,
       accountId: accountId,
       operationId: operationId,
+      now: step['now'] as int?,
+    ),
+    'verifiedAbsence' => resendTextSendAfterVerifiedAbsence(
+      snapshot,
+      accountId: accountId,
+      authority: authority,
+      operationId: operationId,
+      readThreadId: step['readThreadId'] as int?,
+      readStartedAt: step['readStartedAt']! as int,
+      now: step['now']! as int,
+      knownMessages: <ChatMessageConfirmation>[
+        if (step['knownMessage'] != null)
+          _relayConfirmation(account, _object(step['knownMessage'])),
+      ],
     ),
     'authoritativeMessages' => reconcileTextSendConfirmation(
       snapshot,
@@ -443,6 +521,7 @@ TextSendOutboxOperation _operationFromJson(Map<String, Object?> value) {
         value['duplicateRiskAcknowledged'] as bool? ?? false,
     errorClass: value['errorClass'] as String?,
     nextAttemptAt: value['nextAttemptAt'] as int?,
+    automaticResendCount: value['automaticResendCount'] as int? ?? 0,
     replyTo: value['replyTo'] as int?,
     threadId: value['threadId'] as int?,
     replyToToken: value['replyToToken'] == null
@@ -467,6 +546,8 @@ void _expectOperation(
   );
   expect(actual.errorClass, expected['errorClass']);
   expect(actual.nextAttemptAt, expected['nextAttemptAt']);
+  // Cases written before automatic resends leave the count out.
+  expect(actual.automaticResendCount, expected['automaticResendCount'] ?? 0);
   expect(actual.replyTo, expected['replyTo']);
   expect(actual.threadId, expected['threadId']);
   expect(actual.replyToToken?.value, expected['replyToToken']);

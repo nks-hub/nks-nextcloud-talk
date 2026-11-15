@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Any
 
 from validator_common import (
+    ABSENCE_GRACE_SECONDS,
     BASE_RATE_LIMIT_RETRY_SECONDS,
     ContractValidationError,
+    MAX_AUTOMATIC_RESENDS,
     MAX_RATE_LIMIT_BACKOFF_SECONDS,
     REQUIRED_OUTBOX_IDS,
     SEND_CONTEXT_FIELDS,
@@ -148,14 +150,26 @@ def normalize_outbox_operation(
             ),
             "errorClass": error_class,
             "nextAttemptAt": next_attempt,
+            "automaticResendCount": require_integer(
+                raw_operation.get("automaticResendCount", 0),
+                f"{label} automaticResendCount",
+                0,
+            ),
         }
     )
     if state in {"sending", "retryable", "awaitingConfirmation"} and attempt_count < 1:
         raise ContractValidationError(f"{label} active state needs an attempt")
     if state == "completed" and not message_ids:
         raise ContractValidationError(f"{label} completed state needs a message id")
-    if next_attempt is not None and state != "retryable":
-        raise ContractValidationError(f"{label} retry time belongs only to retryable")
+    # On an ambiguous operation the same field holds the moment from which a
+    # chat read may prove the server never stored the message.
+    if next_attempt is not None and state not in {
+        "retryable",
+        "awaitingConfirmation",
+    }:
+        raise ContractValidationError(
+            f"{label} retry time belongs only to retryable or awaitingConfirmation"
+        )
     return normalized
 
 
@@ -217,6 +231,7 @@ def outbox_operation_summary(operation: dict[str, Any]) -> dict[str, Any]:
         "duplicateRiskAcknowledged": operation["duplicateRiskAcknowledged"],
         "errorClass": operation["errorClass"],
         "nextAttemptAt": operation["nextAttemptAt"],
+        "automaticResendCount": operation["automaticResendCount"],
         "replyTo": operation["replyTo"],
         "threadId": operation["threadId"],
         "replyToToken": operation["replyToToken"],
@@ -275,6 +290,7 @@ def admit_outbox_operation(
             "duplicateRiskAcknowledged": False,
             "errorClass": None,
             "nextAttemptAt": None,
+            "automaticResendCount": 0,
         }
     )
     account["operations"][operation_id_value] = operation
@@ -462,6 +478,26 @@ def outbox_replay_is_allowed(
     return {"chat-v2", "chat-reference-id", "threads"}.issubset(
         features
     ) and not federated
+
+
+def absence_verifiable_at(step: dict[str, Any]) -> int | None:
+    # Without a clock the ambiguous operation waits for the sender for good.
+    if step.get("now") is None:
+        return None
+    return (
+        require_integer(step.get("now"), "ambiguous attempt end time", 0)
+        + ABSENCE_GRACE_SECONDS
+    )
+
+
+def carries_operation_reference(
+    message: dict[str, Any],
+    operation: dict[str, Any],
+) -> bool:
+    return (
+        message.get("token") == operation["roomToken"]
+        and message.get("referenceId") == operation["referenceId"]
+    )
 
 
 def rate_limit_retry_delay(
@@ -655,7 +691,8 @@ def apply_outbox_action(
             operation["state"] = "awaitingConfirmation"
             operation["messageIds"] = []
             operation["errorClass"] = "ambiguous-response"
-            outcome = "awaiting-confirmation"
+            operation["nextAttemptAt"] = absence_verifiable_at(step)
+            return "awaiting-confirmation", operation_id_value
         operation["nextAttemptAt"] = None
         return outcome, operation_id_value
 
@@ -675,7 +712,7 @@ def apply_outbox_action(
         if body_state == "possibly-sent":
             operation["state"] = "awaitingConfirmation"
             operation["errorClass"] = "ambiguous-transport"
-            operation["nextAttemptAt"] = None
+            operation["nextAttemptAt"] = absence_verifiable_at(step)
             return "awaiting-confirmation", operation_id_value
         raise ContractValidationError(f"Unknown transport body state {body_state}")
 
@@ -684,8 +721,63 @@ def apply_outbox_action(
             return "unchanged", operation_id_value
         operation["state"] = "awaitingConfirmation"
         operation["errorClass"] = "process-interrupted"
-        operation["nextAttemptAt"] = None
+        operation["nextAttemptAt"] = absence_verifiable_at(step)
         return "awaiting-confirmation", operation_id_value
+
+    if action == "verifiedAbsence":
+        now = require_integer(step.get("now"), "verified absence time", 0)
+        read_started_at = require_integer(
+            step.get("readStartedAt"),
+            "verifying read start time",
+            0,
+        )
+        read_thread_id = step.get("readThreadId")
+        if read_thread_id is not None:
+            read_thread_id = require_integer(
+                read_thread_id,
+                "verifying read threadId",
+                1,
+            )
+        known = (
+            authoritative_relay_messages({"message": step["knownMessage"]})
+            if step.get("knownMessage") is not None
+            else []
+        )
+        # A copy that confirms the operation always wins over a resend.
+        reconciled = apply_authoritative_messages(operation, known)
+        if reconciled == "completed":
+            return reconciled, operation_id_value
+        verifiable_at = operation["nextAttemptAt"]
+        if (
+            operation["state"] != "awaitingConfirmation"
+            or operation["messageIds"]
+            or operation["automaticResendCount"] >= MAX_AUTOMATIC_RESENDS
+            or verifiable_at is None
+            or read_started_at <= verifiable_at
+            or now < read_started_at
+            or read_thread_id != operation["threadId"]
+            or any(carries_operation_reference(message, operation) for message in known)
+            or not outbox_replay_is_allowed(operation, step)
+        ):
+            return "rejected", operation_id_value
+        obsolete = obsolete_replay_predecessors(
+            account,
+            operation_id_value,
+            operation,
+        )
+        if send_start_is_blocked(
+            account,
+            operation_id_value,
+            operation,
+            obsolete,
+        ):
+            return "rejected", operation_id_value
+        quarantine_obsolete_replay_predecessors(account, obsolete)
+        operation["state"] = "queued"
+        operation["automaticResendCount"] += 1
+        operation["errorClass"] = "verified-absent"
+        operation["nextAttemptAt"] = None
+        return "queued", operation_id_value
 
     if action == "authoritativeMessages":
         record = fixture_record(
@@ -819,6 +911,12 @@ def validate_outbox_cases(
                     f"{step['expectedCredentialGeneration']}"
                 )
             expected_operation = step.get("expectedOperation")
+            if isinstance(expected_operation, dict):
+                # Cases written before automatic resends leave the count out.
+                expected_operation = {
+                    "automaticResendCount": 0,
+                    **expected_operation,
+                }
             actual_operation = (
                 outbox_operation_summary(account["operations"][operation_id_value])
                 if operation_id_value is not None

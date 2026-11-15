@@ -26,6 +26,15 @@ enum ChatOutboxOutcome {
 
 enum ChatTransportBodyState { notSent, possiblySent }
 
+/// How long the server is given to finish storing a message whose send ended
+/// without an answer, before a chat read may count as proof it never did.
+const int textSendAbsenceGraceSeconds = 30;
+
+/// How often one operation may go back to the queue on that proof alone.
+/// Past it the operation waits for the sender, as every ambiguous send used
+/// to.
+const int textSendMaximumAutomaticResends = 3;
+
 final class ChatTextSendAuthority {
   ChatTextSendAuthority({
     required this.accountId,
@@ -366,6 +375,7 @@ ChatOutboxResult applyTextSendHttpResponse(
   required ChatOperationId operationId,
   required ChatSendResponse response,
   int? now,
+  int absenceGraceSeconds = textSendAbsenceGraceSeconds,
 }) {
   final binding = _operation(snapshot, accountId, operationId);
   if (binding == null ||
@@ -403,6 +413,9 @@ ChatOutboxResult applyTextSendHttpResponse(
         ChatOutboxOutcome.completed,
       );
     case ChatSendClassification.unconfirmed:
+      // The server reported a save and only the message it returned is not
+      // the expected one. Not finding the reference later proves nothing
+      // about that save, so this one is never sent again by itself.
       return _replaceOperation(
         snapshot,
         binding.account,
@@ -466,7 +479,7 @@ ChatOutboxResult applyTextSendHttpResponse(
           state: TextSendOutboxState.awaitingConfirmation,
           messageIds: const <int>[],
           errorClass: 'ambiguous-response',
-          nextAttemptAt: null,
+          nextAttemptAt: _absenceVerifiableAt(now, absenceGraceSeconds),
         ),
         ChatOutboxOutcome.awaitingConfirmation,
       );
@@ -479,6 +492,8 @@ ChatOutboxResult recordTextSendTransportFailure(
   required ChatOperationId operationId,
   required ChatTransportBodyState bodyState,
   int? nextAttemptAt,
+  int? now,
+  int absenceGraceSeconds = textSendAbsenceGraceSeconds,
 }) {
   final binding = _operation(snapshot, accountId, operationId);
   if (binding == null ||
@@ -506,7 +521,7 @@ ChatOutboxResult recordTextSendTransportFailure(
     binding.operation.copyWith(
       state: TextSendOutboxState.awaitingConfirmation,
       errorClass: 'ambiguous-transport',
-      nextAttemptAt: null,
+      nextAttemptAt: _absenceVerifiableAt(now, absenceGraceSeconds),
     ),
     ChatOutboxOutcome.awaitingConfirmation,
   );
@@ -516,6 +531,8 @@ ChatOutboxResult recoverTextSendAfterRestart(
   ChatRuntimeSnapshot snapshot, {
   required AccountId accountId,
   required ChatOperationId operationId,
+  int? now,
+  int absenceGraceSeconds = textSendAbsenceGraceSeconds,
 }) {
   final binding = _operation(snapshot, accountId, operationId);
   if (binding == null) {
@@ -530,7 +547,9 @@ ChatOutboxResult recoverTextSendAfterRestart(
     binding.operation.copyWith(
       state: TextSendOutboxState.awaitingConfirmation,
       errorClass: 'process-interrupted',
-      nextAttemptAt: null,
+      // Counted from the recovery, the only moment known: the attempt itself
+      // ended earlier, so this waits longer than it has to, never shorter.
+      nextAttemptAt: _absenceVerifiableAt(now, absenceGraceSeconds),
     ),
     ChatOutboxOutcome.awaitingConfirmation,
   );
@@ -559,6 +578,96 @@ ChatOutboxResult reconcileTextSendConfirmation(
     binding.account,
     transition.operation!,
     transition.outcome,
+  );
+}
+
+/// Puts an ambiguous send back in the queue once a chat read has shown that
+/// the server does not hold it.
+///
+/// The server does not deduplicate by reference, so "not seen yet" is not
+/// enough. [readStartedAt] is when the HTTP read began that reached the
+/// newest message of the scope the operation posts into ([readThreadId], null
+/// for the room itself). It has to lie after the grace period the ambiguous
+/// attempt ended with: a read begun earlier may predate a save that was still
+/// under way. [knownMessages] are the messages already seen with this
+/// reference. One that confirms the operation completes it instead, and any
+/// other copy leaves the decision with the sender.
+///
+/// The operation keeps its reference, so a first copy that turns up late is
+/// still recognised and reconciliation settles on the lowest id. It goes back
+/// as `queued`, which the ordinary claim sends and counts as an attempt.
+ChatOutboxResult resendTextSendAfterVerifiedAbsence(
+  ChatRuntimeSnapshot snapshot, {
+  required AccountId accountId,
+  required ChatTextSendAuthority authority,
+  required ChatOperationId operationId,
+  required int? readThreadId,
+  required int readStartedAt,
+  required int now,
+  Iterable<ChatMessageConfirmation> knownMessages = const [],
+}) {
+  if (readStartedAt < 0 || now < 0) {
+    _outboxFailure(r'$.now');
+  }
+  final binding = _operation(snapshot, accountId, operationId);
+  if (binding == null) {
+    return _result(ChatOutboxOutcome.rejected, operationId: operationId);
+  }
+  final known = knownMessages.toList(growable: false);
+  final transition = _reconcileOperation(
+    binding.account,
+    binding.operation,
+    known,
+  );
+  if (transition.operation != null) {
+    return _replaceOperation(
+      snapshot,
+      binding.account,
+      transition.operation!,
+      transition.outcome,
+    );
+  }
+  final operation = binding.operation;
+  final verifiableAt = operation.nextAttemptAt;
+  if (operation.state != TextSendOutboxState.awaitingConfirmation ||
+      operation.messageIds.isNotEmpty ||
+      operation.automaticResendCount >= textSendMaximumAutomaticResends ||
+      verifiableAt == null ||
+      // Both are whole seconds, so only a later second is surely later.
+      readStartedAt <= verifiableAt ||
+      // A clock that ran backwards during the read measured nothing.
+      now < readStartedAt ||
+      readThreadId != operation.threadId ||
+      known.any(
+        (message) =>
+            message.accountId == binding.account.accountId &&
+            message.server == binding.account.server &&
+            message.roomToken == operation.roomToken &&
+            message.referenceId == operation.referenceId.value,
+      ) ||
+      !_canReplayTextSend(binding.account, authority, operation) ||
+      // The claim would end it as failed, and failed reads as never sent.
+      (operation.silent && !authority.profile.silentSend)) {
+    return _result(ChatOutboxOutcome.rejected, operationId: operationId);
+  }
+  final account = _quarantineObsoleteReplayPredecessors(
+    binding.account,
+    authority,
+    operation,
+  );
+  if (_sendStartIsBlocked(account, operation.operationId, operation)) {
+    return _result(ChatOutboxOutcome.rejected, operationId: operationId);
+  }
+  return _replaceOperation(
+    snapshot,
+    account,
+    operation.copyWith(
+      state: TextSendOutboxState.queued,
+      automaticResendCount: operation.automaticResendCount + 1,
+      errorClass: 'verified-absent',
+      nextAttemptAt: null,
+    ),
+    ChatOutboxOutcome.queued,
   );
 }
 
@@ -845,6 +954,19 @@ bool _sendStartIsBlocked(
     }
   }
   return false;
+}
+
+/// When a chat read may first count as proof that an ambiguous send never
+/// reached the server. Without a clock there is no such moment, and the
+/// operation waits for the sender.
+int? _absenceVerifiableAt(int? now, int graceSeconds) {
+  if (now == null) {
+    return null;
+  }
+  if (now < 0 || graceSeconds < 1) {
+    _outboxFailure(r'$.now');
+  }
+  return now + graceSeconds;
 }
 
 int _localRateLimitDelay(TextSendOutboxOperation operation) {

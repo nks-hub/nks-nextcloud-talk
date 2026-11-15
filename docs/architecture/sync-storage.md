@@ -160,7 +160,7 @@ The retry policy is data, not a Timer in the UI:
 - the server Retry-After;
 - a dependency on another operation.
 
-After a process crash, an operation found in `sending` is moved to `awaitingConfirmation`, not to `queued`. The client does not know whether the server accepted the request. Only an operation with proof that the request never left the client is sent again automatically.
+After a process crash, an operation found in `sending` is moved to `awaitingConfirmation`, not to `queued`. The client does not know whether the server accepted the request. Only an operation with proof that the request never left the client is sent again at once. A text send gets a second proof: a chat read begun after a 30 s grace period that shows the server does not hold it, described in `chat-messages-api.md`.
 
 A permanent error is not deleted. The user has to see what was not sent.
 
@@ -184,7 +184,7 @@ The first admission matrix is verified against Talk master `f2958bb25be6604240c5
 
 | operationKind | Identity and authoritative reconciliation | Policy after an ambiguous result |
 | --- | --- | --- |
-| textSend | roomToken + referenceId; the chat catch-up/relay and the specific messageId | `awaitingConfirmation`; no blind POST, a manual resend warns about duplication |
+| textSend | roomToken + referenceId; the chat catch-up/relay and the specific messageId | `awaitingConfirmation`; no blind POST, an automatic resend only after a verified absence, a manual resend warns about duplication |
 | messageEdit | roomToken + messageId + the target text; the message context/chat refresh | Confirm the visible target text, otherwise wait; a replay can duplicate the system message |
 | messageDelete | roomToken + messageId; the verified deleted verb/tombstone | Reconcile before a retry; 404/405 do not by themselves prove the outcome and concurrency is not safe |
 | reactionAdd / reactionRemove | roomToken + messageId + actor + emoji; GET reaction/message | Serially convergent, concurrency unproven; reconcile first, otherwise wait |

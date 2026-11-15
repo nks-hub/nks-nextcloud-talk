@@ -11,7 +11,8 @@
     "outbox-delivery.cases.json",
     "outbox-account-failures.cases.json",
     "outbox-recovery-ordering.cases.json",
-    "outbox-named-threads.cases.json"
+    "outbox-named-threads.cases.json",
+    "outbox-automatic-resend.cases.json"
   ],
   "headerSets": {
     "history": {

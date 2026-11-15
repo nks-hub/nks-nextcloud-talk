@@ -176,6 +176,7 @@ final class TextSendOutboxOperation {
     required this.replyToToken,
     required this.parentRoomToken,
     this.silent = false,
+    this.automaticResendCount = 0,
   }) : messageIds = List.unmodifiable(messageIds) {
     _validate();
   }
@@ -201,9 +202,14 @@ final class TextSendOutboxOperation {
   /// it is stored with the operation, not held in the composer.
   final bool silent;
 
+  /// How often the operation went back to the queue by itself after a chat
+  /// read showed the server does not hold it.
+  final int automaticResendCount;
+
   TextSendOutboxOperation copyWith({
     TextSendOutboxState? state,
     int? attemptCount,
+    int? automaticResendCount,
     Iterable<int>? messageIds,
     bool? duplicateRiskAcknowledged,
     Object? errorClass = _unchanged,
@@ -232,6 +238,7 @@ final class TextSendOutboxOperation {
     replyTo: replyTo ?? this.replyTo,
     threadId: threadId,
     silent: silent,
+    automaticResendCount: automaticResendCount ?? this.automaticResendCount,
     replyToToken: identical(replyToToken, _unchanged)
         ? this.replyToToken
         : replyToToken as ConversationToken?,
@@ -245,6 +252,7 @@ final class TextSendOutboxOperation {
         replayContractRevision.isEmpty ||
         enqueueSequence < 1 ||
         attemptCount < 0 ||
+        automaticResendCount < 0 ||
         (nextAttemptAt != null && nextAttemptAt! < 0)) {
       _outboxFailure(r'$.operations');
     }
@@ -285,7 +293,11 @@ final class TextSendOutboxOperation {
     if (state == TextSendOutboxState.completed && messageIds.isEmpty) {
       _outboxFailure(r'$.operations.messageIds');
     }
-    if (nextAttemptAt != null && state != TextSendOutboxState.retryable) {
+    // On an ambiguous operation it is the moment from which a chat read may
+    // prove the server never stored the message.
+    if (nextAttemptAt != null &&
+        state != TextSendOutboxState.retryable &&
+        state != TextSendOutboxState.awaitingConfirmation) {
       _outboxFailure(r'$.operations.nextAttemptAt');
     }
   }

@@ -215,8 +215,10 @@ The admission rejects an unknown kind, a different revision or a missing capabil
 | Durable admission | queued | The payload, the reply metadata and the revision are stored |
 | Claim | sending | Only one account lane, the attempt is incremented |
 | Error before the body | retryable | The same payload can be safely repeated after nextAttemptAt |
-| The body may have been sent | awaitingConfirmation | No automatic POST |
-| A restart in sending | awaitingConfirmation | The process does not know the server outcome |
+| The body may have been sent | awaitingConfirmation | No POST until a read proves the message absent; nextAttemptAt is the attempt end plus 30 s |
+| A restart in sending | awaitingConfirmation | The process does not know the server outcome; the 30 s count from the recovery |
+| HTTP 201 without the expected message | awaitingConfirmation | The server reported a save, so nextAttemptAt stays empty and only the sender may resend |
+| Verified absence | queued | An HTTP read of the operation's scope, begun after nextAttemptAt, reached the newest message without the reference; at most 3 times per operation |
 | HTTP 400 `error=message` | awaitingConfirmation | The same code can also arise after the comment was saved |
 | HTTP 429, or 503 with `X-Nextcloud-Maintenance-Mode: 1` | retryable | The request is refused before the save (rate limit, maintenance mode); Retry-After or a local bounded backoff is used |
 | HTTP 403, 404 or 412 with an OCS envelope | failed | Permission, missing room or actor, and the lobby refuse the request before the save |
@@ -230,7 +232,18 @@ The admission rejects an unknown kind, a different revision or a missing capabil
 
 <!-- markdownlint-enable MD013 -->
 
-Zero matches in one catch-up window does not prove that nothing happened. A manual resend is possible only after the risk of duplication is confirmed and only while no server-side match is known. A relay that arrives before the HTTP response completes the operation; a later matching HTTP response is idempotent. Within one room the claim is FIFO and at most one send runs, while another room may continue concurrently. A manual resend passes through the same lane, FIFO and single-flight guard. An HTTP result may be applied only to an operation with a matching room, reference and reply context. An empty successful future result (a `200` with the cursor/common-read, or a `304`) leaves the operation in `awaitingConfirmation`.
+Zero matches in one catch-up window does not prove that nothing happened, because the server may still be storing the message. The client therefore resends by itself only on a verified absence, and all of the following must hold:
+
+- The operation is `awaitingConfirmation`, has no recorded `messageIds` and carries a `nextAttemptAt`. That field is set to the end of the ambiguous attempt plus `textSendAbsenceGraceSeconds` (30). An operation without it, such as one stored by an older build or a `201` without the expected message, is never resent automatically.
+- An HTTP read of the same room and thread scope (the room for a plain message or a reply, the named thread for a named-thread send) started in a later second than `nextAttemptAt` and was answered `304`, which is the server saying the scope holds nothing newer than the cursor. A read that started earlier counts for nothing, and neither does a relay payload or anything served from the cache. A clock that reports the end of the read before its start, or that has moved back behind `nextAttemptAt`, means the grace period is not over.
+- No message with the operation's `referenceId` is cached for the room. This is checked in the transaction that changes the state: a copy that confirms the operation completes it, and any other copy leaves it to the sender.
+- The authority allows a replay exactly as for an ordinary retry, a silent send still has `silent-send`, and no earlier operation of the room is unresolved.
+
+The operation then returns to `queued` with `errorClass: verified-absent` and the same `referenceId`, the ordinary claim sends it and counts the attempt, and `automaticResendCount` grows by one. After `textSendMaximumAutomaticResends` (3) it stays in `awaitingConfirmation` for the sender. Later sends of the room stay blocked the whole time. A duplicate is still possible when the server stores the first copy after the verifying read; both copies carry one reference and the lowest-ID rule above settles the operation.
+
+The mobile client checks from a per-room timer armed for `nextAttemptAt` and from every wake that reads the room (a poll round, a returning network, a resume, a background drain). The timer makes its own HTTP catch-up, so it also works while a trusted HPB relay has the long poll standing down. A server without `chat-keep-notifications` is read only while the room is open, so there the check waits for the room.
+
+A manual resend is possible only after the risk of duplication is confirmed and only while no server-side match is known. A relay that arrives before the HTTP response completes the operation; a later matching HTTP response is idempotent. Within one room the claim is FIFO and at most one send runs, while another room may continue concurrently. A manual resend passes through the same lane, FIFO and single-flight guard. An HTTP result may be applied only to an operation with a matching room, reference and reply context. An empty successful future result (a `200` with the cursor/common-read, or a `304`) is not a confirmation and by itself leaves the operation in `awaitingConfirmation`; only the verified absence above moves it.
 
 An ordinary same-room reply can also be confirmed authoritatively from history/future through a compact deleted parent. It must have exactly `parent.id == replyTo`, must carry neither `parentRoomToken` nor `parentThreadId`, and the outer `threadId` must be positive. This exception applies after an ambiguous POST as well as after a restart; it starts no new POST and exactly one match completes the operation. A different parent, added parent metadata or a zero outer thread stay without a match.
 
@@ -247,7 +260,7 @@ Commit `c1aa49c` types the upstream `geo-location` parameter. `latitude` and `lo
 
 Flutter renders a valid location as a map icon and a name inside a single link semantics node with a minimum target of 48 dp. At 200% text the name is limited to two lines. An invalid `geo-location` does not turn into an active link and stays a generic rich-object pill. A live server share was displayed on iOS 18.6 and opened the correct point in OpenStreetMap; the text `#394857` against the pill `#D4E4F6` had 7.2492:1 in both the light and the dark theme, and the test message was deleted after the evidence was collected.
 
-Flutter schema v5 added a nullable `threadId` to `text_send_operations` and the current schema v7 preserves it. A file-backed reopen test preserves both a queued and a sending named-thread operation, and `recoverInterruptedTextSends` safely converts an interrupted `sending` into `awaitingConfirmation` without losing the thread binding. This is DB/repository evidence, not a finished live process-death or background scheduler scenario.
+Flutter schema v5 added a nullable `threadId` to `text_send_operations` and the current schema v7 preserves it. Schema v19 adds `automatic_resend_count` (default 0) for the verified-absence rule; the time a read may first prove an absence reuses `next_attempt_at`, so a row stored by an older build has none and is never resent automatically. A file-backed reopen test preserves both a queued and a sending named-thread operation, and `recoverInterruptedTextSends` safely converts an interrupted `sending` into `awaitingConfirmation` without losing the thread binding. This is DB/repository evidence, not a finished live process-death or background scheduler scenario.
 
 ## Diagnostics and security
 
