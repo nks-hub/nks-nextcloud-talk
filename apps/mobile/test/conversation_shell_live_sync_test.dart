@@ -238,6 +238,9 @@ Future<void> _verifyHiddenListBackoff(WidgetTester tester) async {
         accountsProvider.overrideWith((ref) => Stream.value([account])),
         selectedAccountProvider.overrideWith((ref) => Stream.value(account)),
         // The room is selected but not listed, so no chat pane is built.
+        unreadCountsProvider.overrideWith(
+          (ref) => Stream.value(const <String, int>{}),
+        ),
         conversationsProvider.overrideWith(
           (ref, accountId) => Stream.value(const <CachedConversation>[]),
         ),
@@ -357,6 +360,9 @@ Future<void> _verifyVisibleListPace(WidgetTester tester) async {
         conversationSyncServiceProvider.overrideWithValue(service),
         accountsProvider.overrideWith((ref) => Stream.value([account, other])),
         selectedAccountProvider.overrideWith((ref) => selectedAccounts.stream),
+        unreadCountsProvider.overrideWith(
+          (ref) => Stream.value(const <String, int>{}),
+        ),
         conversationsProvider.overrideWith(
           (ref, accountId) => Stream.value(const <CachedConversation>[]),
         ),
