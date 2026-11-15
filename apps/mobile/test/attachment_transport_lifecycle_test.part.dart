@@ -1,6 +1,41 @@
 part of 'attachment_transport_test.dart';
 
 void _registerLifecycleTests() {
+  test('a source whose digest the caller vouches for is checked by size '
+      'only', () async {
+    final transport = HttpAttachmentTransport(
+      client: MockClient((_) async => http.Response('', 201)),
+      sourceProvider: _MemorySourceProvider(<String, List<int>>{
+        _sourceHandle: _chunkBytes,
+      }),
+    );
+    addTearDown(transport.close);
+    final wrongDigest = _source(_chunkBytes, sha256: _normalSha256);
+
+    await expectLater(
+      transport.verifySource(
+        source: wrongDigest,
+        authorization: _authorization,
+      ),
+      throwsA(isA<AttachmentTransportException>()),
+    );
+    final verified = await transport.verifySource(
+      source: wrongDigest,
+      authorization: _authorization,
+      digestKnown: true,
+    );
+    await transport.releaseSource(verified);
+
+    await expectLater(
+      transport.verifySource(
+        source: _source(<int>[..._chunkBytes, 0], sha256: _chunkSha256),
+        authorization: _authorization,
+        digestKnown: true,
+      ),
+      throwsA(isA<AttachmentTransportException>()),
+    );
+  });
+
   test('rejects redirect without follow or credential leak', () async {
     late http.Request captured;
     final transport = _transport(

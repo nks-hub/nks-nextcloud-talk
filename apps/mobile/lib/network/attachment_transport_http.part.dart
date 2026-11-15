@@ -470,6 +470,7 @@ mixin _HttpAttachmentTransportInternals {
     required AttachmentRequestStep step,
     required _OperationAbortController abort,
     required _TransferActivity activity,
+    bool verifyDigest = true,
   }) async {
     StreamIterator<List<int>>? iterator;
     _CancellationRegistration? iteratorCancellation;
@@ -510,14 +511,16 @@ mixin _HttpAttachmentTransportInternals {
             AttachmentTransportStage.sourceVerification,
           );
         }
-        digest.add(chunk);
+        if (verifyDigest) {
+          digest.add(chunk);
+        }
         activity.markProgress(
           stage: AttachmentTransportStage.sourceVerification,
           requestMayHaveReachedServer: false,
         );
       }
       if (byteLength != source.byteLength ||
-          digest.close() != source.sha256.value) {
+          (verifyDigest && digest.close() != source.sha256.value)) {
         throw _transportFailure(
           AttachmentTransportError.sourceChanged,
           step,

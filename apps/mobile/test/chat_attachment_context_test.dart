@@ -112,6 +112,34 @@ void main() {
     },
   );
 
+  test('a burst of attachments reads the capabilities once', () async {
+    var reads = 0;
+    final api = _api((request) async {
+      reads++;
+      return http.Response(jsonEncode(_attachmentCapabilities()), 200);
+    });
+    addTearDown(api.close);
+    final resolver = ChatAttachmentContextResolver(
+      accounts: accounts,
+      chat: chat,
+      credentials: credentials,
+      api: api,
+      uploadPolicy: uploadPolicy,
+      clock: () => DateTime.utc(2026, 8, 24, 12),
+    );
+
+    for (var index = 0; index < 3; index++) {
+      await resolver.resolve(
+        accountId: AccountId.parse('account-a'),
+        roomToken: _roomToken(),
+        source: _source(),
+        metadata: _metadata(),
+      );
+    }
+
+    expect(reads, 1);
+  });
+
   test(
     'refuses offline when nothing was ever stored for the account',
     () async {
@@ -728,8 +756,12 @@ ChatAttachmentContextResolver _resolver({
   credentials: credentials,
   api: api,
   uploadPolicy: uploadPolicy,
-  clock: () => DateTime.utc(2026, 8, 24, 12),
+  // Every read is a minute later, so no two resolves of one test share the
+  // short window in which a live capability read is reused.
+  clock: () => _resolverNow = _resolverNow.add(const Duration(minutes: 1)),
 );
+
+DateTime _resolverNow = DateTime.utc(2026, 8, 24, 12);
 
 HttpNextcloudApi _api(
   Future<http.Response> Function(http.Request request) handler, {

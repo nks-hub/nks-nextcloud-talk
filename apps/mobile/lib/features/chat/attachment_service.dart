@@ -517,6 +517,10 @@ final class AttachmentService with _AttachmentServiceRuntime {
     final verifiedSource = await _transport.verifySource(
       source: request.source,
       authorization: authorization,
+      // The store hashed its own copy when it committed it, moments ago, and
+      // never rewrites it. A job resumed later is hashed in full again.
+      digestKnown:
+          request.source.ownership == AttachmentSourceOwnership.appOwnedCopy,
     );
 
     AttachmentJobId? admittedJobId;

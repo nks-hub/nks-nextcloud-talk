@@ -277,6 +277,21 @@ final class DurableAttachmentSourceStore implements AttachmentSourceProvider {
     return (await _resolveSource(source.handle)).path;
   }
 
+  /// The path of a committed source, checked by size only.
+  ///
+  /// A committed file is never rewritten, so a reader that needs the bytes
+  /// right after the store hashed them does not have to hash them again.
+  Future<String> resolvePath(PreparedAttachmentSource source) async {
+    await initialize();
+    final resolved = await _resolveSource(source.handle);
+    if (resolved.byteLength != source.byteLength) {
+      throw const DurableAttachmentSourceException(
+        DurableAttachmentSourceError.sourceChanged,
+      );
+    }
+    return resolved.path;
+  }
+
   @override
   Future<AttachmentSourceLease> open(
     AttachmentSourceHandle handle, {

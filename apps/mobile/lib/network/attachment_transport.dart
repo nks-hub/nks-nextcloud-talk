@@ -215,6 +215,7 @@ final class HttpAttachmentTransport with _HttpAttachmentTransportInternals {
     required PreparedAttachmentSource source,
     required AttachmentTransportAuthorization authorization,
     AttachmentCancellationSignal? cancellationSignal,
+    bool digestKnown = false,
   }) async {
     _ensureOpen(AttachmentRequestStep.normalPut);
     _validateAuthorizationFields(
@@ -267,6 +268,7 @@ final class HttpAttachmentTransport with _HttpAttachmentTransportInternals {
         step: AttachmentRequestStep.normalPut,
         abort: abort,
         activity: activity,
+        verifyDigest: !digestKnown,
       );
       abort.throwIfAborted();
       if (_closed) {

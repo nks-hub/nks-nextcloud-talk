@@ -20,6 +20,30 @@ void main() {
   });
 
   group('DurableAttachmentSourceStore', () {
+    test('a thumbnail path lookup checks the size without hashing', () async {
+      final store = DurableAttachmentSourceStore(root: root);
+      final source = await store.copyFromStream(
+        stream: Stream<List<int>>.value(<int>[1, 2, 3, 4]),
+        mimeType: 'image/png',
+        displayName: 'photo.png',
+      );
+      final path = await store.resolvePath(source);
+
+      // Same size, other bytes: only a lookup that hashed would notice.
+      await File(path).writeAsBytes(<int>[9, 9, 9, 9], flush: true);
+      expect(await store.resolvePath(source), path);
+      await expectLater(
+        store.resolveVerifiedPath(source),
+        throwsA(isA<DurableAttachmentSourceException>()),
+      );
+
+      await File(path).writeAsBytes(<int>[9], flush: true);
+      await expectLater(
+        store.resolvePath(source),
+        throwsA(isA<DurableAttachmentSourceException>()),
+      );
+    });
+
     test(
       'copies atomically, hashes bytes, and returns an opaque handle',
       () async {

@@ -509,9 +509,9 @@ final class RecordVoiceRecorder implements VoiceRecorder {
         mimeType: voiceRecordingMimeType,
         displayName: displayName,
       );
-      // Re-verifies the committed file still matches the recorded size and
-      // hash before the recording is handed back to the caller.
-      await store.resolveVerifiedPath(source);
+      // The commit hashed the file a moment ago; only its presence and size
+      // are checked before the recording is handed back to the caller.
+      await store.resolvePath(source);
       final duration = captured;
       if (duration <= Duration.zero) {
         throw const VoicePlatformException(VoicePlatformError.invalidRecording);

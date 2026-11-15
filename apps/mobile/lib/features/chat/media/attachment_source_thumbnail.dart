@@ -40,7 +40,7 @@ class _AttachmentSourceThumbnailState extends State<AttachmentSourceThumbnail> {
 
   void _load() {
     _path = widget.source.mimeType.startsWith('image/')
-        ? widget.store.resolveVerifiedPath(widget.source)
+        ? widget.store.resolvePath(widget.source)
         : null;
   }
 

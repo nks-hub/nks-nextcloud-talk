@@ -71,6 +71,12 @@ final class ChatAttachmentContextResolver {
   final AttachmentUploadPolicy _uploadPolicy;
   final DateTime Function() _clock;
 
+  /// The last live capability read, reused for [_capabilityReuse] so that an
+  /// album of ten pictures asks the server once instead of ten times.
+  ({String key, DateTime readAt, CapabilitySnapshot capabilities})?
+  _recentCapabilities;
+  static const _capabilityReuse = Duration(seconds: 10);
+
   Future<AttachmentCapabilityProfile> resolveProfile({
     required AccountId accountId,
     required ConversationToken roomToken,
@@ -181,12 +187,27 @@ final class ChatAttachmentContextResolver {
     final server = _parseServer(initial.account.serverUrl);
 
     final CapabilitySnapshot capabilities;
+    final capabilityKey =
+        '${accountId.value}\n${initial.account.serverUrl}\n'
+        '${initial.account.loginName}\n$appPassword';
+    final recent = _recentCapabilities;
     try {
-      capabilities = await _api.getAuthenticatedCapabilities(
-        server: server,
-        loginName: initial.account.loginName,
-        appPassword: appPassword,
-      );
+      if (recent != null &&
+          recent.key == capabilityKey &&
+          _clock().toUtc().difference(recent.readAt).abs() < _capabilityReuse) {
+        capabilities = recent.capabilities;
+      } else {
+        capabilities = await _api.getAuthenticatedCapabilities(
+          server: server,
+          loginName: initial.account.loginName,
+          appPassword: appPassword,
+        );
+        _recentCapabilities = (
+          key: capabilityKey,
+          readAt: _clock().toUtc(),
+          capabilities: capabilities,
+        );
+      }
     } on NextcloudApiException catch (error) {
       if (error.statusCode == 401) {
         await _chat.markReauthenticationRequired(accountId.value);
