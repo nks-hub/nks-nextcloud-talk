@@ -404,6 +404,8 @@ final class ChatLiveRoomBinding {
 
   Future<void> synchronize({Future<void>? abortTrigger}) {
     if (_closed) {
+      // Or a caller that loops while the last round advanced never stops.
+      _lastRoundAdvanced = false;
       return Future<void>.value();
     }
     _bindExternalCancellation(abortTrigger);
