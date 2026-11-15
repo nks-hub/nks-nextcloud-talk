@@ -275,7 +275,10 @@ extension _ChatServiceLiveRuntime on ChatService {
             (outcome == ChatMergeOutcome.converged && !scope.futureConverged);
         if (outcome != ChatMergeOutcome.stale &&
             outcome != ChatMergeOutcome.lobby) {
-          await _processPending(prepared);
+          // Not awaited: this holds the room lane, and waiting here behind a
+          // send that hangs would stop every later message from being
+          // applied and the next poll from starting.
+          unawaited(_deliverPending(prepared, threadId: prepared.threadId));
         }
         return _chatReadResult(outcome);
       },
