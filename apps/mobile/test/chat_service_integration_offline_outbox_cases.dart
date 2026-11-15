@@ -727,6 +727,71 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       );
     });
 
+    test('a silent send the server stopped supporting fails and frees '
+        'the room', () async {
+      var features = const <String>[
+        'conversation-v4',
+        'chat-v2',
+        'chat-reference-id',
+        'silent-send',
+      ];
+      var reachable = false;
+      final sent = <String>[];
+      final api = HttpNextcloudApi(
+        capabilityCacheTtl: Duration.zero,
+        client: _UnreachableClient(
+          MockClient((request) async {
+            if (request.url.path.endsWith('/cloud/capabilities')) {
+              return http.Response(
+                jsonEncode(_chatCapabilities(talkFeatures: features)),
+                200,
+              );
+            }
+            if (request.method == 'GET') {
+              return http.Response('', 304);
+            }
+            sent.add(request.bodyFields['message']!);
+            return _acceptedSend(request, 121);
+          }),
+          unreachable: (request) => !reachable && request.method == 'POST',
+        ),
+      );
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      addTearDown(service.close);
+      await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'quietly',
+        silent: true,
+      );
+      await _waitForTextSends(
+        database,
+        (rows) => rows.single.outboxState == 'retryable',
+      );
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'aloud',
+      );
+
+      features = features.sublist(0, 3);
+      reachable = true;
+      await service.drainPendingSends();
+      await _waitForOutboxSettled(chat);
+
+      expect(sent, ['aloud']);
+      final rows = await database.select(database.textSendOperations).get();
+      expect(rows.map((row) => row.outboxState), ['failed', 'completed']);
+      expect(rows.first.errorClass, 'silent-send-unsupported');
+    });
+
     test(
       'offline send rejects a missing persisted capability snapshot',
       () async {

@@ -225,6 +225,7 @@ The admission rejects an unknown kind, a different revision or a missing capabil
 | One authoritative match | completed | The specific messageId is stored |
 | Several referenceId matches | completed | The lowest ID is the message; the copies come from a repeated ambiguous send and must not block the room |
 | A deterministic rejection | failed | The operation stays visible |
+| A silent send after the server lost `silent-send` | failed | The request cannot be built, and left queued it would hold the room's later sends |
 | HTTP 401 | retryable + reauthRequired | Only that account is suspended |
 
 <!-- markdownlint-enable MD013 -->

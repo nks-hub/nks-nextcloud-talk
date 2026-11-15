@@ -331,6 +331,22 @@ ChatOutboxResult claimTextSendOperation(
   )) {
     return _result(ChatOutboxOutcome.rejected, operationId: operationId);
   }
+  // A server that lost `silent-send` would notify for a message promised to
+  // be silent, and the request refuses to be built for it. Left queued, the
+  // operation would hold every later send of the room behind it for good, so
+  // it ends here, where the user can see it and send it again aloud.
+  if (binding.operation.silent && !authority.profile.silentSend) {
+    return _replaceOperation(
+      snapshot,
+      account,
+      binding.operation.copyWith(
+        state: TextSendOutboxState.failed,
+        errorClass: 'silent-send-unsupported',
+        nextAttemptAt: null,
+      ),
+      ChatOutboxOutcome.failed,
+    );
+  }
   return _replaceOperation(
     snapshot,
     account,

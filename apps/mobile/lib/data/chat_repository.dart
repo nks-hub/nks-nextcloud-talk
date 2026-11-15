@@ -714,7 +714,7 @@ final class ChatRepository {
     required int now,
   }) {
     return _database.transaction(() async {
-      final snapshot = await _loadRuntime(accountId);
+      var snapshot = await _loadRuntime(accountId);
       final account = snapshot.accounts[AccountId.parse(accountId)];
       if (account == null) {
         return null;
@@ -741,6 +741,13 @@ final class ChatRepository {
           now: now,
         );
         final plan = result.plan;
+        if (result.outcome == ChatOutboxOutcome.failed && plan != null) {
+          // Ended for good instead of claimed; the next candidate is tried
+          // against the outbox without it.
+          snapshot = plan.commit(snapshot);
+          await _persistAccount(snapshot.accounts[account.accountId]!);
+          continue;
+        }
         if (result.outcome != ChatOutboxOutcome.sending || plan == null) {
           continue;
         }
