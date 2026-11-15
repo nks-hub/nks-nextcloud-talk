@@ -92,9 +92,13 @@ final class _PendingMessageBubble extends StatelessWidget {
     };
     // An admission cannot be called back, so the stand-in has nothing to
     // cancel until it fails.
+    // A send in flight cannot be cancelled either: the repository refuses it.
+    // Leaving the button out keeps the row as low as a sent bubble's, so the
+    // bubble does not change height when the server confirms it.
     final cancelable =
-        !operation.operationId.startsWith(_provisionalOperationPrefix) ||
-        operation.outboxState == 'failed';
+        operation.outboxState != 'sending' &&
+        (!operation.operationId.startsWith(_provisionalOperationPrefix) ||
+            operation.outboxState == 'failed');
     final retryable = operation.outboxState == 'retryable';
     final ambiguous = operation.outboxState == 'awaitingConfirmation';
     final resourceUrl = exactGiphyResource(operation.message);
@@ -128,7 +132,12 @@ final class _PendingMessageBubble extends StatelessWidget {
                 borderRadius: _bubbleRadius(outgoing: true, groupEnd: true),
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                padding: EdgeInsets.fromLTRB(
+                  12,
+                  8,
+                  12,
+                  cancelable || retryable || ambiguous ? 4 : 7,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

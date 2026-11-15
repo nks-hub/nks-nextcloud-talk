@@ -518,6 +518,42 @@ void _registerChatRoomPaneInteractionTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('a send in flight offers no cancel and keeps a low status row', (
+    tester,
+  ) async {
+    await _insertPendingOperation(
+      database,
+      account,
+      conversation,
+      operationId: 'operation-flying',
+      outboxState: 'sending',
+      message: 'Flying fixture text',
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomPane(account: account, conversation: conversation),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('chat-cancel-operation-flying')), findsNothing);
+    // The 40 dp buttons are what make a pending bubble taller than a sent
+    // one; a send in flight has none of them in its status row.
+    final statusRow = find.ancestor(
+      of: find.text('Sending…'),
+      matching: find.byType(Row),
+    );
+    expect(
+      find.descendant(of: statusRow.first, matching: find.byType(IconButton)),
+      findsNothing,
+    );
+    expect(tester.getSize(statusRow.first).height, lessThan(40));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('cancelling a queued send clears the outbox row and bubble', (
     tester,
   ) async {
