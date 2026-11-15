@@ -157,6 +157,7 @@ void main() {
         );
       });
 
+      await chat.ensureRootScope(account: account, conversation: conversation);
       final message = await _service(accounts, chat, vault, client).share(
         accountId: account.id,
         roomToken: conversation.token,
@@ -167,6 +168,21 @@ void main() {
 
       expect(message.messageId, 500);
       expect(shareRequests, 1);
+      // On screen at once: cached, and inside what the room's view covers.
+      expect(
+        await chat.getMessage(
+          accountId: account.id,
+          roomToken: conversation.token,
+          messageId: 500,
+        ),
+        isA<CachedChatMessage>(),
+      );
+      final scope = await chat.getScope(
+        accountId: account.id,
+        roomToken: conversation.token,
+        threadId: null,
+      );
+      expect(scope!.blocksJson, contains('"500"'));
     });
 
     for (final entry in const <String, Map<String, Object?>>{

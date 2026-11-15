@@ -863,6 +863,39 @@ final class ChatRepository {
     });
   }
 
+  /// Stores a message the server returned for a POST that is not a text send,
+  /// a shared location for one, and extends the view it was posted into.
+  /// [threadId] is the named thread it went to, null for the room itself.
+  ///
+  /// Without this the message exists on the server and nowhere on screen
+  /// until the next read of the room.
+  Future<void> recordPostedMessage({
+    required String accountId,
+    required ChatMessage message,
+    int? threadId,
+  }) {
+    return _database.transaction(() async {
+      final account = await (_database.select(
+        _database.accounts,
+      )..where((row) => row.id.equals(accountId))).getSingleOrNull();
+      if (account == null) {
+        return;
+      }
+      await _applyMessageMutation(
+        accountId: accountId,
+        server: ServerBase.parse(account.serverUrl),
+        message: message,
+      );
+      await _appendPostedMessageToViewInCurrentTransaction(
+        accountId: accountId,
+        roomToken: message.roomToken,
+        replyTo: null,
+        namedThreadId: threadId,
+        message: message,
+      );
+    });
+  }
+
   Future<ChatOutboxOutcome> recordTextSendFailure({
     required String accountId,
     required ChatOperationId operationId,

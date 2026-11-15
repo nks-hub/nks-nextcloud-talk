@@ -112,16 +112,34 @@ extension _ChatRepositoryProjection on ChatRepository {
     required TextSendOutboxOperation operation,
     required ChatMessage message,
   }) async {
-    final replyTo = operation.replyTo;
-    final namedThreadId = operation.threadId;
+    if (operation.replyToToken != null ||
+        (operation.parentRoomToken != null &&
+            operation.parentRoomToken != operation.roomToken)) {
+      return;
+    }
+    await _appendPostedMessageToViewInCurrentTransaction(
+      accountId: accountId,
+      roomToken: operation.roomToken,
+      replyTo: operation.replyTo,
+      namedThreadId: operation.threadId,
+      message: message,
+    );
+  }
+
+  /// Puts a message the server returned for a POST into the view it was
+  /// posted to, so it is on screen before the next read brings it.
+  Future<void> _appendPostedMessageToViewInCurrentTransaction({
+    required String accountId,
+    required ConversationToken roomToken,
+    required int? replyTo,
+    required int? namedThreadId,
+    required ChatMessage message,
+  }) async {
     if (replyTo != null && namedThreadId != null) {
       return;
     }
     final viewThreadId = namedThreadId ?? replyTo;
-    if (operation.replyToToken != null ||
-        (operation.parentRoomToken != null &&
-            operation.parentRoomToken != operation.roomToken) ||
-        message.roomToken != operation.roomToken) {
+    if (message.roomToken != roomToken) {
       return;
     }
     if (viewThreadId == null) {
@@ -139,12 +157,12 @@ extension _ChatRepositoryProjection on ChatRepository {
     }
     final viewScope = await _scope(
       accountId: accountId,
-      roomToken: operation.roomToken.value,
+      roomToken: roomToken.value,
       threadId: viewThreadId,
     );
     final networkScope = await _networkScope(
       accountId: accountId,
-      roomToken: operation.roomToken.value,
+      roomToken: roomToken.value,
       threadId: namedThreadId,
     );
     final projectionSource = networkScope ?? viewScope;

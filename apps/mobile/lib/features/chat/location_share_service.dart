@@ -312,6 +312,15 @@ final class LocationShareService implements LocationShareSender {
           _ => LocationShareError.unavailable,
         });
       }
+      try {
+        await _chat.recordPostedMessage(
+          accountId: accountId,
+          message: response.message!,
+          threadId: threadId,
+        );
+      } on Object {
+        // The share itself succeeded; the next read of the room shows it.
+      }
       return response.message!;
     } on LocationShareException {
       rethrow;
