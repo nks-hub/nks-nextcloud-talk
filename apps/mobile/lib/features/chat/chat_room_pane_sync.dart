@@ -573,6 +573,18 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     if (!_scrollController.hasClients) {
       return;
     }
+    // The anchor is the message that was newest when the reader left. What
+    // arrived since lies below it and is only measured once it is on screen,
+    // so from here the jump would stop at the anchor and leave the newer
+    // messages under the fold. Without the anchor the newest edge is zero.
+    if (_anchorMessageId != null) {
+      _scrollController.keepPositionAcrossAnchorChange();
+      _update(() => _anchorMessageId = null);
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+    }
     // A long history makes an animated scroll take an unbounded time, so the
     // far part is cut in one step and only the last screen is animated.
     final position = _scrollController.position;
@@ -586,13 +598,26 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
     );
-    // Arriving releases the anchor, which moves the newest edge again.
-    if (mounted && _scrollController.hasClients) {
+    // Arriving releases the anchor, which moves the newest edge again, and
+    // rows measured only now move it once more. A view left a few pixels
+    // short shows no jump control and no longer follows new messages.
+    // Done once the view has sat on the edge for a few frames in a row; a
+    // slow first layout keeps moving it for longer than one frame.
+    var steadyFrames = 0;
+    for (var pass = 0; pass < 30 && steadyFrames < 3; pass++) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
       final settled = _scrollController.position;
       final target = _newestOffset(settled);
-      if (settled.pixels != target) {
+      if (settled.pixels == target) {
+        steadyFrames++;
+      } else {
+        steadyFrames = 0;
         _scrollController.jumpTo(target);
       }
+      WidgetsBinding.instance.scheduleFrame();
+      await WidgetsBinding.instance.endOfFrame;
     }
   }
 

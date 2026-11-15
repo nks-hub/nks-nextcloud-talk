@@ -282,6 +282,85 @@ void main() {
 
     await closeRoom(tester);
   });
+
+  testWidgets('a jump lands on messages that arrived while reading history', (
+    tester,
+  ) async {
+    final room = await seedRoom('roomd4', 400);
+    await openRoom(tester, room);
+
+    Future<void> arrive(int index) async {
+      final wire = _wireMessage(room.token, 100 + index, index);
+      await tester.runAsync(
+        () => database
+            .into(database.cachedChatMessages)
+            .insert(
+              CachedChatMessagesCompanion.insert(
+                accountId: account.id,
+                roomToken: room.token,
+                messageId: wire['id']! as int,
+                actorType: 'users',
+                actorId: wire['actorId']! as String,
+                actorDisplayName: wire['actorDisplayName']! as String,
+                timestamp: wire['timestamp']! as int,
+                systemMessage: '',
+                messageType: 'comment',
+                referenceId: wire['referenceId']! as String,
+                displayText: wire['message']! as String,
+                deleted: false,
+                rawJson: jsonEncode(wire),
+              ),
+            ),
+      );
+      // The pane shows only what the scope's confirmed blocks cover.
+      await tester.runAsync(
+        () =>
+            (database.update(
+              database.chatScopes,
+            )..where((row) => row.roomToken.equals(room.token))).write(
+              ChatScopesCompanion(
+                futureCursor: Value('${wire['id']}'),
+                blocksJson: Value('[["100","${wire['id']}"]]'),
+              ),
+            ),
+      );
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
+    timelineScrollable(tester).position.jumpTo(6000);
+    await tester.pump();
+    // The messages come in while the app sits in the background.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    for (var index = 400; index < 404; index++) {
+      await arrive(index);
+    }
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.byKey(jumpButton));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('message number 403 '), findsOneWidget);
+    expect(find.byKey(jumpButton), findsNothing);
+
+    // Back at the newest message the view follows what arrives next.
+    await arrive(404);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('message number 404 '), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await closeRoom(tester);
+  });
 }
 
 Map<String, Object?> _wireMessage(String token, int messageId, int index) {
