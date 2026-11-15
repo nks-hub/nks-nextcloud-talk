@@ -151,6 +151,117 @@ void _registerChatRoomPaneThreadContextTests() {
       await tester.pump(const Duration(milliseconds: 1));
     });
 
+    testWidgets('the replies chip fetches a root that is not cached', (
+      tester,
+    ) async {
+      final fixture =
+          readFixtureJson(
+                'conversation-list/fixtures/conversations-full.response.json',
+              )
+              as Map;
+      final roomJson = Map<String, Object?>.from(
+        ((fixture['ocs'] as Map)['data'] as List).first as Map,
+      );
+      roomJson['token'] = conversation.token;
+      await (database.update(
+        database.cachedConversations,
+      )..where((row) => row.token.equals(conversation.token))).write(
+        CachedConversationsCompanion(rawJson: Value(jsonEncode(roomJson))),
+      );
+      final root = _messageJson(
+        id: 77,
+        actorId: 'thread-author',
+        actorDisplayName: 'Thread author',
+        timestamp: 1724300177,
+        message: 'Named thread root',
+        threadId: 77,
+        isThread: true,
+      );
+      final reply = _messageJson(
+        id: 78,
+        actorId: 'thread-author',
+        actorDisplayName: 'Thread author',
+        timestamp: 1724300178,
+        message: 'Reply in the thread',
+        threadId: 77,
+        isThread: true,
+      );
+      await _insertCachedMessage(
+        database,
+        reply,
+        displayText: 'Reply in the thread',
+      );
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                capabilitiesJson(
+                  talkFeatures: const [
+                    'conversation-v4',
+                    'chat-v2',
+                    'chat-reference-id',
+                  ],
+                ),
+              ),
+              200,
+            );
+          }
+          if (request.url.queryParameters['lastKnownMessageId'] != '77') {
+            return http.Response('', 304);
+          }
+          return http.Response(
+            jsonEncode(<String, Object?>{
+              'ocs': <String, Object?>{
+                'meta': <String, Object?>{
+                  'status': 'ok',
+                  'statuscode': 200,
+                  'message': 'OK',
+                },
+                'data': <Object?>[root],
+              },
+            }),
+            200,
+            headers: const <String, String>{
+              'content-type': 'application/json; charset=utf-8',
+              'X-Chat-Last-Given': '77',
+              'X-Chat-Last-Common-Read': '0',
+            },
+          );
+        }),
+      );
+      final service = ChatService(
+        accounts: accounts,
+        chat: ChatRepository(database),
+        credentials: MemoryCredentialVault()
+          ..writeAppPassword(account.id, 'fixture-app-password'),
+        api: api,
+      );
+      addTearDown(service.close);
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        app(
+          home: roomScreen(),
+          overrides: [chatServiceProvider.overrideWithValue(service)],
+        ),
+      );
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('chat-open-thread-78')));
+      await tester.tap(find.byKey(const Key('chat-open-thread-78')));
+      final screen = find.byKey(const Key('chat-thread-screen-77'));
+      for (var i = 0; i < 60 && screen.evaluate().isEmpty; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump();
+      }
+
+      expect(screen, findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    });
+
     testWidgets('title alone does not classify an ordinary thread as named', (
       tester,
     ) async {

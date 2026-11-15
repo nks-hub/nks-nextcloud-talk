@@ -905,13 +905,31 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     var root = message;
     final threadId = message.threadId;
     if (threadId != null && threadId > 0 && threadId != message.messageId) {
-      final cached = await ref
+      Future<CachedChatMessage?> cachedRoot() => ref
           .read(chatRepositoryProvider)
           .getMessage(
             accountId: widget.account.id,
             roomToken: widget.conversation.token,
             messageId: threadId,
           );
+      var cached = await cachedRoot();
+      if (cached == null && mounted) {
+        // An old root can lie beyond the cached history; fetch just it.
+        try {
+          await ref
+              .read(chatServiceProvider)
+              .refreshMessage(
+                accountId: widget.account.id,
+                roomToken: widget.conversation.token,
+                messageId: threadId,
+              );
+        } on Object {
+          // Offline or refused: the chip stays without effect.
+        }
+        if (mounted) {
+          cached = await cachedRoot();
+        }
+      }
       if (cached == null || !mounted) {
         return;
       }
