@@ -384,6 +384,10 @@ final class AttachmentService with _AttachmentServiceRuntime {
       {};
   @override
   final Set<AccountId> _suspendedAccounts = {};
+
+  /// Servers behind a proxy that refused a large body in this session.
+  @override
+  final Set<ServerBase> _payloadLimitedServers = {};
   final Map<AccountId, Future<void>> _accountSuspensions = {};
 
   @override
@@ -562,6 +566,9 @@ final class AttachmentService with _AttachmentServiceRuntime {
             ? _identifierFactory.newReferenceId()
             : ChatReferenceId.parse(album.referenceId);
         final sequence = _nextSequence(account, request.roomToken);
+        final policy = _payloadLimitedServers.contains(request.server)
+            ? attachmentConservativeUploadPolicy
+            : request.policy;
         final draft = AttachmentJobDraft(
           jobId: jobId,
           roomToken: request.roomToken,
@@ -569,9 +576,9 @@ final class AttachmentService with _AttachmentServiceRuntime {
           source: request.source,
           metadata: request.metadata,
           enqueueSequence: sequence,
-          policy: request.policy,
+          policy: policy,
           uploadSessionId:
-              request.policy.modeFor(request.source.byteLength) ==
+              policy.modeFor(request.source.byteLength) ==
                   AttachmentUploadMode.chunked
               ? _identifierFactory.newUploadSessionId()
               : null,

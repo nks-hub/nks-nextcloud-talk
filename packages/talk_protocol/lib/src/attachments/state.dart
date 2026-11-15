@@ -98,6 +98,7 @@ final class AttachmentJob {
   }
 
   AttachmentJob copyWith({
+    AttachmentJobDraft? draft,
     AttachmentJobPhase? phase,
     Object? resumePhase = _unchanged,
     Object? remoteDraftFolder = _unchanged,
@@ -118,7 +119,7 @@ final class AttachmentJob {
     capabilityGeneration: capabilityGeneration,
     replayContractRevision: replayContractRevision,
     davUserId: davUserId,
-    draft: draft,
+    draft: draft ?? this.draft,
     phase: phase ?? this.phase,
     resumePhase: identical(resumePhase, _unchanged)
         ? this.resumePhase

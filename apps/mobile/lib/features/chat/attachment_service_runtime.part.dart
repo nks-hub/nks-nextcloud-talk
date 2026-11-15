@@ -39,6 +39,7 @@ mixin _AttachmentServiceRuntime {
   get _cancellations;
   Map<AttachmentPersistenceKey, Completer<void>> get _terminalSourceReleases;
   Set<AccountId> get _suspendedAccounts;
+  Set<ServerBase> get _payloadLimitedServers;
   Future<void> get _ready;
   set _startupMaintenance(Future<void> value);
   set _confirmationSubscription(
@@ -430,6 +431,11 @@ mixin _AttachmentServiceRuntime {
         key,
         cancellation.signal,
       );
+      if (response is AttachmentDavResponse &&
+          response.classification ==
+              AttachmentDavClassification.payloadTooLarge) {
+        _payloadLimitedServers.add(job!.server);
+      }
       await _stateMutex.protect(() async {
         if (_suspendedAccounts.contains(job!.accountId)) {
           return;

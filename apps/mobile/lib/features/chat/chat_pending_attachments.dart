@@ -373,6 +373,7 @@ String _jobStatus(AppLocalizations strings, StoredAttachmentJob job) {
       'dav-quota-exceeded' ||
       'draft-quota-exceeded' => strings.imageUploadFailedQuota,
       'dav-permission-denied' => strings.imageUploadFailedPermission,
+      'dav-payload-too-large' => strings.imageUploadFailedTooLarge,
       _ => strings.imageUploadFailed,
     };
   }

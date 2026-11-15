@@ -220,6 +220,8 @@ AttachmentRuntimeResult _applyDavResponse(
         ),
         AttachmentRuntimeOutcome.failed,
       );
+    case AttachmentDavClassification.payloadTooLarge:
+      return _retryWithSmallerBodies(snapshot, account, job, response.request);
     case AttachmentDavClassification.success:
       break;
   }
@@ -244,6 +246,9 @@ AttachmentRuntimeResult _applyDavResponse(
         job.copyWith(
           phase: AttachmentJobPhase.uploading,
           chunkCollectionReady: true,
+          // A collection created by this very request cannot hold chunks.
+          chunkManifestLoaded:
+              response.collectionCreated || job.chunkManifestLoaded,
           inFlightRequest: null,
           errorClass: null,
         ),
@@ -314,6 +319,66 @@ AttachmentRuntimeResult _applyDavResponse(
     case AttachmentRequestStep.finalize:
       _runtimeFailure(r'$.response.request.step');
   }
+}
+
+/// A proxy in front of the server refused the body as too large.
+///
+/// The job restarts with [attachmentConservativeUploadPolicy] unless that
+/// would send a body just as large, or chunks of the refused size are already
+/// stored; then the refusal is final.
+AttachmentRuntimeResult _retryWithSmallerBodies(
+  AttachmentRuntimeSnapshot snapshot,
+  AttachmentAccountState account,
+  AttachmentJob job,
+  AttachmentDavRequest request,
+) {
+  final byteLength = job.draft.source.byteLength;
+  final refusedBytes = request.chunkRange?.length ?? byteLength;
+  final fallback = attachmentConservativeUploadPolicy;
+  final chunked = fallback.modeFor(byteLength) == AttachmentUploadMode.chunked;
+  final fallbackBytes = chunked && fallback.chunkSizeBytes < byteLength
+      ? fallback.chunkSizeBytes
+      : byteLength;
+  if (fallbackBytes >= refusedBytes || job.verifiedChunks.isNotEmpty) {
+    return _replaceJob(
+      snapshot,
+      account,
+      job.copyWith(
+        phase: AttachmentJobPhase.failed,
+        inFlightRequest: null,
+        cleanupChunkSession:
+            job.draft.uploadMode == AttachmentUploadMode.chunked,
+        cleanupDraftFile: job.remoteTemporaryPath != null,
+        errorClass: 'dav-payload-too-large',
+      ),
+      AttachmentRuntimeOutcome.failed,
+    );
+  }
+  final draft = job.draft;
+  return _replaceJob(
+    snapshot,
+    account,
+    job.copyWith(
+      draft: AttachmentJobDraft(
+        jobId: draft.jobId,
+        roomToken: draft.roomToken,
+        referenceId: draft.referenceId,
+        source: draft.source,
+        metadata: draft.metadata,
+        enqueueSequence: draft.enqueueSequence,
+        policy: fallback,
+        // The job id is as unique as a session id and needs no generator.
+        uploadSessionId: chunked
+            ? draft.uploadSessionId ??
+                  DavUploadSessionId.parse(draft.jobId.value)
+            : null,
+      ),
+      phase: AttachmentJobPhase.draftResolved,
+      inFlightRequest: null,
+      errorClass: 'dav-payload-too-large',
+    ),
+    AttachmentRuntimeOutcome.draftResolved,
+  );
 }
 
 AttachmentRuntimeResult _rotateTemporaryDestination(

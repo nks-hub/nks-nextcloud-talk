@@ -126,8 +126,8 @@ final attachmentSourceProvider = FutureProvider<DurableAttachmentSourceStore>((
 
 final attachmentUploadPolicyProvider = Provider<AttachmentUploadPolicy>((ref) {
   return AttachmentUploadPolicy(
-    normalUploadMaximumBytes: 1024 * 1024,
-    chunkSizeBytes: 1024000,
+    normalUploadMaximumBytes: 10 * 1024 * 1024,
+    chunkSizeBytes: 5 * 1024 * 1024,
   );
 });
 

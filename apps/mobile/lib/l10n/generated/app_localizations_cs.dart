@@ -830,6 +830,10 @@ class AppLocalizationsCs extends AppLocalizations {
       'Přílohu se nepodařilo odeslat: úložiště je zaplněné.';
 
   @override
+  String get imageUploadFailedTooLarge =>
+      'Přílohu se nepodařilo odeslat: server tak velké soubory nepřijímá.';
+
+  @override
   String get imageUploadFailedPermission =>
       'Přílohu se nepodařilo odeslat: nemáte oprávnění sem nahrávat soubory.';
 

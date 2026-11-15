@@ -36,6 +36,7 @@ enum AttachmentDavClassification {
   deterministicFailure,
   quotaExceeded,
   permissionDenied,
+  payloadTooLarge,
   reauthenticationRequired,
   transientFailure,
 }
@@ -156,12 +157,17 @@ final class AttachmentDavResponse extends AttachmentResponse {
     required this.request,
     required this.classification,
     required this.manifest,
+    this.collectionCreated = false,
   });
 
   @override
   final AttachmentDavRequest request;
   final AttachmentDavClassification classification;
   final DavChunkManifest? manifest;
+
+  /// Whether a chunk MKCOL created the collection just now, as opposed to
+  /// finding one that may already hold chunks.
+  final bool collectionCreated;
 
   @override
   String toString() =>
@@ -285,6 +291,8 @@ AttachmentDavResponse decodeAttachmentDavResponse({
       request: request,
       classification: AttachmentDavClassification.success,
       manifest: manifest,
+      collectionCreated:
+          request.step == AttachmentRequestStep.chunkMkcol && statusCode == 201,
     );
   }
   final classification =
@@ -300,6 +308,12 @@ AttachmentDavResponse decodeAttachmentDavResponse({
       ? AttachmentDavClassification.quotaExceeded
       : statusCode == 403
       ? AttachmentDavClassification.permissionDenied
+      : statusCode == 413 &&
+            <AttachmentRequestStep>{
+              AttachmentRequestStep.normalPut,
+              AttachmentRequestStep.chunkPut,
+            }.contains(request.step)
+      ? AttachmentDavClassification.payloadTooLarge
       // 423 and 425 are Nextcloud saying "busy with this very file": it locks
       // the target while it assembles the chunks and answers 425 while the
       // scan is still running. Treated as deterministic they cost the whole

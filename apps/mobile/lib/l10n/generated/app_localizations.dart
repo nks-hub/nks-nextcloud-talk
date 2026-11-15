@@ -1544,6 +1544,12 @@ abstract class AppLocalizations {
   /// **'The attachment could not be sent: storage quota exceeded.'**
   String get imageUploadFailedQuota;
 
+  /// No description provided for @imageUploadFailedTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'The attachment could not be sent: the server refuses uploads of this size.'**
+  String get imageUploadFailedTooLarge;
+
   /// No description provided for @imageUploadFailedPermission.
   ///
   /// In en, this message translates to:

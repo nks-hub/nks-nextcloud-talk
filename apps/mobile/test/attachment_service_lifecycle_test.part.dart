@@ -94,10 +94,11 @@ void _registerAttachmentServiceLifecycleTests() {
         (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
       );
 
+      // The collection was created by this run (201), so it is known to be
+      // empty and no PROPFIND is spent on listing it.
       expect(seen.map((value) => value.split(' ').first), [
         'POST',
         'MKCOL',
-        'PROPFIND',
         'PUT',
         'PUT',
         'MOVE',
@@ -105,6 +106,90 @@ void _registerAttachmentServiceLifecycleTests() {
       ]);
     },
   );
+
+  test('a 413 on a large body falls back to small chunks and is remembered '
+      'for the server', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final bytes = Uint8List(2000000)..fillRange(0, 2000000, 0x41);
+    final file = File(
+      '${fixture.directory.path}${Platform.pathSeparator}large.bin',
+    );
+    await file.writeAsBytes(bytes, flush: true);
+    final source = PreparedAttachmentSource(
+      handle: AttachmentSourceHandle.parse(file.uri.toString()),
+      ownership: AttachmentSourceOwnership.appOwnedCopy,
+      byteLength: bytes.length,
+      sha256: AttachmentSha256.parse(sha256.convert(bytes).toString()),
+      mimeType: 'image/png',
+      displayName: 'source.png',
+    );
+    final base = fixture.request(normalMaximum: 32, source: source);
+    AttachmentEnqueueRequest large() => AttachmentEnqueueRequest(
+      accountId: base.accountId,
+      server: base.server,
+      roomToken: base.roomToken,
+      source: source,
+      metadata: base.metadata,
+      davUserId: base.davUserId,
+      profile: base.profile,
+      credentialGeneration: base.credentialGeneration,
+      capabilityGeneration: base.capabilityGeneration,
+      roomCanWrite: base.roomCanWrite,
+      policy: AttachmentUploadPolicy(
+        normalUploadMaximumBytes: 10 * 1024 * 1024,
+        chunkSizeBytes: 5 * 1024 * 1024,
+      ),
+    );
+    final seen = <String>[];
+    final service = fixture.service(
+      MockClient((request) async {
+        seen.add('${request.method} ${request.bodyBytes.length}');
+        if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+          return http.Response.bytes(_probeSuccess(), 200);
+        }
+        if (request.method == 'PUT') {
+          return http.Response(
+            '',
+            request.bodyBytes.length > 1024000 ? 413 : 201,
+          );
+        }
+        if (request.method == 'MKCOL' || request.method == 'MOVE') {
+          return http.Response('', 201);
+        }
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/attachment')) {
+          return http.Response.bytes(_finalizeSuccess(), 200);
+        }
+        fail('Unexpected request: ${request.method} ${request.url}');
+      }),
+      identifierFactory: _SequentialIdentifierFactory(),
+    );
+    addTearDown(service.close);
+
+    final session = await service.enqueue(large());
+    await session.events.firstWhere(
+      (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+    );
+
+    expect(seen, [
+      isA<String>(),
+      'PUT 2000000',
+      'MKCOL 0',
+      'PUT 1024000',
+      'PUT 976000',
+      'MOVE 0',
+      isA<String>(),
+    ]);
+
+    final later = await service.enqueue(large());
+    final stored = await fixture.repository.getStoredJob(
+      accountId: 'account-a',
+      jobId: later.jobId.value,
+    );
+    expect(stored!.chunkSizeBytes, 1024000);
+    expect(stored.uploadSessionId, isNotNull);
+  });
 
   test(
     'scope collision cannot complete or release a reply attachment',

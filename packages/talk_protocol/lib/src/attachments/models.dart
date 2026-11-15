@@ -191,6 +191,15 @@ final class AttachmentUploadPolicy {
       'chunkSize: $chunkSizeBytes)';
 }
 
+/// Body sizes every deployment has been seen to accept.
+///
+/// A job whose larger request is refused with 413 restarts with these.
+final AttachmentUploadPolicy attachmentConservativeUploadPolicy =
+    AttachmentUploadPolicy(
+      normalUploadMaximumBytes: 1024 * 1024,
+      chunkSizeBytes: 1024000,
+    );
+
 final class AttachmentJobDraft {
   AttachmentJobDraft({
     required this.jobId,

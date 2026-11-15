@@ -378,6 +378,163 @@ void main() {
       expect(job.cleanupDraftFile, isTrue);
     });
 
+    test('a chunk collection created just now needs no manifest request', () {
+      final prepared = source(size: 2048000);
+      final operation = draft(preparedSource: prepared);
+      var snapshot = _driveProbe(operation);
+      final mkcol = _plan(
+        snapshot,
+        operation,
+        44,
+        observation: observation(prepared),
+      );
+      snapshot = commit(snapshot, mkcol);
+      snapshot = _apply(
+        snapshot,
+        operation,
+        decodeAttachmentDavResponse(
+          request: mkcol.request! as AttachmentDavRequest,
+          statusCode: 201,
+          body: Uint8List(0),
+        ),
+      );
+
+      final next = _plan(
+        snapshot,
+        operation,
+        45,
+        observation: observation(prepared),
+      );
+      expect(next.request!.step, AttachmentRequestStep.chunkPut);
+    });
+
+    test('413 on a single PUT restarts the job in small chunks', () {
+      final prepared = source(size: 3000000);
+      final operation = draft(
+        preparedSource: prepared,
+        uploadPolicy: AttachmentUploadPolicy(
+          normalUploadMaximumBytes: 10 * 1024 * 1024,
+          chunkSizeBytes: 5000000,
+        ),
+      );
+      var snapshot = _driveProbe(operation);
+      final put = _plan(
+        snapshot,
+        operation,
+        46,
+        observation: observation(prepared),
+      );
+      expect(put.request!.step, AttachmentRequestStep.normalPut);
+      snapshot = commit(snapshot, put);
+      snapshot = _apply(
+        snapshot,
+        operation,
+        decodeAttachmentDavResponse(
+          request: put.request! as AttachmentDavRequest,
+          statusCode: 413,
+          body: Uint8List(0),
+        ),
+      );
+
+      final job = _state(snapshot, operation);
+      expect(job.phase, AttachmentJobPhase.draftResolved);
+      expect(job.draft.uploadMode, AttachmentUploadMode.chunked);
+      expect(job.draft.policy.chunkSizeBytes, 1024000);
+      expect(job.draft.referenceId, operation.referenceId);
+      expect(job.draft.enqueueSequence, operation.enqueueSequence);
+      final next = _plan(
+        snapshot,
+        operation,
+        47,
+        observation: observation(prepared),
+      );
+      expect(next.request!.step, AttachmentRequestStep.chunkMkcol);
+    });
+
+    test('413 on a large chunk continues in the same session with small '
+        'chunks', () {
+      final prepared = source(size: 12000000);
+      final operation = draft(
+        preparedSource: prepared,
+        uploadPolicy: AttachmentUploadPolicy(
+          normalUploadMaximumBytes: 10 * 1024 * 1024,
+          chunkSizeBytes: 5000000,
+        ),
+      );
+      var snapshot = _driveProbe(operation);
+      final mkcol = _plan(
+        snapshot,
+        operation,
+        48,
+        observation: observation(prepared),
+      );
+      snapshot = commit(snapshot, mkcol);
+      snapshot = _apply(
+        snapshot,
+        operation,
+        decodeAttachmentDavResponse(
+          request: mkcol.request! as AttachmentDavRequest,
+          statusCode: 201,
+          body: Uint8List(0),
+        ),
+      );
+      final chunk = _plan(
+        snapshot,
+        operation,
+        49,
+        observation: observation(prepared),
+      );
+      expect(chunk.request!.step, AttachmentRequestStep.chunkPut);
+      snapshot = commit(snapshot, chunk);
+      snapshot = _apply(
+        snapshot,
+        operation,
+        decodeAttachmentDavResponse(
+          request: chunk.request! as AttachmentDavRequest,
+          statusCode: 413,
+          body: Uint8List(0),
+        ),
+      );
+
+      final job = _state(snapshot, operation);
+      expect(job.draft.uploadSessionId, operation.uploadSessionId);
+      final next = _plan(
+        snapshot,
+        operation,
+        52,
+        observation: observation(prepared),
+      );
+      final request = next.request! as AttachmentDavRequest;
+      expect(request.step, AttachmentRequestStep.chunkPut);
+      expect(request.chunkRange!.length, 1024000);
+    });
+
+    test('413 on a body that cannot get smaller fails the job', () {
+      final operation = draft();
+      var snapshot = _driveProbe(operation);
+      final put = _plan(
+        snapshot,
+        operation,
+        53,
+        observation: observation(operation.source),
+      );
+      snapshot = commit(snapshot, put);
+      snapshot = _apply(
+        snapshot,
+        operation,
+        decodeAttachmentDavResponse(
+          request: put.request! as AttachmentDavRequest,
+          statusCode: 413,
+          body: Uint8List(0),
+        ),
+      );
+
+      final job = _state(snapshot, operation);
+      expect(job.phase, AttachmentJobPhase.failed);
+      expect(job.errorClass, 'dav-payload-too-large');
+      expect(job.cleanupDraftFile, isTrue);
+    });
+
     _registerAttachmentRuntimeCollisionTests();
 
     test('chunk resume uploads only missing chunks then moves .file', () {

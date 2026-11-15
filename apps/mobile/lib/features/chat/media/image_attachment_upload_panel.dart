@@ -470,6 +470,7 @@ String _statusText(AppLocalizations strings, ImageAttachmentUploadState state) {
     ImageAttachmentUploadPhase.failed => switch (state.failureCode) {
       'dav-quota-exceeded' => strings.imageUploadFailedQuota,
       'dav-permission-denied' => strings.imageUploadFailedPermission,
+      'dav-payload-too-large' => strings.imageUploadFailedTooLarge,
       'gallery-permission-denied' => strings.attachmentGalleryDenied,
       'gallery-unavailable' => strings.attachmentGalleryUnavailable,
       'camera-permission-denied' => strings.attachmentCameraDenied,
