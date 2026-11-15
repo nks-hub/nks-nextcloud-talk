@@ -2,15 +2,34 @@ part of 'chat_composer_integration_test.dart';
 
 void _registerClipboardOfferComposerTests() {
   Future<({_ComposerHarness harness, FakeClipboardImageSource clipboard})>
-  pumpWithClipboardImage(WidgetTester tester) async {
+  pumpWithClipboardImage(
+    WidgetTester tester, {
+    FakeOwnTalkServer? ownTalk,
+  }) async {
     ClipboardImageOffer.debugForgetHandledClip();
     final clipboard = FakeClipboardImageSource()
       ..copyImage('clip-1', _animatedGif);
-    final harness = (await tester.runAsync(_ComposerHarness.create))!;
+    final harness = (await tester.runAsync(
+      () => _ComposerHarness.create(ownTalk: ownTalk),
+    ))!;
     _addHarnessTearDown(tester, harness);
     await tester.pumpWidget(
       harness.app(
-        overrides: [clipboardImageSourceProvider.overrideWithValue(clipboard)],
+        overrides: [
+          clipboardImageSourceProvider.overrideWithValue(clipboard),
+          clipboardOfferMemoryProvider.overrideWithValue(
+            ClipboardOfferMemory(directory: harness.attachmentRoot),
+          ),
+          if (ownTalk != null) ...[
+            ownTalkSettingsStoreProvider.overrideWith(
+              (ref) =>
+                  Future<OwnTalkSettingsStore>.error(StateError('no store')),
+            ),
+            appLifecycleResumeEventsProvider.overrideWithValue(
+              const Stream<void>.empty(),
+            ),
+          ],
+        ],
       ),
     );
     await _pumpUntil(
@@ -47,6 +66,27 @@ void _registerClipboardOfferComposerTests() {
       await _pumpTransition(tester);
       expect(find.byKey(const Key('clipboard-image-offer')), findsNothing);
       expect(clipboard.reads, 1);
+      expect(tester.takeException(), isNull);
+      await _unmountComposer(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
+    'the card leaves the quick emoji slot as it is',
+    (tester) async {
+      await pumpWithClipboardImage(
+        tester,
+        ownTalk: FakeOwnTalkServer()
+          ..setExternally({'composer.quickEmoji': '\u{1F44D}'}),
+      );
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('send-quick-emoji')).evaluate().isNotEmpty,
+      );
+      // The card's send is the only primary action while the field is empty.
+      expect(find.byKey(const Key('clipboard-image-offer')), findsOneWidget);
+      expect(find.byKey(const Key('send-message')), findsNothing);
       expect(tester.takeException(), isNull);
       await _unmountComposer(tester);
     },

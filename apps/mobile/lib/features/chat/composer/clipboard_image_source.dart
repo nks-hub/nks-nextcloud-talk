@@ -1,10 +1,11 @@
 import 'dart:ffi';
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, File, Platform;
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// The clipboard as the composer's paste suggestion sees it: first whether an
 /// image is there, and only then the image itself.
@@ -15,6 +16,10 @@ abstract interface class ClipboardImageSource {
   /// "pasted from your clipboard" notice for something nobody asked to paste.
   /// A new copy has to produce a new value.
   Future<String?> peek();
+
+  /// Whether [id] still names the same clip after the app was restarted, so
+  /// an answer to it is worth remembering on disk.
+  bool survivesRestart(String id);
 
   /// The image bytes, or null when they are gone, too large or unreadable.
   /// Runs off the UI thread and never hands back more than the cap.
@@ -41,6 +46,48 @@ final clipboardImageSourceProvider = Provider<ClipboardImageSource?>((ref) {
   }
   return null;
 });
+
+/// Keeps the clip the user last answered across launches: one line in the
+/// application support directory, the clip's identity and nothing of its
+/// content.
+final class ClipboardOfferMemory {
+  const ClipboardOfferMemory({this.directory});
+
+  final Directory? directory;
+
+  Future<File> _file() async {
+    final target = directory ?? await getApplicationSupportDirectory();
+    return File('${target.path}/clipboard_offer_answered.txt');
+  }
+
+  Future<String?> read() async {
+    try {
+      final file = await _file();
+      if (!file.existsSync()) {
+        return null;
+      }
+      final stored = (await file.readAsString()).trim();
+      return stored.isEmpty ? null : stored;
+    } on Object {
+      // Forgetting costs one repeated suggestion.
+      return null;
+    }
+  }
+
+  Future<void> write(String id) async {
+    try {
+      final file = await _file();
+      await file.parent.create(recursive: true);
+      await file.writeAsString(id, flush: true);
+    } on Object {
+      // Same as above.
+    }
+  }
+}
+
+final clipboardOfferMemoryProvider = Provider<ClipboardOfferMemory>(
+  (ref) => const ClipboardOfferMemory(),
+);
 
 /// An encoded image larger than this is not worth a suggestion.
 const int clipboardImageMaximumBytes = 25 * 1024 * 1024;
@@ -74,6 +121,11 @@ final class AndroidClipboardImageSource implements ClipboardImageSource {
   @override
   Future<String?> peek() => _channel.invokeMethod<String>('peek');
 
+  // The clip's own timestamp does; the change count of a release without
+  // one starts over with the process.
+  @override
+  bool survivesRestart(String id) => !id.startsWith('android-change-');
+
   @override
   Future<Uint8List?> read() =>
       _channel.invokeMethod<Uint8List>('read', clipboardImageMaximumBytes);
@@ -86,6 +138,11 @@ final class WindowsClipboardImageSource implements ClipboardImageSource {
 
   @override
   Listenable? get changes => null;
+
+  // The sequence number starts over with the Windows session, so a stored
+  // one could match an unrelated clip after a reboot.
+  @override
+  bool survivesRestart(String id) => false;
 
   @override
   Future<String?> peek() async {

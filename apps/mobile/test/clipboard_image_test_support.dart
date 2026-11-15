@@ -19,6 +19,12 @@ final class FakeClipboardImageSource implements ClipboardImageSource {
   int peeks = 0;
   int reads = 0;
 
+  /// Whether a clip keeps its identity across an app restart.
+  bool durable = true;
+
+  @override
+  bool survivesRestart(String id) => durable;
+
   /// When set, [read] never answers, like an owner that promised its data
   /// and went away.
   bool hangs = false;

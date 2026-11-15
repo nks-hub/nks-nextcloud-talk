@@ -47,10 +47,13 @@ final class ClipboardImageOffer extends ConsumerStatefulWidget {
   /// Sends what the composer holds, same as the send button.
   final VoidCallback onSend;
 
-  /// Forgets which clip was last sent or dismissed.
+  /// Forgets which clip was last sent or dismissed, as a restart of the app
+  /// does to what is only held in memory.
   @visibleForTesting
-  static void debugForgetHandledClip() =>
-      _ClipboardImageOfferState._handledClip = null;
+  static void debugForgetHandledClip() {
+    _ClipboardImageOfferState._handledClip = null;
+    _ClipboardImageOfferState._restored = false;
+  }
 
   @override
   ConsumerState<ClipboardImageOffer> createState() =>
@@ -64,10 +67,10 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
   static const _thumbnailHeight = 72.0;
 
   /// The clip the user already answered, in any room: it is not offered again
-  /// until something new is copied.
-  // shortcut: kept for the life of the process, so a dismissed clip comes
-  // back after an app restart; persist it if that turns out to annoy.
+  /// until something new is copied. Restored from [ClipboardOfferMemory] the
+  /// first time a clip is looked at.
   static String? _handledClip;
+  static bool _restored = false;
 
   ClipboardImageSource? _source;
   _Offer? _offer;
@@ -162,6 +165,13 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
       _drop();
       return;
     }
+    if (!_restored) {
+      _restored = true;
+      _handledClip ??= await ref.read(clipboardOfferMemoryProvider).read();
+      if (stale()) {
+        return;
+      }
+    }
     if (id == _handledClip || id == _offer?.id) {
       return;
     }
@@ -227,9 +237,19 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
     }
   }
 
+  void _answered(String id) {
+    _handledClip = id;
+    if (_source?.survivesRestart(id) ?? false) {
+      unawaited(ref.read(clipboardOfferMemoryProvider).write(id));
+    }
+  }
+
   void _dismiss() {
-    _handledClip = _offer?.id ?? _handledClip;
-    _drop();
+    final offer = _offer;
+    if (offer != null) {
+      _answered(offer.id);
+      _drop();
+    }
   }
 
   Future<void> _take({required bool send}) async {
@@ -238,7 +258,7 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
       return;
     }
     // Cleared before the first await, so a second tap finds nothing to send.
-    _handledClip = offer.id;
+    _answered(offer.id);
     _drop();
     final attached = await widget.onAttach(offer.image);
     if (send && attached && mounted) {

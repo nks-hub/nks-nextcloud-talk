@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -20,6 +21,7 @@ void main() {
   late ValueNotifier<bool> blocked;
   late List<PastedImage> attached;
   late int sends;
+  late Directory memory;
 
   setUp(() {
     ClipboardImageOffer.debugForgetHandledClip();
@@ -28,9 +30,13 @@ void main() {
     blocked = ValueNotifier<bool>(false);
     attached = <PastedImage>[];
     sends = 0;
+    memory = Directory.systemTemp.createTempSync('nctalk-clipboard-offer-');
   });
 
-  tearDown(() => blocked.dispose());
+  tearDown(() {
+    blocked.dispose();
+    memory.deleteSync(recursive: true);
+  });
 
   // The framework asserts on a lifecycle jump that skips a state.
   var backgrounded = false;
@@ -69,7 +75,12 @@ void main() {
     addTearDown(() => toForeground(tester));
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [clipboardImageSourceProvider.overrideWithValue(clipboard)],
+        overrides: [
+          clipboardImageSourceProvider.overrideWithValue(clipboard),
+          clipboardOfferMemoryProvider.overrideWithValue(
+            ClipboardOfferMemory(directory: memory),
+          ),
+        ],
         child: localizedTestApp(
           home: Scaffold(
             body: Builder(
@@ -186,6 +197,33 @@ void main() {
     await settle(tester);
     expect(find.byKey(_card), findsOneWidget);
     expect(clipboard.reads, 2);
+  });
+
+  testWidgets('an answered clip stays answered across a restart when its '
+      'identity does', (tester) async {
+    clipboard.copyImage('clip-1', tinyPng);
+    await pumpComposer(tester);
+    await focusField(tester);
+    await tester.tap(find.byKey(const Key('clipboard-image-offer-dismiss')));
+    await settle(tester);
+
+    ClipboardImageOffer.debugForgetHandledClip();
+    await pumpComposer(tester, room: 'room-after-restart');
+    await refocusField(tester);
+    expect(find.byKey(_card), findsNothing);
+    expect(clipboard.reads, 1, reason: 'a remembered clip is not read again');
+
+    // A platform whose identity starts over with the process keeps nothing.
+    clipboard
+      ..durable = false
+      ..copyImage('clip-2', tinyPng);
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('clipboard-image-offer-dismiss')));
+    await settle(tester);
+    ClipboardImageOffer.debugForgetHandledClip();
+    await pumpComposer(tester, room: 'room-after-second-restart');
+    await refocusField(tester);
+    expect(find.byKey(_card), findsOneWidget);
   });
 
   testWidgets('send hands the image over exactly once', (tester) async {
