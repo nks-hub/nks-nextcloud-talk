@@ -644,6 +644,89 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       }
     });
 
+    test('a reply answer leaves its cached parent as it was read', () async {
+      await _cacheThreadRoot(database, storedThreadId: null);
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                _chatCapabilities(
+                  talkFeatures: const <String>[
+                    'conversation-v4',
+                    'chat-v2',
+                    'chat-reference-id',
+                    'chat-replies',
+                    'threads',
+                  ],
+                ),
+              ),
+              200,
+            );
+          }
+          if (request.method == 'GET') {
+            return http.Response('', 304);
+          }
+          // Built by the server before the parent was edited: the parent it
+          // carries still has the old text.
+          return http.Response(
+            jsonEncode(
+              _sendReplyResponse(
+                referenceId: request.bodyFields['referenceId']!,
+                message: request.bodyFields['message']!,
+                replyTo: 109,
+              ),
+            ),
+            201,
+            headers: const <String, String>{'X-Chat-Last-Common-Read': '110'},
+          );
+        }),
+      );
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      Future<CachedChatMessage> parent() =>
+          (database.select(database.cachedChatMessages)..where(
+                (row) =>
+                    row.accountId.equals('account-a') &
+                    row.roomToken.equals('rooma123') &
+                    row.messageId.equals(109),
+              ))
+              .getSingle();
+      final read = await parent();
+      final editedWire = (jsonDecode(read.rawJson) as Map<String, Object?>)
+        ..['message'] = 'Edited after the reply was written';
+      await (database.update(
+        database.cachedChatMessages,
+      )..where((row) => row.messageId.equals(109))).write(
+        CachedChatMessagesCompanion(
+          displayText: const Value('Edited after the reply was written'),
+          rawJson: Value(jsonEncode(editedWire)),
+        ),
+      );
+
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'Reply whose answer comes late',
+        threadId: 109,
+      );
+      await _waitForOutboxSettled(chat);
+
+      final sent = await database.select(database.textSendOperations).get();
+      expect(sent.single.outboxState, 'completed');
+      final kept = await parent();
+      expect(kept.displayText, 'Edited after the reply was written');
+      expect(
+        (jsonDecode(kept.rawJson) as Map<String, Object?>)['message'],
+        'Edited after the reply was written',
+      );
+    });
+
     test(
       'offline send rejects a missing persisted capability snapshot',
       () async {

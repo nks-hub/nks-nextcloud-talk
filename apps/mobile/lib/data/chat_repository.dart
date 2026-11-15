@@ -826,6 +826,7 @@ final class ChatRepository {
         messages: response.classification == ChatSendClassification.confirmed
             ? [response.message!]
             : const [],
+        messagesAreSendResponse: true,
       );
       if (result.outcome == ChatOutboxOutcome.completed &&
           sourceOperation != null &&

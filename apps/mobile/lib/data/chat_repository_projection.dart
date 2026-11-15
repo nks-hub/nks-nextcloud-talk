@@ -382,6 +382,7 @@ extension _ChatRepositoryProjection on ChatRepository {
     ChatAccountState account, {
     Iterable<ChatMessage> messages = const [],
     ChatScopeKey? syncedScope,
+    bool messagesAreSendResponse = false,
   }) async {
     final accountId = account.accountId.value;
     // Rows that would not change are left alone on purpose: any write, even
@@ -505,6 +506,7 @@ extension _ChatRepositoryProjection on ChatRepository {
         account,
         message,
         threadReplyAccumulators,
+        adoptContent: !messagesAreSendResponse,
       );
       await _applyReactionsFromNotice(account, message);
       await _applyMutationFromNotice(account, message);
@@ -766,8 +768,9 @@ extension _ChatRepositoryProjection on ChatRepository {
   Future<void> _refreshThreadOriginalFromParent(
     ChatAccountState account,
     ChatMessage message,
-    Map<_ThreadReplyScope, _ThreadReplyAccumulator> replyAccumulators,
-  ) async {
+    Map<_ThreadReplyScope, _ThreadReplyAccumulator> replyAccumulators, {
+    required bool adoptContent,
+  }) async {
     // Same rule as the accumulator: a system message about a reaction or a
     // deletion carries its thread, but it is not a reply to anything.
     if (message.systemMessage.isNotEmpty) {
@@ -791,6 +794,44 @@ extension _ChatRepositoryProjection on ChatRepository {
     final threadReplies = serverCount == null
         ? accumulator!.resolve(null)
         : accumulator?.resolve(serverCount) ?? serverCount;
+    if (!adoptContent) {
+      // The parent in a send's response is a copy from when that response was
+      // built, and it can arrive after a read that already saw the parent
+      // edited or deleted. The cached row keeps its text and deletion state;
+      // only what the reply is the authority on, its thread, is taken.
+      final cachedRow =
+          await (_database.select(_database.cachedChatMessages)..where(
+                (row) =>
+                    row.accountId.equals(accountId) &
+                    row.roomToken.equals(message.roomToken.value) &
+                    row.messageId.equals(threadId),
+              ))
+              .getSingleOrNull();
+      if (cachedRow == null) {
+        return;
+      }
+      final cachedWire = Map<String, Object?>.of(
+        jsonDecode(cachedRow.rawJson) as Map<String, Object?>,
+      )..['threadReplies'] = threadReplies;
+      for (final key in const ['threadId', 'isThread', 'threadTitle']) {
+        if (original.wire.containsKey(key)) {
+          cachedWire[key] = original.wire[key];
+        }
+      }
+      await (_database.update(_database.cachedChatMessages)..where(
+            (row) =>
+                row.accountId.equals(accountId) &
+                row.roomToken.equals(message.roomToken.value) &
+                row.messageId.equals(threadId),
+          ))
+          .write(
+            CachedChatMessagesCompanion(
+              threadId: Value(threadId),
+              rawJson: Value(jsonEncode(cachedWire)),
+            ),
+          );
+      return;
+    }
     final originalWire = Map<String, Object?>.of(original.wire)
       ..['threadReplies'] = threadReplies;
     final displayText = _displayText(account.server, original);
