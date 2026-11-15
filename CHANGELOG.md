@@ -8,6 +8,10 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.0.38 (106) — 15 November 2026
+
+- On Android in battery saver, a message that is still waiting to be sent goes out when the next notification arrives, without the app being opened. Until now it waited for the app to be opened.
+
 ## 1.0.37 (105) — 15 November 2026
 
 - On Android, a message sent just before leaving the app is still delivered. The app stays reachable until the message is out, for at most three minutes when there is no network. If the message is still unsent after that, a notification says so and the message goes out when the app is opened.
