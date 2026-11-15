@@ -434,6 +434,38 @@ void main() {
     expect(closed, isTrue);
   });
 
+  testWidgets('a pick is not recorded when recordUsage is off', (tester) async {
+    final store = _MemoryEmojiUsageStore();
+    EmojiChoice? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: EmojiPicker(
+            accountId: AccountId.parse('account-a'),
+            usageStore: store,
+            labels: labels,
+            catalog: EmojiCatalog(const <EmojiChoice>[
+              EmojiChoice(
+                glyph: '👋',
+                name: 'Waving hand',
+                keywords: <String>['wave'],
+                category: EmojiCategory.people,
+              ),
+            ]),
+            recordUsage: false,
+            onClose: () {},
+            onSelected: (choice) => selected = choice,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('emoji-choice-waving-hand')));
+    await tester.pumpAndSettle();
+    expect(selected?.glyph, '👋');
+    expect((await store.read(AccountId.parse('account-a'))).recent, isEmpty);
+  });
+
   testWidgets('selected emoji becomes the first recent choice', (tester) async {
     final store = _MemoryEmojiUsageStore();
     EmojiChoice? selected;

@@ -51,6 +51,7 @@ Future<OwnTalkEmojiChoice?> showOwnTalkEmojiSheet({
                     usageStore: usageStore,
                     labels: emojiPickerLabelsFor(strings),
                     selectedGlyph: current,
+                    recordUsage: false,
                     onClose: () => Navigator.of(sheetContext).pop(),
                     onSelected: (choice) => Navigator.of(
                       sheetContext,

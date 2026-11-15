@@ -164,6 +164,7 @@ final class EmojiPicker extends StatefulWidget {
     this.catalog,
     this.glyphSupport,
     this.selectedGlyph,
+    this.recordUsage = true,
     super.key,
   });
 
@@ -179,6 +180,10 @@ final class EmojiPicker extends StatefulWidget {
 
   /// The glyph currently in effect, drawn highlighted in the grid.
   final String? selectedGlyph;
+
+  /// Whether a pick lands in the Recent list; off when the picker chooses a
+  /// setting value instead of an emoji to send.
+  final bool recordUsage;
 
   @override
   State<EmojiPicker> createState() => _EmojiPickerState();
@@ -325,6 +330,9 @@ final class _EmojiPickerState extends State<EmojiPicker> {
     }
 
     widget.onSelected(choice);
+    if (!widget.recordUsage) {
+      return;
+    }
     try {
       final usage = await widget.usageStore.recordSelection(
         widget.accountId,
