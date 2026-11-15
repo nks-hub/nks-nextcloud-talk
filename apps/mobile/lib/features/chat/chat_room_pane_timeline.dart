@@ -447,6 +447,11 @@ final class _ChatTimeline extends StatelessWidget {
         key: ValueKey('chat-pending-${operation.operationId}'),
         account: account,
         operation: operation,
+        // The gap a sent bubble would get here, so confirmation moves nothing.
+        groupedWithPrevious:
+            pendingIndex > 0 ||
+            (messages.isNotEmpty &&
+                _pendingSharesGroup(messages.last, account.loginName)),
         onRetry: onRetry,
         onResend: () => onResend(operation),
         onCancel: () => onCancel(operation),
@@ -845,6 +850,20 @@ bool _shouldShowReplyPreview(ChatMessage? message, int? conversationThreadId) {
     null => null,
   };
   return parentId != conversationThreadId;
+}
+
+/// Whether a message of [loginName] sent now would join [earlier]'s group,
+/// by the rule [_messagesShareGroup] applies once the server confirms it.
+bool _pendingSharesGroup(CachedChatMessage earlier, String loginName) {
+  final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  final difference = now - earlier.timestamp;
+  return earlier.systemMessage.isEmpty &&
+      earlier.actorType == 'users' &&
+      earlier.actorId == loginName &&
+      _sameLocalDay(earlier.timestamp, now) &&
+      // A little slack below zero: the server's clock may run ahead of ours.
+      difference >= -60 &&
+      difference <= 5 * 60;
 }
 
 bool _messagesShareGroup(CachedChatMessage earlier, CachedChatMessage later) {

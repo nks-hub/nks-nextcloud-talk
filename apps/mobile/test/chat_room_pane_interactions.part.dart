@@ -554,6 +554,53 @@ void _registerChatRoomPaneInteractionTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('a pending bubble takes the gap its sent form will have', (
+    tester,
+  ) async {
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 21,
+        actorId: 'fixture-user',
+        actorDisplayName: 'Fixture User',
+        timestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000 - 30,
+        message: 'Own earlier text',
+      ),
+      displayText: 'Own earlier text',
+    );
+    await _insertPendingOperation(
+      database,
+      account,
+      conversation,
+      operationId: 'operation-g',
+      outboxState: 'sending',
+      message: 'Grouped pending text',
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomPane(account: account, conversation: conversation),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Own earlier text'), findsOneWidget);
+
+    // Two own messages within five minutes sit 2 dp apart once both are sent;
+    // the one still on its way must not start 8 dp away and then jump.
+    final outer = tester.widget<Padding>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('chat-pending-operation-g')),
+            matching: find.byType(Padding),
+          )
+          .first,
+    );
+    expect(outer.padding, const EdgeInsets.only(top: 2));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('a send queued a moment ago shows cancel only once it waits', (
     tester,
   ) async {

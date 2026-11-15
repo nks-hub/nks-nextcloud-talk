@@ -70,10 +70,14 @@ final class _PendingMessageBubble extends StatefulWidget {
     required this.onRetry,
     required this.onResend,
     required this.onCancel,
+    this.groupedWithPrevious = false,
   });
 
   final StoredAccount account;
   final StoredTextSendOperation operation;
+
+  /// Whether the bubble continues a run of the user's own messages.
+  final bool groupedWithPrevious;
   final VoidCallback onRetry;
   final VoidCallback onResend;
   final VoidCallback onCancel;
@@ -168,7 +172,7 @@ final class _PendingMessageBubbleState extends State<_PendingMessageBubble> {
       ),
     );
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: EdgeInsets.only(top: widget.groupedWithPrevious ? 2 : 8),
       child: Align(
         alignment: Alignment.centerRight,
         child: ConstrainedBox(
