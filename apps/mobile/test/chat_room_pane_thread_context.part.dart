@@ -107,6 +107,50 @@ void _registerChatRoomPaneThreadContextTests() {
       await tester.pump(const Duration(milliseconds: 1));
     });
 
+    testWidgets('the replies chip on a reply opens the thread of its root', (
+      tester,
+    ) async {
+      final root = _messageJson(
+        id: 75,
+        actorId: 'thread-author',
+        actorDisplayName: 'Thread author',
+        timestamp: 1724300175,
+        message: 'Named thread root',
+        threadId: 75,
+        isThread: true,
+      );
+      final reply = _messageJson(
+        id: 76,
+        actorId: 'thread-author',
+        actorDisplayName: 'Thread author',
+        timestamp: 1724300176,
+        message: 'Reply in the thread',
+        threadId: 75,
+        isThread: true,
+      );
+      await _insertCachedMessage(
+        database,
+        root,
+        displayText: 'Named thread root',
+      );
+      await _insertCachedMessage(
+        database,
+        reply,
+        displayText: 'Reply in the thread',
+      );
+
+      await tester.pumpWidget(app(home: roomScreen()));
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('chat-open-thread-76')));
+      await tester.tap(find.byKey(const Key('chat-open-thread-76')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('chat-thread-screen-75')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    });
+
     testWidgets('title alone does not classify an ordinary thread as named', (
       tester,
     ) async {

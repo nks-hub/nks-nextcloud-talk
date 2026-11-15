@@ -896,14 +896,31 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       ..showSnackBar(SnackBar(content: Text(strings.outboxCancelAmbiguous)));
   }
 
-  void _openThread(CachedChatMessage message) {
+  /// Opens the thread [message] belongs to. A reply carries the same
+  /// "N replies" chip as the root, so the root is looked up for it.
+  Future<void> _openThread(CachedChatMessage message) async {
     if (widget.threadId != null || message.messageId < 1) {
       return;
+    }
+    var root = message;
+    final threadId = message.threadId;
+    if (threadId != null && threadId > 0 && threadId != message.messageId) {
+      final cached = await ref
+          .read(chatRepositoryProvider)
+          .getMessage(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            messageId: threadId,
+          );
+      if (cached == null || !mounted) {
+        return;
+      }
+      root = cached;
     }
     final threadContext = ChatThreadContext.fromCachedRoot(
       accountId: widget.account.id,
       roomToken: widget.conversation.token,
-      root: message,
+      root: root,
     );
     if (threadContext == null) {
       return;
