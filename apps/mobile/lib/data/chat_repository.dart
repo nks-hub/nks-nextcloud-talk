@@ -233,19 +233,7 @@ final class ChatRepository {
               ),
             );
       } else {
-        await (_database.update(_database.chatScopes)..where(
-              (scope) =>
-                  scope.accountId.equals(account.id) &
-                  scope.roomToken.equals(conversation.token) &
-                  scope.scopeKey.equals(_rootScopeKey),
-            ))
-            .write(
-              ChatScopesCompanion(
-                lastCommonRead: Value(commonRead),
-                lastReadMessage: Value(room.lastReadMessage),
-                unreadMessages: Value(room.unreadMessages),
-              ),
-            );
+        await _adoptConversationReadState(viewScope, room, commonRead);
       }
       viewScope = (await _rootScope(
         accountId: account.id,
@@ -283,22 +271,49 @@ final class ChatRepository {
               ),
             );
       } else {
-        await (_database.update(_database.chatScopes)..where(
-              (scope) =>
-                  scope.accountId.equals(account.id) &
-                  scope.roomToken.equals(conversation.token) &
-                  scope.scopeKey.equals(_networkRootScopeKey),
-            ))
-            .write(
-              ChatScopesCompanion(
-                lastCommonRead: Value(commonRead),
-                lastReadMessage: Value(room.lastReadMessage),
-                unreadMessages: Value(room.unreadMessages),
-              ),
-            );
+        await _adoptConversationReadState(networkScope, room, commonRead);
       }
       return viewScope;
     });
+  }
+
+  /// Copies the conversation's read state onto a root scope, writing only
+  /// when something differs so an unchanged room wakes no watcher.
+  ///
+  /// The conversation row is refreshed less often than the chat itself, so its
+  /// common-read marker can be older than the one a chat response has already
+  /// stored. That marker never moves backwards: it would turn the read ticks
+  /// of the user's own messages back into sent ones.
+  Future<void> _adoptConversationReadState(
+    StoredChatScope scope,
+    ConversationRoom room,
+    String commonRead,
+  ) async {
+    final commonReadAdvanced =
+        ChatCursor.parse(
+          commonRead,
+        ).compareTo(ChatCursor.parse(scope.lastCommonRead)) >
+        0;
+    if (!commonReadAdvanced &&
+        scope.lastReadMessage == room.lastReadMessage &&
+        scope.unreadMessages == room.unreadMessages) {
+      return;
+    }
+    await (_database.update(_database.chatScopes)..where(
+          (row) =>
+              row.accountId.equals(scope.accountId) &
+              row.roomToken.equals(scope.roomToken) &
+              row.scopeKey.equals(scope.scopeKey),
+        ))
+        .write(
+          ChatScopesCompanion(
+            lastCommonRead: commonReadAdvanced
+                ? Value(commonRead)
+                : const Value.absent(),
+            lastReadMessage: Value(room.lastReadMessage),
+            unreadMessages: Value(room.unreadMessages),
+          ),
+        );
   }
 
   Future<void> _migrateLegacyThreadNetworkScopesInCurrentTransaction({
@@ -851,15 +866,37 @@ final class ChatRepository {
     });
   }
 
-  Future<void> recoverInterruptedTextSends(String accountId) {
+  /// Converts the sends a killed process left in `sending`.
+  ///
+  /// [inFlight] names the operations this process is transmitting right now,
+  /// in any room of the account: those are not interrupted, and disowning
+  /// one would leave its outcome with nowhere to be recorded. The set is read
+  /// inside the transaction, so it may be the caller's live one.
+  Future<void> recoverInterruptedTextSends(
+    String accountId, {
+    Set<ChatOperationId> inFlight = const <ChatOperationId>{},
+  }) async {
+    // Every sync asks, and almost none has anything to recover: one keyed
+    // lookup answers that without loading the account's runtime.
+    if (_completedTextSendsPruned &&
+        !await _hasInterruptedTextSend(accountId, inFlight)) {
+      return;
+    }
     return _database.transaction(() async {
       // Before the snapshot is read, or a later persist would write the
       // pruned rows straight back.
       await _pruneCompletedTextSendsOnce();
+      if (!await _hasInterruptedTextSend(accountId, inFlight)) {
+        return;
+      }
       var snapshot = await _loadRuntime(accountId);
       final typedAccountId = AccountId.parse(accountId);
       final sending = snapshot.accounts[typedAccountId]!.operations.values
-          .where((operation) => operation.state == TextSendOutboxState.sending)
+          .where(
+            (operation) =>
+                operation.state == TextSendOutboxState.sending &&
+                !inFlight.contains(operation.operationId),
+          )
           .map((operation) => operation.operationId)
           .toList(growable: false);
       var changed = false;
@@ -879,6 +916,36 @@ final class ChatRepository {
         await _persistAccount(snapshot.accounts[typedAccountId]!);
       }
     });
+  }
+
+  Future<bool> _hasInterruptedTextSend(
+    String accountId,
+    Set<ChatOperationId> inFlight,
+  ) async {
+    final rows = _database.textSendOperations;
+    final sending =
+        await (_database.selectOnly(rows)
+              ..addColumns([rows.operationId])
+              ..where(
+                rows.accountId.equals(accountId) &
+                    rows.outboxState.equals(TextSendOutboxState.sending.name),
+              ))
+            .map((row) => row.read(rows.operationId)!)
+            .get();
+    return sending.any((id) => !inFlight.contains(ChatOperationId.parse(id)));
+  }
+
+  /// Makes the sends that never left the device due at once, for a wake that
+  /// says the network may be back. A pause the server asked for is left alone.
+  Future<void> expediteUnsentTextSends() {
+    final rows = _database.textSendOperations;
+    return (_database.update(rows)..where(
+          (row) =>
+              row.outboxState.equals(TextSendOutboxState.retryable.name) &
+              row.errorClass.equals('transport-before-send') &
+              row.nextAttemptAt.isNotNull(),
+        ))
+        .write(const TextSendOperationsCompanion(nextAttemptAt: Value(null)));
   }
 
   Future<void> _pruneCompletedTextSendsOnce() async {

@@ -372,6 +372,221 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       });
     }
 
+    for (final wake in const ['its own timer', 'a connectivity wake']) {
+      test('a send that never left goes out on $wake', () async {
+        var reachable = false;
+        final sent = <String>[];
+        final api = HttpNextcloudApi(
+          client: _UnreachableClient(
+            _sendServer((request) {
+              sent.add(request.bodyFields['message']!);
+              return _acceptedSend(request, 121);
+            }),
+            unreachable: (request) => !reachable && request.method == 'POST',
+          ),
+        );
+        addTearDown(api.close);
+        final service = ChatService(
+          accounts: accounts,
+          chat: chat,
+          credentials: credentials,
+          api: api,
+        );
+        addTearDown(service.close);
+        await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+
+        await service.sendText(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          message: 'through a short blip',
+        );
+        await _waitForTextSends(
+          database,
+          (rows) => rows.single.outboxState == 'retryable',
+        );
+        reachable = true;
+        final waited = Stopwatch()..start();
+
+        if (wake == 'a connectivity wake') {
+          await service.drainPendingSends();
+          expect(
+            waited.elapsed,
+            lessThan(const Duration(seconds: 3)),
+            reason: 'a wake does not sit out the backoff',
+          );
+        } else {
+          // Nothing else touches the room: only the service's timer can.
+          for (var attempt = 0; attempt < 400 && sent.isEmpty; attempt++) {
+            await Future<void>.delayed(const Duration(milliseconds: 25));
+          }
+          expect(waited.elapsed, greaterThan(const Duration(seconds: 3)));
+        }
+        await _waitForOutboxSettled(chat);
+
+        expect(sent, ['through a short blip']);
+        final rows = await database.select(database.textSendOperations).get();
+        expect(rows.single.outboxState, 'completed');
+        expect(rows.single.attemptCount, 2);
+      });
+    }
+
+    test('a closed service leaves its retry timer unarmed', () async {
+      var posts = 0;
+      final api = HttpNextcloudApi(
+        client: _UnreachableClient(
+          _sendServer((request) => _acceptedSend(request, 121)),
+          unreachable: (request) {
+            if (request.method != 'POST') return false;
+            posts++;
+            return true;
+          },
+        ),
+      );
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'left behind',
+      );
+      await _waitForTextSends(
+        database,
+        (rows) => rows.single.outboxState == 'retryable',
+      );
+
+      await service.close();
+      await Future<void>.delayed(const Duration(seconds: 6));
+
+      expect(posts, 1);
+    });
+
+    test('recovery leaves a send that is still on the wire alone', () async {
+      final answer = Completer<void>();
+      var posts = 0;
+      final api = HttpNextcloudApi(
+        client: _sendServer((request) async {
+          posts++;
+          await answer.future;
+          return _acceptedSend(request, 121);
+        }),
+      );
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'slow but alive',
+      );
+      final sending = await _waitForTextSends(
+        database,
+        (rows) => rows.single.outboxState == 'sending' && posts == 1,
+      );
+
+      // A sync runs recovery, and this one runs while the POST is unanswered.
+      final sync = service.syncRoom(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      final during = await database.select(database.textSendOperations).get();
+      expect(during.single.outboxState, 'sending');
+
+      // The repository skips exactly the ids it is given, and no others.
+      await chat.recoverInterruptedTextSends(
+        'account-a',
+        inFlight: {ChatOperationId.parse(sending.single.operationId)},
+      );
+      expect(
+        (await database.select(database.textSendOperations).get())
+            .single
+            .outboxState,
+        'sending',
+      );
+
+      answer.complete();
+      await sync;
+      await _waitForOutboxSettled(chat);
+      final done = await database.select(database.textSendOperations).get();
+      expect(done.single.outboxState, 'completed');
+      expect(posts, 1);
+    });
+
+    test('recovery converts a send no process owns', () async {
+      final api = HttpNextcloudApi(
+        client: _sendServer((request) => Completer<http.Response>().future),
+      );
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'orphaned by a restart',
+      );
+      await _waitForTextSends(
+        database,
+        (rows) => rows.single.outboxState == 'sending',
+      );
+
+      // A second repository stands in for the process after a restart.
+      await ChatRepository(database).recoverInterruptedTextSends('account-a');
+
+      final rows = await database.select(database.textSendOperations).get();
+      expect(rows.single.outboxState, 'awaitingConfirmation');
+      expect(rows.single.errorClass, 'process-interrupted');
+    });
+
+    test('preparing a room rewrites its scope only when it changed', () async {
+      final account = (await accounts.getAccount('account-a'))!;
+      final conversation = (await chat.getConversation(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      ))!;
+      await chat.ensureRootScope(account: account, conversation: conversation);
+      final stored = (await chat.getScope(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        threadId: null,
+      ))!;
+
+      var writes = 0;
+      final subscription = database
+          .tableUpdates(TableUpdateQuery.onTable(database.chatScopes))
+          .listen((_) => writes++);
+      addTearDown(subscription.cancel);
+      await chat.ensureRootScope(account: account, conversation: conversation);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(writes, 0);
+
+      // A chat response has moved the common-read marker past what the
+      // conversation row still says. Preparing the room must not undo that.
+      final ahead = (int.parse(stored.lastCommonRead) + 40).toString();
+      await database
+          .update(database.chatScopes)
+          .write(ChatScopesCompanion(lastCommonRead: Value(ahead)));
+      await chat.ensureRootScope(account: account, conversation: conversation);
+      for (final scope in await database.select(database.chatScopes).get()) {
+        expect(scope.lastCommonRead, ahead, reason: scope.scopeKey);
+      }
+    });
+
     test(
       'offline send rejects a missing persisted capability snapshot',
       () async {

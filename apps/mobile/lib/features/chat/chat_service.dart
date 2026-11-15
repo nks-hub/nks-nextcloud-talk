@@ -83,9 +83,12 @@ final class ChatService {
   /// The capability snapshot whose rows this service last wrote, per account.
   final Map<String, CapabilitySnapshot> _recordedCapabilities = {};
 
-  /// Sends being claimed or on the wire per account, which restart recovery
-  /// must not mistake for sends a dead process left behind.
-  final Map<String, int> _transmittingSends = {};
+  /// Operations on the wire per account, which restart recovery must not
+  /// mistake for sends a dead process left behind.
+  final Map<String, Set<ChatOperationId>> _inFlightSends = {};
+
+  /// The pending retry of a send that never left, one per room.
+  final Map<String, Timer> _retryTimers = {};
   final Set<_ChatReadAdmission> _readAdmissions = {};
   final _readerWakes =
       StreamController<({String accountId, String roomToken})>.broadcast();
@@ -97,6 +100,10 @@ final class ChatService {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    for (final timer in _retryTimers.values) {
+      timer.cancel();
+    }
+    _retryTimers.clear();
     for (final binding in _liveBindings.toList()) {
       binding.close();
     }
@@ -180,6 +187,10 @@ final class ChatService {
         .whereType<Future<void>>()
         .toList(growable: true);
     final prefix = '$accountId\u0000';
+    _retryTimers.removeWhere((key, timer) {
+      if (key.startsWith(prefix)) timer.cancel();
+      return key.startsWith(prefix);
+    });
     active.addAll(
       _liveNetworkPolls.entries
           .where((entry) => entry.key.startsWith(prefix))
@@ -228,6 +239,10 @@ final class ChatService {
   /// including the rooms of a second account whose server is reachable, so a
   /// signed-in account's queued text waits on an unrelated account's outage.
   Future<void> drainPendingSends() async {
+    // A drain answers a wake: the network is back, the app resumed. A send
+    // that failed for want of a connection is worth trying now, not when its
+    // backoff runs out.
+    await _chat.expediteUnsentTextSends();
     final lanes = <String, List<String>>{};
     for (final room in await _chat.roomsWithPendingTextSends()) {
       (lanes[room.accountId] ??= <String>[]).add(room.roomToken);
@@ -488,34 +503,45 @@ final class ChatService {
     return _serializeRoom<void>(key, () {
       return _withRoomErrorPersistence(accountId, roomToken, () async {
         final prepared = await _prepare(accountId, roomToken);
-        await _serializeRoom<void>(
-          _deliveryKey(key),
-          () => _transmitting(prepared, () async {
-            final claim = await _chat.manuallyResend(
-              accountId: accountId,
-              operationId: ChatOperationId.parse(operationId),
-              authority: prepared.authority,
-              requestId: ChatRequestId.parse(_uuid.v4()),
-            );
-            if (claim == null) {
-              throw const ChatServiceException(
-                ChatServiceError.invalidResponse,
-              );
-            }
-            await _transmitClaim(prepared, claim);
-          }),
-        );
+        await _serializeRoom<void>(_deliveryKey(key), () async {
+          final claim = await _chat.manuallyResend(
+            accountId: accountId,
+            operationId: ChatOperationId.parse(operationId),
+            authority: prepared.authority,
+            requestId: ChatRequestId.parse(_uuid.v4()),
+          );
+          if (claim == null) {
+            throw const ChatServiceException(ChatServiceError.invalidResponse);
+          }
+          await _transmitClaim(prepared, claim);
+        });
       });
     });
   }
 
-  /// Converts sends a killed process left in `sending`. A request this
-  /// process still has in flight is not one of them, in any room of the
-  /// account, so recovery waits for the next sync instead of disowning it.
-  Future<void> _recoverInterruptedSends(String accountId) async {
-    if ((_transmittingSends[accountId] ?? 0) == 0) {
-      await _chat.recoverInterruptedTextSends(accountId);
+  Future<void> _recoverInterruptedSends(String accountId) =>
+      _chat.recoverInterruptedTextSends(
+        accountId,
+        inFlight: _inFlightSends[accountId] ??= <ChatOperationId>{},
+      );
+
+  /// Tries the room's outbox again once a send that could not go out is due.
+  ///
+  /// One timer per room. It fires once, and only an attempt that fails again
+  /// arms the next one with a longer pause, so it cannot spin.
+  void _armRetry(_PreparedChat prepared, int delaySeconds) {
+    if (_closed || _suspendedAccounts.contains(prepared.account.id)) {
+      return;
     }
+    final key = _roomKey(prepared.account.id, prepared.room.token.value);
+    _retryTimers[key]?.cancel();
+    _retryTimers[key] = Timer(
+      Duration(seconds: delaySeconds < 1 ? 1 : delaySeconds),
+      () {
+        _retryTimers.remove(key);
+        unawaited(_deliverPending(prepared));
+      },
+    );
   }
 
   /// Removes a pending outbox operation. Returns `false` when the send may
@@ -836,47 +862,43 @@ final class ChatService {
     final key = _deliveryKey(
       _roomKey(prepared.account.id, prepared.room.token.value),
     );
-    return _serializeRoom<void>(
-      key,
-      () => _transmitting(prepared, () async {
-        while (true) {
-          _ensureAccountActive(prepared.account.id);
-          final claim = await _chat.claimNextTextSend(
-            accountId: prepared.account.id,
-            roomToken: prepared.room.token,
-            authority: prepared.authority,
-            requestId: ChatRequestId.parse(_uuid.v4()),
-            now: _nowSeconds(),
-          );
-          if (claim == null) {
-            return;
-          }
-          _ensureAccountActive(prepared.account.id);
-          await _transmitClaim(prepared, claim);
+    return _serializeRoom<void>(key, () async {
+      while (true) {
+        _ensureAccountActive(prepared.account.id);
+        final claim = await _chat.claimNextTextSend(
+          accountId: prepared.account.id,
+          roomToken: prepared.room.token,
+          authority: prepared.authority,
+          requestId: ChatRequestId.parse(_uuid.v4()),
+          now: _nowSeconds(),
+        );
+        if (claim == null) {
+          return;
         }
-      }),
-    );
+        _ensureAccountActive(prepared.account.id);
+        await _transmitClaim(prepared, claim);
+      }
+    });
   }
 
-  /// Marks the account as having a send between its claim and its outcome.
-  /// The claim is inside too: it is what puts the row into `sending`.
-  Future<void> _transmitting(
-    _PreparedChat prepared,
-    Future<void> Function() action,
-  ) async {
-    final accountId = prepared.account.id;
-    _transmittingSends[accountId] = (_transmittingSends[accountId] ?? 0) + 1;
-    try {
-      await action();
-    } finally {
-      _transmittingSends[accountId] = _transmittingSends[accountId]! - 1;
-    }
-  }
-
+  /// Sends one claimed operation and records what became of it. The operation
+  /// counts as in flight from here, with no gap after the claim, until its
+  /// outcome is stored.
   Future<void> _transmitClaim(
     _PreparedChat prepared,
     ClaimedTextSend claim,
   ) async {
+    final inFlight = _inFlightSends[prepared.account.id] ??=
+        <ChatOperationId>{};
+    inFlight.add(claim.operation.operationId);
+    try {
+      await _sendClaim(prepared, claim);
+    } finally {
+      inFlight.remove(claim.operation.operationId);
+    }
+  }
+
+  Future<void> _sendClaim(_PreparedChat prepared, ClaimedTextSend claim) async {
     final ChatSendResponse response;
     try {
       response = await _api.sendChat(
@@ -889,18 +911,20 @@ final class ChatService {
       // Only a request whose body never left may be repeated by itself: the
       // server does not deduplicate by reference, so anything less certain
       // waits for a confirmation or for the user.
+      final retryDelay =
+          error.retryAfter?.inSeconds ??
+          _unsentRetryDelaySeconds(claim.operation.attemptCount);
       await _chat.recordTextSendFailure(
         accountId: prepared.account.id,
         operationId: claim.operation.operationId,
         bodyState: error.requestNotSent
             ? ChatTransportBodyState.notSent
             : ChatTransportBodyState.possiblySent,
-        nextAttemptAt: error.requestNotSent
-            ? _nowSeconds() +
-                  (error.retryAfter?.inSeconds ??
-                      _unsentRetryDelaySeconds(claim.operation.attemptCount))
-            : null,
+        nextAttemptAt: error.requestNotSent ? _nowSeconds() + retryDelay : null,
       );
+      if (error.requestNotSent) {
+        _armRetry(prepared, retryDelay);
+      }
       return;
     } on TalkProtocolException {
       _ensureAccountActive(prepared.account.id);
@@ -918,6 +942,14 @@ final class ChatService {
       response: response,
       now: _nowSeconds(),
     );
+    if (outcome == ChatOutboxOutcome.retryable) {
+      // The pause the outbox stored is this one or shorter.
+      _armRetry(
+        prepared,
+        response.retryAfterSeconds ??
+            _unsentRetryDelaySeconds(claim.operation.attemptCount),
+      );
+    }
     if (outcome == ChatOutboxOutcome.reauthenticationRequired) {
       await _chat.recordRoomError(
         accountId: prepared.account.id,
