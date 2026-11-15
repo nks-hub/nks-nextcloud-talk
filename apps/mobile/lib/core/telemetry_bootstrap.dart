@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:rybbit_flutter_sdk/rybbit_flutter_sdk.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -25,25 +27,16 @@ Future<void> runWithTelemetry({
     return;
   }
 
-  final installation = await installationIds.read();
+  // Never throws; awaited only where the id is used, so reading it does not
+  // hold back the first frame.
+  final installation = installationIds.read();
   final observers = <NavigatorObserver>[];
 
   if (config.analyticsEnabled) {
-    try {
-      await Rybbit.init(
-        host: config.rybbitHost,
-        siteId: config.rybbitSiteId,
-        anonymousId: installation?.value,
-        // Errors belong to Sentry, which scrubs them first. Rybbit's own
-        // handler would ship the raw message and claim FlutterError.onError
-        // from under the Sentry integration.
-        autoTrackErrors: false,
-        globalProperties: {'environment': config.environment},
-      );
-      observers.add(RybbitNavigatorObserver());
-    } on Object {
-      // Analytics is never worth a failed launch.
-    }
+    // The observer ignores routes until the SDK is ready, so it can be attached
+    // while the SDK (device info, Hive boxes) is still starting.
+    observers.add(RybbitNavigatorObserver());
+    unawaited(_startAnalytics(config, installation));
   }
 
   if (!config.crashReportingEnabled) {
@@ -56,9 +49,10 @@ Future<void> runWithTelemetry({
     configureSentryOptions(options, config: config);
   }, appRunner: () => runApp(appBuilder(observers)));
 
-  if (installation != null) {
+  final installationId = await installation;
+  if (installationId != null) {
     await Sentry.configureScope(
-      (scope) => scope.setUser(SentryUser(id: installation.value)),
+      (scope) => scope.setUser(SentryUser(id: installationId.value)),
     );
   }
   final runtimeHealth = RuntimeHealthTelemetry(
@@ -70,6 +64,32 @@ Future<void> runWithTelemetry({
   await runtimeHealth.start();
   if (config.releaseGateEnabled) {
     await captureTelemetryReleaseGate(runtimeTags: runtimeHealth.tags);
+  }
+}
+
+Future<void> _startAnalytics(
+  TelemetryConfig config,
+  Future<InstallationId?> installation,
+) async {
+  try {
+    await Rybbit.init(
+      host: config.rybbitHost,
+      siteId: config.rybbitSiteId,
+      anonymousId: (await installation)?.value,
+      // Errors belong to Sentry, which scrubs them first. Rybbit's own
+      // handler would ship the raw message and claim FlutterError.onError
+      // from under the Sentry integration.
+      autoTrackErrors: false,
+      globalProperties: {'environment': config.environment},
+    );
+    // The home route was pushed while the SDK was starting and the observer
+    // dropped it; report it the way the observer would have.
+    Rybbit.instance.screenView(
+      Navigator.defaultRouteName,
+      title: Navigator.defaultRouteName,
+    );
+  } on Object {
+    // Analytics is never worth a failed launch.
   }
 }
 
