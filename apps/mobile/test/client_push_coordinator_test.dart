@@ -90,6 +90,26 @@ final class _TwoAccountConnector implements ClientPushConnector {
   }
 }
 
+final class _SequenceConnector implements ClientPushConnector {
+  _SequenceConnector(this._sockets);
+
+  final List<ClientPushSocket> _sockets;
+  var connects = 0;
+
+  @override
+  Future<ClientPushSocket> connect(Uri endpoint) async {
+    final socket = _sockets[connects++];
+    Timer(const Duration(milliseconds: 1), () {
+      if (socket is _BlockingSocket) {
+        socket.emit('authenticated');
+      } else if (socket is _FakeSocket) {
+        socket.emit('authenticated');
+      }
+    });
+    return socket;
+  }
+}
+
 ClientPushEndpoints _endpoints({bool notifications = true}) =>
     ClientPushEndpoints(
       websocket: Uri.parse('wss://cloud.example.invalid/push/ws'),
@@ -398,6 +418,7 @@ void main() {
       fetchToken: (_, _, _) async => 'token',
       connector: connector,
       onWakeUp: woken.add,
+      minimumSessionAge: Duration.zero,
       delay: (duration) {
         delays.add(duration);
         return Completer<void>().future;
@@ -419,6 +440,53 @@ void main() {
     await coordinator.dispose();
     coordinator.reconnect();
     expect(connector.sockets, hasLength(2));
+  });
+
+  test('reconnect keeps a socket that was only just opened', () async {
+    final connector = _Connector();
+    final woken = <String>[];
+    final coordinator = ClientPushCoordinator(
+      resolve: (_, _) async => _endpoints(),
+      fetchToken: (_, _, _) async => 'token',
+      connector: connector,
+      onWakeUp: woken.add,
+    );
+
+    coordinator.follow('account-a');
+    await _settle();
+    // A burst of connectivity events right after connecting.
+    coordinator.reconnect();
+    coordinator.reconnect();
+    await _settle();
+
+    expect(connector.sockets, hasLength(1));
+    expect(connector.sockets.single.closed, isFalse);
+    expect(woken, <String>['account-a']);
+    await coordinator.dispose();
+  });
+
+  test('reconnect does not wait for the old socket to finish closing', () async {
+    final connector = _TwoAccountConnector();
+    final coordinator = ClientPushCoordinator(
+      resolve: (_, _) async => _endpoints(),
+      fetchToken: (_, _, _) async => 'token',
+      connector: _SequenceConnector([connector.first, connector.second]),
+      onWakeUp: (_) {},
+      minimumSessionAge: Duration.zero,
+      delay: (_) => Completer<void>().future,
+    );
+
+    coordinator.follow('account-a');
+    await _settle();
+    coordinator.reconnect();
+    await _settle();
+
+    // The first socket's close never returns, the second is up regardless.
+    expect(connector.first.closeStarted.isCompleted, isTrue);
+    expect(connector.first.releaseClose.isCompleted, isFalse);
+    expect(connector.second.closed, isFalse);
+    await coordinator.dispose();
+    connector.first.releaseClose.complete();
   });
 
   test('resume syncs every followed account and keeps the socket', () async {

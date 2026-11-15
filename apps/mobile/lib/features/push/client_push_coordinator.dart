@@ -32,6 +32,7 @@ final class ClientPushCoordinator {
     onRoomSettings,
     Duration firstRetry = const Duration(seconds: 2),
     Duration maximumRetry = const Duration(minutes: 5),
+    Duration minimumSessionAge = const Duration(seconds: 5),
     Future<void> Function(Duration)? delay,
   }) : _resolve = resolve,
        _fetchToken = fetchToken,
@@ -40,6 +41,7 @@ final class ClientPushCoordinator {
        _onRoomSettings = onRoomSettings,
        _firstRetry = firstRetry,
        _maximumRetry = maximumRetry,
+       _minimumSessionAge = minimumSessionAge,
        _delay = delay ?? _sleep;
 
   static Future<void> _sleep(Duration duration) =>
@@ -62,6 +64,7 @@ final class ClientPushCoordinator {
   _onRoomSettings;
   final Duration _firstRetry;
   final Duration _maximumRetry;
+  final Duration _minimumSessionAge;
   final Future<void> Function(Duration) _delay;
 
   final Map<String, _AccountChannel> _channels = <String, _AccountChannel>{};
@@ -106,9 +109,13 @@ final class ClientPushCoordinator {
   /// socket drops it and connects again at once. A socket opened over the old
   /// network can be dead without a close frame, and the ping would only
   /// notice after 30 to 60 seconds.
+  ///
+  /// A socket younger than the minimum session age is kept: connectivity
+  /// events arrive in bursts, and it was opened over the network they
+  /// announce.
   void reconnect() {
     for (final channel in _channels.values) {
-      channel.reconnect();
+      channel.reconnect(_minimumSessionAge);
     }
   }
 
@@ -159,6 +166,7 @@ final class ClientPushCoordinator {
         backoff = _firstRetry;
         final events = StreamIterator<ClientPushEvent>(session.events);
         final drop = channel.sessionDrop = Completer<void>();
+        channel.sessionAge = Stopwatch()..start();
         // Bound to this session's account, so a signal can only ever reach a
         // room of the account whose socket carried it.
         final signals = session.roomSettingsSignals.listen((signal) {
@@ -188,7 +196,9 @@ final class ClientPushCoordinator {
           await events.cancel();
           if (drop.isCompleted) {
             channel.session = null;
-            await session.close();
+            // Not awaited: a close handshake with a peer that is gone can
+            // take seconds, and the new socket should not wait for it.
+            unawaited(session.close().catchError((Object _) {}));
           }
         }
       } on Object {
@@ -243,10 +253,17 @@ final class _AccountChannel {
   /// One connection attempt without the retry wait, granted by [reconnect].
   bool reconnectNow = false;
 
-  void reconnect() {
+  /// Running since the open session was established.
+  Stopwatch? sessionAge;
+
+  void reconnect(Duration minimumSessionAge) {
     wake();
     final drop = sessionDrop;
-    if (drop != null && !drop.isCompleted) {
+    final age = sessionAge;
+    if (drop != null &&
+        !drop.isCompleted &&
+        age != null &&
+        age.elapsed >= minimumSessionAge) {
       reconnectNow = true;
       drop.complete();
     }
