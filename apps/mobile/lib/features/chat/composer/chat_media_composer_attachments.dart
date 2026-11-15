@@ -117,10 +117,66 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
     PreparedAttachmentSource? source;
     try {
       if (pickerSource == AttachmentPickerSource.gallery) {
-        final sources = await _imagePicker.pickImages(
-          cancellationSignal: cancellation.signal,
-        );
+        // Every further picture gets its preview slot as soon as the gallery
+        // returns, and the slot fills when its own copy lands.
+        final extras = <_ComposerAttachment>[];
+        final copies = <Completer<PreparedAttachmentSource?>>[];
+        void dropExtras() {
+          for (final copy in copies) {
+            if (!copy.isCompleted) copy.complete(null);
+          }
+          for (final extra in extras) {
+            if (!extra.disposed) {
+              if (!_disposed) _updateAttachments(() => _images.remove(extra));
+              extra.dispose();
+            }
+          }
+        }
+
+        final List<PreparedAttachmentSource> sources;
+        try {
+          sources = await _imagePicker.pickImages(
+            cancellationSignal: cancellation.signal,
+            onSelected: (count) {
+              if (_disposed || image.disposed || cancellation.isCancelled) {
+                return;
+              }
+              for (var index = 1; index < count; index++) {
+                final copy = Completer<PreparedAttachmentSource?>();
+                final extra = _addImageAttachment()..preparing = true;
+                extras.add(extra);
+                copies.add(copy);
+                unawaited(
+                  extra.controller
+                      .pickAndHold(() async {
+                        final prepared = await copy.future;
+                        if (prepared == null) return null;
+                        extra.source = prepared;
+                        return ImageAttachmentUploadRequest(
+                          accountId: admission.accountId,
+                          server: admission.server,
+                          roomToken: admission.roomToken,
+                          source: prepared,
+                          metadata: admission.metadata,
+                          diagnosticSource: AttachmentUploadSource.gallery,
+                        );
+                      })
+                      .whenComplete(() => extra.preparing = false),
+                );
+              }
+            },
+            onCopied: (index, prepared) {
+              if (index > 0 && index <= copies.length) {
+                copies[index - 1].complete(prepared);
+              }
+            },
+          );
+        } on Object {
+          dropExtras();
+          rethrow;
+        }
         if (_disposed || image.disposed || cancellation.isCancelled) {
+          dropExtras();
           for (final prepared in sources) {
             await image.store.discard(prepared.handle);
           }
@@ -128,26 +184,6 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
         }
         source = sources.isEmpty ? null : sources.first;
         image.source = source;
-        for (var index = 1; index < sources.length; index++) {
-          if (_disposed || image.disposed || cancellation.isCancelled) {
-            for (final remaining in sources.skip(index)) {
-              await image.store.discard(remaining.handle);
-            }
-            return null;
-          }
-          final prepared = sources[index];
-          final extra = _addImageAttachment()..source = prepared;
-          await extra.controller.pickAndHold(
-            () async => ImageAttachmentUploadRequest(
-              accountId: admission.accountId,
-              server: admission.server,
-              roomToken: admission.roomToken,
-              source: prepared,
-              metadata: admission.metadata,
-              diagnosticSource: AttachmentUploadSource.gallery,
-            ),
-          );
-        }
       } else {
         source = await _imagePicker.pick(
           source: pickerSource,

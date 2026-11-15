@@ -257,8 +257,13 @@ final class DurableImageAttachmentPicker {
   final int maximumImageBytes;
   final ReportAttachmentUploadDiagnostic reportDiagnostic;
 
+  /// [onSelected] reports how many images the gallery returned and
+  /// [onCopied] each durable copy as it lands, so a caller can show every
+  /// preview slot at once instead of after the last copy.
   Future<List<PreparedAttachmentSource>> pickImages({
     AttachmentCancellationSignal? cancellationSignal,
+    void Function(int count)? onSelected,
+    void Function(int index, PreparedAttachmentSource source)? onCopied,
   }) async {
     final selectionBackend = backend;
     if (selectionBackend is! MultipleImageSelectionBackend) {
@@ -267,6 +272,7 @@ final class DurableImageAttachmentPicker {
     }
     final selections = await (selectionBackend as MultipleImageSelectionBackend)
         .selectImages();
+    onSelected?.call(selections.length);
     final sources = <PreparedAttachmentSource>[];
     try {
       for (final selection in selections) {
@@ -278,6 +284,7 @@ final class DurableImageAttachmentPicker {
             cancellationSignal: cancellationSignal,
           ),
         );
+        onCopied?.call(sources.length - 1, sources.last);
       }
       return sources;
     } on Object {

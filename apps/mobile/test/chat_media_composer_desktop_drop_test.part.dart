@@ -53,7 +53,11 @@ void _registerChatMediaComposerDesktopDropTests(
       final seen = <String>{};
       for (var page = 0; page < 6; page++) {
         for (var index = 1; index <= 6; index++) {
-          if (find.text('file-$index.pdf').hitTestable().evaluate().isNotEmpty) {
+          if (find
+              .text('file-$index.pdf')
+              .hitTestable()
+              .evaluate()
+              .isNotEmpty) {
             seen.add('file-$index.pdf');
           }
         }
@@ -131,6 +135,48 @@ void _registerChatMediaComposerDesktopDropTests(
       },
     );
   }
+
+  testWidgets('every picked photo gets its preview slot before the last copy '
+      'finishes', (tester) async {
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+    final media = ChatMediaComposerController();
+    // Created and completed in the real zone, where the copy awaits it.
+    final gate = (await tester.runAsync(() async => Completer<void>()))!;
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore(),
+        bridge: bridge.bridge,
+        threadId: null,
+        voiceBackends: voiceBackends,
+        controller: media,
+        imageSelectionBackend: _AlbumPicker(lastCopyGate: gate),
+      ),
+    );
+
+    Future<bool>? pick;
+    await tester.runAsync(() async {
+      pick = media.pickAttachment(AttachmentPickerSource.gallery);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pump();
+    expect(find.text('4 attachments'), findsOneWidget);
+
+    expect(
+      await tester.runAsync(() {
+        gate.complete();
+        return pick!;
+      }),
+      isTrue,
+    );
+    await tester.pump();
+    expect(await tester.runAsync(media.sendPreparedAttachment), isTrue);
+    expect(bridge.sources.map((source) => source.displayName), [
+      for (var index = 0; index < 4; index++) 'photo-$index.png',
+    ]);
+  });
 
   testWidgets(
     'four picked photos share one album, another send gets a new one',
@@ -428,6 +474,11 @@ void _registerChatMediaComposerDesktopDropTests(
 
 final class _AlbumPicker
     implements ImageSelectionBackend, MultipleImageSelectionBackend {
+  _AlbumPicker({this.lastCopyGate});
+
+  /// Holds back the bytes of the last picture until completed.
+  final Completer<void>? lastCopyGate;
+
   @override
   Future<ImageSelection?> selectImage(AttachmentPickerSource source) =>
       const _ImageBackend().selectImage(source);
@@ -441,7 +492,12 @@ final class _AlbumPicker
         displayName: 'photo-$index.png',
         declaredMimeType: selection.declaredMimeType,
         byteLength: selection.byteLength,
-        openRead: selection.openRead,
+        openRead: index == 3 && lastCopyGate != null
+            ? ({int? start, int? end}) async* {
+                await lastCopyGate!.future;
+                yield* selection.openRead(start: start, end: end);
+              }
+            : selection.openRead,
       ),
     );
   }
