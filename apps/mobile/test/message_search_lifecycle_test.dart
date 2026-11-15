@@ -13,6 +13,7 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
+import 'package:nextcloudtalk/features/conversations/unread_badge.dart';
 import 'package:nextcloudtalk/features/search/message_search_service.dart';
 import 'package:nextcloudtalk/features/search/message_search_screen.dart';
 import 'package:nextcloudtalk/features/search/message_search_thread_screen.dart';
@@ -331,6 +332,9 @@ Widget _wrapShell(
             Stream.value(availableAccounts ?? <StoredAccount>[fixture.account]),
       ),
       selectedAccountProvider.overrideWith((ref) => selectedAccounts),
+      unreadCountsProvider.overrideWith(
+        (ref) => Stream.value(const <String, int>{}),
+      ),
       conversationsProvider.overrideWith(
         (ref, accountId) =>
             Stream.value(<CachedConversation>[fixture.conversation]),

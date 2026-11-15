@@ -15,6 +15,7 @@ import 'package:nextcloudtalk/features/calls/call_transport_service.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
+import 'package:nextcloudtalk/features/conversations/unread_badge.dart';
 import 'package:nextcloudtalk/features/newconversation/new_conversation_screen.dart';
 import 'package:nextcloudtalk/features/rooms/room_details_screen.dart';
 import 'package:nextcloudtalk/features/settings/settings_screen.dart';
@@ -65,6 +66,12 @@ void main() {
         ),
         // Plain streams instead of the drift-backed ones: the fake clock in
         // testWidgets never drains drift's live-query timers.
+        unreadCountsProvider.overrideWith(
+          (ref) => Stream.value({
+            for (final entry in conversationsByAccount.entries)
+              entry.key: unreadCountOf(entry.value),
+          }),
+        ),
         conversationsProvider.overrideWith(
           (ref, accountId) => Stream.value(
             conversationsByAccount[accountId] ?? const <CachedConversation>[],

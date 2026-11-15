@@ -345,15 +345,23 @@ void main() {
 }
 
 Future<UnreadSummary> _readSummary(ProviderContainer container) async {
-  // unreadSummaryProvider reads accountsProvider and conversationsProvider
+  // unreadSummaryProvider reads accountsProvider and unreadCountsProvider
   // via valueOrNull, so it silently sees "no data yet" until each underlying
   // stream has actually emitted once. Await that directly instead of racing
   // it with a timer.
   final accountList = await container.read(accountsProvider.future);
+  await container.read(unreadCountsProvider.future);
+  final summary = container.read(unreadSummaryProvider);
+  // The database sum must agree with adding up the rows themselves.
   for (final account in accountList) {
-    await container.read(conversationsProvider(account.id).future);
+    expect(
+      summary.countFor(account.id),
+      unreadCountOf(
+        await container.read(conversationsProvider(account.id).future),
+      ),
+    );
   }
-  return container.read(unreadSummaryProvider);
+  return summary;
 }
 
 Future<void> _waitUntil(

@@ -12,6 +12,7 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_sync_service.dart';
+import 'package:nextcloudtalk/features/conversations/unread_badge.dart';
 import 'package:nextcloudtalk/features/onboarding/onboarding_screen.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 
@@ -114,6 +115,9 @@ void main() {
           accountsProvider.overrideWith((ref) => Stream.value([account])),
           selectedAccountProvider.overrideWith(
             (ref) => selectedAccounts.stream,
+          ),
+          unreadCountsProvider.overrideWith(
+            (ref) => Stream.value(const <String, int>{}),
           ),
           conversationsProvider.overrideWith(
             (ref, accountId) => Stream.value(const <CachedConversation>[]),
@@ -471,6 +475,9 @@ Future<void> _verifyLifecycleSync(
           accountsProvider.overrideWith((ref) => Stream.value([account])),
           selectedAccountProvider.overrideWith(
             (ref) => selectedAccounts.stream,
+          ),
+          unreadCountsProvider.overrideWith(
+            (ref) => Stream.value(const <String, int>{}),
           ),
           conversationsProvider.overrideWith(
             (ref, accountId) => Stream.value(const <CachedConversation>[]),

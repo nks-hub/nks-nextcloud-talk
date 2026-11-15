@@ -11,6 +11,7 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
 import 'package:nextcloudtalk/features/conversations/deep_link_bridge.dart';
+import 'package:nextcloudtalk/features/conversations/unread_badge.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 
 import 'test_support.dart';
@@ -113,6 +114,9 @@ void main() {
           // The room has to be in the selected account's list: the shell
           // opens a conversation by selecting its token, and the workspace
           // resolves that token against this stream.
+          unreadCountsProvider.overrideWith(
+            (ref) => Stream.value(const <String, int>{}),
+          ),
           conversationsProvider.overrideWith(
             (ref, accountId) => Stream.value(
               accountId == targetAccount.id

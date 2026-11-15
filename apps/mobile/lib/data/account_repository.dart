@@ -102,6 +102,25 @@ final class AccountRepository {
     return query.watch();
   }
 
+  /// Unread messages per account, summed in the database so the badge does not
+  /// load every conversation row (and its JSON) of every account. Accounts
+  /// without conversations are absent.
+  Stream<Map<String, int>> watchUnreadCounts() {
+    final accountId = _database.cachedConversations.accountId;
+    final unread = _database.cachedConversations.unreadMessages.sum();
+    final query = _database.selectOnly(_database.cachedConversations)
+      ..addColumns([accountId, unread])
+      ..groupBy([accountId]);
+    return query
+        .watch()
+        .map(
+          (rows) => {
+            for (final row in rows) row.read(accountId)!: row.read(unread) ?? 0,
+          },
+        )
+        .distinct(mapEquals);
+  }
+
   Future<CachedConversation?> getConversation({
     required String accountId,
     required String token,

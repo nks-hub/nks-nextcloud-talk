@@ -15,6 +15,7 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
+import 'package:nextcloudtalk/features/conversations/unread_badge.dart';
 import 'package:nextcloudtalk/features/push/windows_notification.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -92,6 +93,9 @@ void main() {
             ),
             selectedAccountProvider.overrideWith(
               (ref) => selectedAccounts.stream,
+            ),
+            unreadCountsProvider.overrideWith(
+              (ref) => Stream.value(const <String, int>{}),
             ),
             conversationsProvider.overrideWith(
               (ref, accountId) =>

@@ -37,19 +37,19 @@ final class UnreadSummary {
   int get total => byAccount.values.fold(0, (sum, count) => sum + count);
 }
 
-/// Recomputed whenever the account list or any single account's conversation
-/// stream changes; each account's count only ever depends on that account's
-/// own [conversationsProvider] stream, so one account's data can never leak
+final unreadCountsProvider = StreamProvider<Map<String, int>>((ref) {
+  return ref.watch(accountRepositoryProvider).watchUnreadCounts();
+});
+
+/// Recomputed whenever the account list or a per-account sum changes; the
+/// database groups the sum by account, so one account's data can never leak
 /// into another account's count.
 final unreadSummaryProvider = Provider<UnreadSummary>((ref) {
   final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
-  final byAccount = <String, int>{
-    for (final account in accounts)
-      account.id: unreadCountOf(
-        ref.watch(conversationsProvider(account.id)).valueOrNull ?? const [],
-      ),
-  };
-  return UnreadSummary(byAccount);
+  final counts = ref.watch(unreadCountsProvider).valueOrNull ?? const {};
+  return UnreadSummary({
+    for (final account in accounts) account.id: counts[account.id] ?? 0,
+  });
 });
 
 /// A small unread-count badge, meant to overlay an account avatar wherever
