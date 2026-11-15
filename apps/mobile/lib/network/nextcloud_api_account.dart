@@ -273,6 +273,24 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
     return read.snapshot;
   }
 
+  /// Whether a capability read for this login would be answered from memory
+  /// at once, with nothing left to wait for on the network.
+  bool hasSettledCapabilities({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+  }) {
+    final cached = _capabilityCache['${server.uri}\u0000$loginName'];
+    return cached != null &&
+        cached.settled &&
+        !cached.rateLimited &&
+        cached.credentialFingerprint ==
+            _credentialFingerprint(
+              _basicAuthorization(loginName, appPassword),
+            ) &&
+        _clock().isBefore(cached.expiresAt);
+  }
+
   /// Reads authenticated capabilities and reports whether transport occurred.
   ///
   /// [forceRefresh] bypasses a valid in-memory snapshot without disabling the
@@ -355,6 +373,7 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
       }
       rethrow;
     }
+    entry.settled = true;
     if (!shared) {
       // A private read may still publish its result, as long as it does not
       // evict a snapshot another caller could be reading. An expired entry or

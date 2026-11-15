@@ -25,6 +25,7 @@ part 'chat_service_integration_connectivity_cases.dart';
 part 'chat_service_integration_offline_outbox_cases.dart';
 part 'chat_service_integration_automatic_resend_cases.dart';
 part 'chat_service_integration_send_activity_cases.dart';
+part 'chat_service_integration_cold_admission_cases.dart';
 part 'chat_service_integration_outbox_cases.dart';
 part 'chat_service_integration_nonblocking_cases.dart';
 part 'chat_service_integration_thread_admission_cases.dart';
@@ -50,6 +51,7 @@ void main() {
   suite.registerOfflineOutboxCases();
   suite.registerAutomaticResendCases();
   suite.registerSendActivityCases();
+  suite.registerColdAdmissionCases();
   suite.registerOutboxCases();
   suite.registerNonBlockingCases();
   suite.registerThreadAdmissionCases();

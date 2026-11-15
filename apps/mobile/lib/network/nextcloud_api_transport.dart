@@ -600,7 +600,7 @@ String _credentialFingerprint(String authorization) =>
     sha256.convert(utf8.encode(authorization)).toString();
 
 final class _CachedCapabilities {
-  const _CachedCapabilities({
+  _CachedCapabilities({
     required this.server,
     required this.credentialFingerprint,
     required this.snapshot,
@@ -612,6 +612,10 @@ final class _CachedCapabilities {
   final String credentialFingerprint;
   final Future<CapabilitySnapshot> snapshot;
   final DateTime expiresAt;
+
+  /// Whether [snapshot] has arrived. Until then reading it waits on the
+  /// network like the request that is fetching it.
+  bool settled = false;
 
   /// This entry is a `429`, not a snapshot. Capabilities carry no per-endpoint
   /// rate limit of their own, so a `429` there can only mean the whole origin

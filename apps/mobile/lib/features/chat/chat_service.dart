@@ -421,12 +421,28 @@ final class ChatService {
         if (replyTo != null && (threadId != null || replyTo < 1)) {
           throw const ChatServiceException(ChatServiceError.invalidResponse);
         }
+        // The text exists only in memory until it is admitted, so nothing
+        // before that may wait on the network: without a snapshot in memory
+        // the stored capabilities admit it and the server is asked afterwards.
         var prepared = await _prepare(
           accountId,
           roomToken,
           threadId: threadId,
           allowPersistedCapabilitiesForSend: true,
+          preferPersistedCapabilities: true,
         );
+        if (prepared.threadId != null &&
+            prepared.namedThread == null &&
+            !prepared.capabilitiesVerifiedOnline) {
+          // Where a thread of unknown kind posts to is read from the server
+          // below, which needs it reachable anyway.
+          prepared = await _prepare(
+            accountId,
+            roomToken,
+            threadId: threadId,
+            allowPersistedCapabilitiesForSend: true,
+          );
+        }
         if (replyTo != null && !prepared.profile.reply) {
           throw const ChatServiceException(ChatServiceError.sendUnsupported);
         }
@@ -510,10 +526,10 @@ final class ChatService {
         // arms its own retry, where waiting here left it to chance.
         _sendActivity(1);
         unawaited(
-          _deliverPending(
-            prepared,
-            threadId: threadId,
-          ).whenComplete(() => _sendActivity(-1)),
+          (prepared.capabilitiesVerifiedOnline
+                  ? _deliverPending(prepared, threadId: threadId)
+                  : _deliverAfterStoredAdmission(prepared, threadId))
+              .whenComplete(() => _sendActivity(-1)),
         );
         return operationId;
       }, threadId: threadId);
@@ -550,6 +566,29 @@ final class ChatService {
     } on Object {
       // Persisted by the wrapper, or the account went away underneath.
     }
+  }
+
+  /// Delivery for a message admitted on stored capabilities.
+  ///
+  /// The server is asked now, because a change it reports would make it
+  /// refuse a claim made with the stored ones. If it cannot be asked, the
+  /// stored ones still send the message or arm its retry.
+  Future<void> _deliverAfterStoredAdmission(
+    _PreparedChat stored,
+    int? threadId,
+  ) async {
+    var prepared = stored;
+    try {
+      prepared = await _prepare(
+        stored.account.id,
+        stored.room.token.value,
+        threadId: threadId,
+        allowPersistedCapabilitiesForSend: true,
+      );
+    } on Object {
+      // Falls back to [stored].
+    }
+    await _deliverPending(prepared, threadId: threadId);
   }
 
   Future<void> resendText({
@@ -747,6 +786,7 @@ final class ChatService {
     int? threadId,
     Future<void>? abortTrigger,
     bool allowPersistedCapabilitiesForSend = false,
+    bool preferPersistedCapabilities = false,
     bool forceCapabilityNetworkRead = false,
   }) async {
     _ensureAccountActive(accountId);
@@ -775,6 +815,7 @@ final class ChatService {
       appPassword: appPassword,
       abortTrigger: abortTrigger,
       allowPersistedCapabilitiesForSend: allowPersistedCapabilitiesForSend,
+      preferPersisted: preferPersistedCapabilities,
       forceNetworkRead: forceCapabilityNetworkRead,
     );
     _ensureAccountActive(accountId);
@@ -870,8 +911,20 @@ final class ChatService {
     required String appPassword,
     required Future<void>? abortTrigger,
     required bool allowPersistedCapabilitiesForSend,
+    required bool preferPersisted,
     required bool forceNetworkRead,
   }) async {
+    if (preferPersisted &&
+        !_api.hasSettledCapabilities(
+          server: server,
+          loginName: account.loginName,
+          appPassword: appPassword,
+        )) {
+      final persisted = await _loadPersistedCapabilities(account);
+      if (persisted != null) {
+        return persisted;
+      }
+    }
     try {
       final capabilityRead = await _api.getAuthenticatedCapabilitiesWithSource(
         server: server,
