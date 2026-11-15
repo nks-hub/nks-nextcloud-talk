@@ -227,56 +227,53 @@ void main() {
     var roomReads = 0;
     final targetRequests = <http.Request>[];
     final api = HttpNextcloudApi(
-      client: MockClient((request) async {
-        if (!online) {
+      client: SwitchedClient(
+        () => online,
+        MockClient((request) async {
+          targetRequests.add(request);
           if (request.url.path.endsWith('/cloud/capabilities')) {
-            throw http.ClientException('Synthetic offline state', request.url);
+            return http.Response(
+              jsonEncode(capabilitiesJson(talkFeatures: features.toList())),
+              200,
+            );
           }
-          throw StateError('Offline reply reached ${request.url}');
-        }
-        targetRequests.add(request);
-        if (request.url.path.endsWith('/cloud/capabilities')) {
-          return http.Response(
-            jsonEncode(capabilitiesJson(talkFeatures: features.toList())),
-            200,
-          );
-        }
-        if (request.method == 'GET' &&
-            request.url.path.endsWith('/apps/spreed/api/v4/room')) {
-          return http.Response(
-            jsonEncode(
-              _conversationResponse(
-                token: 'sharedroom',
-                displayName: 'Room from account B',
-                unreadMessages: roomReads == 0 ? 2 : 0,
-                lastMessageId: 4242,
+          if (request.method == 'GET' &&
+              request.url.path.endsWith('/apps/spreed/api/v4/room')) {
+            return http.Response(
+              jsonEncode(
+                _conversationResponse(
+                  token: 'sharedroom',
+                  displayName: 'Room from account B',
+                  unreadMessages: roomReads == 0 ? 2 : 0,
+                  lastMessageId: 4242,
+                ),
               ),
-            ),
-            200,
-            headers: const <String, String>{
-              'X-Nextcloud-Talk-Hash': 'windows-action-hash',
-              'X-Nextcloud-Talk-Modified-Before': '1787864000',
-              'X-Nextcloud-Talk-Federation-Invites': '0',
-            },
+              200,
+              headers: const <String, String>{
+                'X-Nextcloud-Talk-Hash': 'windows-action-hash',
+                'X-Nextcloud-Talk-Modified-Before': '1787864000',
+                'X-Nextcloud-Talk-Federation-Invites': '0',
+              },
+            );
+          }
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/chat/sharedroom/read')) {
+            roomReads++;
+            return http.Response(
+              jsonEncode(
+                _readResponse(roomToken: 'sharedroom', lastReadMessage: 4242),
+              ),
+              200,
+            );
+          }
+          if (request.url.path.contains('/avatar')) {
+            return http.Response('', 404);
+          }
+          throw StateError(
+            'Unexpected request: ${request.method} ${request.url}',
           );
-        }
-        if (request.method == 'POST' &&
-            request.url.path.endsWith('/chat/sharedroom/read')) {
-          roomReads++;
-          return http.Response(
-            jsonEncode(
-              _readResponse(roomToken: 'sharedroom', lastReadMessage: 4242),
-            ),
-            200,
-          );
-        }
-        if (request.url.path.contains('/avatar')) {
-          return http.Response('', 404);
-        }
-        throw StateError(
-          'Unexpected request: ${request.method} ${request.url}',
-        );
-      }),
+        }),
+      ),
     );
     final container = ProviderContainer(
       overrides: [
@@ -314,12 +311,15 @@ void main() {
     );
     expect(replyResponse, isTrue);
 
+    // Admitted from the stored capabilities and tried at once; with no
+    // network the attempt ends unsent and the reply stays in the outbox.
+    await waitForUnsentTextSends(database);
     final queued = await database.select(database.textSendOperations).get();
     expect(queued, hasLength(1));
     expect(queued.single.accountId, accountB.id);
     expect(queued.single.roomToken, 'sharedroom');
     expect(queued.single.message, 'Reply from Windows');
-    expect(queued.single.outboxState, 'queued');
+    expect(queued.single.outboxState, 'retryable');
     // The toast quoted message 4242; the reply answers it, not the room.
     expect(queued.single.replyTo, 4242);
 

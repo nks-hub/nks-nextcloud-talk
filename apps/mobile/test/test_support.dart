@@ -21,6 +21,25 @@ final class OfflineClient extends http.BaseClient {
       throw http.ClientException('offline', request.url);
 }
 
+/// [OfflineClient] until [online] says otherwise, then [inner].
+final class SwitchedClient extends http.BaseClient {
+  SwitchedClient(this.online, this.inner);
+
+  final bool Function() online;
+  final http.Client inner;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (!online()) {
+      throw http.ClientException('offline', request.url);
+    }
+    return inner.send(request);
+  }
+
+  @override
+  void close() => inner.close();
+}
+
 /// Waits for what a send into a tunnel leaves behind: every room's oldest
 /// operation tried once and put back as unsent, nothing still on its way.
 Future<void> waitForUnsentTextSends(AppDatabase database) async {
