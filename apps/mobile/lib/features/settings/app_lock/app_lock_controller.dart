@@ -99,6 +99,9 @@ final class AppLockController extends Notifier<AppLockState> {
       }
       final enabled = await ref.read(appLockStoreProvider).readEnabled();
       if (!enabled) {
+        // Expose the app now: with the lock off nothing depends on the device
+        // query, which only decides whether the setting is offered.
+        _setState(const AppLockState(phase: AppLockPhase.disabled));
         var supported = false;
         try {
           supported = await ref
@@ -107,9 +110,9 @@ final class AppLockController extends Notifier<AppLockState> {
         } on Object {
           // Availability only controls whether the disabled setting is shown.
         }
-        _setState(
-          AppLockState(phase: AppLockPhase.disabled, supported: supported),
-        );
+        if (supported && !_disposed && state.phase == AppLockPhase.disabled) {
+          state = state.copyWith(supported: true);
+        }
         return;
       }
       final supported = await ref

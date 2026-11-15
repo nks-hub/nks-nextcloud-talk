@@ -60,6 +60,10 @@ final class _NextcloudTalkAppState extends ConsumerState<NextcloudTalkApp> {
   @override
   Widget build(BuildContext context) {
     ref.watch(callKitChannelProvider);
+    // Started here, next to the theme query that already opens the database,
+    // so the lock gate and the account list do not each add a loading frame.
+    ref.listen(accountsProvider, (_, _) {});
+    ref.listen(selectedAccountProvider, (_, _) {});
     final serverSeed = AppTheme.seedFromServerHex(
       ref.watch(selectedAccountThemeColorProvider).valueOrNull,
     );

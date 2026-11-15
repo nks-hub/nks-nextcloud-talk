@@ -85,6 +85,53 @@ void main() {
     },
   );
 
+  test('a disabled lock exposes the app before the device answers', () async {
+    final authenticator = _PendingSupportAuthenticator();
+    final container = _container(
+      store: _MemoryAppLockStore(),
+      authenticator: authenticator,
+    );
+    addTearDown(container.dispose);
+    container.read(appLockControllerProvider);
+    await pumpEventQueue();
+
+    var state = container.read(appLockControllerProvider);
+    expect(state.phase, AppLockPhase.disabled);
+    expect(state.exposesApp, isTrue);
+    expect(state.supported, isFalse);
+
+    authenticator.support.complete(true);
+    await container.read(appLockControllerProvider.notifier).ready;
+
+    state = container.read(appLockControllerProvider);
+    expect(state.phase, AppLockPhase.disabled);
+    expect(state.supported, isTrue);
+  });
+
+  test('an enabled lock exposes nothing while the device answers', () async {
+    final authenticator = _PendingSupportAuthenticator();
+    final container = _container(
+      store: _MemoryAppLockStore(enabled: true),
+      authenticator: authenticator,
+    );
+    addTearDown(container.dispose);
+    final phases = <AppLockPhase>[];
+    container.listen(
+      appLockControllerProvider,
+      (_, next) => phases.add(next.phase),
+      fireImmediately: true,
+    );
+    await pumpEventQueue();
+
+    expect(phases, [AppLockPhase.loading]);
+    expect(container.read(appLockControllerProvider).exposesApp, isFalse);
+
+    authenticator.support.complete(true);
+    await container.read(appLockControllerProvider.notifier).ready;
+
+    expect(phases, [AppLockPhase.loading, AppLockPhase.locked]);
+  });
+
   test('an enabled lock starts locked without exposing app content', () async {
     final authenticator = _FakeAuthenticator(supported: true);
     final container = _container(
@@ -228,7 +275,7 @@ void main() {
 ProviderContainer _container({
   bool mobile = true,
   required _MemoryAppLockStore store,
-  required _FakeAuthenticator authenticator,
+  required AppLockAuthenticator authenticator,
 }) {
   return ProviderContainer(
     overrides: [
@@ -297,4 +344,14 @@ final class _FakeAuthenticator implements AppLockAuthenticator {
     }
     throw result;
   }
+}
+
+final class _PendingSupportAuthenticator implements AppLockAuthenticator {
+  final support = Completer<bool>();
+
+  @override
+  Future<bool> isSupported() => support.future;
+
+  @override
+  Future<bool> authenticate(String reason) async => false;
 }
