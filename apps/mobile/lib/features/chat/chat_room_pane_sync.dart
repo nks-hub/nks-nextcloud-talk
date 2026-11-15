@@ -70,14 +70,21 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     ref.invalidate(chatRoomSignalingProvider(room));
   }
 
-  Future<void> _restartLiveSync() async {
+  /// [roomChanged] binds the new room without waiting for the previous
+  /// room's round to wind down; the generation already keeps that round from
+  /// touching this pane. The same room is still restarted in order.
+  Future<void> _restartLiveSync({bool roomChanged = false}) async {
     final generation = ++_syncGeneration;
     final previousBinding = _liveBinding;
     final previousLoop = _syncLoop;
     _liveBinding = null;
     _syncLoop = null;
     previousBinding?.close();
-    await previousLoop?.stop();
+    if (roomChanged) {
+      unawaited(previousLoop?.stop());
+    } else {
+      await previousLoop?.stop();
+    }
     if (!mounted ||
         generation != _syncGeneration ||
         !_isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState)) {
@@ -250,6 +257,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         _localError = null;
       });
     }
+    _syncRounds.value++;
     _startPendingJump();
     _scheduleVisibleReadMarker(generation);
   }
@@ -262,6 +270,8 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_markVisibleRead(key, generation));
     });
+    // A round that rebuilt nothing has no frame coming for the callback.
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   Future<void> _markVisibleRead(ChatRoomProviderKey key, int generation) async {

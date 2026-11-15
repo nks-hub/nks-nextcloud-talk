@@ -755,6 +755,7 @@ final class _PrivateReplyDialogState extends State<_PrivateReplyDialog> {
 final class _SendOrQuickEmojiButton extends StatelessWidget {
   const _SendOrQuickEmojiButton({
     required this.composer,
+    required this.refresh,
     required this.emoji,
     required this.sending,
     required this.hasAttachment,
@@ -763,6 +764,9 @@ final class _SendOrQuickEmojiButton extends StatelessWidget {
   });
 
   final TextEditingController composer;
+
+  /// Fires when [hasAttachment] may answer differently.
+  final Listenable refresh;
   final String emoji;
   final bool sending;
   final bool Function() hasAttachment;
@@ -772,7 +776,7 @@ final class _SendOrQuickEmojiButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: composer,
+      listenable: Listenable.merge([composer, refresh]),
       builder: (context, _) {
         if (composer.text.trim().isNotEmpty || hasAttachment()) {
           return sendButton;

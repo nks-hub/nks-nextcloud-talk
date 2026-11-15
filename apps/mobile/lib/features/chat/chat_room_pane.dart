@@ -350,7 +350,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _appearanceMarkers = OwnTalkAppearanceMarkerWatch();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_restoreDraft(_key));
-      unawaited(_restartLiveSync());
+      unawaited(_restartLiveSync(roomChanged: true));
     });
   }
 
@@ -426,6 +426,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _highlightTimer?.cancel();
     _incomingAnnouncements.dispose();
     _attachmentMenuActions_.dispose();
+    _syncRounds.dispose();
     _scrollController
       ..removeListener(_handleScroll)
       ..dispose();
@@ -444,7 +445,33 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   final ValueNotifier<List<AttachmentMenuAction>> _attachmentMenuActions_ =
       ValueNotifier<List<AttachmentMenuAction>>(const <AttachmentMenuAction>[]);
 
+  /// Ticks once per finished live round.
+  // shortcut: the send/quick-emoji button re-reads the prepared attachment
+  // on this tick because the media composer does not announce it; listen to
+  // ChatMediaComposerController instead once it is a Listenable.
+  final ValueNotifier<int> _syncRounds = ValueNotifier<int>(0);
+
+  List<AttachmentMenuAction> _publishedMenuActions =
+      const <AttachmentMenuAction>[];
+
   void _publishAttachmentMenuActions(List<AttachmentMenuAction> actions) {
+    // Every build makes new callbacks, but they only reach back into this
+    // state, so a menu with the same entries enabled is the same menu.
+    final published = _publishedMenuActions;
+    if (published.length == actions.length) {
+      var same = true;
+      for (var index = 0; same && index < actions.length; index++) {
+        same =
+            published[index].key == actions[index].key &&
+            published[index].label == actions[index].label &&
+            (published[index].onSelected == null) ==
+                (actions[index].onSelected == null);
+      }
+      if (same) {
+        return;
+      }
+    }
+    _publishedMenuActions = actions;
     // Published after the frame: assigning during build would rebuild the
     // open sheet in the middle of this one.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1011,6 +1038,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
             ? sendButton
             : _SendOrQuickEmojiButton(
                 composer: _composer,
+                refresh: _syncRounds,
                 emoji: quickEmoji,
                 sending: _sending,
                 hasAttachment: () =>
