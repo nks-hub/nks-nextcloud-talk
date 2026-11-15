@@ -280,10 +280,19 @@ final class _ChatComposer extends ConsumerWidget {
     required this.onOversizedPaste,
     required this.canDivertPaste,
     required this.hasAttachment,
+    required this.media,
+    required this.roomKey,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
+
+  /// What the attachment row is doing, for the clipboard image suggestion.
+  final ChatMediaComposerController media;
+
+  /// The room this composer writes into; a suggestion never follows the
+  /// composer into another one.
+  final ChatRoomProviderKey roomKey;
 
   /// Receives an image that arrived as bytes — Ctrl/Cmd+V with a screenshot
   /// on the clipboard, or content a mobile keyboard inserted — so it can wait
@@ -483,6 +492,15 @@ final class _ChatComposer extends ConsumerWidget {
                         noResults: strings.mentionSuggestionsEmpty,
                         error: strings.mentionSuggestionsError,
                       ),
+                    ),
+                    ClipboardImageOffer(
+                      key: ValueKey<ChatRoomProviderKey>(roomKey),
+                      focusNode: focusNode,
+                      blocked: () => sending || media.isBusy,
+                      refresh: media.changes,
+                      sending: sending,
+                      onAttach: onPasteImage,
+                      onSend: onSubmit,
                     ),
                     Focus(
                       onKeyEvent: (node, event) => _handleKey(

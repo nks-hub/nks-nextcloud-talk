@@ -69,6 +69,7 @@ import 'media/remote_file_picker_screen.dart';
 import 'media/image_attachment_upload_panel.dart';
 import 'composer/attachment_submission.dart';
 import 'composer/chat_media_composer.dart';
+import 'composer/clipboard_image_offer.dart';
 import 'composer/composer_text_editing.dart';
 import 'composer/pasted_image.dart';
 import 'composer/emoji_picker.dart';
@@ -1214,6 +1215,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
             autofocus: widget.threadId != null && context.sendsOnEnter,
             sending: _sending,
             hasAttachment: () => _mediaComposerController.hasPreparedAttachment,
+            media: _mediaComposerController,
+            roomKey: _key,
             onSubmit: _send,
             onPasteFiles: _mediaComposerController.attachFiles,
             onPasteImage: (image) => _mediaComposerController.attachImageBytes(

@@ -295,6 +295,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openEmojiPicker => 'Open emoji picker';
 
   @override
+  String get clipboardImageOfferTitle => 'Paste image from clipboard';
+
+  @override
+  String get clipboardImageOfferHint => 'Tap the preview to add a caption';
+
+  @override
+  String get clipboardImageOfferAttach => 'Add the image to the message';
+
+  @override
+  String get clipboardImageOfferDismiss => 'Dismiss the clipboard image';
+
+  @override
+  String get clipboardImageOfferSend => 'Send the image';
+
+  @override
   String get pastedTextAttachFailed =>
       'The long text could not be attached as a file.';
 

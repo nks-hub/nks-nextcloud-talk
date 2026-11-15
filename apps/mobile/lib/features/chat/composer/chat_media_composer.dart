@@ -118,6 +118,8 @@ final class ChatMediaComposerController {
   Future<bool> Function()? _pickContact;
   bool Function()? _hasPreparedAttachment;
   bool Function()? _canAttachBytes;
+  bool Function()? _isBusy;
+  final ValueNotifier<int> _changes = ValueNotifier<int>(0);
   Future<bool> Function()? _sendPreparedAttachment;
   Future<bool> Function(Uint8List bytes, String mimeType, String displayName)?
   _attachImageBytes;
@@ -140,6 +142,13 @@ final class ChatMediaComposerController {
 
   /// True while a picked file waits in the composer for the send button.
   bool get hasPreparedAttachment => _hasPreparedAttachment?.call() ?? false;
+
+  /// True while a file or a voice message is being prepared, waits for the
+  /// send button or is on its way out.
+  bool get isBusy => _isBusy?.call() ?? false;
+
+  /// Ticks when [isBusy] may answer differently.
+  Listenable get changes => _changes;
 
   /// Whether [attachImageBytes] can take a file right now: the room accepts
   /// attachments. Each file gets its own preparation and upload state.
@@ -175,6 +184,7 @@ final class ChatMediaComposerController {
     required Future<bool> Function(List<String>) attachFiles,
     required bool Function() hasPreparedAttachment,
     required bool Function() canAttachBytes,
+    required bool Function() isBusy,
     required Future<bool> Function() sendPreparedAttachment,
     required Future<bool> Function(Uint8List, String, String) attachImageBytes,
   }) {
@@ -185,6 +195,7 @@ final class ChatMediaComposerController {
     _pickContact = pickContact;
     _hasPreparedAttachment = hasPreparedAttachment;
     _canAttachBytes = canAttachBytes;
+    _isBusy = isBusy;
     _sendPreparedAttachment = sendPreparedAttachment;
     _attachImageBytes = attachImageBytes;
   }
@@ -200,6 +211,7 @@ final class ChatMediaComposerController {
     _pickContact = null;
     _hasPreparedAttachment = null;
     _canAttachBytes = null;
+    _isBusy = null;
     _sendPreparedAttachment = null;
     _attachImageBytes = null;
   }
@@ -414,6 +426,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
           _sendingAttachments ||
           _images.any((image) => image.controller.state.isPrepared),
       canAttachBytes: () => !_disposed && _imageSupported,
+      isBusy: _isBusy,
       sendPreparedAttachment: _sendPreparedAttachment,
       attachImageBytes: _attachImageBytes,
     );
@@ -446,6 +459,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
             _sendingAttachments ||
             _images.any((image) => image.controller.state.isPrepared),
         canAttachBytes: () => !_disposed && _imageSupported,
+        isBusy: _isBusy,
         sendPreparedAttachment: _sendPreparedAttachment,
         attachImageBytes: _attachImageBytes,
       );
@@ -531,8 +545,18 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     return controller;
   }
 
+  bool _isBusy() {
+    final voice = _voiceController;
+    return _sendingAttachments ||
+        _images.any(
+          (image) => image.preparing || image.controller.state.isActive,
+        ) ||
+        (voice != null && !_showsIdleToolbar(voice.state));
+  }
+
   void _handleVoiceState() {
     final controller = _voiceController;
+    widget.controller?._changes.value++;
     if (!_disposed && mounted) {
       setState(() {});
     }

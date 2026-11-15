@@ -47,6 +47,7 @@ extension _ChatMediaComposerPending on _ChatMediaComposerState {
 
   void _handleImageState(_ComposerAttachment image) {
     final state = image.controller.state;
+    widget.controller?._changes.value++;
     if (image.durablyAccepted && !state.isActive) {
       scheduleMicrotask(() {
         if (_disposed || image.disposed) return;

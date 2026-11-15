@@ -298,6 +298,21 @@ class AppLocalizationsCs extends AppLocalizations {
   String get openEmojiPicker => 'Otevřít výběr emoji';
 
   @override
+  String get clipboardImageOfferTitle => 'Vložit obrázek ze schránky';
+
+  @override
+  String get clipboardImageOfferHint => 'Klepnutím na náhled přidáte popisek';
+
+  @override
+  String get clipboardImageOfferAttach => 'Přidat obrázek ke zprávě';
+
+  @override
+  String get clipboardImageOfferDismiss => 'Skrýt obrázek ze schránky';
+
+  @override
+  String get clipboardImageOfferSend => 'Odeslat obrázek';
+
+  @override
   String get pastedTextAttachFailed =>
       'Dlouhý text se nepodařilo přiložit jako soubor.';
 

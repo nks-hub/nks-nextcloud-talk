@@ -596,6 +596,36 @@ abstract class AppLocalizations {
   /// **'Open emoji picker'**
   String get openEmojiPicker;
 
+  /// No description provided for @clipboardImageOfferTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste image from clipboard'**
+  String get clipboardImageOfferTitle;
+
+  /// No description provided for @clipboardImageOfferHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the preview to add a caption'**
+  String get clipboardImageOfferHint;
+
+  /// No description provided for @clipboardImageOfferAttach.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the image to the message'**
+  String get clipboardImageOfferAttach;
+
+  /// No description provided for @clipboardImageOfferDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss the clipboard image'**
+  String get clipboardImageOfferDismiss;
+
+  /// No description provided for @clipboardImageOfferSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the image'**
+  String get clipboardImageOfferSend;
+
   /// No description provided for @pastedTextAttachFailed.
   ///
   /// In en, this message translates to:

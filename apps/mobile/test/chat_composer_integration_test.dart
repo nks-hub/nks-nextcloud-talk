@@ -22,6 +22,8 @@ import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/features/chat/composer/chat_media_composer.dart';
+import 'package:nextcloudtalk/features/chat/composer/clipboard_image_offer.dart';
+import 'package:nextcloudtalk/features/chat/composer/clipboard_image_source.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy_attachment.dart';
 import 'package:nextcloudtalk/features/chat/emoji_only_message.dart';
@@ -35,6 +37,7 @@ import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dar
 import 'package:nextcloudtalk/platform/app_settings.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'clipboard_image_test_support.dart';
 import 'owntalk_extensions_test_support.dart';
 import 'test_support.dart';
 
@@ -42,12 +45,14 @@ part 'chat_composer_location_test.part.dart';
 part 'chat_composer_giphy_reopen_test.part.dart';
 part 'chat_composer_nonblocking_test.part.dart';
 part 'chat_composer_quick_emoji_test.part.dart';
+part 'chat_composer_clipboard_offer_test.part.dart';
 
 void main() {
   _registerLocationComposerTests();
   _registerGiphyReopenTests();
   _registerNonBlockingComposerTests();
   _registerQuickEmojiComposerTests();
+  _registerClipboardOfferComposerTests();
   testWidgets(
     'media reply reaches finalize and clears its banner on enqueue',
     (tester) async {
