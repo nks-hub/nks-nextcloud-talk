@@ -79,6 +79,7 @@ void main() {
     ).capturesEvent;
     expect(captures('network'), isFalse);
     expect(captures('dav-quota-exceeded'), isFalse);
+    expect(captures('dav-payload-too-large'), isFalse);
     expect(captures('dav-weird'), isTrue);
     expect(captures(null), isTrue);
   });

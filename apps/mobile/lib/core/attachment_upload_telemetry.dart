@@ -144,8 +144,8 @@ final class AttachmentUploadDiagnostic {
     AttachmentUploadCheckpoint.credentialUnavailable ||
     AttachmentUploadCheckpoint.streamFailed ||
     AttachmentUploadCheckpoint.stalled => true,
-    AttachmentUploadCheckpoint.durableFailed => !_expectedDurableFailures
-        .contains(errorClass),
+    AttachmentUploadCheckpoint.durableFailed =>
+      !_expectedDurableFailures.contains(errorClass),
     _ => false,
   };
 }
@@ -159,6 +159,7 @@ const _expectedDurableFailures = <String>{
   'dav-quota-exceeded',
   'dav-permission-denied',
   'dav-rejected',
+  'dav-payload-too-large',
 };
 
 typedef ReportAttachmentUploadDiagnostic =
