@@ -1,6 +1,8 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/conversation_avatar_repository.dart';
@@ -30,6 +32,61 @@ void main() {
   });
 
   tearDown(() => database.close());
+
+  test('only a loaded versioned avatar outlives its last listener', () async {
+    var fail = false;
+    final api = HttpNextcloudApi(
+      client: MockClient((_) async {
+        if (fail) {
+          return http.Response('', 500);
+        }
+        return _imageResponse(
+          body: [1, 2, 3],
+          headers: const {'x-nc-iscustomavatar': '1'},
+        );
+      }),
+    );
+    addTearDown(api.close);
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        credentialVaultProvider.overrideWithValue(vault),
+        nextcloudApiProvider.overrideWithValue(api),
+      ],
+    );
+    addTearDown(container.dispose);
+    const room = 'https://cloud.example.invalid/ocs/v2.php/apps/spreed/api/v1';
+
+    Future<bool> keptAfterUse(String path, {required bool versioned}) async {
+      final provider = conversationAvatarProvider(
+        ConversationAvatarProviderKey(
+          account: accountA,
+          uri: Uri.parse('$room/$path'),
+          versioned: versioned,
+        ),
+      );
+      final subscription = container.listen(provider, (_, _) {});
+      try {
+        await container.read(provider.future);
+      } on Object {
+        // The failing case is asked about below like the others.
+      }
+      subscription.close();
+      await pumpEventQueue();
+      return container.exists(provider);
+    }
+
+    expect(
+      await keptAfterUse('room/room-a/avatar?avatarVersion=5', versioned: true),
+      isTrue,
+    );
+    expect(await keptAfterUse('room/room-b/avatar', versioned: false), isFalse);
+    fail = true;
+    expect(
+      await keptAfterUse('room/room-c/avatar?avatarVersion=1', versioned: true),
+      isFalse,
+    );
+  });
 
   test(
     'a versioned avatar is fetched once and then treated as immutable',

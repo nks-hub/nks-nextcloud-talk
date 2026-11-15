@@ -915,14 +915,43 @@ final referenceThumbnailProvider = FutureProvider.autoDispose
       }
     });
 
+/// The most recently loaded versioned avatars, kept alive so a row scrolled
+/// back in does not read its blob again and flash the initials meanwhile.
+/// Only versioned ones: their address changes with the picture, while the
+/// others must keep revalidating on their own schedule.
+final _conversationAvatarLinksProvider =
+    Provider<Map<ConversationAvatarProviderKey, KeepAliveLink>>((ref) => {});
+
+const _keptConversationAvatars = 128;
+
 final conversationAvatarProvider = FutureProvider.autoDispose
     .family<ConversationAvatarImage?, ConversationAvatarProviderKey>((
       ref,
       key,
-    ) {
-      return ref
+    ) async {
+      final load = ref
           .watch(conversationAvatarRepositoryProvider)
           .load(account: key.account, uri: key.uri, versioned: key.versioned);
+      if (!key.versioned) {
+        return load;
+      }
+      final links = ref.read(_conversationAvatarLinksProvider);
+      final link = ref.keepAlive();
+      links.remove(key)?.close();
+      links[key] = link;
+      if (links.length > _keptConversationAvatars) {
+        links.remove(links.keys.first)?.close();
+      }
+      try {
+        return await load;
+      } on Object {
+        // A failed load is retried the next time the row appears.
+        if (identical(links[key], link)) {
+          links.remove(key);
+        }
+        link.close();
+        rethrow;
+      }
     });
 
 final chatMediaCacheProvider = Provider<ChatMediaCache>((ref) {
