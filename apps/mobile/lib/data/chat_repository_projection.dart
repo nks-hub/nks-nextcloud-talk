@@ -363,6 +363,7 @@ extension _ChatRepositoryProjection on ChatRepository {
         duplicateRiskAcknowledged: row.duplicateRiskAcknowledged,
         errorClass: row.errorClass,
         nextAttemptAt: row.nextAttemptAt,
+        automaticResendCount: row.automaticResendCount,
         replyTo: row.replyTo,
         threadId: row.threadId,
         replyToToken: row.replyToToken == null
@@ -497,6 +498,7 @@ extension _ChatRepositoryProjection on ChatRepository {
         duplicateRiskAcknowledged: operation.duplicateRiskAcknowledged,
         errorClass: Value(operation.errorClass),
         nextAttemptAt: Value(operation.nextAttemptAt),
+        automaticResendCount: Value(operation.automaticResendCount),
         replyTo: Value(operation.replyTo),
         threadId: Value(operation.threadId),
         replyToToken: Value(operation.replyToToken?.value),

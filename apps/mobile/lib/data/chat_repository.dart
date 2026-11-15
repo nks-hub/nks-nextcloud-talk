@@ -88,7 +88,8 @@ final class ChatRepository {
 
   /// Rooms that still hold a text send the outbox may deliver on its own:
   /// `queued`, `retryable` and `sending` (the last one is recovered before
-  /// replay). Ambiguous and failed rows wait for the sender.
+  /// replay), and an ambiguous one a chat read may still prove absent from
+  /// the server. Other ambiguous rows and failed ones wait for the sender.
   Future<List<({String accountId, String roomToken})>>
   roomsWithPendingTextSends() async {
     final operations = _database.textSendOperations;
@@ -97,10 +98,18 @@ final class ChatRepository {
               ..addColumns([operations.accountId, operations.roomToken])
               ..where(
                 operations.outboxState.isIn(const [
-                  'queued',
-                  'retryable',
-                  'sending',
-                ]),
+                      'queued',
+                      'retryable',
+                      'sending',
+                    ]) |
+                    (operations.outboxState.equals(
+                          TextSendOutboxState.awaitingConfirmation.name,
+                        ) &
+                        operations.nextAttemptAt.isNotNull() &
+                        operations.messageIdsJson.equals('[]') &
+                        operations.automaticResendCount.isSmallerThanValue(
+                          textSendMaximumAutomaticResends,
+                        )),
               ))
             .get();
     return [
@@ -825,6 +834,7 @@ final class ChatRepository {
     required ChatOperationId operationId,
     required ChatSendResponse response,
     required int now,
+    int absenceGraceSeconds = textSendAbsenceGraceSeconds,
   }) {
     return _database.transaction(() async {
       final snapshot = await _loadRuntime(accountId);
@@ -835,6 +845,7 @@ final class ChatRepository {
         operationId: operationId,
         response: response,
         now: now,
+        absenceGraceSeconds: absenceGraceSeconds,
       );
       final plan = result.plan;
       if (plan == null) {
@@ -896,11 +907,15 @@ final class ChatRepository {
     });
   }
 
+  /// [now] is when the attempt ended. A body that may have left starts its
+  /// grace period there; without it the send waits for the sender for good.
   Future<ChatOutboxOutcome> recordTextSendFailure({
     required String accountId,
     required ChatOperationId operationId,
     required ChatTransportBodyState bodyState,
     int? nextAttemptAt,
+    int? now,
+    int absenceGraceSeconds = textSendAbsenceGraceSeconds,
   }) {
     return _database.transaction(() async {
       final snapshot = await _loadRuntime(accountId);
@@ -911,6 +926,8 @@ final class ChatRepository {
         operationId: operationId,
         bodyState: bodyState,
         nextAttemptAt: nextAttemptAt,
+        now: now,
+        absenceGraceSeconds: absenceGraceSeconds,
       );
       final plan = result.plan;
       if (plan == null) {
@@ -928,9 +945,14 @@ final class ChatRepository {
   /// in any room of the account: those are not interrupted, and disowning
   /// one would leave its outcome with nowhere to be recorded. The set is read
   /// inside the transaction, so it may be the caller's live one.
+  ///
+  /// [now] starts the grace period of the converted sends; without it they
+  /// wait for the sender for good.
   Future<void> recoverInterruptedTextSends(
     String accountId, {
     Set<ChatOperationId> inFlight = const <ChatOperationId>{},
+    int? now,
+    int absenceGraceSeconds = textSendAbsenceGraceSeconds,
   }) async {
     // Every sync asks, and almost none has anything to recover: one keyed
     // lookup answers that without loading the account's runtime.
@@ -961,6 +983,8 @@ final class ChatRepository {
           snapshot,
           accountId: typedAccountId,
           operationId: operationId,
+          now: now,
+          absenceGraceSeconds: absenceGraceSeconds,
         );
         final plan = result.plan;
         if (plan != null) {
@@ -989,6 +1013,117 @@ final class ChatRepository {
             .map((row) => row.read(rows.operationId)!)
             .get();
     return sending.any((id) => !inFlight.contains(ChatOperationId.parse(id)));
+  }
+
+  /// The ambiguous send a chat read may still prove absent from the server,
+  /// if that is what heads the room's outbox: the thread the read has to
+  /// cover (null for the room itself) and the second it may start after.
+  Future<({int? threadId, int verifiableAt})?> pendingAbsenceVerification({
+    required String accountId,
+    required String roomToken,
+  }) async {
+    final head = await _absenceVerificationHead(accountId, roomToken);
+    return head == null
+        ? null
+        : (threadId: head.threadId, verifiableAt: head.nextAttemptAt!);
+  }
+
+  Future<StoredTextSendOperation?> _absenceVerificationHead(
+    String accountId,
+    String roomToken,
+  ) async {
+    final head =
+        await (_database.select(_database.textSendOperations)
+              ..where(
+                (row) =>
+                    row.accountId.equals(accountId) &
+                    row.roomToken.equals(roomToken) &
+                    row.outboxState.isIn(const [
+                      'queued',
+                      'retryable',
+                      'sending',
+                      'awaitingConfirmation',
+                    ]),
+              )
+              ..orderBy([(row) => OrderingTerm.asc(row.enqueueSequence)])
+              ..limit(1))
+            .getSingleOrNull();
+    if (head == null ||
+        head.outboxState != TextSendOutboxState.awaitingConfirmation.name ||
+        head.nextAttemptAt == null ||
+        head.messageIdsJson != '[]' ||
+        head.automaticResendCount >= textSendMaximumAutomaticResends) {
+      return null;
+    }
+    return head;
+  }
+
+  /// Queues the room's ambiguous head-of-line send again after an HTTP read
+  /// of [threadId]'s scope, begun at [readStartedAt], reached the server's
+  /// newest message without it. Returns whether it was queued.
+  ///
+  /// Every cached message carrying the operation's reference goes to the
+  /// state machine inside the same transaction, so a copy that did arrive
+  /// completes the operation or stops the resend and can never lose to it.
+  Future<bool> resendVerifiedAbsentTextSend({
+    required String accountId,
+    required ConversationToken roomToken,
+    required int? threadId,
+    required ChatTextSendAuthority authority,
+    required int readStartedAt,
+    required int now,
+  }) async {
+    // Every converged read asks, and almost none has such a send.
+    if (await _absenceVerificationHead(accountId, roomToken.value) == null) {
+      return false;
+    }
+    return _database.transaction(() async {
+      final head = await _absenceVerificationHead(accountId, roomToken.value);
+      if (head == null) {
+        return false;
+      }
+      final snapshot = await _loadRuntime(accountId);
+      final typedAccountId = AccountId.parse(accountId);
+      final account = snapshot.accounts[typedAccountId]!;
+      final cached =
+          await (_database.select(_database.cachedChatMessages)..where(
+                (row) =>
+                    row.accountId.equals(accountId) &
+                    row.roomToken.equals(roomToken.value) &
+                    row.referenceId.equals(head.referenceId),
+              ))
+              .get();
+      final List<ChatMessageConfirmation> known;
+      try {
+        known = [
+          for (final message in cached)
+            ChatMessageConfirmation.fromMessage(
+              ChatMessage.fromJson(jsonDecode(message.rawJson)),
+              accountId: typedAccountId,
+              server: account.server,
+            ),
+        ];
+      } on Object {
+        // A copy exists and cannot be read: not a proven absence.
+        return false;
+      }
+      final result = resendTextSendAfterVerifiedAbsence(
+        snapshot,
+        accountId: typedAccountId,
+        authority: authority,
+        operationId: ChatOperationId.parse(head.operationId),
+        readThreadId: threadId,
+        readStartedAt: readStartedAt,
+        now: now,
+        knownMessages: known,
+      );
+      final plan = result.plan;
+      if (plan == null) {
+        return false;
+      }
+      await _persistAccount(plan.commit(snapshot).accounts[typedAccountId]!);
+      return result.outcome == ChatOutboxOutcome.queued;
+    });
   }
 
   /// Makes the sends that never left the device due at once, for a wake that

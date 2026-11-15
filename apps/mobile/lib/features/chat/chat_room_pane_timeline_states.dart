@@ -56,6 +56,7 @@ final class _ProvisionalSend {
       attemptCount: 0,
       messageIdsJson: '[]',
       duplicateRiskAcknowledged: false,
+      automaticResendCount: 0,
       createdAtMillis: 0,
       updatedAtMillis: 0,
     );

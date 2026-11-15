@@ -192,6 +192,7 @@ extension _ChatServiceFetch on ChatService {
         probe: probe,
       );
     }
+    await _armAbsenceVerification(prepared);
     return result;
   }
 
@@ -266,6 +267,7 @@ extension _ChatServiceFetch on ChatService {
         threadId: prepared.networkThreadId,
         futureConverged: scope.futureConverged,
       );
+      final readStartedAt = _nowSeconds();
       final response = await _api.getChat(
         chatRequest: request,
         loginName: prepared.account.loginName,
@@ -274,6 +276,9 @@ extension _ChatServiceFetch on ChatService {
       );
       await _ensurePreparedContextCurrent(prepared);
       final outcome = await _applyGetResponse(prepared, response);
+      if (outcome == ChatMergeOutcome.converged) {
+        await _resendVerifiedAbsent(prepared, readStartedAt);
+      }
       if (outcome == ChatMergeOutcome.stale ||
           response.classification == ChatGetClassification.notModified ||
           response.classification == ChatGetClassification.commonReadOnly ||

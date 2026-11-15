@@ -310,7 +310,14 @@ class TextSendOperations extends Table {
 
   TextColumn get errorClass => text().nullable()();
 
+  /// Seconds since the epoch. On a `retryable` row the send is due then; on
+  /// an `awaitingConfirmation` row a chat read started after it may prove the
+  /// server never stored the message.
   IntColumn get nextAttemptAt => integer().nullable()();
+
+  /// How often the row went back to the queue on such a proof alone.
+  IntColumn get automaticResendCount =>
+      integer().withDefault(const Constant(0))();
 
   IntColumn get replyTo => integer().nullable()();
 
@@ -710,7 +717,7 @@ final class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -1066,6 +1073,13 @@ final class AppDatabase extends _$AppDatabase {
     }
     if (from < 18) {
       await _createTableIfMissing(migrator, certificatePins);
+    }
+    if (from < 19) {
+      await _addColumnIfMissing(
+        migrator,
+        textSendOperations,
+        textSendOperations.automaticResendCount,
+      );
     }
   }
 

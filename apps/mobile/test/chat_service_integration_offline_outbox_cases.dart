@@ -276,7 +276,8 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
     });
 
     for (final lost in const ['timed out', 'was reset']) {
-      test('a send that $lost after its body left stays unconfirmed', () async {
+      test('a send that $lost after its body left is not repeated inside '
+          'its grace period', () async {
         var posts = 0;
         final api = HttpNextcloudApi(
           requestTimeout: const Duration(milliseconds: 100),
@@ -294,8 +295,12 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
           credentials: credentials,
           api: api,
         );
+        addTearDown(service.close);
         await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
 
+        final before =
+            DateTime.now().millisecondsSinceEpoch ~/
+            Duration.millisecondsPerSecond;
         await service.sendText(
           accountId: 'account-a',
           roomToken: 'rooma123',
@@ -306,10 +311,21 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
           (rows) => rows.single.outboxState == 'awaitingConfirmation',
         );
         expect(rows.single.errorClass, 'ambiguous-transport');
-        expect(rows.single.nextAttemptAt, isNull);
+        // From then on a chat read may prove the message absent.
+        expect(
+          rows.single.nextAttemptAt,
+          inInclusiveRange(
+            before + textSendAbsenceGraceSeconds,
+            before + textSendAbsenceGraceSeconds + 2,
+          ),
+        );
 
         await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
-        expect(posts, 1, reason: 'an ambiguous send is never repeated unasked');
+        expect(
+          posts,
+          1,
+          reason: 'a read begun inside the grace period proves nothing',
+        );
       });
     }
 
@@ -394,6 +410,7 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
           credentials: credentials,
           api: api,
         );
+        addTearDown(service.close);
         await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
 
         final before =
@@ -413,6 +430,14 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
           expect(
             rows.single.nextAttemptAt,
             inInclusiveRange(before + 7, before + 9),
+          );
+        } else if (state == 'awaitingConfirmation') {
+          expect(
+            rows.single.nextAttemptAt,
+            inInclusiveRange(
+              before + textSendAbsenceGraceSeconds,
+              before + textSendAbsenceGraceSeconds + 2,
+            ),
           );
         } else {
           expect(rows.single.nextAttemptAt, isNull);
@@ -1246,13 +1271,14 @@ MockClient _sendServer(
   FutureOr<http.Response> Function(http.Request request) onSend, {
   List<String>? requests,
   int? Function()? incomingId,
+  Set<String> features = _sendFeatures,
 }) {
   return MockClient((request) async {
     final capabilities = request.url.path.endsWith('/cloud/capabilities');
     requests?.add(capabilities ? 'capabilities' : request.method);
     if (capabilities) {
       return http.Response(
-        jsonEncode(_chatCapabilities(talkFeatures: _sendFeatures.toList())),
+        jsonEncode(_chatCapabilities(talkFeatures: features.toList())),
         200,
       );
     }

@@ -23,6 +23,7 @@ part 'chat_service_integration_poll_cases.dart';
 part 'chat_service_integration_lifecycle_send_cases.dart';
 part 'chat_service_integration_connectivity_cases.dart';
 part 'chat_service_integration_offline_outbox_cases.dart';
+part 'chat_service_integration_automatic_resend_cases.dart';
 part 'chat_service_integration_outbox_cases.dart';
 part 'chat_service_integration_nonblocking_cases.dart';
 part 'chat_service_integration_thread_admission_cases.dart';
@@ -46,6 +47,7 @@ void main() {
   suite.registerLifecycleSendCases();
   suite.registerConnectivityCases();
   suite.registerOfflineOutboxCases();
+  suite.registerAutomaticResendCases();
   suite.registerOutboxCases();
   suite.registerNonBlockingCases();
   suite.registerThreadAdmissionCases();

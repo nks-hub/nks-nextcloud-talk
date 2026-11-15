@@ -6213,6 +6213,17 @@ class $TextSendOperationsTable extends TextSendOperations
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _automaticResendCountMeta =
+      const VerificationMeta('automaticResendCount');
+  @override
+  late final GeneratedColumn<int> automaticResendCount = GeneratedColumn<int>(
+    'automatic_resend_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _replyToMeta = const VerificationMeta(
     'replyTo',
   );
@@ -6295,6 +6306,7 @@ class $TextSendOperationsTable extends TextSendOperations
     duplicateRiskAcknowledged,
     errorClass,
     nextAttemptAt,
+    automaticResendCount,
     replyTo,
     threadId,
     replyToToken,
@@ -6447,6 +6459,15 @@ class $TextSendOperationsTable extends TextSendOperations
         ),
       );
     }
+    if (data.containsKey('automatic_resend_count')) {
+      context.handle(
+        _automaticResendCountMeta,
+        automaticResendCount.isAcceptableOrUnknown(
+          data['automatic_resend_count']!,
+          _automaticResendCountMeta,
+        ),
+      );
+    }
     if (data.containsKey('reply_to')) {
       context.handle(
         _replyToMeta,
@@ -6572,6 +6593,10 @@ class $TextSendOperationsTable extends TextSendOperations
         DriftSqlType.int,
         data['${effectivePrefix}next_attempt_at'],
       ),
+      automaticResendCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}automatic_resend_count'],
+      )!,
       replyTo: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}reply_to'],
@@ -6626,7 +6651,14 @@ class StoredTextSendOperation extends DataClass
   final String messageIdsJson;
   final bool duplicateRiskAcknowledged;
   final String? errorClass;
+
+  /// Seconds since the epoch. On a `retryable` row the send is due then; on
+  /// an `awaitingConfirmation` row a chat read started after it may prove the
+  /// server never stored the message.
   final int? nextAttemptAt;
+
+  /// How often the row went back to the queue on such a proof alone.
+  final int automaticResendCount;
   final int? replyTo;
   final int? threadId;
   final String? replyToToken;
@@ -6648,6 +6680,7 @@ class StoredTextSendOperation extends DataClass
     required this.duplicateRiskAcknowledged,
     this.errorClass,
     this.nextAttemptAt,
+    required this.automaticResendCount,
     this.replyTo,
     this.threadId,
     this.replyToToken,
@@ -6678,6 +6711,7 @@ class StoredTextSendOperation extends DataClass
     if (!nullToAbsent || nextAttemptAt != null) {
       map['next_attempt_at'] = Variable<int>(nextAttemptAt);
     }
+    map['automatic_resend_count'] = Variable<int>(automaticResendCount);
     if (!nullToAbsent || replyTo != null) {
       map['reply_to'] = Variable<int>(replyTo);
     }
@@ -6715,6 +6749,7 @@ class StoredTextSendOperation extends DataClass
       nextAttemptAt: nextAttemptAt == null && nullToAbsent
           ? const Value.absent()
           : Value(nextAttemptAt),
+      automaticResendCount: Value(automaticResendCount),
       replyTo: replyTo == null && nullToAbsent
           ? const Value.absent()
           : Value(replyTo),
@@ -6756,6 +6791,9 @@ class StoredTextSendOperation extends DataClass
       ),
       errorClass: serializer.fromJson<String?>(json['errorClass']),
       nextAttemptAt: serializer.fromJson<int?>(json['nextAttemptAt']),
+      automaticResendCount: serializer.fromJson<int>(
+        json['automaticResendCount'],
+      ),
       replyTo: serializer.fromJson<int?>(json['replyTo']),
       threadId: serializer.fromJson<int?>(json['threadId']),
       replyToToken: serializer.fromJson<String?>(json['replyToToken']),
@@ -6786,6 +6824,7 @@ class StoredTextSendOperation extends DataClass
       ),
       'errorClass': serializer.toJson<String?>(errorClass),
       'nextAttemptAt': serializer.toJson<int?>(nextAttemptAt),
+      'automaticResendCount': serializer.toJson<int>(automaticResendCount),
       'replyTo': serializer.toJson<int?>(replyTo),
       'threadId': serializer.toJson<int?>(threadId),
       'replyToToken': serializer.toJson<String?>(replyToToken),
@@ -6810,6 +6849,7 @@ class StoredTextSendOperation extends DataClass
     bool? duplicateRiskAcknowledged,
     Value<String?> errorClass = const Value.absent(),
     Value<int?> nextAttemptAt = const Value.absent(),
+    int? automaticResendCount,
     Value<int?> replyTo = const Value.absent(),
     Value<int?> threadId = const Value.absent(),
     Value<String?> replyToToken = const Value.absent(),
@@ -6835,6 +6875,7 @@ class StoredTextSendOperation extends DataClass
     nextAttemptAt: nextAttemptAt.present
         ? nextAttemptAt.value
         : this.nextAttemptAt,
+    automaticResendCount: automaticResendCount ?? this.automaticResendCount,
     replyTo: replyTo.present ? replyTo.value : this.replyTo,
     threadId: threadId.present ? threadId.value : this.threadId,
     replyToToken: replyToToken.present ? replyToToken.value : this.replyToToken,
@@ -6880,6 +6921,9 @@ class StoredTextSendOperation extends DataClass
       nextAttemptAt: data.nextAttemptAt.present
           ? data.nextAttemptAt.value
           : this.nextAttemptAt,
+      automaticResendCount: data.automaticResendCount.present
+          ? data.automaticResendCount.value
+          : this.automaticResendCount,
       replyTo: data.replyTo.present ? data.replyTo.value : this.replyTo,
       threadId: data.threadId.present ? data.threadId.value : this.threadId,
       replyToToken: data.replyToToken.present
@@ -6914,6 +6958,7 @@ class StoredTextSendOperation extends DataClass
           ..write('duplicateRiskAcknowledged: $duplicateRiskAcknowledged, ')
           ..write('errorClass: $errorClass, ')
           ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('automaticResendCount: $automaticResendCount, ')
           ..write('replyTo: $replyTo, ')
           ..write('threadId: $threadId, ')
           ..write('replyToToken: $replyToToken, ')
@@ -6925,7 +6970,7 @@ class StoredTextSendOperation extends DataClass
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     accountId,
     operationId,
     roomToken,
@@ -6940,13 +6985,14 @@ class StoredTextSendOperation extends DataClass
     duplicateRiskAcknowledged,
     errorClass,
     nextAttemptAt,
+    automaticResendCount,
     replyTo,
     threadId,
     replyToToken,
     parentRoomToken,
     createdAtMillis,
     updatedAtMillis,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -6965,6 +7011,7 @@ class StoredTextSendOperation extends DataClass
           other.duplicateRiskAcknowledged == this.duplicateRiskAcknowledged &&
           other.errorClass == this.errorClass &&
           other.nextAttemptAt == this.nextAttemptAt &&
+          other.automaticResendCount == this.automaticResendCount &&
           other.replyTo == this.replyTo &&
           other.threadId == this.threadId &&
           other.replyToToken == this.replyToToken &&
@@ -6989,6 +7036,7 @@ class TextSendOperationsCompanion
   final Value<bool> duplicateRiskAcknowledged;
   final Value<String?> errorClass;
   final Value<int?> nextAttemptAt;
+  final Value<int> automaticResendCount;
   final Value<int?> replyTo;
   final Value<int?> threadId;
   final Value<String?> replyToToken;
@@ -7011,6 +7059,7 @@ class TextSendOperationsCompanion
     this.duplicateRiskAcknowledged = const Value.absent(),
     this.errorClass = const Value.absent(),
     this.nextAttemptAt = const Value.absent(),
+    this.automaticResendCount = const Value.absent(),
     this.replyTo = const Value.absent(),
     this.threadId = const Value.absent(),
     this.replyToToken = const Value.absent(),
@@ -7034,6 +7083,7 @@ class TextSendOperationsCompanion
     required bool duplicateRiskAcknowledged,
     this.errorClass = const Value.absent(),
     this.nextAttemptAt = const Value.absent(),
+    this.automaticResendCount = const Value.absent(),
     this.replyTo = const Value.absent(),
     this.threadId = const Value.absent(),
     this.replyToToken = const Value.absent(),
@@ -7069,6 +7119,7 @@ class TextSendOperationsCompanion
     Expression<bool>? duplicateRiskAcknowledged,
     Expression<String>? errorClass,
     Expression<int>? nextAttemptAt,
+    Expression<int>? automaticResendCount,
     Expression<int>? replyTo,
     Expression<int>? threadId,
     Expression<String>? replyToToken,
@@ -7094,6 +7145,8 @@ class TextSendOperationsCompanion
         'duplicate_risk_acknowledged': duplicateRiskAcknowledged,
       if (errorClass != null) 'error_class': errorClass,
       if (nextAttemptAt != null) 'next_attempt_at': nextAttemptAt,
+      if (automaticResendCount != null)
+        'automatic_resend_count': automaticResendCount,
       if (replyTo != null) 'reply_to': replyTo,
       if (threadId != null) 'thread_id': threadId,
       if (replyToToken != null) 'reply_to_token': replyToToken,
@@ -7119,6 +7172,7 @@ class TextSendOperationsCompanion
     Value<bool>? duplicateRiskAcknowledged,
     Value<String?>? errorClass,
     Value<int?>? nextAttemptAt,
+    Value<int>? automaticResendCount,
     Value<int?>? replyTo,
     Value<int?>? threadId,
     Value<String?>? replyToToken,
@@ -7144,6 +7198,7 @@ class TextSendOperationsCompanion
           duplicateRiskAcknowledged ?? this.duplicateRiskAcknowledged,
       errorClass: errorClass ?? this.errorClass,
       nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
+      automaticResendCount: automaticResendCount ?? this.automaticResendCount,
       replyTo: replyTo ?? this.replyTo,
       threadId: threadId ?? this.threadId,
       replyToToken: replyToToken ?? this.replyToToken,
@@ -7203,6 +7258,9 @@ class TextSendOperationsCompanion
     if (nextAttemptAt.present) {
       map['next_attempt_at'] = Variable<int>(nextAttemptAt.value);
     }
+    if (automaticResendCount.present) {
+      map['automatic_resend_count'] = Variable<int>(automaticResendCount.value);
+    }
     if (replyTo.present) {
       map['reply_to'] = Variable<int>(replyTo.value);
     }
@@ -7244,6 +7302,7 @@ class TextSendOperationsCompanion
           ..write('duplicateRiskAcknowledged: $duplicateRiskAcknowledged, ')
           ..write('errorClass: $errorClass, ')
           ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('automaticResendCount: $automaticResendCount, ')
           ..write('replyTo: $replyTo, ')
           ..write('threadId: $threadId, ')
           ..write('replyToToken: $replyToToken, ')
@@ -18068,6 +18127,7 @@ typedef $$TextSendOperationsTableCreateCompanionBuilder =
       required bool duplicateRiskAcknowledged,
       Value<String?> errorClass,
       Value<int?> nextAttemptAt,
+      Value<int> automaticResendCount,
       Value<int?> replyTo,
       Value<int?> threadId,
       Value<String?> replyToToken,
@@ -18092,6 +18152,7 @@ typedef $$TextSendOperationsTableUpdateCompanionBuilder =
       Value<bool> duplicateRiskAcknowledged,
       Value<String?> errorClass,
       Value<int?> nextAttemptAt,
+      Value<int> automaticResendCount,
       Value<int?> replyTo,
       Value<int?> threadId,
       Value<String?> replyToToken,
@@ -18203,6 +18264,11 @@ class $$TextSendOperationsTableFilterComposer
 
   ColumnFilters<int> get nextAttemptAt => $composableBuilder(
     column: $table.nextAttemptAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get automaticResendCount => $composableBuilder(
+    column: $table.automaticResendCount,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -18334,6 +18400,11 @@ class $$TextSendOperationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get automaticResendCount => $composableBuilder(
+    column: $table.automaticResendCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get replyTo => $composableBuilder(
     column: $table.replyTo,
     builder: (column) => ColumnOrderings(column),
@@ -18456,6 +18527,11 @@ class $$TextSendOperationsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get automaticResendCount => $composableBuilder(
+    column: $table.automaticResendCount,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get replyTo =>
       $composableBuilder(column: $table.replyTo, builder: (column) => column);
 
@@ -18553,6 +18629,7 @@ class $$TextSendOperationsTableTableManager
                 Value<bool> duplicateRiskAcknowledged = const Value.absent(),
                 Value<String?> errorClass = const Value.absent(),
                 Value<int?> nextAttemptAt = const Value.absent(),
+                Value<int> automaticResendCount = const Value.absent(),
                 Value<int?> replyTo = const Value.absent(),
                 Value<int?> threadId = const Value.absent(),
                 Value<String?> replyToToken = const Value.absent(),
@@ -18575,6 +18652,7 @@ class $$TextSendOperationsTableTableManager
                 duplicateRiskAcknowledged: duplicateRiskAcknowledged,
                 errorClass: errorClass,
                 nextAttemptAt: nextAttemptAt,
+                automaticResendCount: automaticResendCount,
                 replyTo: replyTo,
                 threadId: threadId,
                 replyToToken: replyToToken,
@@ -18599,6 +18677,7 @@ class $$TextSendOperationsTableTableManager
                 required bool duplicateRiskAcknowledged,
                 Value<String?> errorClass = const Value.absent(),
                 Value<int?> nextAttemptAt = const Value.absent(),
+                Value<int> automaticResendCount = const Value.absent(),
                 Value<int?> replyTo = const Value.absent(),
                 Value<int?> threadId = const Value.absent(),
                 Value<String?> replyToToken = const Value.absent(),
@@ -18621,6 +18700,7 @@ class $$TextSendOperationsTableTableManager
                 duplicateRiskAcknowledged: duplicateRiskAcknowledged,
                 errorClass: errorClass,
                 nextAttemptAt: nextAttemptAt,
+                automaticResendCount: automaticResendCount,
                 replyTo: replyTo,
                 threadId: threadId,
                 replyToToken: replyToToken,

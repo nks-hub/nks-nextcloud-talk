@@ -712,7 +712,8 @@ extension _ChatServiceOutboxCases on _ChatServiceIntegrationSuite {
       },
     );
 
-    test('ambiguous transport waits for explicit confirmation', () async {
+    test('ambiguous transport is not repeated before a read proves the '
+        'message absent', () async {
       var sendRequests = 0;
       final api = HttpNextcloudApi(
         client: MockClient((request) async {
@@ -734,13 +735,17 @@ extension _ChatServiceOutboxCases on _ChatServiceIntegrationSuite {
         credentials: credentials,
         api: api,
       );
+      addTearDown(service.close);
 
       await service.sendText(
         accountId: 'account-a',
         roomToken: 'rooma123',
         message: 'Possibly sent',
       );
-      await _waitForOutboxSettled(chat);
+      await _waitForTextSends(
+        database,
+        (rows) => rows.single.outboxState == 'awaitingConfirmation',
+      );
 
       final operations = await chat
           .watchTextSendOperations(

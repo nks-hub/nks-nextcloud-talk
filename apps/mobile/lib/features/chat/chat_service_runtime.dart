@@ -253,6 +253,7 @@ extension _ChatServiceLiveRuntime on ChatService {
             ))) {
       throw const _ChatSynchronizationCancelled();
     }
+    final readStartedAt = _nowSeconds();
     final response = await _api.getChat(
       chatRequest: request,
       loginName: prepared.account.loginName,
@@ -269,6 +270,9 @@ extension _ChatServiceLiveRuntime on ChatService {
           throw const _ChatSynchronizationStale();
         }
         final outcome = await _applyGetResponse(prepared, response);
+        if (outcome == ChatMergeOutcome.converged) {
+          await _resendVerifiedAbsent(prepared, readStartedAt);
+        }
         poll.advanced =
             (outcome == ChatMergeOutcome.applied &&
                 response.cursor != request.cursor) ||

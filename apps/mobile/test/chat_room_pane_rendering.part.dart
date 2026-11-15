@@ -955,6 +955,7 @@ void _registerChatRoomPaneRenderingTests() {
       attemptCount: 1,
       messageIdsJson: '[40]',
       duplicateRiskAcknowledged: false,
+      automaticResendCount: 0,
       createdAtMillis: 1,
       updatedAtMillis: 1,
     );

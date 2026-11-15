@@ -120,7 +120,9 @@ List<ChatBlock> _decodeBlocks(String source) {
 /// reached for failures the contract classifies as happening before the
 /// server stored a comment, which is exactly why the same payload may be
 /// replayed - and therefore dropped - without risking a duplicate. A `failed`
-/// row is a deterministic server refusal.
+/// row is a deterministic server refusal. An ambiguous send returns to
+/// `queued` only after a chat read showed the server does not hold it, which
+/// is as much as the other two states know.
 ///
 /// Everything else may already exist on the server: `sending` is in flight,
 /// `awaitingConfirmation` is the contract's explicit ambiguous state,

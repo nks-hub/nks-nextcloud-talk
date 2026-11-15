@@ -99,7 +99,7 @@ void main() {
           .get();
       expect(
         columns.map((row) => row.read<String>('name')),
-        contains('silent'),
+        containsAll(<String>['silent', 'automatic_resend_count']),
         reason:
             'the recovery has to replay the migrations, not just the tables',
       );
@@ -179,7 +179,7 @@ void main() {
         .select(database.cachedConversations)
         .getSingle();
 
-    expect(database.schemaVersion, 18);
+    expect(database.schemaVersion, 19);
     expect(account.id, 'account-a');
     expect(account.talkFeaturesJson, '[]');
     expect(room.token, 'synthetic-room-token-a');
@@ -242,7 +242,7 @@ void main() {
           .getSingle();
       final account = await database.select(database.accounts).getSingle();
 
-      expect(database.schemaVersion, 18);
+      expect(database.schemaVersion, 19);
       expect(room.token, 'synthetic-room-token-a');
       expect(room.roomType, 2);
       expect(room.roomName, 'synthetic-room-a');
@@ -286,7 +286,7 @@ void main() {
     );
     addTearDown(database.close);
 
-    expect(database.schemaVersion, 18);
+    expect(database.schemaVersion, 19);
     expect(await database.select(database.conversationAvatars).get(), isEmpty);
   });
 
@@ -328,9 +328,11 @@ void main() {
           .select(database.textSendOperations)
           .getSingle();
 
-      expect(database.schemaVersion, 18);
+      expect(database.schemaVersion, 19);
       expect(operation.operationId, 'operation-a');
       expect(operation.threadId, isNull);
+      // Schema 19: a row from before automatic resends has made none.
+      expect(operation.automaticResendCount, 0);
     },
   );
 
@@ -486,7 +488,7 @@ void main() {
           )
           .get();
 
-      expect(database.schemaVersion, 18);
+      expect(database.schemaVersion, 19);
       expect(messages.single.messageId, 101);
       expect(indexes, hasLength(1));
     } finally {
@@ -543,7 +545,7 @@ void main() {
       final room = await database
           .select(database.cachedConversations)
           .getSingle();
-      expect(database.schemaVersion, 18);
+      expect(database.schemaVersion, 19);
       expect(room.token, 'rooma123');
       expect(room.peerStatus, isNull);
       expect(room.peerStatusIcon, isNull);
@@ -593,7 +595,7 @@ void main() {
         text: 'Recovered after an upgrade',
       );
 
-      expect(database.schemaVersion, 18);
+      expect(database.schemaVersion, 19);
       expect(
         await chat.readDraft(accountId: 'account-a', roomToken: 'rooma123'),
         'Recovered after an upgrade',
@@ -651,7 +653,7 @@ void main() {
       final room = await database
           .select(database.cachedConversations)
           .getSingle();
-      expect(database.schemaVersion, 18);
+      expect(database.schemaVersion, 19);
       expect(room.token, 'rooma123');
       expect(room.isArchived, isTrue);
     } finally {
@@ -688,7 +690,7 @@ void main() {
       await database.close();
       database = AppDatabase.forTesting(NativeDatabase(file));
 
-      expect(database.schemaVersion, 18);
+      expect(database.schemaVersion, 19);
       expect(
         (await database.select(database.accounts).getSingle()).id,
         'account-a',
@@ -742,7 +744,7 @@ void main() {
       await database.close();
       database = AppDatabase.forTesting(NativeDatabase(file));
 
-      expect(database.schemaVersion, 18);
+      expect(database.schemaVersion, 19);
       expect(
         (await database.select(database.accounts).getSingle()).id,
         'account-a',
@@ -772,7 +774,7 @@ void main() {
       await database.customStatement(
         "INSERT INTO future_schema_probe (value) VALUES ('preserve-me')",
       );
-      await database.customStatement('PRAGMA user_version = 19');
+      await database.customStatement('PRAGMA user_version = 20');
       await database.close();
       database = null;
 
@@ -810,7 +812,7 @@ void main() {
         database.customSelect('SELECT 1').get(),
         throwsA(isA<_DatabaseInspectionComplete>()),
       );
-      expect(observedVersion, 19);
+      expect(observedVersion, 20);
       expect(observedValue, 'preserve-me');
     } finally {
       await database?.close();

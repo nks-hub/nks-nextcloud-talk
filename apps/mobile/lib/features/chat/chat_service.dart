@@ -53,11 +53,13 @@ final class ChatService {
     required CredentialVault credentials,
     required HttpNextcloudApi api,
     Uuid? uuid,
+    int absenceGraceSeconds = textSendAbsenceGraceSeconds,
   }) : _accounts = accounts,
        _chat = chat,
        _credentials = credentials,
        _api = api,
-       _uuid = uuid ?? const Uuid();
+       _uuid = uuid ?? const Uuid(),
+       _absenceGraceSeconds = absenceGraceSeconds;
 
   static const int _pageSize = 100;
   static const int _maximumCatchUpPages = 12;
@@ -73,6 +75,9 @@ final class ChatService {
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
   final Uuid _uuid;
+
+  /// The contract's grace period. Only tests shorten it.
+  final int _absenceGraceSeconds;
   final Map<String, Future<void>> _roomTails = {};
   final Map<String, Future<ChatSynchronizationResult>> _syncInFlight = {};
   final Map<String, _SharedLivePoll> _liveNetworkPolls = {};
@@ -87,7 +92,9 @@ final class ChatService {
   /// mistake for sends a dead process left behind.
   final Map<String, Set<ChatOperationId>> _inFlightSends = {};
 
-  /// The pending retry of a send that never left, one per room.
+  /// The pending retry of a send that never left, or the pending check of
+  /// one that may have, one per room: only the oldest undelivered send of a
+  /// room is ever waiting for either.
   final Map<String, Timer> _retryTimers = {};
   final Set<_ChatReadAdmission> _readAdmissions = {};
   final _readerWakes =
@@ -272,6 +279,21 @@ final class ChatService {
         );
         if (result == ChatSynchronizationResult.deferred) {
           await _drainWithoutReading(accountId, roomToken);
+        }
+        // A send into a named thread is proven absent only by a read of that
+        // thread, which the room's own sync does not make.
+        final pending = await _chat.pendingAbsenceVerification(
+          accountId: accountId,
+          roomToken: roomToken,
+        );
+        if (pending?.threadId != null) {
+          await _syncRoom(
+            accountId: accountId,
+            roomToken: roomToken,
+            threadId: pending!.threadId,
+            joinExisting: true,
+            automatic: true,
+          );
         }
       } on ChatServiceException {
         // Recorded on the room by syncRoom; the next wake tries again.
@@ -535,9 +557,89 @@ final class ChatService {
       _chat.recoverInterruptedTextSends(
         accountId,
         inFlight: _inFlightSends[accountId] ??= <ChatOperationId>{},
+        now: _nowSeconds(),
+        absenceGraceSeconds: _absenceGraceSeconds,
       );
 
-  /// Tries the room's outbox again once a send that could not go out is due.
+  /// Arms the room's timer for the moment its ambiguous head-of-line send may
+  /// first be checked against the server.
+  ///
+  /// Nothing is armed once that moment has passed. Whoever asks then has just
+  /// read the room, so that read was the check, and arming again on its
+  /// refusal would spin.
+  Future<void> _armAbsenceVerification(_PreparedChat prepared) async {
+    final pending = await _chat.pendingAbsenceVerification(
+      accountId: prepared.account.id,
+      roomToken: prepared.room.token.value,
+    );
+    if (pending == null) {
+      return;
+    }
+    final remaining = pending.verifiableAt - _nowSeconds();
+    if (remaining >= 0) {
+      // One more, because the read has to start in a later second.
+      _armRetry(prepared, remaining + 1);
+    }
+  }
+
+  /// Reads the scope of the room's ambiguous head-of-line send over HTTP, so
+  /// that the read can prove the message absent and queue it again. Returns
+  /// false when the room has no such send.
+  ///
+  /// Never a joined read: a poll already under way began before the grace
+  /// period ended, and one standing down for the relay reads nothing at all.
+  Future<bool> _verifyPendingAbsence(_PreparedChat stale) async {
+    final accountId = stale.account.id;
+    final roomToken = stale.room.token.value;
+    try {
+      final pending = await _chat.pendingAbsenceVerification(
+        accountId: accountId,
+        roomToken: roomToken,
+      );
+      if (pending == null) {
+        return false;
+      }
+      final result = await _syncRoom(
+        accountId: accountId,
+        roomToken: roomToken,
+        threadId: pending.threadId,
+        joinExisting: false,
+        automatic: true,
+      );
+      if (result != ChatSynchronizationResult.incomplete) {
+        // Converged decided it; deferred waits for a reader, whose arrival
+        // reads the room anyway.
+        return true;
+      }
+    } on ChatServiceException {
+      // Recorded on the room by the sync.
+    } on Object {
+      // The account or the service went away underneath.
+      return true;
+    }
+    // Nothing was proven either way. Asked again, no sooner than one more
+    // grace period, until a read gets through.
+    _armRetry(stale, _absenceGraceSeconds);
+    return true;
+  }
+
+  /// [readStartedAt] is when the HTTP request left whose answer said the
+  /// scope holds nothing newer. Only such an answer proves an absence: the
+  /// relay and the cache never say what the server does not have.
+  Future<void> _resendVerifiedAbsent(
+    _PreparedChat prepared,
+    int readStartedAt,
+  ) => _chat.resendVerifiedAbsentTextSend(
+    accountId: prepared.account.id,
+    roomToken: prepared.room.token,
+    threadId: prepared.networkThreadId,
+    authority: prepared.authority,
+    readStartedAt: readStartedAt,
+    now: _nowSeconds(),
+  );
+
+  /// Tries the room's outbox again once a send that could not go out is due,
+  /// or checks a send that may have gone out once its grace period is over.
   ///
   /// One timer per room. It fires once, and only an attempt that fails again
   /// arms the next one with a longer pause, so it cannot spin.
@@ -561,6 +663,9 @@ final class ChatService {
   /// refused. If the room cannot be prepared right now the old state still
   /// keeps the retries going.
   Future<void> _retryDelivery(_PreparedChat stale) async {
+    if (await _verifyPendingAbsence(stale)) {
+      return;
+    }
     var prepared = stale;
     try {
       prepared = await _prepare(
@@ -963,9 +1068,9 @@ final class ChatService {
       );
     } on NextcloudApiException catch (error) {
       _ensureAccountActive(prepared.account.id);
-      // Only a request whose body never left may be repeated by itself: the
+      // Only a request whose body never left may be repeated at once: the
       // server does not deduplicate by reference, so anything less certain
-      // waits for a confirmation or for the user.
+      // waits for a confirmation, or for a read that proves it absent.
       final retryDelay =
           error.retryAfter?.inSeconds ??
           _unsentRetryDelaySeconds(claim.operation.attemptCount);
@@ -976,9 +1081,13 @@ final class ChatService {
             ? ChatTransportBodyState.notSent
             : ChatTransportBodyState.possiblySent,
         nextAttemptAt: error.requestNotSent ? _nowSeconds() + retryDelay : null,
+        now: _nowSeconds(),
+        absenceGraceSeconds: _absenceGraceSeconds,
       );
       if (error.requestNotSent) {
         _armRetry(prepared, retryDelay);
+      } else {
+        await _armAbsenceVerification(prepared);
       }
       return true;
     } on TalkProtocolException {
@@ -987,7 +1096,10 @@ final class ChatService {
         accountId: prepared.account.id,
         operationId: claim.operation.operationId,
         bodyState: ChatTransportBodyState.possiblySent,
+        now: _nowSeconds(),
+        absenceGraceSeconds: _absenceGraceSeconds,
       );
+      await _armAbsenceVerification(prepared);
       return true;
     }
     _ensureAccountActive(prepared.account.id);
@@ -1015,7 +1127,11 @@ final class ChatService {
       operationId: claim.operation.operationId,
       response: response,
       now: _nowSeconds(),
+      absenceGraceSeconds: _absenceGraceSeconds,
     );
+    if (outcome == ChatOutboxOutcome.awaitingConfirmation) {
+      await _armAbsenceVerification(prepared);
+    }
     if (outcome == ChatOutboxOutcome.retryable) {
       // The pause the outbox stored is this one or shorter.
       _armRetry(

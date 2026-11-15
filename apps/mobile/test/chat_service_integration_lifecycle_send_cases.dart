@@ -556,6 +556,7 @@ extension _ChatServiceLifecycleSendCases on _ChatServiceIntegrationSuite {
         credentials: credentials,
         api: api,
       );
+      addTearDown(service.close);
 
       await service.sendText(
         accountId: 'account-a',
@@ -563,7 +564,10 @@ extension _ChatServiceLifecycleSendCases on _ChatServiceIntegrationSuite {
         message: 'Synthetic reply',
         replyTo: 109,
       );
-      await _waitForOutboxSettled(chat);
+      await _waitForTextSends(
+        database,
+        (rows) => rows.single.outboxState == 'awaitingConfirmation',
+      );
 
       final operations = await chat
           .watchTextSendOperations(

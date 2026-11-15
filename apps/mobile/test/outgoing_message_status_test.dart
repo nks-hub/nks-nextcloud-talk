@@ -259,6 +259,7 @@ StoredTextSendOperation _operation({
   attemptCount: 1,
   messageIdsJson: jsonEncode(messageIds),
   duplicateRiskAcknowledged: false,
+  automaticResendCount: 0,
   createdAtMillis: 1,
   updatedAtMillis: 1,
 );
