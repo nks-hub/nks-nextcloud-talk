@@ -63,22 +63,55 @@ final class SecureCredentialVault
 
   static const _currentVersion = 2;
 
+  /// Passwords already read, so a hot path (every thumbnail, every request
+  /// preparation) does not cross into the platform keystore each time. Never
+  /// holds null: right after a cold start the keystore can answer null for an
+  /// account whose password is there.
+  final Map<String, String> _passwords = {};
+  var _passwordEpoch = 0;
+
+  /// Dropped before and after a change, and the epoch moves, so a read that
+  /// overlaps it can neither be served nor leave behind the old value.
+  void _forgetPassword(String accountId) {
+    _passwordEpoch++;
+    _passwords.remove(accountId);
+  }
+
   @override
   Future<void> writeAppPassword(String accountId, String appPassword) async {
-    await _ensureCurrent(accountId);
-    await _write(_currentKey(accountId), appPassword);
+    _forgetPassword(accountId);
+    try {
+      await _ensureCurrent(accountId);
+      await _write(_currentKey(accountId), appPassword);
+    } finally {
+      _forgetPassword(accountId);
+    }
   }
 
   @override
   Future<String?> readAppPassword(String accountId) async {
+    final cached = _passwords[accountId];
+    if (cached != null) {
+      return cached;
+    }
+    final epoch = _passwordEpoch;
     await _ensureCurrent(accountId);
-    return _read(_currentKey(accountId));
+    final password = await _read(_currentKey(accountId));
+    if (password != null && epoch == _passwordEpoch) {
+      _passwords[accountId] = password;
+    }
+    return password;
   }
 
   @override
   Future<void> deleteAppPassword(String accountId) async {
-    await _ensureCurrent(accountId);
-    await _delete(_currentKey(accountId));
+    _forgetPassword(accountId);
+    try {
+      await _ensureCurrent(accountId);
+      await _delete(_currentKey(accountId));
+    } finally {
+      _forgetPassword(accountId);
+    }
   }
 
   static const _pendingRevocationsKey = 'nks.pending_revocations';

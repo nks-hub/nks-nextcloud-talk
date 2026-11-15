@@ -322,6 +322,51 @@ void main() {
     expect(await vault.readPendingRevocations(), isNull);
     expect(storage.calls, isEmpty);
   });
+
+  test('reads a password from the keystore once until it changes', () async {
+    const currentKey = 'credential.v2.account.account-a.appPassword';
+    final storage = _RecordingSecureStorage();
+    final vault = SecureCredentialVault(storage: storage);
+    int reads() =>
+        storage.calls.where((call) => call.operation == _Operation.read).length;
+
+    // A missing password is not remembered: it is asked for again.
+    expect(await vault.readAppPassword('account-a'), isNull);
+    storage.calls.clear();
+    expect(await vault.readAppPassword('account-a'), isNull);
+    expect(reads(), 1);
+
+    await vault.writeAppPassword('account-a', 'first');
+    storage.calls.clear();
+    expect(await vault.readAppPassword('account-a'), 'first');
+    expect(await vault.readAppPassword('account-a'), 'first');
+    expect(reads(), 1);
+    expect(storage.calls.single.key, currentKey);
+
+    await vault.writeAppPassword('account-a', 'second');
+    storage.calls.clear();
+    expect(await vault.readAppPassword('account-a'), 'second');
+    expect(await vault.readAppPassword('account-a'), 'second');
+    expect(reads(), 1);
+
+    await vault.deleteAppPassword('account-a');
+    expect(await vault.readAppPassword('account-a'), isNull);
+  });
+
+  test(
+    'a read overlapping a delete does not bring the password back',
+    () async {
+      final storage = _RecordingSecureStorage();
+      final vault = SecureCredentialVault(storage: storage);
+      await vault.writeAppPassword('account-a', 'first');
+
+      final overlapping = vault.readAppPassword('account-a');
+      await vault.deleteAppPassword('account-a');
+      await overlapping;
+
+      expect(await vault.readAppPassword('account-a'), isNull);
+    },
+  );
 }
 
 enum _Operation { read, write, delete }
