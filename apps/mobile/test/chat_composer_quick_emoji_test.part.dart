@@ -68,6 +68,28 @@ void _registerQuickEmojiComposerTests() {
     return harness;
   }
 
+  testWidgets('send and quick emoji share one slot of the same size', (
+    tester,
+  ) async {
+    await openQuickEmojiComposer(tester);
+    final slot = find.byKey(const Key('send-slot-transition'));
+    final emojiRect = tester.getRect(slot);
+
+    await tester.enterText(find.byKey(const Key('chat-composer')), 'Hello');
+    await tester.pump();
+    // Mid-transition the slot already holds the send button, at full size.
+    expect(find.byKey(const Key('send-quick-emoji')), findsNothing);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.getRect(slot), emojiRect);
+
+    await tester.enterText(find.byKey(const Key('chat-composer')), '');
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byKey(const Key('send-quick-emoji')), findsOneWidget);
+    expect(tester.getRect(slot), emojiRect);
+    expect(tester.takeException(), isNull);
+    await _unmountComposer(tester);
+  });
+
   testWidgets('holding the quick emoji sends it at the step it grew to', (
     tester,
   ) async {
