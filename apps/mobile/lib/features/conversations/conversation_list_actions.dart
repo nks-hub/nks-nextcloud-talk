@@ -211,21 +211,11 @@ final class _ConversationListViewState
         .where((conversation) => _matchesFilters(conversation, filters))
         .toList(growable: false);
 
-    final items = <Widget>[
-      _ConversationFilterBar(
-        selected: filters,
-        showArchived: canViewArchived,
-        onToggle: _toggleFilter,
-      ),
-      for (final conversation in shown)
-        _ConversationTile(
-          account: widget.account,
-          conversation: conversation,
-          selected: conversation.token == widget.selectedToken,
-          onTap: () => widget.onSelect(conversation),
-          onLongPress: () => _openActions(conversation),
-        ),
-    ];
+    final filterBar = _ConversationFilterBar(
+      selected: filters,
+      showArchived: canViewArchived,
+      onToggle: _toggleFilter,
+    );
 
     if (shown.isEmpty) {
       return RefreshIndicator(
@@ -233,7 +223,7 @@ final class _ConversationListViewState
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            ...items,
+            filterBar,
             const SizedBox(height: 120),
             _EmptyConversations(filtered: filters.isNotEmpty),
           ],
@@ -246,9 +236,21 @@ final class _ConversationListViewState
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.only(bottom: widget.bottomInset),
-        itemCount: items.length,
+        itemCount: shown.length + 1,
         separatorBuilder: (_, _) => const Divider(indent: 84),
-        itemBuilder: (context, index) => items[index],
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return filterBar;
+          }
+          final conversation = shown[index - 1];
+          return _ConversationTile(
+            account: widget.account,
+            conversation: conversation,
+            selected: conversation.token == widget.selectedToken,
+            onTap: () => widget.onSelect(conversation),
+            onLongPress: () => _openActions(conversation),
+          );
+        },
       ),
     );
   }
@@ -593,7 +595,14 @@ bool _matchesFilters(
       _hasUnreadMention(conversation);
 }
 
+// The mentions filter runs over every conversation on every build.
+final _unreadMention = Expando<bool>();
+
 bool _hasUnreadMention(CachedConversation conversation) {
+  return _unreadMention[conversation] ??= _parseUnreadMention(conversation);
+}
+
+bool _parseUnreadMention(CachedConversation conversation) {
   try {
     final room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
     final directConversation = room.type == 1 || room.type == 5;

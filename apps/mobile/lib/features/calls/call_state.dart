@@ -2,6 +2,27 @@ import 'dart:convert';
 
 import '../../data/app_database.dart';
 
+final _decodedJson = Expando<Map<String, Object?>>();
+
+/// The room's wire JSON, decoded once per cached row instead of on every
+/// build of every widget that needs one field of it. Empty when the stored
+/// JSON is malformed or not an object. Read-only: the map is shared.
+Map<String, Object?> decodedConversationJson(CachedConversation conversation) {
+  return _decodedJson[conversation] ??= _decodeObject(conversation.rawJson);
+}
+
+Map<String, Object?> _decodeObject(String source) {
+  try {
+    final decoded = jsonDecode(source);
+    if (decoded is Map<String, Object?>) {
+      return decoded;
+    }
+  } on FormatException {
+    // Treated like a room that states nothing.
+  }
+  return const {};
+}
+
 /// The server-reported fact that a call is running in a conversation.
 ///
 /// Only what the wire states plainly is modelled. `callFlag` is a bitmask
@@ -16,13 +37,8 @@ final class ConversationCallState {
   static ConversationCallState? fromConversation(
     CachedConversation conversation,
   ) {
-    final Object? decoded;
-    try {
-      decoded = jsonDecode(conversation.rawJson);
-    } on FormatException {
-      return null;
-    }
-    if (decoded is! Map<String, Object?> || decoded['hasCall'] != true) {
+    final decoded = decodedConversationJson(conversation);
+    if (decoded['hasCall'] != true) {
       return null;
     }
     final startedAt = decoded['callStartTime'];
@@ -85,15 +101,7 @@ final class ConversationCallStartPolicy {
   static ConversationCallStartPolicy fromConversation(
     CachedConversation conversation,
   ) {
-    final Object? decoded;
-    try {
-      decoded = jsonDecode(conversation.rawJson);
-    } on FormatException {
-      return _denied;
-    }
-    if (decoded is! Map<String, Object?>) {
-      return _denied;
-    }
+    final decoded = decodedConversationJson(conversation);
     // A call already running is joined, not started.
     if (decoded['hasCall'] == true || decoded['canStartCall'] != true) {
       return _denied;

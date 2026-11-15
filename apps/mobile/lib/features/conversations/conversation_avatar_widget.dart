@@ -9,6 +9,7 @@ import '../../app_providers.dart';
 import '../../data/app_database.dart';
 import '../../data/conversation_avatar_repository.dart';
 import '../../core/desktop_metrics.dart';
+import '../calls/call_state.dart';
 import 'conversation_avatar.dart';
 
 final class ConversationAvatar extends ConsumerWidget {
@@ -31,14 +32,16 @@ final class ConversationAvatar extends ConsumerWidget {
     final radius = this.radius ?? context.listAvatarRadius;
     final source = resolveConversationAvatar(
       server: ServerBase.parse(account.serverUrl),
-      talkFeatures: _decodeTalkFeatures(account.talkFeaturesJson),
+      talkFeatures: _talkFeatures[account] ??= _decodeTalkFeatures(
+        account.talkFeaturesJson,
+      ),
       roomToken: conversation.token,
       roomType: conversation.roomType,
       roomName: conversation.roomName,
       objectType: conversation.objectType,
       avatarVersion: conversation.avatarVersion,
       dark: dark,
-      federated: _isFederatedConversation(conversation.rawJson),
+      federated: _isFederatedConversation(conversation),
     );
     return Semantics(
       image: true,
@@ -171,6 +174,9 @@ IconData _iconData(ConversationAvatarIcon icon) {
   };
 }
 
+// Every list row asks for the same account's features on every build.
+final _talkFeatures = Expando<Set<String>>();
+
 Set<String> _decodeTalkFeatures(String source) {
   try {
     final decoded = jsonDecode(source);
@@ -183,17 +189,11 @@ Set<String> _decodeTalkFeatures(String source) {
   return const {};
 }
 
-bool _isFederatedConversation(String source) {
-  try {
-    final decoded = jsonDecode(source);
-    if (decoded is Map<String, Object?>) {
-      final remoteServer = decoded['remoteServer'];
-      return remoteServer is String && remoteServer.trim().isNotEmpty;
-    }
-  } on FormatException {
-    // Invalid room JSON is handled by the account repository on the next sync.
-  }
-  return false;
+bool _isFederatedConversation(CachedConversation conversation) {
+  // Invalid room JSON decodes to nothing here; the account repository handles
+  // it on the next sync.
+  final remoteServer = decodedConversationJson(conversation)['remoteServer'];
+  return remoteServer is String && remoteServer.trim().isNotEmpty;
 }
 
 String _initials(String displayName) {

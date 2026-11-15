@@ -25,6 +25,20 @@ void main() {
     );
   }
 
+  test('a row is decoded once and a malformed one states nothing', () {
+    final room = conversation(const {'hasCall': true});
+    expect(
+      identical(decodedConversationJson(room), decodedConversationJson(room)),
+      isTrue,
+    );
+    expect(ConversationCallState.fromConversation(room), isNotNull);
+    expect(
+      decodedConversationJson(room.copyWith(rawJson: '{not json')),
+      isEmpty,
+    );
+    expect(decodedConversationJson(room.copyWith(rawJson: '[1]')), isEmpty);
+  });
+
   test('no call is reported without an explicit server flag', () {
     expect(
       ConversationCallState.fromConversation(conversation(const {})),

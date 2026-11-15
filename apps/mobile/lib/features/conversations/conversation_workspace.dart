@@ -16,6 +16,13 @@ const double kExpandedShellBreakpoint = 720;
 /// draws all three.
 const double kMinConversationWidth = 400;
 
+final _unifiedSearch = Expando<bool>();
+
+// Asked by three widgets on every build; the answer only changes with the
+// account row.
+bool _hasUnifiedSearch(StoredAccount account) => _unifiedSearch[account] ??=
+    talkFeaturesOf(account).contains('unified-search');
+
 final class ConversationWorkspace extends StatelessWidget {
   const ConversationWorkspace({
     super.key,
@@ -101,7 +108,7 @@ final class ConversationWorkspace extends StatelessWidget {
     // the only thing worth gating on is whether the server can search at all.
     final closeDetails = onCloseDetails;
     final bindings = <ShortcutActivator, VoidCallback>{
-      if (talkFeaturesOf(account).contains('unified-search')) ...{
+      if (_hasUnifiedSearch(account)) ...{
         const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
             openMessageSearch(context, account.id),
         const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () =>
@@ -322,7 +329,7 @@ final class _CompactShell extends StatelessWidget {
         actions: [
           // Without `unified-search` the server has no provider to ask, and
           // the screen would only ever reach a dead end.
-          if (talkFeaturesOf(account).contains('unified-search'))
+          if (_hasUnifiedSearch(account))
             IconButton(
               key: const Key('open-message-search'),
               onPressed: () => openMessageSearch(context, account.id),
@@ -645,7 +652,7 @@ final class _ExpandedShell extends StatelessWidget {
                           tooltip: strings.newConversationTitle,
                           icon: const Icon(Icons.chat_bubble_outline_rounded),
                         ),
-                        if (talkFeaturesOf(account).contains('unified-search'))
+                        if (_hasUnifiedSearch(account))
                           IconButton(
                             key: const Key('open-message-search'),
                             onPressed: () =>
