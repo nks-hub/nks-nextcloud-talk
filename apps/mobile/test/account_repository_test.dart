@@ -170,6 +170,70 @@ void main() {
 
     expect(await repository.watchSelectedThemeColor().first, null);
   });
+
+  test(
+    'a sync that changes nothing visible wakes no account watcher',
+    () async {
+      await repository.upsertAccount(
+        accountId: 'account-a',
+        serverUrl: 'https://a.example.invalid',
+        loginName: 'alex',
+        serverProductName: 'Nextcloud A',
+        talkFeatures: const {'conversation-v4'},
+        serverThemeColor: '#123456',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      final selected = <StoredAccount?>[];
+      final all = <List<StoredAccount>>[];
+      final colors = <String?>[];
+      final subscriptions = [
+        repository.watchSelectedAccount().listen(selected.add),
+        repository.watchAccounts().listen(all.add),
+        repository.watchSelectedThemeColor().listen(colors.add),
+      ];
+      addTearDown(() async {
+        for (final subscription in subscriptions) {
+          await subscription.cancel();
+        }
+      });
+      Future<void> settle(bool Function() done) async {
+        while (!done()) {
+          await pumpEventQueue();
+        }
+        await pumpEventQueue();
+      }
+
+      await settle(
+        () => selected.isNotEmpty && all.isNotEmpty && colors.isNotEmpty,
+      );
+
+      // What every conversation sync writes to the account row.
+      await (database.update(
+        database.accounts,
+      )..where((account) => account.id.equals('account-a'))).write(
+        const AccountsCompanion(
+          conversationCursor: Value('cursor-2'),
+          conversationHash: Value('hash-2'),
+          lastSyncedAtMillis: Value(1234),
+        ),
+      );
+      await repository.updateCapabilities('account-a', const {
+        'conversation-v4',
+      }, serverThemeColor: '#123456');
+      await pumpEventQueue();
+      await repository.recordSyncError('account-a', 'network');
+      await settle(() => selected.length > 1 && all.length > 1);
+
+      expect(selected, hasLength(2));
+      expect(all, hasLength(2));
+      expect(colors, ['#123456']);
+      expect(selected.last!.lastSyncError, 'network');
+      expect(selected.last!.conversationCursor, null);
+      final exact = await repository.getAccount('account-a');
+      expect(exact!.conversationCursor, 'cursor-2');
+      expect(exact.lastSyncedAtMillis, 1234);
+    },
+  );
 }
 
 final class _RejectOutsideTransactionAccountSelects extends QueryInterceptor {

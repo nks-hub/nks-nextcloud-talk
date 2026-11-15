@@ -12,7 +12,13 @@ final class AccountRepository {
 
   final AppDatabase _database;
 
-  Stream<List<StoredAccount>> watchAccounts() => _accountsQuery().watch();
+  /// Emits only when something a screen shows changed: the sync bookkeeping
+  /// columns are blanked, because every sync rewrites them and would otherwise
+  /// repaint the whole app. Services read them through [getAccount].
+  Stream<List<StoredAccount>> watchAccounts() => _accountsQuery()
+      .watch()
+      .map((accounts) => accounts.map(_withoutSyncBookkeeping).toList())
+      .distinct(listEquals);
 
   /// One-shot read of the rows [watchAccounts] streams.
   ///
@@ -33,8 +39,23 @@ final class AccountRepository {
     final query = _database.select(_database.accounts)
       ..where((account) => account.selected.equals(true))
       ..limit(1);
-    return query.watchSingleOrNull();
+    return query
+        .watchSingleOrNull()
+        .map(
+          (account) =>
+              account == null ? null : _withoutSyncBookkeeping(account),
+        )
+        .distinct();
   }
+
+  static StoredAccount _withoutSyncBookkeeping(StoredAccount account) =>
+      account.copyWith(
+        conversationCursor: const Value(null),
+        conversationHash: const Value(null),
+        emptyConfirmationRequestId: const Value(null),
+        emptyConfirmationObservedAtMillis: const Value(null),
+        lastSyncedAtMillis: const Value(null),
+      );
 
   Stream<String?> watchSelectedThemeColor() {
     final query =
@@ -48,9 +69,10 @@ final class AccountRepository {
           ])
           ..where(_database.accounts.selected.equals(true))
           ..limit(1);
-    return query.watchSingleOrNull().map(
-      (row) => row?.readTable(_database.accountThemes).seedColor,
-    );
+    return query
+        .watchSingleOrNull()
+        .map((row) => row?.readTable(_database.accountThemes).seedColor)
+        .distinct();
   }
 
   /// Every certificate any account trusts, grouped by lowercase host.
@@ -192,18 +214,27 @@ final class AccountRepository {
     Set<String> talkFeatures, {
     required String? serverThemeColor,
   }) {
-    final sorted = talkFeatures.toList()..sort();
+    final json = jsonEncode(talkFeatures.toList()..sort());
     return _database.transaction(() async {
-      await (_database.update(
-        _database.accounts,
-      )..where((account) => account.id.equals(accountId))).write(
-        AccountsCompanion(talkFeaturesJson: Value(jsonEncode(sorted))),
-      );
+      // Called on every sync; an unchanged write would still wake every
+      // account watcher.
+      final stored = await getAccount(accountId);
+      if (stored != null && stored.talkFeaturesJson != json) {
+        await (_database.update(_database.accounts)
+              ..where((account) => account.id.equals(accountId)))
+            .write(AccountsCompanion(talkFeaturesJson: Value(json)));
+      }
       await _replaceThemeColor(accountId, serverThemeColor);
     });
   }
 
   Future<void> _replaceThemeColor(String accountId, String? color) async {
+    final stored = await (_database.select(
+      _database.accountThemes,
+    )..where((theme) => theme.accountId.equals(accountId))).getSingleOrNull();
+    if (stored?.seedColor == color) {
+      return;
+    }
     if (color == null) {
       await (_database.delete(
         _database.accountThemes,
