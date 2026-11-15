@@ -44,11 +44,18 @@ extension _ChatRepositoryMutations on ChatRepository {
     required String accountId,
     required ChatMessage message,
   }) async {
+    // Only a later message of the room can quote this one, and its stored
+    // JSON then holds a parent with this id. The filter may let a few rows
+    // through that do not (a longer id with the same digits); they are
+    // decoded and left alone below, where a whole room no longer is.
     final rows =
         await (_database.select(_database.cachedChatMessages)..where(
               (row) =>
                   row.accountId.equals(accountId) &
-                  row.roomToken.equals(message.roomToken.value),
+                  row.roomToken.equals(message.roomToken.value) &
+                  row.messageId.isBiggerThanValue(message.messageId) &
+                  row.rawJson.like('%"parent":%') &
+                  row.rawJson.like('%"id":${message.messageId}%'),
             ))
             .get();
     for (final row in rows) {
