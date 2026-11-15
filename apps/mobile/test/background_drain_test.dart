@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show AppLifecycleState;
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter/foundation.dart';
@@ -102,6 +103,16 @@ void main() {
       await BackgroundDrainSchedule(channel: platform.channel).ensure();
 
       expect(platform.calls, isEmpty);
+    });
+
+    test('one wake for waiting text is an Android request only', () async {
+      await BackgroundDrainSchedule(channel: platform.channel).requestOnce();
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await BackgroundDrainSchedule(channel: platform.channel).requestOnce();
+
+      expect(platform.calls.map((call) => call.method), <String>[
+        'scheduleOnce',
+      ]);
     });
 
     test('a platform that refuses the wake is not an app failure', () async {
@@ -324,6 +335,68 @@ void main() {
             .outboxState,
         'retryable',
       );
+    });
+
+    void leaveTheApp() {
+      final binding = TestWidgetsFlutterBinding.instance;
+      addTearDown(
+        () => binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed),
+      );
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    }
+
+    Iterable<String> wakeRequests() => platform.calls
+        .map((call) => call.method)
+        .where((method) => method == 'scheduleOnce');
+
+    test('leaving the app with text waiting asks for one wake', () async {
+      final container = runningApp(client: OfflineClient());
+      container.read(outboxDrainProvider);
+      await pumpEventQueue(times: 200);
+      await queueOfflineSend();
+      expect(wakeRequests(), isEmpty, reason: 'the app is still in front');
+
+      leaveTheApp();
+      await pumpEventQueue(times: 200);
+
+      expect(wakeRequests(), hasLength(1));
+    });
+
+    test('leaving the app with nothing waiting asks for nothing', () async {
+      final container = runningApp(client: OfflineClient());
+      container.read(outboxDrainProvider);
+      await pumpEventQueue(times: 200);
+
+      leaveTheApp();
+      await pumpEventQueue(times: 200);
+
+      expect(wakeRequests(), isEmpty);
+    });
+
+    test('a send that gives up after the app was left asks for one wake, '
+        'and the drain it brings asks for none', () async {
+      final container = runningApp(client: OfflineClient());
+      container.read(outboxDrainProvider);
+      await pumpEventQueue(times: 200);
+      leaveTheApp();
+      await pumpEventQueue(times: 200);
+      expect(wakeRequests(), isEmpty);
+
+      await container
+          .read(chatServiceProvider)
+          .sendText(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            message: 'Sent on the way out',
+          );
+      await waitForUnsentTextSends(database);
+      await pumpEventQueue(times: 200);
+      expect(wakeRequests(), hasLength(1));
+
+      // The wake fires and the server is still out of reach.
+      platform.runDrain();
+      await pumpEventQueue(times: 200);
+      expect(wakeRequests(), hasLength(1));
     });
 
     test('the app registers its wake with the platform on start', () async {

@@ -31,6 +31,25 @@ class BackgroundDrainSchedule {
 
   Future<void> ensure() => _requested ??= _request();
 
+  /// Asks for one drain as soon as a network is there, for text that is
+  /// waiting while the app is not in front. The recurring wake may be a
+  /// quarter of an hour away.
+  ///
+  /// Android only. The caller asks only while something is pending, and the
+  /// platform keeps a request it already holds.
+  Future<void> requestOnce() async {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    try {
+      await channel.invokeMethod<void>('scheduleOnce');
+    } on MissingPluginException {
+      // A build without the native side, or a plain widget test binding.
+    } on PlatformException {
+      // The platform refused the wake; the recurring one still stands.
+    }
+  }
+
   Future<void> _request() async {
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:

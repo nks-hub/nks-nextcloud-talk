@@ -215,11 +215,16 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
             BackgroundDrain.CHANNEL,
         )
         drain.setMethodCallHandler { call, result ->
-            if (call.method == "ensureScheduled") {
-                BackgroundDrain.ensureScheduled(applicationContext)
-                result.success(null)
-            } else {
-                result.notImplemented()
+            when (call.method) {
+                "ensureScheduled" -> {
+                    BackgroundDrain.ensureScheduled(applicationContext)
+                    result.success(null)
+                }
+                "scheduleOnce" -> {
+                    BackgroundDrain.scheduleOnce(applicationContext)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
             }
         }
         backgroundDrainChannel = drain

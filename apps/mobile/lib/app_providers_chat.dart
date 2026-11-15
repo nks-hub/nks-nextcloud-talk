@@ -24,13 +24,43 @@ final transferKeepAliveProvider = Provider<AttachmentTransferKeepAlive?>((ref) {
   return keepAlive;
 });
 
+/// Asks the platform for one drain as soon as a network is there, if the
+/// app is out of sight and text is still waiting to be sent.
+///
+/// Called when the app leaves the screen and when a send started just before
+/// that gives up for now. A drain the platform starts never comes through
+/// here, so a server that keeps failing cannot make this go round.
+Future<void> requestWakeForUnsentText(Ref ref) async {
+  final state = WidgetsBinding.instance.lifecycleState;
+  if (state != ui.AppLifecycleState.paused &&
+      state != ui.AppLifecycleState.hidden) {
+    return;
+  }
+  try {
+    final pending = await ref
+        .read(chatRepositoryProvider)
+        .roomsWithPendingTextSends();
+    if (pending.isNotEmpty) {
+      await ref.read(backgroundDrainScheduleProvider).requestOnce();
+    }
+  } on Object {
+    // Best effort; the recurring wake still stands.
+  }
+}
+
 final chatServiceProvider = Provider<ChatService>((ref) {
+  final keepAlive = ref.watch(transferKeepAliveProvider)?.holder();
   final service = ChatService(
     accounts: ref.watch(accountRepositoryProvider),
     chat: ref.watch(chatRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
     api: ref.watch(nextcloudApiProvider),
-    reportSendActivity: ref.watch(transferKeepAliveProvider)?.holder(),
+    reportSendActivity: (active) {
+      keepAlive?.call(active);
+      if (!active) {
+        unawaited(requestWakeForUnsentText(ref));
+      }
+    },
   );
   ref.onDispose(() => unawaited(service.close()));
   return service;
@@ -84,6 +114,9 @@ final outboxDrainProvider = Provider<void>((ref) {
       events.listen((_) => unawaited(drain())),
   ];
   final readers = chat.readerWakeEvents.listen((_) => unawaited(drain()));
+  final leaving = AppLifecycleListener(
+    onPause: () => unawaited(requestWakeForUnsentText(ref)),
+  );
   final channel = ref.watch(backgroundDrainChannelProvider);
   channel.setMethodCallHandler((call) async {
     if (call.method != 'runDrain') {
@@ -97,6 +130,7 @@ final outboxDrainProvider = Provider<void>((ref) {
   });
   ref.onDispose(() {
     channel.setMethodCallHandler(null);
+    leaving.dispose();
     unawaited(readers.cancel());
     for (final wake in wakes) {
       unawaited(wake.cancel());
