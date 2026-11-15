@@ -792,6 +792,65 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       expect(rows.first.errorClass, 'silent-send-unsupported');
     });
 
+    for (final replaced in const [true, false]) {
+      test(
+        'a send refused with 401 '
+        '${replaced ? 'for a replaced password is sent again' : 'asks for a new login'}',
+        () async {
+          final authorizations = <String?>[];
+          final api = HttpNextcloudApi(
+            client: _sendServer((request) {
+              authorizations.add(request.headers['Authorization']);
+              if (authorizations.length > 1) {
+                return _acceptedSend(request, 121);
+              }
+              // The user logs in again while this request is on its way.
+              if (replaced) {
+                credentials.values['account-a'] =
+                    'fixture-replacement-password';
+              }
+              return http.Response('', 401);
+            }),
+          );
+          addTearDown(api.close);
+          final service = ChatService(
+            accounts: accounts,
+            chat: chat,
+            credentials: credentials,
+            api: api,
+          );
+          addTearDown(service.close);
+          await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+
+          await service.sendText(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            message: 'across a new login',
+          );
+          final rows = await _waitForTextSends(
+            database,
+            (rows) =>
+                rows.single.outboxState ==
+                (replaced ? 'completed' : 'retryable'),
+          );
+          final lane =
+              (await database.select(database.chatCapabilities).getSingle())
+                  .lane;
+
+          if (replaced) {
+            expect(authorizations, hasLength(2));
+            expect(authorizations.first, isNot(authorizations.last));
+            expect(rows.single.attemptCount, 2);
+            expect(lane, ChatAccountLane.ready.name);
+          } else {
+            expect(authorizations, hasLength(1));
+            expect(rows.single.errorClass, 'reauth');
+            expect(lane, ChatAccountLane.reauthenticationRequired.name);
+          }
+        },
+      );
+    }
+
     test(
       'offline send rejects a missing persisted capability snapshot',
       () async {

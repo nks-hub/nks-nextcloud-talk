@@ -513,7 +513,9 @@ final class ChatService {
           if (claim == null) {
             throw const ChatServiceException(ChatServiceError.invalidResponse);
           }
-          await _transmitClaim(prepared, claim);
+          if (!await _transmitClaim(prepared, claim)) {
+            unawaited(_deliverWithCurrentCredentials(prepared));
+          }
         });
       });
     });
@@ -876,15 +878,40 @@ final class ChatService {
           return;
         }
         _ensureAccountActive(prepared.account.id);
-        await _transmitClaim(prepared, claim);
+        if (!await _transmitClaim(prepared, claim)) {
+          unawaited(_deliverWithCurrentCredentials(prepared));
+          return;
+        }
       }
     });
+  }
+
+  /// Picks the outbox up again after [stale] turned out to carry a password
+  /// the user has replaced. Nothing is sent unless the stored one differs, so
+  /// a server that keeps answering 401 cannot make this go round.
+  Future<void> _deliverWithCurrentCredentials(_PreparedChat stale) async {
+    try {
+      final prepared = await _prepare(
+        stale.account.id,
+        stale.room.token.value,
+        allowPersistedCapabilitiesForSend: true,
+      );
+      if (prepared.appPassword != stale.appPassword &&
+          prepared.capabilitiesVerifiedOnline) {
+        await _deliverPending(prepared);
+      }
+    } on Object {
+      // The rows stay queued; the next sync or wake delivers them.
+    }
   }
 
   /// Sends one claimed operation and records what became of it. The operation
   /// counts as in flight from here, with no gap after the claim, until its
   /// outcome is stored.
-  Future<void> _transmitClaim(
+  ///
+  /// Returns false when [prepared] carries a password that has been replaced,
+  /// which makes it useless for anything further.
+  Future<bool> _transmitClaim(
     _PreparedChat prepared,
     ClaimedTextSend claim,
   ) async {
@@ -892,13 +919,13 @@ final class ChatService {
         <ChatOperationId>{};
     inFlight.add(claim.operation.operationId);
     try {
-      await _sendClaim(prepared, claim);
+      return await _sendClaim(prepared, claim);
     } finally {
       inFlight.remove(claim.operation.operationId);
     }
   }
 
-  Future<void> _sendClaim(_PreparedChat prepared, ClaimedTextSend claim) async {
+  Future<bool> _sendClaim(_PreparedChat prepared, ClaimedTextSend claim) async {
     final ChatSendResponse response;
     try {
       response = await _api.sendChat(
@@ -925,7 +952,7 @@ final class ChatService {
       if (error.requestNotSent) {
         _armRetry(prepared, retryDelay);
       }
-      return;
+      return true;
     } on TalkProtocolException {
       _ensureAccountActive(prepared.account.id);
       await _chat.recordTextSendFailure(
@@ -933,9 +960,28 @@ final class ChatService {
         operationId: claim.operation.operationId,
         bodyState: ChatTransportBodyState.possiblySent,
       );
-      return;
+      return true;
     }
     _ensureAccountActive(prepared.account.id);
+    if (response.classification ==
+            ChatSendClassification.reauthenticationRequired &&
+        await _credentialReplacedSince(
+          prepared.account.id,
+          prepared.appPassword,
+        )) {
+      // The 401 answers the password this request was built with, and the
+      // user has logged in again since. It refused the request before any
+      // save, so the operation goes back to the queue rather than taking the
+      // new login down with it.
+      _ensureAccountActive(prepared.account.id);
+      await _chat.recordTextSendFailure(
+        accountId: prepared.account.id,
+        operationId: claim.operation.operationId,
+        bodyState: ChatTransportBodyState.notSent,
+        nextAttemptAt: _nowSeconds(),
+      );
+      return false;
+    }
     final outcome = await _chat.applyTextSendResponse(
       accountId: prepared.account.id,
       operationId: claim.operation.operationId,
@@ -958,6 +1004,7 @@ final class ChatService {
         errorCode: ChatServiceError.reauthenticationRequired.name,
       );
     }
+    return true;
   }
 
   Future<T> _withRoomErrorPersistence<T>(
