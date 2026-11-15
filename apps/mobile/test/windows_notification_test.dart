@@ -146,6 +146,34 @@ void main() {
     expect(shown, isEmpty);
   });
 
+  test('a trigger during a running refresh gets one more round', () async {
+    Completer<List<Map<String, Object?>>?>? pending;
+    var fetches = 0;
+    final service = await build(
+      fetch: (id, _) {
+        fetches++;
+        return pending?.future ?? Future.value(responses[id]);
+      },
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    fetches = 0;
+
+    final running = pending = Completer();
+    final first = service.refresh('account-a');
+    // The server stores the notification after the running round read the
+    // list; the trigger that announces it must not be lost.
+    pending = null;
+    responses['account-a'] = [notification(10)];
+    unawaited(service.refresh('account-a'));
+    unawaited(service.refresh('account-a'));
+    running.complete([]);
+    await first;
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    expect(fetches, 2);
+    expect(shown, hasLength(1));
+  });
+
   test('a failed fetch neither notifies nor advances the baseline', () async {
     var fail = false;
     final service = await build(

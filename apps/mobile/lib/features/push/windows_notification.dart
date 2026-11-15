@@ -193,8 +193,17 @@ final class WindowsNotificationService {
   Future<void> refresh(String accountId) {
     final account = _watched[accountId];
     if (account == null) return Future<void>.value();
-    return account.refreshing ??= _refresh(accountId, account).whenComplete(() {
-      account.refreshing = null;
+    final running = account.refreshing;
+    if (running == null) {
+      return account.refreshing = _refresh(accountId, account).whenComplete(
+        () => account.refreshing = null,
+      );
+    }
+    // The running round may already have read the list, so every trigger
+    // that arrives meanwhile shares one more round right after it.
+    return account.queued ??= running.then((_) {
+      account.queued = null;
+      return refresh(accountId);
     });
   }
 
@@ -282,5 +291,6 @@ final class _DesktopNotificationAccount {
   StreamSubscription<List<CachedConversation>>? subscription;
   Timer? timer;
   Future<void>? refreshing;
+  Future<void>? queued;
   int? highestId;
 }
