@@ -433,18 +433,27 @@ final class AttachmentRepository {
   }) {
     final updatedAtMillis = updatedAt.toUtc().millisecondsSinceEpoch;
     return _database.transaction(() async {
-      await _database
-          .into(_database.attachmentRuntimeAccounts)
-          .insertOnConflictUpdate(
-            AttachmentRuntimeAccountsCompanion.insert(
-              accountId: account.accountId.value,
-              serverUrl: account.server.value,
-              lane: account.lane.name,
-              credentialGeneration: account.credentialGeneration,
-              capabilityGeneration: account.capabilityGeneration,
-              updatedAtMillis: updatedAtMillis,
-            ),
-          );
+      final runtimeAccount = AttachmentRuntimeAccountsCompanion.insert(
+        accountId: account.accountId.value,
+        serverUrl: account.server.value,
+        lane: account.lane.name,
+        credentialGeneration: account.credentialGeneration,
+        capabilityGeneration: account.capabilityGeneration,
+        updatedAtMillis: updatedAtMillis,
+      );
+      final stored =
+          await (_database.select(_database.attachmentRuntimeAccounts)
+                ..where((row) => row.accountId.equals(account.accountId.value)))
+              .getSingleOrNull();
+      // Nearly every step leaves the account as it was; only the job moved.
+      if (stored
+              ?.toCompanion(false)
+              .copyWith(updatedAtMillis: Value(updatedAtMillis)) !=
+          runtimeAccount) {
+        await _database
+            .into(_database.attachmentRuntimeAccounts)
+            .insertOnConflictUpdate(runtimeAccount);
+      }
       await _database
           .into(_database.attachmentJobs)
           .insertOnConflictUpdate(

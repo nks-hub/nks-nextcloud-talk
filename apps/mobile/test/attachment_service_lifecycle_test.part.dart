@@ -51,6 +51,46 @@ void _registerAttachmentServiceLifecycleTests() {
     },
   );
 
+  test('the credential is read once for an upload, not once per request, and '
+      'the account row is written only when it changes', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final vault = _CountingCredentialVault(fixture.credentials);
+    var requests = 0;
+    final service = fixture.service(
+      MockClient((request) async {
+        requests++;
+        if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+          return http.Response.bytes(_probeSuccess(), 200);
+        }
+        if (request.method == 'POST') {
+          return http.Response.bytes(_finalizeSuccess(), 200);
+        }
+        return http.Response('', 201);
+      }),
+      credentialVault: vault,
+      clock: () => DateTime.utc(2026, 1, 1).add(Duration(seconds: requests)),
+    );
+    addTearDown(service.close);
+
+    final session = await service.enqueue(fixture.request(normalMaximum: 4));
+    final admitted = await fixture.database
+        .select(fixture.database.attachmentRuntimeAccounts)
+        .getSingle();
+    await session.events.firstWhere(
+      (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+    );
+
+    // Probe, MKCOL, two chunks, MOVE and finalize.
+    expect(requests, 6);
+    // One read to admit the job and one for the whole run.
+    expect(vault.reads, 2);
+    final after = await fixture.database
+        .select(fixture.database.attachmentRuntimeAccounts)
+        .getSingle();
+    expect(after.updatedAtMillis, admitted.updatedAtMillis);
+  });
+
   test('bytes of the request in flight are reported in memory and cleared '
       'when it ends', () async {
     final fixture = await _Fixture.create();

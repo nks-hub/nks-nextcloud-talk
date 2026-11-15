@@ -392,6 +392,9 @@ final class AttachmentService with _AttachmentServiceRuntime {
   /// Servers behind a proxy that refused a large body in this session.
   @override
   final Set<ServerBase> _payloadLimitedServers = {};
+  @override
+  final Map<AttachmentPersistenceKey, AttachmentTransportAuthorization>
+  _heldAuthorizations = {};
 
   /// Bytes of the request in flight, per job id. Kept in memory because a
   /// database write per sent block would cost more than the upload.

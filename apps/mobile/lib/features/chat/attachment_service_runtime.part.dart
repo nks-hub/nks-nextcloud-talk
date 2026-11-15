@@ -42,6 +42,11 @@ mixin _AttachmentServiceRuntime {
   Set<ServerBase> get _payloadLimitedServers;
   ValueNotifier<Map<String, int>>? get _inFlightBytes;
 
+  /// The account and credential of a job whose steps keep succeeding, so the
+  /// keystore is read once per upload and not once per request.
+  Map<AttachmentPersistenceKey, AttachmentTransportAuthorization>
+  get _heldAuthorizations;
+
   void _addInFlightBytes(String jobId, int bytes) {
     final notifier = _inFlightBytes;
     if (notifier != null) {
@@ -331,28 +336,33 @@ mixin _AttachmentServiceRuntime {
     if (job == null || _suspendedAccounts.contains(job.accountId)) {
       return _AttachmentStepOutcome.stopped;
     }
-    final storedAccount = await _repository.getAccount(key.accountId);
-    if (storedAccount == null) {
-      return _AttachmentStepOutcome.stopped;
+    var held = _heldAuthorizations[key];
+    if (held == null) {
+      final storedAccount = await _repository.getAccount(key.accountId);
+      if (storedAccount == null) {
+        return _AttachmentStepOutcome.stopped;
+      }
+      final String? password;
+      try {
+        password = await _credentials.readAppPassword(key.accountId);
+      } on CredentialVaultTemporarilyUnavailable {
+        await _deferForCredential(selection.roomKey, key, job);
+        return _AttachmentStepOutcome.stopped;
+      }
+      if (password == null || password.isEmpty) {
+        await _deferForCredential(selection.roomKey, key, job);
+        return _AttachmentStepOutcome.stopped;
+      }
+      _credentialRetryCounts.remove(key);
+      held = AttachmentTransportAuthorization(
+        accountId: job.accountId,
+        server: job.server,
+        loginName: storedAccount.loginName,
+        appPassword: password,
+      );
+      _heldAuthorizations[key] = held;
     }
-    final String? password;
-    try {
-      password = await _credentials.readAppPassword(key.accountId);
-    } on CredentialVaultTemporarilyUnavailable {
-      await _deferForCredential(selection.roomKey, key, job);
-      return _AttachmentStepOutcome.stopped;
-    }
-    if (password == null || password.isEmpty) {
-      await _deferForCredential(selection.roomKey, key, job);
-      return _AttachmentStepOutcome.stopped;
-    }
-    _credentialRetryCounts.remove(key);
-    final authorization = AttachmentTransportAuthorization(
-      accountId: job.accountId,
-      server: job.server,
-      loginName: storedAccount.loginName,
-      appPassword: password,
-    );
+    final authorization = held;
     final cancellation = AttachmentCancellationController();
     AttachmentRequest? dispatchedRequest;
     _cancellations[key] = cancellation;

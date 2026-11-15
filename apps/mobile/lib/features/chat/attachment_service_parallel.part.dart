@@ -44,6 +44,10 @@ Future<void> _runParallelAttachmentRoom(
               (outcome) {
                 running.remove(key);
                 service._jobRuns.remove(key);
+                // Anything but a clean step re-reads the account next time.
+                if (outcome != _AttachmentStepOutcome.progressed) {
+                  service._heldAuthorizations.remove(key);
+                }
                 switch (outcome) {
                   case _AttachmentStepOutcome.progressed:
                     blocked.clear();
@@ -60,6 +64,7 @@ Future<void> _runParallelAttachmentRoom(
                 failure ??= (error, stack);
                 running.remove(key);
                 service._jobRuns.remove(key);
+                service._heldAuthorizations.remove(key);
                 wake();
               },
             );
@@ -74,6 +79,10 @@ Future<void> _runParallelAttachmentRoom(
       await changed.future;
     }
   } finally {
+    // No credential outlives the run that read it.
+    service._heldAuthorizations.removeWhere(
+      (key, _) => key.accountId == roomKey.accountId.value,
+    );
     service._roomWakeups.remove(roomKey);
     await Future.wait(running.values.toList());
   }

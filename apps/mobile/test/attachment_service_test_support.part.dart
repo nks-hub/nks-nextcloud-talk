@@ -554,6 +554,27 @@ final class _TrackedFileSourceLease implements AttachmentSourceLease {
   }
 }
 
+final class _CountingCredentialVault implements CredentialVault {
+  _CountingCredentialVault(this._inner);
+
+  final CredentialVault _inner;
+  int reads = 0;
+
+  @override
+  Future<String?> readAppPassword(String accountId) {
+    reads++;
+    return _inner.readAppPassword(accountId);
+  }
+
+  @override
+  Future<void> writeAppPassword(String accountId, String appPassword) =>
+      _inner.writeAppPassword(accountId, appPassword);
+
+  @override
+  Future<void> deleteAppPassword(String accountId) =>
+      _inner.deleteAppPassword(accountId);
+}
+
 final class _IdentifierFactory implements AttachmentIdentifierFactory {
   int _request = 0;
 
