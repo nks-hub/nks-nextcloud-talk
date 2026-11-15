@@ -493,6 +493,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             replyTo: rootReply?.messageId,
             emojiSizeStep: emojiSizeStep,
           );
+      unawaited(_dropAdmittedDraft(targetKey, sentDraft));
       if (mounted) {
         _update(() => provisional.operationId = operationId);
       }

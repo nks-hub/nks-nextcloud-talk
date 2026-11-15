@@ -623,6 +623,85 @@ void _registerNonBlockingComposerTests() {
       timeout: const Timeout(Duration(seconds: 30)),
     );
   }
+
+  testWidgets(
+    'a line sent just before the app is left stays in the draft until the '
+    'outbox holds it',
+    (tester) async {
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      _addHarnessTearDown(tester, harness);
+      await tester.pumpWidget(harness.app());
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+      );
+      final hold = Completer<void>();
+      harness.admissionHold.add(hold);
+      var away = false;
+      void setAway(bool value) {
+        if (away == value) return;
+        away = value;
+        for (final state
+            in value
+                ? const [
+                    AppLifecycleState.inactive,
+                    AppLifecycleState.hidden,
+                    AppLifecycleState.paused,
+                  ]
+                : const [
+                    AppLifecycleState.hidden,
+                    AppLifecycleState.inactive,
+                    AppLifecycleState.resumed,
+                  ]) {
+          tester.binding.handleAppLifecycleStateChanged(state);
+        }
+      }
+
+      addTearDown(() {
+        if (!hold.isCompleted) hold.complete();
+        setAway(false);
+      });
+      final drafts = ChatRepository(harness.database);
+      Future<String?> storedDraft() => tester.runAsync<String?>(
+        () => drafts.readDraft(
+          accountId: harness.account.id,
+          roomToken: harness.conversation.token,
+        ),
+      );
+      Future<List<StoredTextSendOperation>> outbox() async =>
+          (await tester.runAsync(
+            () => harness.database
+                .select(harness.database.textSendOperations)
+                .get(),
+          ))!;
+
+      await _typeAndSend(tester, 'on the way out');
+      await _pumpUntil(tester, () => _composer(tester).text.isEmpty);
+
+      // HOME, while the line is still only in memory.
+      setAway(true);
+      String? draft;
+      for (var attempt = 0; attempt < 200 && draft == null; attempt++) {
+        await tester.pump(const Duration(milliseconds: 10));
+        draft = await storedDraft();
+      }
+      expect(draft, 'on the way out');
+      expect(await outbox(), isEmpty);
+
+      hold.complete();
+      for (var attempt = 0; attempt < 600 && draft != null; attempt++) {
+        await tester.pump(const Duration(milliseconds: 10));
+        draft = await storedDraft();
+      }
+      expect(draft, isNull, reason: 'the outbox holds the line now');
+      expect((await outbox()).single.message, 'on the way out');
+      expect(tester.takeException(), isNull);
+      // A paused app draws no frame, and the unmount below needs one.
+      setAway(false);
+      await _unmountComposer(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
 }
 
 Future<void> _typeAndSend(WidgetTester tester, String text) async {
