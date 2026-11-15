@@ -541,9 +541,27 @@ final class ChatService {
       Duration(seconds: delaySeconds < 1 ? 1 : delaySeconds),
       () {
         _retryTimers.remove(key);
-        unawaited(_deliverPending(prepared));
+        unawaited(_retryDelivery(prepared));
       },
     );
+  }
+
+  /// Prepared afresh, because the capabilities or the password may have
+  /// changed while the timer ran and a claim made with the old ones is
+  /// refused. If the room cannot be prepared right now the old state still
+  /// keeps the retries going.
+  Future<void> _retryDelivery(_PreparedChat stale) async {
+    var prepared = stale;
+    try {
+      prepared = await _prepare(
+        stale.account.id,
+        stale.room.token.value,
+        allowPersistedCapabilitiesForSend: true,
+      );
+    } on Object {
+      // Falls back to [stale].
+    }
+    await _deliverPending(prepared);
   }
 
   /// Removes a pending outbox operation. Returns `false` when the send may
