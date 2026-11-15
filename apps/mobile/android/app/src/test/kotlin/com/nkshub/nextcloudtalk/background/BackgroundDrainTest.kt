@@ -2,6 +2,7 @@ package com.nkshub.nextcloudtalk.background
 
 import android.app.job.JobInfo
 import android.app.job.JobScheduler
+import android.os.Build
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -51,5 +52,17 @@ class BackgroundDrainTest {
             setOf(BackgroundDrain.JOB_ID, BackgroundDrain.ONCE_JOB_ID),
             scheduler.allPendingJobs.map { it.id }.toSet(),
         )
+    }
+
+    @Test
+    fun aPushAsksForAnExpeditedDrainOnce() {
+        BackgroundDrain.scheduleForPush(context)
+        BackgroundDrain.scheduleForPush(context)
+
+        val job = scheduler.getPendingJob(BackgroundDrain.PUSH_JOB_ID)!!
+        assertEquals(JobInfo.NETWORK_TYPE_ANY, job.networkType)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            assertTrue(job.isExpedited)
+        }
     }
 }

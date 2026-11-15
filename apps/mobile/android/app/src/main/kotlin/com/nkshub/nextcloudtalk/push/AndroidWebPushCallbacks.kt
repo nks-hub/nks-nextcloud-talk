@@ -6,6 +6,8 @@ import org.unifiedpush.android.connector.MessagingReceiver
 import org.unifiedpush.android.connector.PushService
 import org.unifiedpush.android.connector.data.PushEndpoint
 import org.unifiedpush.android.connector.data.PushMessage
+import com.nkshub.nextcloudtalk.attachments.AttachmentTransferService
+import com.nkshub.nextcloudtalk.background.BackgroundDrain
 
 internal object AndroidWebPushEventSink {
     fun endpoint(context: Context, endpoint: PushEndpoint, instance: String) {
@@ -39,6 +41,9 @@ internal object AndroidWebPushEventSink {
             store.accountIdForInstance(instance)?.let { accountId ->
                 AndroidSystemNotifications.apply(context, accountId, payload)
             }
+        }
+        if (AttachmentTransferService.unsentWaiting(context)) {
+            BackgroundDrain.scheduleForPush(context)
         }
         notifyIfStored(result)
     }

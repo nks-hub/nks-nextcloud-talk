@@ -5,6 +5,7 @@ import android.app.job.JobScheduler
 import android.content.ComponentName
 import android.content.Context
 import io.flutter.plugin.common.MethodChannel
+import android.os.Build
 
 /**
  * The recurring, network-constrained wake-up that lets the outbox deliver
@@ -24,6 +25,9 @@ object BackgroundDrain {
 
     /** The single wake asked for while text is waiting to be sent. */
     const val ONCE_JOB_ID = 5105
+
+    /** The drain an incoming push asks for while a held message is unsent. */
+    const val PUSH_JOB_ID = 5106
 
     /** `JobInfo.getMinPeriodMillis()`; anything shorter is clamped up anyway. */
     private const val PERIOD_MILLIS = 15L * 60L * 1000L
@@ -88,5 +92,32 @@ object BackgroundDrain {
             .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
             .build()
         scheduler.schedule(job)
+    }
+
+    /**
+     * Drains the outbox on the back of a push that just arrived.
+     *
+     * Battery saver keeps a background app off the network, so [scheduleOnce]
+     * never becomes runnable there. A high-priority push is the one moment
+     * the system lets the app out, and an expedited job is what it lets run:
+     * MEASURED on a handset in battery saver, the notification came in
+     * 1.2 s while the message written before it stayed unsent for 109 s,
+     * until the app was opened.
+     */
+    fun scheduleForPush(context: Context) {
+        val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
+        if (scheduler.getPendingJob(PUSH_JOB_ID) != null) {
+            return
+        }
+        val job = JobInfo.Builder(
+            PUSH_JOB_ID,
+            ComponentName(context, BackgroundDrainJobService::class.java),
+        ).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+        // Before Android 12 there is no expedited job; an ordinary one still
+        // runs in the window the push opens when battery saver is off.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            job.setExpedited(true)
+        }
+        scheduler.schedule(job.build())
     }
 }

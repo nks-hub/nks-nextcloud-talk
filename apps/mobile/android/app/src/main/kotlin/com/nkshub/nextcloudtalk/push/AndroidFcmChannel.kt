@@ -7,6 +7,8 @@ import com.google.android.gms.tasks.Tasks
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import com.nkshub.nextcloudtalk.attachments.AttachmentTransferService
+import com.nkshub.nextcloudtalk.background.BackgroundDrain
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.CopyOnWriteArrayList
@@ -330,6 +332,9 @@ class NksFirebaseMessagingService : FirebaseMessagingService() {
         val payload = AndroidWebPushPayloadParser.parse(plaintext, decrypted = true)
         AndroidSystemNotifications.apply(applicationContext, accountId, payload)
         AndroidFcmChannel.messageReceived(accountId)
+        if (AttachmentTransferService.unsentWaiting(applicationContext)) {
+            BackgroundDrain.scheduleForPush(applicationContext)
+        }
     }
 
     private companion object {

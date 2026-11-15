@@ -57,8 +57,10 @@ class AttachmentTransferServiceTest {
     fun aMessageLeftUnsentIsAnnouncedAndTheNoticeCanBeTakenBack() {
         AttachmentTransferService.showUnsent(context, true)
         assertEquals(context.getString(R.string.unsent_message_left_title), shownTitle())
+        assertEquals(true, AttachmentTransferService.unsentWaiting(context))
 
         AttachmentTransferService.showUnsent(context, false)
         assertEquals(0, shadowOf(manager).allNotifications.size)
+        assertEquals(false, AttachmentTransferService.unsentWaiting(context))
     }
 }

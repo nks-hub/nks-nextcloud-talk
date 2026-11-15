@@ -126,6 +126,13 @@ class AttachmentTransferService : Service() {
         private const val CHANNEL_ID = "attachment-upload"
         private const val NOTIFICATION_ID = 4111
         private const val UNSENT_NOTIFICATION_ID = 4112
+        private const val PREFERENCES = "attachment_transfer"
+        private const val KEY_UNSENT = "unsent_message_waiting"
+
+        /** Whether [showUnsent] last announced a message that is still unsent. */
+        fun unsentWaiting(context: Context): Boolean =
+            context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+                .getBoolean(KEY_UNSENT, false)
 
         /**
          * Says that a message is still unsent once the service has given
@@ -133,6 +140,10 @@ class AttachmentTransferService : Service() {
          * opened, so the sender must not be left believing it went out.
          */
         fun showUnsent(context: Context, shown: Boolean) {
+            // Kept on disk: the push that may send the message later can
+            // arrive in a process that was started just for it.
+            context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_UNSENT, shown).apply()
             val manager = context.getSystemService(NotificationManager::class.java)
             if (!shown) {
                 manager.cancel(UNSENT_NOTIFICATION_ID)
