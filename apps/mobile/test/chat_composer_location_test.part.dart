@@ -30,6 +30,89 @@ void _registerLocationComposerTests() {
     await _unmountComposer(tester);
   });
 
+  testWidgets('a shared location leaves the running live sync alone', (
+    tester,
+  ) async {
+    final harness = (await tester.runAsync(_ComposerHarness.create))!;
+    _addHarnessTearDown(tester, harness);
+    final sender = _FakeLocationSender();
+    await tester.pumpWidget(
+      harness.app(
+        wrapInScaffold: true,
+        overrides: <Override>[
+          currentLocationSourceProvider.overrideWithValue(
+            const _FakeLocationSource(),
+          ),
+          locationShareServiceProvider.overrideWithValue(sender),
+        ],
+      ),
+    );
+    await _openLocationConfirmation(tester);
+    // A rebound room opens with a first round that shows the sync bar, so
+    // the bar never showing means the binding was not replaced.
+    final syncBar = find.descendant(
+      of: find.byKey(const Key('chat-room-pane')),
+      matching: find.byType(LinearProgressIndicator),
+    );
+    await _pumpUntil(tester, () => syncBar.evaluate().isEmpty);
+    await tester.tap(find.byKey(const Key('location-share-submit')));
+    for (
+      var frame = 0;
+      frame < 100 && find.text('Location shared.').evaluate().isEmpty;
+      frame++
+    ) {
+      await tester.pump(const Duration(milliseconds: 10));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 1)),
+      );
+      expect(syncBar, findsNothing, reason: 'frame $frame');
+    }
+    expect(find.text('Location shared.'), findsOneWidget);
+    expect(sender.positions, hasLength(1));
+    await _unmountComposer(tester);
+  });
+
+  testWidgets('text is sent while a position fix is still pending', (
+    tester,
+  ) async {
+    final harness = (await tester.runAsync(_ComposerHarness.create))!;
+    _addHarnessTearDown(tester, harness);
+    final source = _HeldLocationSource();
+    await tester.pumpWidget(
+      harness.app(
+        wrapInScaffold: true,
+        overrides: <Override>[
+          currentLocationSourceProvider.overrideWithValue(source),
+          locationShareServiceProvider.overrideWithValue(_FakeLocationSender()),
+        ],
+      ),
+    );
+    await _openLocationAction(tester);
+    await _pumpTransition(tester);
+    expect(source.requested, isTrue);
+
+    await tester.enterText(
+      find.byKey(const Key('chat-composer')),
+      'Typed meanwhile',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('send-message-gesture')));
+    await _pumpUntil(
+      tester,
+      () => harness.chatSendStarted.contains('Typed meanwhile'),
+    );
+
+    source.fix.complete(const SharedPosition(50.0875, 14.42076));
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('location-share-confirmation'))
+          .evaluate()
+          .isNotEmpty,
+    );
+    await _unmountComposer(tester);
+  });
+
   testWidgets('room change invalidates an open location confirmation', (
     tester,
   ) async {
@@ -446,6 +529,17 @@ final class _FakeLocationSource implements CurrentLocationSource {
   @override
   Future<SharedPosition> current() async =>
       const SharedPosition(50.0875, 14.42076);
+}
+
+final class _HeldLocationSource implements CurrentLocationSource {
+  final fix = Completer<SharedPosition>();
+  bool requested = false;
+
+  @override
+  Future<SharedPosition> current() {
+    requested = true;
+    return fix.future;
+  }
 }
 
 final class _FailingLocationSource implements CurrentLocationSource {

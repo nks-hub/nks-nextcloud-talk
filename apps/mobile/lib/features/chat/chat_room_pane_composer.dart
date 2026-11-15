@@ -48,6 +48,13 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     });
   }
 
+  /// Starts the next live round now when the loop is between two.
+  ///
+  /// Never a restart: the running long poll delivers what was just posted by
+  /// itself, and closing the binding to open a new one left the room
+  /// receiving nothing while it rebound.
+  void _nudgeLiveSync() => _syncLoop?.wake();
+
   Future<void> _openPollComposer() async {
     if (_sending || _isReadOnlyNow()) {
       return;
@@ -70,7 +77,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
           PollComposerDialog(sender: sender, roomKey: key, isCurrent: current),
     );
     if (created == true && current()) {
-      await _sync();
+      _nudgeLiveSync();
     }
   }
 
@@ -85,7 +92,6 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     }
     final generation = ++_sendGeneration;
     final strings = AppLocalizations.of(context);
-    _update(() => _sending = true);
     try {
       final position = await ref.read(currentLocationSourceProvider).current();
       if (!mounted || !_isCurrentSendScope(targetKey, generation)) {
@@ -119,6 +125,9 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       if (confirmed != true || !_isCurrentSendScope(targetKey, generation)) {
         return;
       }
+      // Only the request holds the composer. Waiting for a position fix or
+      // for the answer to the dialog used to block text sends as well.
+      _update(() => _sending = true);
       await ref
           .read(locationShareServiceProvider)
           .share(
@@ -131,10 +140,8 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       if (!_isCurrentSendScope(targetKey, generation)) {
         return;
       }
-      await _sync();
-      if (_isCurrentSendScope(targetKey, generation)) {
-        _showLocationSnackBar(strings.locationShared);
-      }
+      _nudgeLiveSync();
+      _showLocationSnackBar(strings.locationShared);
     } on CurrentLocationException catch (error) {
       if (_isCurrentSendScope(targetKey, generation)) {
         final message = switch (error.code) {
@@ -189,7 +196,6 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     }
     final generation = ++_sendGeneration;
     final strings = AppLocalizations.of(context);
-    _update(() => _sending = true);
     try {
       final picked = await Navigator.of(context).push<LocationPickerResult>(
         MaterialPageRoute<LocationPickerResult>(
@@ -200,6 +206,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       if (picked == null || !_isCurrentSendScope(targetKey, generation)) {
         return;
       }
+      _update(() => _sending = true);
       await ref
           .read(locationShareServiceProvider)
           .share(
@@ -212,10 +219,8 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       if (!_isCurrentSendScope(targetKey, generation)) {
         return;
       }
-      await _sync();
-      if (_isCurrentSendScope(targetKey, generation)) {
-        _showLocationSnackBar(strings.locationShared);
-      }
+      _nudgeLiveSync();
+      _showLocationSnackBar(strings.locationShared);
     } on LocationShareException catch (error) {
       if (_isCurrentSendScope(targetKey, generation)) {
         _showLocationSnackBar(
@@ -257,12 +262,9 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       return;
     }
     if (result == RemoteFilePickerResult.shared) {
-      // The server posts the share into the room itself, so the message only
-      // appears here after a sync.
-      await _sync();
-      if (!mounted || targetKey != _key) {
-        return;
-      }
+      // The server posts the share into the room itself, so the message
+      // arrives with the room's own live sync.
+      _nudgeLiveSync();
     }
     _showLocationSnackBar(switch (result) {
       RemoteFilePickerResult.shared => strings.remoteFilesShared,
