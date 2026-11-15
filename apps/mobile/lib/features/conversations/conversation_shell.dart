@@ -69,6 +69,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   var _handlingWindowsPushOpen = false;
   var _handlingDeepLink = false;
   ({String accountId, String roomToken})? _reportedOpenRoom;
+  Completer<void>? _selectedAccountChanged;
 
   @override
   void initState() {
@@ -320,7 +321,14 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
         token: token,
       );
     }
-    if (!mounted || conversation == null) {
+    // The room must not open under the account that was selected before:
+    // with two accounts in the same room it would start that account's live
+    // sync and report the wrong pair as on screen.
+    if (conversation == null) {
+      return;
+    }
+    final shown = await _selectedAccountShown(account.id);
+    if (!mounted || !shown) {
       return;
     }
     // The link can arrive while the user is on any screen, so unwind back to
@@ -331,8 +339,26 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     setState(() => _selectedConversationToken = opened);
   }
 
+  /// Waits until the shell shows [accountId]; false if it never does.
+  Future<bool> _selectedAccountShown(String accountId) async {
+    final deadline = Stopwatch()..start();
+    while (mounted && _selectedAccountId != accountId) {
+      final remaining = const Duration(seconds: 5) - deadline.elapsed;
+      if (remaining <= Duration.zero) {
+        return false;
+      }
+      final changed = _selectedAccountChanged ??= Completer<void>();
+      await changed.future.timeout(remaining, onTimeout: () {});
+    }
+    return mounted;
+  }
+
   void _scheduleInitialSync(StoredAccount account) {
-    _selectedAccountId = account.id;
+    if (_selectedAccountId != account.id) {
+      _selectedAccountId = account.id;
+      _selectedAccountChanged?.complete();
+      _selectedAccountChanged = null;
+    }
     if (!_liveSyncAllowed || _scheduledAccountId == account.id) {
       return;
     }
@@ -532,6 +558,8 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     unawaited(_windowsPushOpenSubscription?.cancel());
     unawaited(_deepLinkSubscription?.cancel());
     unawaited(_stopLiveSync());
+    _selectedAccountChanged?.complete();
+    _selectedAccountChanged = null;
     super.dispose();
   }
 

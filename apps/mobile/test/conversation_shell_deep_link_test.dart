@@ -154,6 +154,17 @@ void main() {
     // Up to here the shell has seen no account at all: the deep link
     // opening the room must not depend on one being selected already.
     selectedAccounts.add(otherAccount);
+    // The link has selected the target account in the database, but the
+    // shell still shows the other one: the room must not open under it.
+    await _pumpUntil(tester, () => heldRequests > 0);
+    for (var attempt = 0; attempt < 20; attempt++) {
+      await tester.pump(const Duration(milliseconds: 10));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 1)),
+      );
+    }
+    expect(find.byKey(const Key('chat-room-pane')), findsNothing);
+    expect(reportedRooms.where((room) => room.$2 != null), isEmpty);
     // In production `selectedAccountProvider` reads the database back, so it
     // emits the account the deep link just selected. Standing in for that
     // here rather than subscribing to the real stream keeps the test free of
