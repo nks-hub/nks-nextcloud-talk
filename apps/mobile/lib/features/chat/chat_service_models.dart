@@ -159,6 +159,12 @@ String _roomKey(String accountId, String roomToken) =>
 /// the account prefix so suspending an account still waits for it.
 String _admissionKey(String roomKey) => '$roomKey\u0000admit';
 
+String _deliveryKey(String roomKey) => '$roomKey\u0000deliver';
+
+/// Pause before a send that never left is tried again by itself.
+int _unsentRetryDelaySeconds(int attemptCount) =>
+    5 * (1 << (attemptCount - 1).clamp(0, 6));
+
 String _scopeSyncKey(String accountId, String roomToken, int? threadId) =>
     '${_roomKey(accountId, roomToken)}\u0000${threadId ?? 'root'}';
 

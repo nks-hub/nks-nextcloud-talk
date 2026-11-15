@@ -174,7 +174,7 @@ mixin _NextcloudApiChat on _HttpNextcloudApiBase {
     if (formBody is! Map<String, Object>) {
       throw const NextcloudApiException(NextcloudApiError.invalidJson);
     }
-    final request = http.Request('POST', chatRequest.uri)
+    final request = _ChatSendRequest(chatRequest.uri)
       ..headers.addAll({
         ...chatRequest.headers,
         'Accept': 'application/json',
@@ -183,11 +183,34 @@ mixin _NextcloudApiChat on _HttpNextcloudApiBase {
       ..bodyFields = formBody.map(
         (key, value) => MapEntry(key, value.toString()),
       );
-    final payload = await _sendBody(
-      request,
-      allowedStatusCodes: _chatSendAllowedStatusCodes,
-      maximumBytes: chatMaximumResponseBytes,
-    );
+    final _BodyPayload payload;
+    try {
+      payload = await _sendBody(
+        request,
+        allowedStatusCodes: _chatSendAllowedStatusCodes,
+        maximumBytes: chatMaximumResponseBytes,
+      );
+    } on NextcloudApiException catch (error) {
+      // Sealed in the same step as the check: a timed-out send keeps running,
+      // and a connection that only comes up afterwards must not deliver a
+      // message already reported as unsent.
+      if (!request.sealUnsentBody()) {
+        rethrow;
+      }
+      throw NextcloudApiException(
+        error.code,
+        statusCode: error.statusCode,
+        retryAfter: error.retryAfter,
+        requestNotSent: true,
+      );
+    } on IOException {
+      // IOClient passes a failed TLS handshake through unwrapped, and the
+      // outbox still has to learn what became of the operation.
+      throw NextcloudApiException(
+        NextcloudApiError.network,
+        requestNotSent: request.sealUnsentBody(),
+      );
+    }
     return decodeChatSendResponse(
       request: chatRequest,
       statusCode: payload.statusCode,
@@ -358,5 +381,45 @@ mixin _NextcloudApiChat on _HttpNextcloudApiBase {
       statusCode: payload.statusCode,
       body: payload.body,
     );
+  }
+}
+
+/// A chat POST that knows whether its body ever started to leave.
+///
+/// A client listens to the body stream only once it has a connection to write
+/// it to (IOClient pipes it after `openUrl` returns), so a body nobody has
+/// listened to is a message the server cannot have stored.
+final class _ChatSendRequest extends http.Request {
+  _ChatSendRequest(Uri url) : super('POST', url);
+
+  bool _bodyStarted = false;
+  bool _sealed = false;
+
+  /// Returns true, and withholds the body from then on, if it never started.
+  bool sealUnsentBody() {
+    if (_bodyStarted) {
+      return false;
+    }
+    return _sealed = true;
+  }
+
+  @override
+  http.ByteStream finalize() {
+    final body = super.finalize();
+    late final StreamController<List<int>> controller;
+    controller = StreamController<List<int>>(
+      onListen: () {
+        if (_sealed) {
+          controller.addError(
+            http.ClientException('Chat send abandoned before its body', url),
+          );
+          unawaited(controller.close());
+          return;
+        }
+        _bodyStarted = true;
+        unawaited(controller.addStream(body).whenComplete(controller.close));
+      },
+    );
+    return http.ByteStream(controller.stream);
   }
 }

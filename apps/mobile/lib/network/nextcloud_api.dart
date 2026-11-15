@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Cookie, HttpException, OSError, Platform;
+import 'dart:io' show Cookie, HttpException, IOException, OSError, Platform;
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
@@ -381,7 +381,12 @@ final class AvatarResponse {
 }
 
 final class NextcloudApiException implements Exception {
-  const NextcloudApiException(this.code, {this.statusCode, this.retryAfter});
+  const NextcloudApiException(
+    this.code, {
+    this.statusCode,
+    this.retryAfter,
+    this.requestNotSent = false,
+  });
 
   final NextcloudApiError code;
   final int? statusCode;
@@ -392,6 +397,11 @@ final class NextcloudApiException implements Exception {
   /// so this stays null on the case that matters most and callers need a
   /// fallback pause of their own.
   final Duration? retryAfter;
+
+  /// True only when the request body provably never left this device, so
+  /// repeating the request cannot duplicate its effect. Set by the chat send;
+  /// every other caller sees false, which claims nothing.
+  final bool requestNotSent;
 
   @override
   String toString() =>

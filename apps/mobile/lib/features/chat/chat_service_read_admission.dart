@@ -235,7 +235,7 @@ extension _ChatReadAdmissionService on ChatService {
             roomToken,
             forceCapabilityNetworkRead: true,
           );
-          await _chat.recoverInterruptedTextSends(accountId);
+          await _recoverInterruptedSends(accountId);
           await _ensurePreparedContextCurrent(prepared);
           await _processPending(prepared);
         }),

@@ -725,8 +725,8 @@ extension _ChatServicePollCases on _ChatServiceIntegrationSuite {
         await _waitForOutboxSettled(chat);
         expect(
           capabilityRequests,
-          2,
-          reason: 'send admission requires a fresh capability read',
+          1,
+          reason: 'send admission reuses the cached capability snapshot',
         );
         final ordinaryView = await chat.getScope(
           accountId: 'account-a',
@@ -761,9 +761,9 @@ extension _ChatServicePollCases on _ChatServiceIntegrationSuite {
         await binding.synchronize();
         await binding.synchronize();
 
-        // Live re-preparing can reuse the snapshot freshly verified by send;
-        // the root/dedicated request split is what proves the re-prepare happened.
-        expect(capabilityRequests, 2);
+        // Live re-preparing reuses the snapshot the first sync read; the
+        // root/dedicated request split is what proves the re-prepare happened.
+        expect(capabilityRequests, 1);
         expect(rootRequests, 2);
         expect(dedicatedRequests, greaterThanOrEqualTo(1));
         expect(dedicatedCursors.first, '109');

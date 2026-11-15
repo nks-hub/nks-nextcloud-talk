@@ -73,6 +73,7 @@ extension _ChatServiceThreadAdmissionCases on _ChatServiceIntegrationSuite {
           );
           gate.releaseCapabilities();
           await send;
+          await _waitForOutboxSettled(chat);
 
           final operations = await database
               .select(database.textSendOperations)

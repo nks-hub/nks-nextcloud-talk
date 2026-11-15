@@ -661,6 +661,9 @@ final class _ComposerHarness {
     );
     await attachmentService.ready;
     final api = HttpNextcloudApi(
+      // No snapshot outlives its read, so a held capabilities answer still
+      // holds an admission the way a cold cache on a slow link does.
+      capabilityCacheTtl: Duration.zero,
       client: MockClient((request) async {
         if (ownTalk != null &&
             request.url.path.contains('/owntalk_extensions/')) {

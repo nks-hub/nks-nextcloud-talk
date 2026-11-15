@@ -79,6 +79,13 @@ final class ChatService {
   final Set<ChatLiveRoomBinding> _liveBindings = {};
   final Set<ChatRelayBinding> _relayBindings = {};
   final Set<String> _suspendedAccounts = {};
+
+  /// The capability snapshot whose rows this service last wrote, per account.
+  final Map<String, CapabilitySnapshot> _recordedCapabilities = {};
+
+  /// Sends being claimed or on the wire per account, which restart recovery
+  /// must not mistake for sends a dead process left behind.
+  final Map<String, int> _transmittingSends = {};
   final Set<_ChatReadAdmission> _readAdmissions = {};
   final _readerWakes =
       StreamController<({String accountId, String roomToken})>.broadcast();
@@ -452,22 +459,21 @@ final class ChatService {
   /// Empties the room's outbox after an admission, without the caller waiting
   /// for it.
   ///
-  /// On the room lane, so it stays ordered against synchronization and against
-  /// the deliveries of earlier admissions. A failure is recorded on the room
-  /// and on the operation exactly as a drain's would be, and the next wake
-  /// picks the rows up again.
+  /// Off the room lane: a request there would wait behind the room's reads,
+  /// and one that hangs would keep incoming messages from being applied.
+  /// [_processPending] orders it against every other delivery. A failure is
+  /// recorded on the room and on the operation exactly as a drain's would be,
+  /// and the next wake picks the rows up again.
   Future<void> _deliverPending(_PreparedChat prepared, {int? threadId}) async {
     final accountId = prepared.account.id;
     final roomToken = prepared.room.token.value;
     try {
-      await _serializeRoom<void>(_roomKey(accountId, roomToken), () {
-        return _withRoomErrorPersistence(
-          accountId,
-          roomToken,
-          () => _processPending(prepared),
-          threadId: threadId,
-        );
-      });
+      await _withRoomErrorPersistence(
+        accountId,
+        roomToken,
+        () => _processPending(prepared),
+        threadId: threadId,
+      );
     } on Object {
       // Persisted by the wrapper, or the account went away underneath.
     }
@@ -482,18 +488,34 @@ final class ChatService {
     return _serializeRoom<void>(key, () {
       return _withRoomErrorPersistence(accountId, roomToken, () async {
         final prepared = await _prepare(accountId, roomToken);
-        final claim = await _chat.manuallyResend(
-          accountId: accountId,
-          operationId: ChatOperationId.parse(operationId),
-          authority: prepared.authority,
-          requestId: ChatRequestId.parse(_uuid.v4()),
+        await _serializeRoom<void>(
+          _deliveryKey(key),
+          () => _transmitting(prepared, () async {
+            final claim = await _chat.manuallyResend(
+              accountId: accountId,
+              operationId: ChatOperationId.parse(operationId),
+              authority: prepared.authority,
+              requestId: ChatRequestId.parse(_uuid.v4()),
+            );
+            if (claim == null) {
+              throw const ChatServiceException(
+                ChatServiceError.invalidResponse,
+              );
+            }
+            await _transmitClaim(prepared, claim);
+          }),
         );
-        if (claim == null) {
-          throw const ChatServiceException(ChatServiceError.invalidResponse);
-        }
-        await _transmitClaim(prepared, claim);
       });
     });
+  }
+
+  /// Converts sends a killed process left in `sending`. A request this
+  /// process still has in flight is not one of them, in any room of the
+  /// account, so recovery waits for the next sync instead of disowning it.
+  Future<void> _recoverInterruptedSends(String accountId) async {
+    if ((_transmittingSends[accountId] ?? 0) == 0) {
+      await _chat.recoverInterruptedTextSends(accountId);
+    }
   }
 
   /// Removes a pending outbox operation. Returns `false` when the send may
@@ -501,13 +523,14 @@ final class ChatService {
   /// the caller has to tell the user instead of pretending otherwise.
   ///
   /// Local only: no request is made and no room sync error is recorded, and
-  /// the room lane keeps a claim from racing the gate.
+  /// the delivery lane keeps a claim from racing the gate.
   Future<bool> cancelText({
     required String accountId,
     required String roomToken,
     required String operationId,
   }) {
-    return _serializeRoom<bool>(_roomKey(accountId, roomToken), () {
+    final key = _deliveryKey(_roomKey(accountId, roomToken));
+    return _serializeRoom<bool>(key, () {
       return _chat.cancelTextSend(
         accountId: accountId,
         operationId: operationId,
@@ -668,7 +691,7 @@ final class ChatService {
         loginName: account.loginName,
         appPassword: appPassword,
         abortTrigger: abortTrigger,
-        forceRefresh: allowPersistedCapabilitiesForSend || forceNetworkRead,
+        forceRefresh: forceNetworkRead,
       );
       _ensureAccountActive(account.id);
       final capabilities = capabilityRead.snapshot;
@@ -677,22 +700,35 @@ final class ChatService {
       }
       final sortedTalkFeatures = capabilities.talkFeatures.toList()..sort();
       final fingerprint = jsonEncode(sortedTalkFeatures);
-      await _accounts.updateCapabilities(
-        account.id,
-        capabilities.talkFeatures,
-        serverThemeColor: capabilities.serverThemeColor,
-      );
-      final storedCapability = await _chat.recordCapabilities(
-        accountId: account.id,
-        talkFeatures: capabilities.talkFeatures,
-        observedAt: DateTime.now().toUtc(),
-      );
+      // A cache hit returns the snapshot this service already stored. Its
+      // rows are rewritten only if something else has moved them since.
+      var storedCapability =
+          identical(_recordedCapabilities[account.id], capabilities) &&
+              account.talkFeaturesJson == fingerprint
+          ? await _chat.getReadyCapabilitySnapshot(account.id)
+          : null;
+      if (storedCapability?.fingerprint != fingerprint) {
+        await _accounts.updateCapabilities(
+          account.id,
+          capabilities.talkFeatures,
+          serverThemeColor: capabilities.serverThemeColor,
+        );
+        storedCapability = await _chat.recordCapabilities(
+          accountId: account.id,
+          talkFeatures: capabilities.talkFeatures,
+          observedAt: DateTime.now().toUtc(),
+        );
+        _recordedCapabilities[account.id] = capabilities;
+      }
       return _PreparedCapabilities(
         talkFeatures: capabilities.talkFeatures,
         fingerprint: fingerprint,
-        generation: storedCapability.generation,
-        verifiedOnline:
-            capabilityRead.source == CapabilitySnapshotSource.network,
+        generation: storedCapability!.generation,
+        // The in-memory snapshot was read from this server within its short
+        // lifetime, which is as much as a probe before every send proved. A
+        // send that turns out to be offline fails before its body leaves and
+        // is retried, so nothing ambiguous comes of trusting it.
+        verifiedOnline: true,
         readPrivacyIsPublic:
             capabilities.context == CapabilityContext.authenticated &&
             capabilities.chatReadPrivacy == ChatReadPrivacy.public,
@@ -792,21 +828,48 @@ final class ChatService {
     return outcome;
   }
 
-  Future<void> _processPending(_PreparedChat prepared) async {
-    while (true) {
-      _ensureAccountActive(prepared.account.id);
-      final claim = await _chat.claimNextTextSend(
-        accountId: prepared.account.id,
-        roomToken: prepared.room.token,
-        authority: prepared.authority,
-        requestId: ChatRequestId.parse(_uuid.v4()),
-        now: _nowSeconds(),
-      );
-      if (claim == null) {
-        return;
-      }
-      _ensureAccountActive(prepared.account.id);
-      await _transmitClaim(prepared, claim);
+  /// Sends what the room's outbox has due, oldest first.
+  ///
+  /// Serialized on the room's delivery lane, which callers may enter while
+  /// holding the room lane but never the other way round.
+  Future<void> _processPending(_PreparedChat prepared) {
+    final key = _deliveryKey(
+      _roomKey(prepared.account.id, prepared.room.token.value),
+    );
+    return _serializeRoom<void>(
+      key,
+      () => _transmitting(prepared, () async {
+        while (true) {
+          _ensureAccountActive(prepared.account.id);
+          final claim = await _chat.claimNextTextSend(
+            accountId: prepared.account.id,
+            roomToken: prepared.room.token,
+            authority: prepared.authority,
+            requestId: ChatRequestId.parse(_uuid.v4()),
+            now: _nowSeconds(),
+          );
+          if (claim == null) {
+            return;
+          }
+          _ensureAccountActive(prepared.account.id);
+          await _transmitClaim(prepared, claim);
+        }
+      }),
+    );
+  }
+
+  /// Marks the account as having a send between its claim and its outcome.
+  /// The claim is inside too: it is what puts the row into `sending`.
+  Future<void> _transmitting(
+    _PreparedChat prepared,
+    Future<void> Function() action,
+  ) async {
+    final accountId = prepared.account.id;
+    _transmittingSends[accountId] = (_transmittingSends[accountId] ?? 0) + 1;
+    try {
+      await action();
+    } finally {
+      _transmittingSends[accountId] = _transmittingSends[accountId]! - 1;
     }
   }
 
@@ -821,12 +884,22 @@ final class ChatService {
         loginName: prepared.account.loginName,
         appPassword: prepared.appPassword,
       );
-    } on NextcloudApiException {
+    } on NextcloudApiException catch (error) {
       _ensureAccountActive(prepared.account.id);
+      // Only a request whose body never left may be repeated by itself: the
+      // server does not deduplicate by reference, so anything less certain
+      // waits for a confirmation or for the user.
       await _chat.recordTextSendFailure(
         accountId: prepared.account.id,
         operationId: claim.operation.operationId,
-        bodyState: ChatTransportBodyState.possiblySent,
+        bodyState: error.requestNotSent
+            ? ChatTransportBodyState.notSent
+            : ChatTransportBodyState.possiblySent,
+        nextAttemptAt: error.requestNotSent
+            ? _nowSeconds() +
+                  (error.retryAfter?.inSeconds ??
+                      _unsentRetryDelaySeconds(claim.operation.attemptCount))
+            : null,
       );
       return;
     } on TalkProtocolException {

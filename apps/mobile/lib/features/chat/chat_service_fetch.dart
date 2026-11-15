@@ -159,7 +159,7 @@ extension _ChatServiceFetch on ChatService {
     Future<void>? abortTrigger,
     _ChatReadGuard? probe,
   }) async {
-    await _chat.recoverInterruptedTextSends(prepared.account.id);
+    await _recoverInterruptedSends(prepared.account.id);
     var scope = (await _chat.getNetworkScope(
       accountId: prepared.account.id,
       roomToken: prepared.conversation.token,

@@ -192,62 +192,108 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       expect(await chat.roomsWithPendingTextSends(), isEmpty);
     });
 
-    test(
-      'hot capability cache cannot authorize offline chat transport',
-      () async {
-        const storedFeatures = <String>{
-          'conversation-v4',
-          'chat-v2',
-          'chat-reference-id',
-        };
-        await accounts.updateTalkFeatures('account-a', storedFeatures);
-        await chat.recordCapabilities(
-          accountId: 'account-a',
-          talkFeatures: storedFeatures,
-          observedAt: DateTime.utc(2026, 1, 1),
-        );
+    test('a send with cached capabilities is one request', () async {
+      final requests = <String>[];
+      final api = HttpNextcloudApi(
+        client: _sendServer(
+          (request) => _acceptedSend(request, 120),
+          requests: requests,
+        ),
+      );
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+      requests.clear();
 
-        var networkAvailable = true;
-        var capabilityRequests = 0;
-        var sendRequests = 0;
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'One round trip',
+      );
+      await _waitForOutboxSettled(chat);
+
+      expect(requests, ['POST']);
+      final sent = await database.select(database.textSendOperations).get();
+      expect(sent.single.outboxState, 'completed');
+    });
+
+    test('a send that never left is retried and frees the room', () async {
+      var reachable = false;
+      final sent = <String>[];
+      final api = HttpNextcloudApi(
+        client: _UnreachableClient(
+          _sendServer((request) {
+            sent.add(request.bodyFields['message']!);
+            return _acceptedSend(request, 120 + sent.length);
+          }),
+          unreachable: (request) => !reachable && request.method == 'POST',
+        ),
+      );
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'first into the tunnel',
+      );
+      final unsent = await _waitForTextSends(
+        database,
+        (rows) => rows.single.outboxState == 'retryable',
+      );
+      expect(unsent.single.errorClass, 'transport-before-send');
+      expect(unsent.single.attemptCount, 1);
+      expect(unsent.single.nextAttemptAt, isNotNull);
+
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'second into the tunnel',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      final waiting = await database.select(database.textSendOperations).get();
+      expect(waiting.map((row) => row.outboxState), ['retryable', 'queued']);
+      expect(sent, isEmpty);
+
+      reachable = true;
+      await (database.update(database.textSendOperations)
+            ..where((row) => row.outboxState.equals('retryable')))
+          .write(const TextSendOperationsCompanion(nextAttemptAt: Value(0)));
+      await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+      await _waitForOutboxSettled(chat);
+
+      expect(sent, ['first into the tunnel', 'second into the tunnel']);
+      final delivered = await database
+          .select(database.textSendOperations)
+          .get();
+      expect(delivered.map((row) => row.outboxState), [
+        'completed',
+        'completed',
+      ]);
+      expect(delivered.map((row) => row.attemptCount), [2, 1]);
+    });
+
+    for (final lost in const ['timed out', 'was reset']) {
+      test('a send that $lost after its body left stays unconfirmed', () async {
+        var posts = 0;
         final api = HttpNextcloudApi(
-          client: MockClient((request) async {
-            if (request.url.path.endsWith('/cloud/capabilities')) {
-              capabilityRequests++;
-              if (!networkAvailable) {
-                throw http.ClientException(
-                  'Synthetic offline capability failure',
-                  request.url,
-                );
-              }
-              return http.Response(
-                jsonEncode(
-                  _chatCapabilities(talkFeatures: storedFeatures.toList()),
-                ),
-                200,
-              );
-            }
-            if (request.method == 'GET') {
-              if (!networkAvailable) {
-                throw StateError('Offline send must not fetch chat');
-              }
-              return http.Response('', 304);
-            }
-            expect(request.method, 'POST');
-            sendRequests++;
-            if (!networkAvailable) {
-              throw StateError('Offline send must not reach chat transport');
-            }
-            return http.Response(
-              jsonEncode(
-                _sendResponse(
-                  referenceId: request.bodyFields['referenceId']!,
-                  message: request.bodyFields['message']!,
-                ),
-              ),
-              201,
-              headers: const <String, String>{'X-Chat-Last-Common-Read': '110'},
-            );
+          requestTimeout: const Duration(milliseconds: 100),
+          client: _sendServer((request) {
+            posts++;
+            return lost == 'timed out'
+                ? Completer<http.Response>().future
+                : throw http.ClientException('Synthetic reset', request.url);
           }),
         );
         addTearDown(api.close);
@@ -257,41 +303,74 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
           credentials: credentials,
           api: api,
         );
+        await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
 
-        await api.getAuthenticatedCapabilities(
-          server: ServerBase.parse('https://cloud.example.invalid'),
-          loginName: 'fixture-user',
-          appPassword: 'fixture-app-password-never-use',
-        );
-        expect(capabilityRequests, 1);
-
-        networkAvailable = false;
         await service.sendText(
           accountId: 'account-a',
           roomToken: 'rooma123',
-          message: 'Queued despite a hot capability cache',
+          message: 'Possibly stored',
         );
+        final rows = await _waitForTextSends(
+          database,
+          (rows) => rows.single.outboxState == 'awaitingConfirmation',
+        );
+        expect(rows.single.errorClass, 'ambiguous-transport');
+        expect(rows.single.nextAttemptAt, isNull);
 
-        final queued = await database
-            .select(database.textSendOperations)
-            .getSingle();
-        expect(capabilityRequests, 2);
-        expect(sendRequests, 0);
-        expect(queued.outboxState, 'queued');
-        expect(queued.attemptCount, 0);
+        await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+        expect(posts, 1, reason: 'an ambiguous send is never repeated unasked');
+      });
+    }
 
-        networkAvailable = true;
+    for (final (statusCode, state, errorClass) in const [
+      (403, 'failed', 'deterministic-rejection'),
+      (404, 'failed', 'deterministic-rejection'),
+      (412, 'failed', 'deterministic-rejection'),
+      (429, 'retryable', 'rate-limited'),
+      (503, 'retryable', 'rate-limited'),
+    ]) {
+      test('a send answered $statusCode without a body ends $state', () async {
+        final api = HttpNextcloudApi(
+          client: _sendServer(
+            (request) => http.Response(
+              '<html>Refused in front of Talk</html>',
+              statusCode,
+              headers: const <String, String>{'retry-after': '7'},
+            ),
+          ),
+        );
+        addTearDown(api.close);
+        final service = ChatService(
+          accounts: accounts,
+          chat: chat,
+          credentials: credentials,
+          api: api,
+        );
         await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
 
-        final completed = await database
-            .select(database.textSendOperations)
-            .getSingle();
-        expect(capabilityRequests, 3);
-        expect(sendRequests, 1);
-        expect(completed.operationId, queued.operationId);
-        expect(completed.outboxState, 'completed');
-      },
-    );
+        final before =
+            DateTime.now().millisecondsSinceEpoch ~/
+            Duration.millisecondsPerSecond;
+        await service.sendText(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          message: 'Refused before the save',
+        );
+        final rows = await _waitForTextSends(
+          database,
+          (rows) => rows.single.outboxState == state,
+        );
+        expect(rows.single.errorClass, errorClass);
+        if (state == 'retryable') {
+          expect(
+            rows.single.nextAttemptAt,
+            inInclusiveRange(before + 7, before + 9),
+          );
+        } else {
+          expect(rows.single.nextAttemptAt, isNull);
+        }
+      });
+    }
 
     test(
       'offline send rejects a missing persisted capability snapshot',
@@ -490,4 +569,78 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       expect(await chat.roomsWithPendingTextSends(), isEmpty);
     });
   }
+}
+
+const _sendFeatures = <String>{
+  'conversation-v4',
+  'chat-v2',
+  'chat-reference-id',
+};
+
+/// Answers capabilities and chat reads, and hands every POST to [onSend].
+MockClient _sendServer(
+  FutureOr<http.Response> Function(http.Request request) onSend, {
+  List<String>? requests,
+}) {
+  return MockClient((request) async {
+    final capabilities = request.url.path.endsWith('/cloud/capabilities');
+    requests?.add(capabilities ? 'capabilities' : request.method);
+    if (capabilities) {
+      return http.Response(
+        jsonEncode(_chatCapabilities(talkFeatures: _sendFeatures.toList())),
+        200,
+      );
+    }
+    if (request.method == 'GET') {
+      return http.Response('', 304);
+    }
+    return onSend(request);
+  });
+}
+
+http.Response _acceptedSend(http.Request request, int messageId) {
+  final response = _sendResponse(
+    referenceId: request.bodyFields['referenceId']!,
+    message: request.bodyFields['message']!,
+  );
+  final data = (response['ocs']! as Map)['data']! as Map;
+  data['id'] = messageId;
+  data['threadId'] = messageId;
+  return http.Response(
+    jsonEncode(response),
+    201,
+    headers: const <String, String>{'X-Chat-Last-Common-Read': '110'},
+  );
+}
+
+Future<List<StoredTextSendOperation>> _waitForTextSends(
+  AppDatabase database,
+  bool Function(List<StoredTextSendOperation> rows) condition,
+) async {
+  for (var attempt = 0; attempt < 500; attempt++) {
+    final rows = await database.select(database.textSendOperations).get();
+    if (rows.isNotEmpty && condition(rows)) return rows;
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+  }
+  fail('The outbox did not reach the expected state');
+}
+
+/// Fails a request the way a refused connection does: before the client has
+/// asked for the body, which a [MockClient] reads up front.
+final class _UnreachableClient extends http.BaseClient {
+  _UnreachableClient(this._inner, {required this.unreachable});
+
+  final http.Client _inner;
+  final bool Function(http.BaseRequest request) unreachable;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (unreachable(request)) {
+      throw http.ClientException('Synthetic connection failure', request.url);
+    }
+    return _inner.send(request);
+  }
+
+  @override
+  void close() => _inner.close();
 }
