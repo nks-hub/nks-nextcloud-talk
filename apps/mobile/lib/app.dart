@@ -61,8 +61,8 @@ final class _NextcloudTalkAppState extends ConsumerState<NextcloudTalkApp> {
   Widget build(BuildContext context) {
     ref.watch(callKitChannelProvider);
     // Started here, next to the theme query that already opens the database,
-    // so the lock gate and the account list do not each add a loading frame.
-    ref.listen(accountsProvider, (_, _) {});
+    // so the shell does not add a loading frame of its own. Not the account
+    // list: that one starts the outbox, which stays behind the lock gate.
     ref.listen(selectedAccountProvider, (_, _) {});
     final serverSeed = AppTheme.seedFromServerHex(
       ref.watch(selectedAccountThemeColorProvider).valueOrNull,
