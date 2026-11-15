@@ -62,6 +62,28 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  test('batch progress counts the bytes of the request in flight', () {
+    final uploaded = pendingAttachmentFixture(0, phase: 'awaitingConfirmation');
+    final sending = pendingAttachmentFixture(1);
+    final waiting = pendingAttachmentFixture(2, phase: 'localPrepared');
+    final cancelled = pendingAttachmentFixture(3, phase: 'cancelled');
+    final jobs = [uploaded, sending, waiting, cancelled];
+
+    expect(
+      pendingAttachmentBatchProgress(jobs, const {}),
+      closeTo(1 / 3, 1e-9),
+    );
+    expect(
+      pendingAttachmentBatchProgress(jobs, {sending.jobId: 512}),
+      closeTo(0.5, 1e-9),
+    );
+    // A request never counts for more than its file.
+    expect(
+      pendingAttachmentBatchProgress(jobs, {sending.jobId: 4096}),
+      closeTo(2 / 3, 1e-9),
+    );
+  });
+
   test(
     'active albums retain completed photos and keep separate sends apart',
     () {
@@ -150,7 +172,7 @@ void main() {
         await tester.pump();
         expect(find.text('3 of 10 sent'), findsOneWidget);
         expect(find.byType(CircularProgressIndicator), findsOneWidget);
-        expect(find.byType(LinearProgressIndicator), findsNothing);
+        expect(find.byType(LinearProgressIndicator), findsOneWidget);
         expect(
           find.byKey(const Key('retry-pending-attachments')),
           findsOneWidget,

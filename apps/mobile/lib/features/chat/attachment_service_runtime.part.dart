@@ -40,6 +40,25 @@ mixin _AttachmentServiceRuntime {
   Map<AttachmentPersistenceKey, Completer<void>> get _terminalSourceReleases;
   Set<AccountId> get _suspendedAccounts;
   Set<ServerBase> get _payloadLimitedServers;
+  ValueNotifier<Map<String, int>>? get _inFlightBytes;
+
+  void _addInFlightBytes(String jobId, int bytes) {
+    final notifier = _inFlightBytes;
+    if (notifier != null) {
+      notifier.value = {
+        ...notifier.value,
+        jobId: (notifier.value[jobId] ?? 0) + bytes,
+      };
+    }
+  }
+
+  void _clearInFlightBytes(String jobId) {
+    final notifier = _inFlightBytes;
+    if (notifier != null && notifier.value.containsKey(jobId)) {
+      notifier.value = {...notifier.value}..remove(jobId);
+    }
+  }
+
   Future<void> get _ready;
   set _startupMaintenance(Future<void> value);
   set _confirmationSubscription(
@@ -479,6 +498,7 @@ mixin _AttachmentServiceRuntime {
         }
       });
     } finally {
+      _clearInFlightBytes(key.jobId);
       if (identical(_cancellations[key], cancellation)) {
         _cancellations.remove(key);
       }
@@ -547,6 +567,9 @@ mixin _AttachmentServiceRuntime {
           : null,
       fileSize: dav.step == AttachmentRequestStep.chunkPropfind
           ? _jobForKey(key)!.draft.source.byteLength
+          : null,
+      onBytesSent: dav.body is AttachmentSourceBody
+          ? (bytes) => _addInFlightBytes(key.jobId, bytes)
           : null,
     ),
   };

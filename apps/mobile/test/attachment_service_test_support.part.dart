@@ -99,6 +99,7 @@ final class _Fixture {
     ReportAttachmentUploadDiagnostic? reportDiagnostic,
     ReportAttachmentTransferActivity? reportTransferActivity,
     List<Duration>? credentialRetryDelays,
+    ValueNotifier<Map<String, int>>? inFlightBytes,
   }) {
     final sources = sourceProvider ?? _FileSourceProvider();
     return AttachmentService(
@@ -120,6 +121,7 @@ final class _Fixture {
         sourceProvider: sources,
       ),
       identifierFactory: identifierFactory ?? _IdentifierFactory(),
+      inFlightBytes: inFlightBytes,
       retryDelays: retryDelays,
       watchConfirmationCandidates: watchConfirmationCandidates,
       persistTransition: persistTransition,

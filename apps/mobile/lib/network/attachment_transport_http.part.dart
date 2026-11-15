@@ -15,6 +15,7 @@ mixin _HttpAttachmentTransportInternals {
     required AttachmentTransportAuthorization authorization,
     required AttachmentCancellationSignal? cancellationSignal,
     required AttachmentVerifiedSource? verifiedSource,
+    void Function(int bytes)? onBytesSent,
   }) async {
     _ensureOpen(request.step);
     _validateAuthorization(request, authorization);
@@ -58,6 +59,7 @@ mixin _HttpAttachmentTransportInternals {
           authorizationHeader: authorizationHeader,
           abort: abort,
           activity: activity,
+          onBytesSent: onBytesSent,
         );
       } else {
         final wireRequest = _regularRequest(
@@ -142,6 +144,7 @@ mixin _HttpAttachmentTransportInternals {
     required String authorizationHeader,
     required _OperationAbortController abort,
     required _TransferActivity activity,
+    void Function(int bytes)? onBytesSent,
   }) async {
     final wireRequest =
         http.AbortableStreamedRequest(
@@ -188,6 +191,7 @@ mixin _HttpAttachmentTransportInternals {
           step: request.step,
           abort: abort,
           activity: activity,
+          onBytesSent: onBytesSent,
         );
       } on Object catch (error, stack) {
         firstFailure ??= _CapturedFailure(
@@ -216,6 +220,7 @@ mixin _HttpAttachmentTransportInternals {
     required AttachmentRequestStep step,
     required _OperationAbortController abort,
     required _TransferActivity activity,
+    void Function(int bytes)? onBytesSent,
   }) async {
     StreamIterator<List<int>>? iterator;
     _CancellationRegistration? iteratorCancellation;
@@ -280,6 +285,7 @@ mixin _HttpAttachmentTransportInternals {
             );
           }
           remaining -= take;
+          onBytesSent?.call(take);
           activity.markProgress(
             stage: AttachmentTransportStage.upload,
             requestMayHaveReachedServer: true,

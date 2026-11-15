@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:uuid/uuid.dart';
 
@@ -232,6 +233,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
     ReportAttachmentUploadDiagnostic reportDiagnostic =
         reportAttachmentUploadDiagnostic,
     ReportAttachmentTransferActivity? reportTransferActivity,
+    ValueNotifier<Map<String, int>>? inFlightBytes,
     List<Duration> credentialRetryDelays = const <Duration>[
       Duration(seconds: 2),
       Duration(seconds: 10),
@@ -278,6 +280,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
       createRetryTimer: createRetryTimer ?? Timer.new,
       reportDiagnostic: reportDiagnostic,
       reportTransferActivity: reportTransferActivity,
+      inFlightBytes: inFlightBytes,
       credentialRetryDelays: List<Duration>.unmodifiable(credentialRetryDelays),
       confirmationRetryDelays: List<Duration>.unmodifiable(
         confirmationRetryDelays,
@@ -304,6 +307,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
     required this._createRetryTimer,
     required this._reportDiagnostic,
     required this._reportTransferActivity,
+    required this._inFlightBytes,
     required this._credentialRetryDelays,
     required this._confirmationRetryDelays,
     required this._retryDelays,
@@ -388,6 +392,11 @@ final class AttachmentService with _AttachmentServiceRuntime {
   /// Servers behind a proxy that refused a large body in this session.
   @override
   final Set<ServerBase> _payloadLimitedServers = {};
+
+  /// Bytes of the request in flight, per job id. Kept in memory because a
+  /// database write per sent block would cost more than the upload.
+  @override
+  final ValueNotifier<Map<String, int>>? _inFlightBytes;
   final Map<AccountId, Future<void>> _accountSuspensions = {};
 
   @override

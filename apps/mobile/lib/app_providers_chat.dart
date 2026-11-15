@@ -205,6 +205,12 @@ final chatAttachmentContextResolverProvider =
       );
     });
 
+/// Bytes of each upload request in flight, by job id, for the progress bar.
+final attachmentInFlightBytesProvider =
+    Provider<ValueNotifier<Map<String, int>>>(
+      (ref) => ValueNotifier<Map<String, int>>(const <String, int>{}),
+    );
+
 final attachmentServiceProvider = FutureProvider<AttachmentService>((
   ref,
 ) async {
@@ -229,6 +235,7 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
               threadId: threadId,
             ),
     reportTransferActivity: keepAlive?.report,
+    inFlightBytes: ref.watch(attachmentInFlightBytesProvider),
   );
   // A network hint or a resumed app is worth one more attempt for uploads
   // whose automatic retries ran out while the device was offline.

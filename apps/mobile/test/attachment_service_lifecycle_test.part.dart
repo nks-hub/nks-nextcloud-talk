@@ -51,6 +51,36 @@ void _registerAttachmentServiceLifecycleTests() {
     },
   );
 
+  test('bytes of the request in flight are reported in memory and cleared '
+      'when it ends', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final inFlight = ValueNotifier<Map<String, int>>(const {});
+    final seen = <int>[];
+    inFlight.addListener(() => seen.addAll(inFlight.value.values));
+    final service = fixture.service(
+      MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+          return http.Response.bytes(_probeSuccess(), 200);
+        }
+        if (request.method == 'PUT') {
+          return http.Response('', 201);
+        }
+        return http.Response.bytes(_finalizeSuccess(), 200);
+      }),
+      inFlightBytes: inFlight,
+    );
+    addTearDown(service.close);
+
+    final session = await service.enqueue(fixture.request(normalMaximum: 32));
+    await session.events.firstWhere(
+      (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+    );
+
+    expect(seen, contains(fixture.bytes.length));
+    expect(inFlight.value, isEmpty);
+  });
+
   test('an attachment admitted without a network stays queued as a durable '
       'job', () async {
     final fixture = await _Fixture.create();

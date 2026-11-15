@@ -383,12 +383,14 @@ final class HttpAttachmentTransport with _HttpAttachmentTransportInternals {
     AttachmentCancellationSignal? cancellationSignal,
     AttachmentVerifiedSource? verifiedSource,
     int? fileSize,
+    void Function(int bytes)? onBytesSent,
   }) async {
     final payload = await _send(
       request: request,
       authorization: authorization,
       cancellationSignal: cancellationSignal,
       verifiedSource: verifiedSource,
+      onBytesSent: onBytesSent,
     );
     return _decodeResponse(
       request: request,

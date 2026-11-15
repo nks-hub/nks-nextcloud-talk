@@ -61,6 +61,38 @@ List<PendingAttachmentBatch> pendingAttachmentBatches(
   ];
 }
 
+/// The share of a batch's bytes that already reached the server.
+///
+/// [inFlightBytes] carries what the request in flight has sent so far; the
+/// rows only learn about a request once it is over.
+double pendingAttachmentBatchProgress(
+  List<StoredAttachmentJob> jobs,
+  Map<String, int> inFlightBytes,
+) {
+  var total = 0;
+  var sent = 0;
+  for (final job in jobs) {
+    if (job.phase == 'cancelled') continue;
+    final size = job.sourceByteLength;
+    total += size;
+    if (const {
+      'uploaded',
+      'finalizing',
+      'awaitingConfirmation',
+      'completed',
+    }.contains(job.phase)) {
+      sent += size;
+      continue;
+    }
+    var jobSent = inFlightBytes[job.jobId] ?? 0;
+    for (final range in (jsonDecode(job.verifiedChunksJson) as List)) {
+      jobSent += DavChunkRange.parse(range, fileSize: size).length;
+    }
+    sent += jobSent > size ? size : jobSent;
+  }
+  return total == 0 ? 0 : sent / total;
+}
+
 bool attachmentJobNeedsAttention(StoredAttachmentJob job) =>
     job.phase == 'failed' ||
     job.phase == 'cleanupFailed' ||
@@ -115,6 +147,10 @@ class _PendingAttachmentBubbleState
     extends ConsumerState<PendingAttachmentBubble> {
   bool _busy = false;
   bool _actionFailed = false;
+
+  /// The bar never steps back: a finished request leaves the in-flight map a
+  /// moment before its row arrives.
+  double _shownProgress = 0;
 
   Future<void> _act({required bool retry, StoredAttachmentJob? only}) async {
     if (_busy) return;
@@ -274,6 +310,26 @@ class _PendingAttachmentBubbleState
                 style: TextStyle(color: scheme.onPrimaryContainer),
               ),
             ),
+            if (batch.isSending && !batch.confirming)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: ValueListenableBuilder<Map<String, int>>(
+                  valueListenable: ref.watch(attachmentInFlightBytesProvider),
+                  builder: (context, inFlightBytes, _) {
+                    final progress = pendingAttachmentBatchProgress(
+                      jobs,
+                      inFlightBytes,
+                    );
+                    if (progress > _shownProgress) {
+                      _shownProgress = progress;
+                    }
+                    return LinearProgressIndicator(
+                      key: const Key('pending-attachment-progress'),
+                      value: _shownProgress,
+                    );
+                  },
+                ),
+              ),
             Text(
               status,
               style: TextStyle(
