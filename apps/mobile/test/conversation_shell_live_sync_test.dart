@@ -18,6 +18,7 @@ import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'test_support.dart';
 
 void main() {
+  _registerVisibleListPaceTest();
   testWidgets('manual refresh queues a full sync during foreground progress', (
     tester,
   ) async {
@@ -150,6 +151,126 @@ void main() {
     'desktop keeps conversation sync while inactive and hidden',
     (tester) => _verifyLifecycleSync(tester, desktop: true),
   );
+}
+
+void _registerVisibleListPaceTest() {
+  testWidgets(
+    'a visible list syncs every 5 s and the other accounts about '
+    'once a minute',
+    _verifyVisibleListPace,
+  );
+}
+
+Future<void> _verifyVisibleListPace(WidgetTester tester) async {
+  final database = openTestDatabase();
+  addTearDown(database.close);
+  final accounts = AccountRepository(database);
+  final vault = MemoryCredentialVault();
+  final other = await accounts.upsertAccount(
+    accountId: 'account-b',
+    serverUrl: 'https://other.example.invalid',
+    loginName: 'other-user',
+    serverProductName: 'Nextcloud',
+    createdAt: DateTime.utc(2026, 1, 1),
+  );
+  final account = await accounts.upsertAccount(
+    accountId: 'account-a',
+    serverUrl: 'https://cloud.example.invalid',
+    loginName: 'fixture-user',
+    serverProductName: 'Nextcloud',
+    createdAt: DateTime.utc(2026, 1, 2),
+  );
+  vault.values[account.id] = 'fixture-app-password-never-use';
+  vault.values[other.id] = 'fixture-app-password-never-use';
+
+  final listRequests = <String, int>{};
+  final api = HttpNextcloudApi(
+    client: _CallbackClient((request) async {
+      if (request.url.path.endsWith('/cloud/capabilities')) {
+        return _response(jsonEncode(capabilitiesJson()), 200);
+      }
+      if (request.url.path.endsWith('/apps/spreed/api/v4/room')) {
+        final count = listRequests.update(
+          request.url.host,
+          (value) => value + 1,
+          ifAbsent: () => 1,
+        );
+        final response =
+            jsonDecode(
+                  jsonEncode(
+                    readFixtureJson(
+                      'conversation-list/fixtures/'
+                      'conversations-full.response.json',
+                    ),
+                  ),
+                )!
+                as Map<String, Object?>;
+        if (count > 1) {
+          (response['ocs']! as Map<String, Object?>)['data'] = <Object?>[];
+        }
+        return _response(
+          jsonEncode(response),
+          200,
+          headers: <String, String>{
+            'X-Nextcloud-Talk-Hash': 'fixture-hash-$count',
+            'X-Nextcloud-Talk-Modified-Before': '${1724300000 + count}',
+            'X-Nextcloud-Talk-Federation-Invites': '0',
+          },
+        );
+      }
+      return _response('', 404);
+    }),
+  );
+  addTearDown(api.close);
+  final service = ConversationSyncService(
+    accounts: accounts,
+    credentials: vault,
+    api: api,
+  );
+  final selectedAccounts = StreamController<StoredAccount?>();
+  addTearDown(selectedAccounts.close);
+
+  int selectedRequests() => listRequests['cloud.example.invalid'] ?? 0;
+  int otherRequests() => listRequests['other.example.invalid'] ?? 0;
+
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        clientPushEnabledProvider.overrideWithValue(false),
+        credentialVaultProvider.overrideWithValue(vault),
+        nextcloudApiProvider.overrideWithValue(api),
+        conversationSyncServiceProvider.overrideWithValue(service),
+        accountsProvider.overrideWith((ref) => Stream.value([account, other])),
+        selectedAccountProvider.overrideWith((ref) => selectedAccounts.stream),
+        conversationsProvider.overrideWith(
+          (ref, accountId) => Stream.value(const <CachedConversation>[]),
+        ),
+      ],
+      child: localizedTestApp(home: const ConversationShell()),
+    ),
+  );
+  addTearDown(() async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+  selectedAccounts.add(account);
+  await _pumpUntil(tester, () => selectedRequests() == 1);
+
+  // No conversation is open, so the list is on screen: one round per 5 s.
+  await tester.pump(const Duration(seconds: 5));
+  await _pumpUntil(tester, () => selectedRequests() == 2);
+  expect(otherRequests(), 0);
+
+  // The twelfth round, about a minute in, also refreshes the other account.
+  for (var round = 2; round < 12; round++) {
+    await tester.pump(const Duration(seconds: 5));
+    await _pumpUntil(tester, () => selectedRequests() == round + 1);
+  }
+  await _pumpUntil(tester, () => otherRequests() == 1);
+  expect(selectedRequests(), 12);
+  expect(tester.takeException(), isNull);
 }
 
 Future<void> _verifyLifecycleSync(

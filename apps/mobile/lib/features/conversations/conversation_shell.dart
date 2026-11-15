@@ -293,15 +293,32 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     if (!mounted) {
       return;
     }
-    try {
-      await sync.sync(account.id, forceFull: true);
-    } on ConversationSyncException {
-      // A cached room can still be opened while the account retries its sync.
-    }
-    final conversation = await accounts.getConversation(
+    var conversation = await accounts.getConversation(
       accountId: account.id,
       token: token,
     );
+    if (conversation != null) {
+      // Known room: open it now and let the list catch up behind it. The
+      // failure is already written to the account row the UI reads.
+      unawaited(
+        sync
+            .sync(account.id)
+            .catchError(
+              (Object _, StackTrace _) {},
+              test: (error) => error is ConversationSyncException,
+            ),
+      );
+    } else {
+      try {
+        await sync.sync(account.id, forceFull: true);
+      } on ConversationSyncException {
+        // Nothing to open if the room is still unknown below.
+      }
+      conversation = await accounts.getConversation(
+        accountId: account.id,
+        token: token,
+      );
+    }
     if (!mounted || conversation == null) {
       return;
     }
@@ -309,7 +326,8 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     // the shell and then select. Selecting alone would leave them looking at
     // whatever was on top.
     Navigator.of(context).popUntil((route) => route.isFirst);
-    setState(() => _selectedConversationToken = conversation.token);
+    final opened = conversation.token;
+    setState(() => _selectedConversationToken = opened);
   }
 
   void _scheduleInitialSync(StoredAccount account) {
@@ -360,8 +378,20 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
       showProgress = false;
     }
 
+    var round = 0;
     final loop = ForegroundSyncLoop(
       task: (cancellation) async {
+        final current = round++;
+        if (current % _otherAccountsSyncRounds ==
+            _otherAccountsSyncRounds - 1) {
+          _syncOtherAccounts(accountId);
+        }
+        // Behind an open chat on a phone nobody sees the list, so it keeps
+        // the slower pace it had before.
+        if (!_conversationListVisible() &&
+            current % _hiddenListSyncRounds != 0) {
+          return;
+        }
         try {
           await ref
               .read(conversationSyncServiceProvider)
@@ -375,7 +405,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           rethrow;
         }
       },
-      successInterval: const Duration(seconds: 15),
+      successInterval: _listSyncInterval,
       retryBaseDelay: const Duration(seconds: 2),
       retryMaximumDelay: const Duration(seconds: 30),
       onCycleStarted: () {
@@ -388,6 +418,43 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     );
     _liveSyncLoop = loop;
     loop.start();
+  }
+
+  bool _conversationListVisible() {
+    if (!mounted) {
+      return false;
+    }
+    if (_selectedConversationToken == null) {
+      return true;
+    }
+    return MediaQuery.sizeOf(context).width >= kExpandedShellBreakpoint &&
+        !ref.read(conversationListCollapsedProvider);
+  }
+
+  /// Refreshes the accounts the list is not showing, so their unread badges
+  /// move without a push. Never awaited: a slow second server must not hold
+  /// the selected account's loop.
+  void _syncOtherAccounts(String selectedAccountId) {
+    final sync = ref.read(conversationSyncServiceProvider);
+    for (final account
+        in ref.read(accountsProvider).valueOrNull ?? const <StoredAccount>[]) {
+      final blocked = ConversationSyncError.values.any(
+        (error) =>
+            error.name == account.lastSyncError &&
+            _isPermanentConversationSyncError(error),
+      );
+      if (account.id == selectedAccountId || blocked) {
+        continue;
+      }
+      unawaited(
+        sync
+            .sync(account.id)
+            .catchError(
+              (Object _, StackTrace _) {},
+              test: (error) => error is ConversationSyncException,
+            ),
+      );
+    }
   }
 
   Future<void> _stopLiveSync() async {
@@ -828,6 +895,15 @@ void _openNewConversation(
     ),
   );
 }
+
+/// One round of the conversation list loop while the list is on screen.
+const Duration _listSyncInterval = Duration(seconds: 5);
+
+/// With the list hidden only every third round syncs: about 15 s.
+const int _hiddenListSyncRounds = 3;
+
+/// Every twelfth round, about once a minute, the other accounts sync too.
+const int _otherAccountsSyncRounds = 12;
 
 bool _isPermanentConversationSyncError(ConversationSyncError error) {
   return switch (error) {

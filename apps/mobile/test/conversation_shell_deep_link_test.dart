@@ -67,12 +67,16 @@ void main() {
       token: 'roomtoken1',
     );
 
-    // No app password is stored for either account, so the forced resync
-    // that a resolved deep link kicks off fails fast with a caught
-    // ConversationSyncException instead of making any HTTP request.
+    // The target account's server never answers while the link is handled:
+    // a room that is already cached has to open without waiting for it.
+    vault.values[targetAccount.id] = 'fixture-app-password-never-use';
+    final serverAnswers = Completer<void>();
+    var heldRequests = 0;
     final api = HttpNextcloudApi(
       client: _CallbackClient((request) async {
-        throw StateError('Unexpected HTTP request: ${request.url}');
+        heldRequests++;
+        await serverAnswers.future;
+        return http.StreamedResponse(const Stream<List<int>>.empty(), 503);
       }),
     );
     addTearDown(api.close);
@@ -176,6 +180,10 @@ void main() {
       () => accounts.getAccount(targetAccount.id),
     );
     expect(selected?.selected, isTrue);
+    expect(heldRequests, greaterThan(0));
+    expect(serverAnswers.isCompleted, isFalse);
+    serverAnswers.complete();
+    await tester.pump(const Duration(milliseconds: 1));
     expect(tester.takeException(), isNull);
 
     // Same reason as `adaptive_breakpoint_test`: unmount while pumping is
