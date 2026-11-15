@@ -753,6 +753,68 @@ void main() {
     });
   }
 
+  test(
+    'two failed reactions on one message leave the cache as it was',
+    () async {
+      final answers = <Completer<http.Response>>[];
+      final api = _api((request) {
+        if (request.url.path.endsWith('/capabilities')) {
+          return Future.value(
+            http.Response(
+              jsonEncode(
+                capabilitiesJson(talkFeatures: const ['chat-v2', 'reactions']),
+              ),
+              200,
+            ),
+          );
+        }
+        final answer = Completer<http.Response>();
+        answers.add(answer);
+        return answer.future;
+      });
+      addTearDown(api.close);
+      final service = ChatMessageActionsService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      Future<String> raw() async => (await chat.getMessage(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        messageId: 5,
+      ))!.rawJson;
+      final before = await raw();
+      Future<void> react(String emoji) => expectLater(
+        service.addReaction(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          messageId: 5,
+          reaction: emoji,
+        ),
+        throwsA(isA<ChatMessageActionException>()),
+      );
+
+      final first = react('👍');
+      final second = react('❤️');
+      while (answers.isEmpty) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      // The second waits its turn, so it cannot build on the unconfirmed first.
+      expect(jsonDecode(await raw())['reactions'], {'👍': 1});
+      answers[0].complete(http.Response('{}', 500));
+      await first;
+      while (answers.length < 2) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(jsonDecode(await raw())['reactions'], {'❤️': 1});
+      answers[1].complete(http.Response('{}', 500));
+      await second;
+
+      expect(await raw(), before);
+    },
+  );
+
   test('an expired session is reported as reauthentication required', () async {
     final api = _api(
       (_) async => http.Response(jsonEncode(<String, Object?>{}), 401),

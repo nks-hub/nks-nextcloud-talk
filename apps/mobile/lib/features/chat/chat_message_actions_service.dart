@@ -107,7 +107,7 @@ final class ChatMessageActionsService {
         context: context,
         request: request,
       );
-      await _applyParentMutation(
+      return () => _applyParentMutation(
         accountId: accountId,
         context: context,
         response: response,
@@ -146,7 +146,7 @@ final class ChatMessageActionsService {
         context: context,
         request: request,
       );
-      await _applyParentMutation(
+      return () => _applyParentMutation(
         accountId: accountId,
         context: context,
         response: response,
@@ -527,12 +527,54 @@ final class ChatMessageActionsService {
   /// previous message back and is reported exactly as before.
   ///
   /// [change] returns null when there is nothing to show ahead of the answer.
+  ///
+  /// [request] talks to the server and returns the step that stores its
+  /// answer. Only a failed request is undone: once the server has taken the
+  /// change, a problem with reading the answer must not put the old message
+  /// back.
+  ///
+  /// Actions on one message run one after another. Side by side, the second
+  /// took the first one's unconfirmed state as its own starting point, and
+  /// with both failing the cache kept a change the server never had.
   Future<void> _optimistically({
     required String accountId,
     required String roomToken,
     required int messageId,
     required ChatMessage? Function(ChatMessage current) change,
-    required Future<void> Function() request,
+    required Future<Future<void> Function()> Function() request,
+  }) {
+    final lane = '$accountId\u0000$roomToken\u0000$messageId';
+    final previous = _messageLanes[lane] ?? Future<void>.value();
+    final run = previous.then(
+      (_) => _runOptimistically(
+        accountId: accountId,
+        roomToken: roomToken,
+        messageId: messageId,
+        change: change,
+        request: request,
+      ),
+    );
+    // The lane only orders; each caller still gets its own outcome.
+    final tail = run.then<void>((_) {}, onError: (Object _) {});
+    _messageLanes[lane] = tail;
+    unawaited(
+      tail.whenComplete(() {
+        if (identical(_messageLanes[lane], tail)) {
+          _messageLanes.remove(lane);
+        }
+      }),
+    );
+    return run;
+  }
+
+  final Map<String, Future<void>> _messageLanes = <String, Future<void>>{};
+
+  Future<void> _runOptimistically({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+    required ChatMessage? Function(ChatMessage current) change,
+    required Future<Future<void> Function()> Function() request,
   }) async {
     ({ServerBase server, ChatMessage before, ChatMessage after})? local;
     try {
@@ -560,8 +602,9 @@ final class ChatMessageActionsService {
     } on FormatException {
       // As above.
     }
+    final Future<void> Function() storeAnswer;
     try {
-      await request();
+      storeAnswer = await request();
     } on Object {
       if (local != null) {
         final cached = await _chat.getMessage(
@@ -580,6 +623,7 @@ final class ChatMessageActionsService {
       }
       rethrow;
     }
+    await storeAnswer();
   }
 
   Future<void> _mutateReaction({
@@ -633,39 +677,41 @@ final class ChatMessageActionsService {
         context: context,
         request: request,
       );
-      final aggregate = response.reactionAggregate;
-      if (aggregate == null) {
-        throw const ChatMessageActionException(
-          ChatMessageActionError.invalidResponse,
+      return () async {
+        final aggregate = response.reactionAggregate;
+        if (aggregate == null) {
+          throw const ChatMessageActionException(
+            ChatMessageActionError.invalidResponse,
+          );
+        }
+        final cached = await _chat.getMessage(
+          accountId: accountId,
+          roomToken: roomToken,
+          messageId: messageId,
         );
-      }
-      final cached = await _chat.getMessage(
-        accountId: accountId,
-        roomToken: roomToken,
-        messageId: messageId,
-      );
-      if (cached == null) {
-        throw const ChatMessageActionException(
-          ChatMessageActionError.messageMissing,
+        if (cached == null) {
+          throw const ChatMessageActionException(
+            ChatMessageActionError.messageMissing,
+          );
+        }
+        final ChatMessage current;
+        try {
+          current = ChatMessage.fromJson(jsonDecode(cached.rawJson));
+        } on Object {
+          throw const ChatMessageActionException(
+            ChatMessageActionError.invalidResponse,
+          );
+        }
+        final updated = current.withReactionAggregate(
+          reactions: aggregate.counts,
+          reactionsSelf: aggregate.reactionsSelf,
         );
-      }
-      final ChatMessage current;
-      try {
-        current = ChatMessage.fromJson(jsonDecode(cached.rawJson));
-      } on Object {
-        throw const ChatMessageActionException(
-          ChatMessageActionError.invalidResponse,
+        await _chat.applyMessageMutation(
+          accountId: accountId,
+          server: context.server,
+          message: updated,
         );
-      }
-      final updated = current.withReactionAggregate(
-        reactions: aggregate.counts,
-        reactionsSelf: aggregate.reactionsSelf,
-      );
-      await _chat.applyMessageMutation(
-        accountId: accountId,
-        server: context.server,
-        message: updated,
-      );
+      };
     },
   );
 
