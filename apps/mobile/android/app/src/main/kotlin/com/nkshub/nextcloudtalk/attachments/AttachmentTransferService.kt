@@ -125,6 +125,49 @@ class AttachmentTransferService : Service() {
         internal var running: AttachmentTransferService? = null
         private const val CHANNEL_ID = "attachment-upload"
         private const val NOTIFICATION_ID = 4111
+        private const val UNSENT_NOTIFICATION_ID = 4112
+
+        /**
+         * Says that a message is still unsent once the service has given
+         * up holding the process for it; nothing sends it until the app is
+         * opened, so the sender must not be left believing it went out.
+         */
+        fun showUnsent(context: Context, shown: Boolean) {
+            val manager = context.getSystemService(NotificationManager::class.java)
+            if (!shown) {
+                manager.cancel(UNSENT_NOTIFICATION_ID)
+                return
+            }
+            val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                manager.createNotificationChannel(
+                    NotificationChannel(
+                        CHANNEL_ID,
+                        context.getString(R.string.attachment_upload_channel),
+                        NotificationManager.IMPORTANCE_LOW,
+                    ).apply { setShowBadge(false) },
+                )
+                Notification.Builder(context, CHANNEL_ID)
+            } else {
+                Notification.Builder(context)
+            }
+            context.packageManager.getLaunchIntentForPackage(context.packageName)?.let { launch ->
+                builder.setContentIntent(
+                    PendingIntent.getActivity(
+                        context, UNSENT_NOTIFICATION_ID, launch,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    ),
+                )
+            }
+            manager.notify(
+                UNSENT_NOTIFICATION_ID,
+                builder
+                    .setSmallIcon(android.R.drawable.stat_notify_error)
+                    .setContentTitle(context.getString(R.string.unsent_message_left_title))
+                    .setContentText(context.getString(R.string.unsent_message_left_text))
+                    .setAutoCancel(true)
+                    .build(),
+            )
+        }
     }
 }
 
@@ -156,6 +199,15 @@ class AttachmentTransferChannel(private val context: Context) : MethodChannel.Me
             }
             "stop" -> {
                 runCatching { context.stopService(intent) }
+                result.success(null)
+            }
+            "unsent" -> {
+                runCatching {
+                    AttachmentTransferService.showUnsent(
+                        context,
+                        call.argument<Boolean>("shown") == true,
+                    )
+                }
                 result.success(null)
             }
             else -> result.notImplemented()

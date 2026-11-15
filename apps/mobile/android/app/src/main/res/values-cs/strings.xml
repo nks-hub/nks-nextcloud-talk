@@ -10,4 +10,6 @@
     <string name="attachment_upload_channel">Odesílání zpráv a příloh</string>
     <string name="attachment_upload_title">Odesílám…</string>
     <string name="unsent_message_title">Čekám na odeslání zprávy</string>
+    <string name="unsent_message_left_title">Zpráva zatím neodešla</string>
+    <string name="unsent_message_left_text">Odešle se po otevření aplikace.</string>
 </resources>

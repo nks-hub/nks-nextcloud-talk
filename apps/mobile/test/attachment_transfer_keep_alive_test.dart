@@ -74,4 +74,25 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 20));
     expect(calls, ['start', 'stop']);
   });
+  test('the unsent notice is shown and taken back over the channel', () async {
+    const channel = MethodChannel('test/attachment_transfer_unsent');
+    final calls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add('${call.method} ${(call.arguments as Map)['shown']}');
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+    final keepAlive = AttachmentTransferKeepAlive(channel: channel);
+    addTearDown(keepAlive.dispose);
+
+    keepAlive.unsentNotice(true);
+    keepAlive.unsentNotice(false);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    expect(calls, ['unsent true', 'unsent false']);
+  });
 }

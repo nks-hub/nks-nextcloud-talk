@@ -11,4 +11,6 @@
     <string name="attachment_upload_channel">Sending messages and attachments</string>
     <string name="attachment_upload_title">Sending…</string>
     <string name="unsent_message_title">Waiting to send a message</string>
+    <string name="unsent_message_left_title">A message has not been sent yet</string>
+    <string name="unsent_message_left_text">Open the app to send it.</string>
 </resources>

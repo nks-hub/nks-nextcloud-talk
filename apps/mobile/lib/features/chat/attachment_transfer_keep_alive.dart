@@ -72,6 +72,11 @@ final class AttachmentTransferKeepAlive {
     });
   }
 
+  /// Tells the sender a message is still unsent after the hold gave up on
+  /// it, or takes that notice back.
+  void unsentNotice(bool shown) =>
+      unawaited(_invoke('unsent', {'shown': shown}));
+
   void dispose() {
     _stopTimer?.cancel();
     _stopTimer = null;

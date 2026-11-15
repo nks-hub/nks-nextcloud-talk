@@ -52,4 +52,13 @@ class AttachmentTransferServiceTest {
         assertEquals(context.getString(R.string.attachment_upload_title), shownTitle())
         controller.destroy()
     }
+
+    @Test
+    fun aMessageLeftUnsentIsAnnouncedAndTheNoticeCanBeTakenBack() {
+        AttachmentTransferService.showUnsent(context, true)
+        assertEquals(context.getString(R.string.unsent_message_left_title), shownTitle())
+
+        AttachmentTransferService.showUnsent(context, false)
+        assertEquals(0, shadowOf(manager).allNotifications.size)
+    }
 }

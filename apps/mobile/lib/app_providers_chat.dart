@@ -114,9 +114,8 @@ final outboxDrainProvider = Provider<void>((ref) {
       events.listen((_) => unawaited(drain())),
   ];
   final readers = chat.readerWakeEvents.listen((_) => unawaited(drain()));
-  final waitingHold = ref
-      .watch(transferKeepAliveProvider)
-      ?.holder(waiting: true);
+  final keepAlive = ref.watch(transferKeepAliveProvider);
+  final waitingHold = keepAlive?.holder(waiting: true);
   final unsentHold = waitingHold == null
       ? null
       : UnsentTextHold(
@@ -124,14 +123,21 @@ final outboxDrainProvider = Provider<void>((ref) {
               .watch(chatRepositoryProvider)
               .watchHasPendingTextSends,
           hold: waitingHold,
-          onWindowEnd: () => unawaited(requestWakeForUnsentText(ref)),
+          onWindowEnd: () {
+            unawaited(requestWakeForUnsentText(ref));
+            // Nothing sends it from here until a wake gets the network.
+            keepAlive?.unsentNotice(true);
+          },
         );
   final leaving = AppLifecycleListener(
     onPause: () {
       unawaited(requestWakeForUnsentText(ref));
       unsentHold?.paused();
     },
-    onResume: unsentHold?.resumed,
+    onResume: () {
+      unsentHold?.resumed();
+      keepAlive?.unsentNotice(false);
+    },
   );
   final channel = ref.watch(backgroundDrainChannelProvider);
   channel.setMethodCallHandler((call) async {
@@ -139,6 +145,10 @@ final outboxDrainProvider = Provider<void>((ref) {
       throw MissingPluginException('${call.method} is not handled here');
     }
     await drain();
+    if ((await ref.read(chatRepositoryProvider).roomsWithPendingTextSends())
+        .isEmpty) {
+      keepAlive?.unsentNotice(false);
+    }
     // The attachment service keeps its own wake sources; a scheduled wake
     // reaches it here because the platform hint is not one of them.
     await (await ref.read(attachmentServiceProvider.future)).resumeRetries();
