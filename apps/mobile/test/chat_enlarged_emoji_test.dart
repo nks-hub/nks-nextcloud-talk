@@ -113,6 +113,23 @@ void main() {
     expect(find.byKey(const Key('chat-enlarged-emoji-42')), findsNothing);
   });
 
+  testWidgets('an emoji message without a size marker wraps instead of '
+      'shrinking onto one line', (tester) async {
+    const emoji = '\u{1F44D}';
+    final key = find.byKey(const Key('chat-enlarged-emoji-42'));
+    await tester.pumpWidget(_app(_message(emoji, _uuid), width: 100));
+    final oneLine = tester.getSize(key).height;
+
+    await tester.pumpWidget(_app(_message(emoji * 4, _uuid), width: 100));
+
+    expect(
+      find.descendant(of: key, matching: find.byType(FittedBox)),
+      findsNothing,
+    );
+    expect(_fontSize(tester), enlargedEmojiFontSize);
+    expect(tester.getSize(key).height, greaterThan(oneLine));
+  });
+
   testWidgets('the largest step scales down instead of overflowing', (
     tester,
   ) async {

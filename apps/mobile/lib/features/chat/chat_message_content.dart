@@ -183,9 +183,10 @@ final class ChatMessageContent extends StatelessWidget {
   }
 }
 
-/// An emoji-only message at the jumbo size, or at the larger size the sender
-/// picked with [step] (0 for none). Scaled down rather than wrapped when the
-/// bubble is too narrow for it, whatever the text scale.
+/// An emoji-only message at the jumbo size, which wraps like any text, or at
+/// the larger size the sender picked with [step] (0 for none). A held emoji is
+/// scaled down rather than wrapped when the bubble is too narrow for it,
+/// whatever the text scale.
 final class _EnlargedEmoji extends StatelessWidget {
   const _EnlargedEmoji({
     super.key,
@@ -200,19 +201,23 @@ final class _EnlargedEmoji extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final emoji = Text(
+      text,
+      style: TextStyle(
+        color: color,
+        fontSize: step == 0
+            ? enlargedEmojiFontSize
+            : enlargedEmojiFontSizeForStep(step),
+        height: 1.15,
+      ),
+    );
+    if (step == 0) {
+      return emoji;
+    }
     return FittedBox(
       fit: BoxFit.scaleDown,
       alignment: Alignment.centerLeft,
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: step == 0
-              ? enlargedEmojiFontSize
-              : enlargedEmojiFontSizeForStep(step),
-          height: 1.15,
-        ),
-      ),
+      child: emoji,
     );
   }
 }
