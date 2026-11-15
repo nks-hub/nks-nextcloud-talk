@@ -778,8 +778,9 @@ final class _SendOrQuickEmojiButton extends StatelessWidget {
     return ListenableBuilder(
       listenable: Listenable.merge([composer, refresh]),
       builder: (context, _) {
-        if (composer.text.trim().isNotEmpty || hasAttachment()) {
-          return sendButton;
+        final showSend = composer.text.trim().isNotEmpty || hasAttachment();
+        if (showSend) {
+          return _PopIn(showSend: true, child: sendButton);
         }
         final strings = AppLocalizations.of(context);
         final name = EmojiCatalog.standard()
@@ -789,16 +790,73 @@ final class _SendOrQuickEmojiButton extends StatelessWidget {
         final label = name == null
             ? strings.ownTalkQuickEmojiSend
             : strings.ownTalkQuickEmojiSendNamed(name);
-        // Bare glyph like the reaction shortcut in other messengers: a filled
-        // send-button disc behind a colour emoji reads as a sticker. Holding it
-        // sends the emoji enlarged.
-        return QuickEmojiHoldButton(
-          emoji: emoji,
-          tooltip: label,
-          enabled: !sending,
-          onSend: onSendEmoji,
+        // Holding it sends the emoji enlarged.
+        return _PopIn(
+          showSend: false,
+          child: QuickEmojiHoldButton(
+            emoji: emoji,
+            tooltip: label,
+            enabled: !sending,
+            onSend: onSendEmoji,
+          ),
         );
       },
+    );
+  }
+}
+
+/// Scales and fades [child] in when the slot changes between the quick emoji
+/// and the send button.
+///
+/// The outgoing button leaves at once rather than cross-fading: only one of
+/// the two may ever be under the finger.
+final class _PopIn extends StatefulWidget {
+  const _PopIn({required this.showSend, required this.child});
+
+  final bool showSend;
+  final Widget child;
+
+  @override
+  State<_PopIn> createState() => _PopInState();
+}
+
+final class _PopInState extends State<_PopIn>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 150),
+    value: 1,
+  );
+  late final Animation<double> _curve = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+  late final Animation<double> _scale = Tween<double>(
+    begin: 0.8,
+    end: 1,
+  ).animate(_curve);
+
+  @override
+  void didUpdateWidget(_PopIn oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.showSend != widget.showSend &&
+        !MediaQuery.disableAnimationsOf(context)) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      key: const Key('send-slot-transition'),
+      opacity: _curve,
+      child: ScaleTransition(scale: _scale, child: widget.child),
     );
   }
 }

@@ -6,7 +6,7 @@ import 'package:talk_protocol/talk_protocol.dart' show ChatEmojiSizeReference;
 
 import 'emoji_only_message.dart';
 
-/// The conversation's quick emoji as a bare glyph button.
+/// The conversation's quick emoji on a tonal disc the size of the send button.
 ///
 /// A tap sends it at the ordinary size. Press and hold grows a preview of the
 /// emoji over [growDuration]; releasing sends it at the size step reached
@@ -41,7 +41,9 @@ final class QuickEmojiHoldButton extends StatefulWidget {
 
 final class _QuickEmojiHoldButtonState extends State<QuickEmojiHoldButton>
     with SingleTickerProviderStateMixin {
-  static const double _glyphSize = 30;
+  static const double _slot = 48;
+  static const double _glyphSize = 24;
+  static const double _previewPadding = 8;
   static const int _maxStep = ChatEmojiSizeReference.maxStep;
 
   final LayerLink _link = LayerLink();
@@ -118,6 +120,15 @@ final class _QuickEmojiHoldButtonState extends State<QuickEmojiHoldButton>
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    // The button sits at the end of the row, so the preview grows away from
+    // that edge: towards the start and upwards.
+    final anchor = AlignmentDirectional.bottomEnd.resolve(
+      Directionality.of(context),
+    );
+    final snap = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 150);
     return OverlayPortal(
       controller: _preview,
       overlayChildBuilder: (context) => Positioned(
@@ -125,27 +136,36 @@ final class _QuickEmojiHoldButtonState extends State<QuickEmojiHoldButton>
         top: 0,
         child: CompositedTransformFollower(
           link: _link,
-          targetAnchor: Alignment.bottomRight,
-          followerAnchor: Alignment.bottomRight,
+          targetAnchor: anchor,
+          followerAnchor: anchor,
           child: IgnorePointer(
-            child: Material(
-              type: MaterialType.transparency,
-              child: AnimatedBuilder(
-                animation: _grow,
-                // Snapped to the step a release would send, so the preview
-                // never shows a size other than the one that goes out.
-                builder: (context, _) => TweenAnimationBuilder<double>(
-                  tween: Tween(
-                    begin: _glyphSize,
-                    end: enlargedEmojiFontSizeForStep(_step),
-                  ),
-                  duration: const Duration(milliseconds: 150),
-                  curve: Curves.easeOut,
-                  builder: (context, fontSize, _) => Text(
-                    widget.emoji,
-                    key: const Key('quick-emoji-hold-preview'),
-                    textScaler: TextScaler.noScaling,
-                    style: TextStyle(fontSize: fontSize, height: 1),
+            child: AnimatedBuilder(
+              animation: _grow,
+              // Snapped to the step a release would send, so the preview
+              // never shows a size other than the one that goes out.
+              builder: (context, _) => TweenAnimationBuilder<double>(
+                tween: Tween(
+                  begin: _slot - 2 * _previewPadding,
+                  end: enlargedEmojiFontSizeForStep(_step),
+                ),
+                duration: snap,
+                curve: Curves.easeOutCubic,
+                // Starts as the button's own disc and swells out of it; the
+                // fixed radius turns the circle into a rounded tile.
+                builder: (context, fontSize, _) => Material(
+                  elevation: 3,
+                  color: scheme.surfaceContainerHigh,
+                  shadowColor: scheme.shadow,
+                  surfaceTintColor: Colors.transparent,
+                  borderRadius: BorderRadius.circular(_slot / 2),
+                  child: Padding(
+                    padding: const EdgeInsets.all(_previewPadding),
+                    child: Text(
+                      widget.emoji,
+                      key: const Key('quick-emoji-hold-preview'),
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(fontSize: fontSize, height: 1),
+                    ),
                   ),
                 ),
               ),
@@ -171,9 +191,11 @@ final class _QuickEmojiHoldButtonState extends State<QuickEmojiHoldButton>
           child: Tooltip(
             message: widget.tooltip,
             triggerMode: TooltipTriggerMode.manual,
+            // Same box and disc as the send button it stands in for, so the
+            // two swap without moving anything in the row.
             child: SizedBox.square(
-              dimension: 48,
-              child: IconButton(
+              dimension: _slot,
+              child: IconButton.filledTonal(
                 key: const Key('send-quick-emoji'),
                 onPressed: widget.enabled
                     ? () => widget.onSend(widget.emoji, null)
@@ -185,6 +207,11 @@ final class _QuickEmojiHoldButtonState extends State<QuickEmojiHoldButton>
                     child: Text(
                       widget.emoji,
                       textAlign: TextAlign.center,
+                      // The disc does not grow with the text scale, so the
+                      // glyph may only grow as far as still fits inside it.
+                      textScaler: MediaQuery.textScalerOf(
+                        context,
+                      ).clamp(maxScaleFactor: 1.3),
                       style: const TextStyle(fontSize: _glyphSize, height: 1),
                     ),
                   ),
