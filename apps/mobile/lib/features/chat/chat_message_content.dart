@@ -43,6 +43,42 @@ part 'chat_location_preview.dart';
 
 http.Client _createLocationTileClient(String accountId) => http.Client();
 
+/// What a bubble derives from its message before any styling.
+typedef _RenderedMessage = ({
+  String serverUrl,
+  ServerBase server,
+  RichChatDocument document,
+  ({List<Uri> references, bool hasOverflow}) giphy,
+  List<Uri> references,
+});
+
+/// Kept per message instance: a bubble is rebuilt whenever the pane is, and
+/// parsing the markdown again for an unchanged message was most of that
+/// rebuild. Entries go with the message they belong to.
+final _renderedMessages = Expando<_RenderedMessage>();
+
+_RenderedMessage _renderMessage(StoredAccount account, ChatMessage message) {
+  final cached = _renderedMessages[message];
+  if (cached != null && cached.serverUrl == account.serverUrl) {
+    return cached;
+  }
+  final server = ServerBase.parse(account.serverUrl);
+  final document = renderRichChatMessage(
+    message: message.message,
+    markdownEnabled:
+        message.markdown == true || exactGiphyResource(message.message) != null,
+    parameters: message.messageParameters,
+    server: server,
+  );
+  return _renderedMessages[message] = (
+    serverUrl: account.serverUrl,
+    server: server,
+    document: document,
+    giphy: _giphyReferences(document),
+    references: _messageReferences(message, document),
+  );
+}
+
 final class ChatMessageContent extends StatelessWidget {
   const ChatMessageContent({
     super.key,
@@ -79,13 +115,8 @@ final class ChatMessageContent extends StatelessWidget {
     if (parsed == null) {
       return Text(fallbackText, style: TextStyle(color: foregroundColor));
     }
-    final exactGiphyReference = exactGiphyResource(parsed.message);
-    final document = renderRichChatMessage(
-      message: parsed.message,
-      markdownEnabled: parsed.markdown == true || exactGiphyReference != null,
-      parameters: parsed.messageParameters,
-      server: ServerBase.parse(account.serverUrl),
-    );
+    final rendered = _renderMessage(account, parsed);
+    final document = rendered.document;
     final attachments = parsed.messageParameters.entries
         .where((entry) => entry.value.type == 'file')
         .toList(growable: false);
@@ -98,8 +129,8 @@ final class ChatMessageContent extends StatelessWidget {
               _mimeType(attachments.single.value),
             ) !=
             null;
-    final giphySelection = _giphyReferences(document);
-    final references = _messageReferences(parsed, document);
+    final giphySelection = rendered.giphy;
+    final references = rendered.references;
     return _PollViewerScope(
       account: account,
       message: parsed,
@@ -151,7 +182,7 @@ final class ChatMessageContent extends StatelessWidget {
                 account: account,
                 target: ReferenceResolutionTarget(
                   accountId: account.id,
-                  server: ServerBase.parse(account.serverUrl),
+                  server: rendered.server,
                   reference: references[index],
                 ),
                 index: index,

@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -270,15 +271,30 @@ void main() {
             widget.parsed as ChatMessage?,
     };
 
+    // Likewise for the rendered markdown each bubble lays out.
+    List<Object> rendered() => [
+      for (final widget in tester.widgetList<RichChatDocumentContent>(
+        find.byType(RichChatDocumentContent),
+      ))
+        widget.document,
+    ];
+
     final first = decoded();
+    final firstRendered = rendered();
     expect(first.length, greaterThan(2));
+    expect(firstRendered.length, greaterThan(2));
     final pane = tester.element(find.byType(ChatRoomPane));
     for (var round = 0; round < 3; round++) {
       pane.markNeedsBuild();
       await tester.pump();
     }
     final rebuilt = decoded();
+    final rebuiltRendered = rendered();
     expect(rebuilt.keys, first.keys);
+    expect(rebuiltRendered.length, firstRendered.length);
+    for (var index = 0; index < firstRendered.length; index++) {
+      expect(identical(rebuiltRendered[index], firstRendered[index]), isTrue);
+    }
     for (final id in first.keys) {
       expect(identical(rebuilt[id], first[id]), isTrue, reason: 'row $id');
     }

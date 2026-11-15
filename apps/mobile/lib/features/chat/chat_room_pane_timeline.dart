@@ -90,6 +90,15 @@ typedef _TimelineLayout = ({
   Set<int> hidden,
 });
 
+/// What the pane reads out of the conversation's JSON, each of which decodes
+/// it again.
+typedef _RoomFacts = ({
+  ChatPostingAccess postingAccess,
+  ChatTypingRoomKey? typingKey,
+  PinnedMessageState pinned,
+  int scheduledMessages,
+});
+
 /// Everything the pane derives from the current room's streams, kept across
 /// rebuilds. The pane rebuilds many times per send, and each of these is
 /// linear in the room's cached history.
@@ -98,6 +107,8 @@ final class _TimelineCache {
   final visible = _Memo<List<CachedChatMessage>>();
   final attachments = _Memo<List<PendingAttachmentBatch>>();
   final layout = _Memo<_TimelineLayout>();
+  final room = _Memo<_RoomFacts>();
+  final canShare = _Memo<bool>();
   final Map<int, (String, ChatMessage?)> _parsed = {};
 
   /// Decodes a row once per `rawJson`; an edit, reaction or delete rewrites
@@ -126,6 +137,8 @@ final class _TimelineCache {
     visible.clear();
     attachments.clear();
     layout.clear();
+    room.clear();
+    canShare.clear();
     _parsed.clear();
   }
 }
@@ -238,7 +251,9 @@ final class _ChatTimeline extends StatelessWidget {
       attachments,
       inlineReplies,
       anchorMessageId,
-      account,
+      // Not the account row: it is rewritten on every sync.
+      account.id,
+      account.serverUrl,
     ), _layout);
     Widget buildAt(BuildContext context, int chronologicalIndex) {
       if (hasOlder && chronologicalIndex == 0) {

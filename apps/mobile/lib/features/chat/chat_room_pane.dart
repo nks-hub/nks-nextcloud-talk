@@ -666,9 +666,21 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     // chat permission can be taken away from one participant, and a lobby
     // holds everyone but moderators. Both used to leave the composer open,
     // so the refusal only showed up as a failed send.
-    final postingAccess = ChatPostingAccess.fromCachedConversation(
-      liveConversation,
+    final roomFacts = _timelineCache.room(
+      (widget.account, liveConversation),
+      () => (
+        postingAccess: ChatPostingAccess.fromCachedConversation(
+          liveConversation,
+        ),
+        typingKey: chatTypingRoomKeyFor(
+          account: widget.account,
+          conversation: liveConversation,
+        ),
+        pinned: PinnedMessageState.fromCachedConversation(liveConversation),
+        scheduledMessages: scheduledMessageCount(liveConversation),
+      ),
     );
+    final postingAccess = roomFacts.postingAccess;
     final readOnly = !postingAccess.canPost;
     // Opens the HPB chat relay for this room when the server has one. It
     // delivers nothing to the widget tree: the messages reach the timeline
@@ -679,10 +691,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         roomToken: widget.conversation.token,
       )),
     );
-    final typingKey = chatTypingRoomKeyFor(
-      account: widget.account,
-      conversation: liveConversation,
-    );
+    final typingKey = roomFacts.typingKey;
     _setTypingScope(
       typingKey,
       canPost: !readOnly && TickerMode.valuesOf(context).enabled,
@@ -717,7 +726,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final profileCanDelete = actionsProfile?.delete ?? false;
     final profileCanDeleteAny = actionsProfile?.deleteAny ?? false;
     final profileCanReact = !readOnly && (actionsProfile?.canReact ?? false);
-    final pinned = PinnedMessageState.fromCachedConversation(liveConversation);
+    final pinned = roomFacts.pinned;
     // Pins are a whole-room concept, so a thread pane neither shows nor
     // offers them; the root room pane owns that.
     final inRootRoom = widget.threadId == null;
@@ -982,9 +991,12 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       ),
     ];
     final quickEmoji =
-        ownTalkConversationCanShare(
-          roomType: widget.conversation.roomType,
-          rawJson: widget.conversation.rawJson,
+        _timelineCache.canShare(
+          (widget.conversation.roomType, widget.conversation.rawJson),
+          () => ownTalkConversationCanShare(
+            roomType: widget.conversation.roomType,
+            rawJson: widget.conversation.rawJson,
+          ),
         )
         ? ref.watch(
             ownTalkRoomExtrasProvider((
@@ -1069,7 +1081,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
             onOpen: (messageId) => unawaited(_jumpToMessage(messageId)),
             onHide: (messageId) => unawaited(_hidePinnedMessage(messageId)),
           ),
-          if (profileCanSchedule && scheduledMessageCount(liveConversation) > 0)
+          if (profileCanSchedule && roomFacts.scheduledMessages > 0)
             ListTile(
               key: const Key('open-scheduled-messages'),
               dense: true,
