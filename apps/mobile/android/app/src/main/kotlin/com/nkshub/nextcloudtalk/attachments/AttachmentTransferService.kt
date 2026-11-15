@@ -15,7 +15,8 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 /**
- * Keeps the process out of the cached-app freezer while attachments upload.
+ * Keeps the process out of the cached-app freezer while attachments upload
+ * or a text message is on its way to the server.
  *
  * Android freezes a backgrounded app about ten seconds after it leaves the
  * screen, and the system photo picker alone is enough to send it there. A
@@ -23,7 +24,9 @@ import io.flutter.plugin.common.MethodChannel
  * that ends after a few kilobytes, and the upload sits in "Sending" until the
  * app has been back in front long enough for the idle timeout to notice. The
  * upload itself runs in Dart; this service only holds the process in the
- * foreground while it does.
+ * foreground while it does. A text message sent the moment before the app is
+ * left needs the same few seconds: frozen, its request never completes and
+ * the message waits for the app to be opened again.
  */
 class AttachmentTransferService : Service() {
 

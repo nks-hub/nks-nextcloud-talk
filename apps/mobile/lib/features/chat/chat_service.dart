@@ -54,7 +54,9 @@ final class ChatService {
     required HttpNextcloudApi api,
     Uuid? uuid,
     int absenceGraceSeconds = textSendAbsenceGraceSeconds,
-  }) : _accounts = accounts,
+    void Function(bool active)? reportSendActivity,
+  }) : _reportSendActivity = reportSendActivity,
+       _accounts = accounts,
        _chat = chat,
        _credentials = credentials,
        _api = api,
@@ -78,6 +80,22 @@ final class ChatService {
 
   /// The contract's grace period. Only tests shorten it.
   final int _absenceGraceSeconds;
+
+  /// Told when the first text send starts and when the last one has been
+  /// delivered or given up for now, so the platform can keep the process
+  /// alive in between. A send waiting for its retry holds nothing.
+  final void Function(bool active)? _reportSendActivity;
+  int _sendsInFlight = 0;
+
+  void _sendActivity(int change) {
+    final before = _sendsInFlight > 0;
+    _sendsInFlight += change;
+    final active = _sendsInFlight > 0;
+    if (before != active) {
+      _reportSendActivity?.call(active);
+    }
+  }
+
   final Map<String, Future<void>> _roomTails = {};
   final Map<String, Future<ChatSynchronizationResult>> _syncInFlight = {};
   final Map<String, _SharedLivePoll> _liveNetworkPolls = {};
@@ -385,6 +403,8 @@ final class ChatService {
     int? emojiSizeStep,
   }) {
     final key = _roomKey(accountId, roomToken);
+    // Held from the tap: the app may be left before the message is admitted.
+    _sendActivity(1);
     // Admission has a lane of its own. On the room lane it would queue behind
     // the previous message's request, and a send into a tunnel would hold the
     // composer for as long as that request takes to fail.
@@ -488,10 +508,16 @@ final class ChatService {
         // Also when the capabilities came from storage because the server
         // could not be asked: a send that finds no network ends unsent and
         // arms its own retry, where waiting here left it to chance.
-        unawaited(_deliverPending(prepared, threadId: threadId));
+        _sendActivity(1);
+        unawaited(
+          _deliverPending(
+            prepared,
+            threadId: threadId,
+          ).whenComplete(() => _sendActivity(-1)),
+        );
         return operationId;
       }, threadId: threadId);
-    });
+    }).whenComplete(() => _sendActivity(-1));
   }
 
   /// Empties the room's outbox after an admission, without the caller waiting

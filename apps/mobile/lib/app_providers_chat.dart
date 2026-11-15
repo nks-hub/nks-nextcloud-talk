@@ -12,12 +12,25 @@ final attachmentRoomJobsProvider = StreamProvider.autoDispose
           );
     });
 
+/// The one keep-alive of the process, shared by everything that sends, so
+/// an upload finishing does not release it under a message still on its way.
+/// Android only: nothing else freezes the app seconds after it is left.
+final transferKeepAliveProvider = Provider<AttachmentTransferKeepAlive?>((ref) {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+    return null;
+  }
+  final keepAlive = AttachmentTransferKeepAlive();
+  ref.onDispose(keepAlive.dispose);
+  return keepAlive;
+});
+
 final chatServiceProvider = Provider<ChatService>((ref) {
   final service = ChatService(
     accounts: ref.watch(accountRepositoryProvider),
     chat: ref.watch(chatRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
     api: ref.watch(nextcloudApiProvider),
+    reportSendActivity: ref.watch(transferKeepAliveProvider)?.holder(),
   );
   ref.onDispose(() => unawaited(service.close()));
   return service;
@@ -216,9 +229,7 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
 ) async {
   final source = await ref.watch(attachmentSourceProvider.future);
   final chat = ref.watch(chatServiceProvider);
-  final keepAlive = !kIsWeb && defaultTargetPlatform == TargetPlatform.android
-      ? AttachmentTransferKeepAlive()
-      : null;
+  final keepAlive = ref.watch(transferKeepAliveProvider);
   final service = AttachmentService(
     repository: ref.watch(attachmentRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
@@ -234,7 +245,7 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
               roomToken: roomToken.value,
               threadId: threadId,
             ),
-    reportTransferActivity: keepAlive?.report,
+    reportTransferActivity: keepAlive?.holder(),
     inFlightBytes: ref.watch(attachmentInFlightBytesProvider),
   );
   // A network hint or a resumed app is worth one more attempt for uploads
@@ -255,7 +266,6 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
     ),
   );
   ref.onDispose(() {
-    keepAlive?.dispose();
     unawaited(readers.cancel());
     for (final wake in wakes) {
       unawaited(wake.cancel());
