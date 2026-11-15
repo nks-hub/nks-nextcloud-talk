@@ -480,7 +480,15 @@ final class ChatService {
   /// [_processPending] orders it against every other delivery. A failure is
   /// recorded on the room and on the operation exactly as a drain's would be,
   /// and the next wake picks the rows up again.
-  Future<void> _deliverPending(_PreparedChat prepared, {int? threadId}) async {
+  ///
+  /// [clearsRoomError] is false for a caller whose own outcome decides what
+  /// the room shows: a delivery with nothing to send would otherwise wipe an
+  /// error that caller is about to record or has just recorded.
+  Future<void> _deliverPending(
+    _PreparedChat prepared, {
+    int? threadId,
+    bool clearsRoomError = true,
+  }) async {
     final accountId = prepared.account.id;
     final roomToken = prepared.room.token.value;
     try {
@@ -489,6 +497,7 @@ final class ChatService {
         roomToken,
         () => _processPending(prepared),
         threadId: threadId,
+        clearsRoomError: clearsRoomError,
       );
     } on Object {
       // Persisted by the wrapper, or the account went away underneath.
@@ -1031,10 +1040,12 @@ final class ChatService {
     String roomToken,
     Future<T> Function() action, {
     int? threadId,
+    bool clearsRoomError = true,
   }) async {
     try {
       final result = await action();
       _ensureAccountActive(accountId);
+      if (!clearsRoomError) return result;
       if (result == ChatSynchronizationResult.deferred) return result;
       await _chat.clearRoomError(
         accountId: accountId,

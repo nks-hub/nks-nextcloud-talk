@@ -278,7 +278,13 @@ extension _ChatServiceLiveRuntime on ChatService {
           // Not awaited: this holds the room lane, and waiting here behind a
           // send that hangs would stop every later message from being
           // applied and the next poll from starting.
-          unawaited(_deliverPending(prepared, threadId: prepared.threadId));
+          unawaited(
+            _deliverPending(
+              prepared,
+              threadId: prepared.threadId,
+              clearsRoomError: false,
+            ),
+          );
         }
         return _chatReadResult(outcome);
       },
