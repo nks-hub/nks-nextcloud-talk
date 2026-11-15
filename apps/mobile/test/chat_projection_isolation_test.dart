@@ -448,7 +448,122 @@ void main() {
     expect(otherAccountRoot.futureCursor, '888');
     expect(otherAccountView.futureCursor, '888');
   });
+
+  test('a poll round that changes nothing writes nothing', () async {
+    for (final scopeKey in const ['root', 'network-root']) {
+      await _insertScope(
+        database,
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        scopeKey: scopeKey,
+        threadId: null,
+        cursor: 20,
+      );
+    }
+    await _insertMessage(
+      database,
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+    await _insertOperation(database, id: 1, updatedAtMillis: 1);
+
+    // The first round still has the sync timestamp to record.
+    expect(
+      await repository.applyChatGetResponse(_notModifiedResponse()),
+      ChatMergeOutcome.converged,
+    );
+
+    final updates = <Set<TableUpdate>>[];
+    final subscription = database.tableUpdates().listen(updates.add);
+    addTearDown(subscription.cancel);
+    expect(
+      await repository.applyChatGetResponse(_notModifiedResponse()),
+      ChatMergeOutcome.converged,
+    );
+    await pumpEventQueue();
+
+    expect(updates, isEmpty);
+    final operation = await database.select(database.textSendOperations).get();
+    expect(operation.single.updatedAtMillis, 1);
+  });
+
+  test('only old completed text sends are pruned', () async {
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final old = now - const Duration(days: 8).inMilliseconds;
+    await _insertOperation(database, id: 1, updatedAtMillis: old);
+    await _insertOperation(
+      database,
+      id: 2,
+      updatedAtMillis: now - const Duration(days: 6).inMilliseconds,
+    );
+    await _insertOperation(
+      database,
+      id: 3,
+      updatedAtMillis: old,
+      outboxState: 'failed',
+    );
+    await _insertOperation(
+      database,
+      id: 4,
+      updatedAtMillis: old,
+      outboxState: 'awaitingConfirmation',
+    );
+
+    await repository.recoverInterruptedTextSends('account-a');
+
+    final rows = await database.select(database.textSendOperations).get();
+    expect(rows.map((row) => row.enqueueSequence).toSet(), {2, 3, 4});
+  });
 }
+
+Future<void> _insertOperation(
+  AppDatabase database, {
+  required int id,
+  required int updatedAtMillis,
+  String outboxState = 'completed',
+}) {
+  return database
+      .into(database.textSendOperations)
+      .insert(
+        TextSendOperationsCompanion.insert(
+          accountId: 'account-a',
+          operationId: '00000000-0000-4000-8000-00000000000$id',
+          roomToken: 'rooma123',
+          referenceId: '11111111-1111-4111-8111-11111111111$id',
+          message: 'Synthetic outbox text',
+          replayContractRevision: 'fixture-revision',
+          enqueueSequence: id,
+          outboxState: outboxState,
+          attemptCount: 1,
+          messageIdsJson: outboxState == 'completed' ? '[20]' : '[]',
+          duplicateRiskAcknowledged: false,
+          createdAtMillis: updatedAtMillis,
+          updatedAtMillis: updatedAtMillis,
+        ),
+      );
+}
+
+ChatGetResponse _notModifiedResponse() => decodeChatGetResponse(
+  request: ChatFetchRequest(
+    accountId: AccountId.parse('account-a'),
+    requestId: ChatRequestId.parse('projection-not-modified'),
+    server: ServerBase.parse('https://cloud.example.invalid'),
+    roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+    profile: ChatCapabilityProfile.fromTalkFeatures(const <Object?>[
+      'chat-v2',
+      'chat-replies',
+    ], federated: false),
+    direction: ChatFetchDirection.future,
+    cursor: ChatCursor.parse('20'),
+    lastCommonRead: ChatCursor.parse('0'),
+    limit: 200,
+    includeLastKnown: false,
+    timeoutSeconds: 0,
+    interactive: true,
+  ),
+  statusCode: 304,
+  body: Uint8List(0),
+);
 
 Future<void> _insertScope(
   AppDatabase database, {

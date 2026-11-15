@@ -178,26 +178,29 @@ extension _ChatRepositoryProjection on ChatRepository {
       if (viewScope != null) ..._decodeBlocks(viewScope.blocksJson),
       ...extraBlocks,
     ]);
+    final companion = ChatScopesCompanion.insert(
+      accountId: networkScope.accountId,
+      roomToken: networkScope.roomToken,
+      scopeKey: _scopeKey(viewThreadId),
+      threadId: Value(viewThreadId),
+      historyCursor: blocks.first.start.value,
+      futureCursor: blocks.last.end.value,
+      lastCommonRead: networkScope.lastCommonRead,
+      lastReadMessage: networkScope.lastReadMessage,
+      unreadMessages: networkScope.unreadMessages,
+      hasHistory: networkScope.hasHistory,
+      futureConverged: networkScope.futureConverged,
+      blocksJson: _encodeBlocks(blocks),
+      lastSyncedAtMillis: Value(networkScope.lastSyncedAtMillis),
+      lastSyncError: Value(networkScope.lastSyncError),
+    );
+    // An identical upsert would still wake every watcher of the table.
+    if (viewScope?.toCompanion(false) == companion) {
+      return;
+    }
     await _database
         .into(_database.chatScopes)
-        .insertOnConflictUpdate(
-          ChatScopesCompanion.insert(
-            accountId: networkScope.accountId,
-            roomToken: networkScope.roomToken,
-            scopeKey: _scopeKey(viewThreadId),
-            threadId: Value(viewThreadId),
-            historyCursor: blocks.first.start.value,
-            futureCursor: blocks.last.end.value,
-            lastCommonRead: networkScope.lastCommonRead,
-            lastReadMessage: networkScope.lastReadMessage,
-            unreadMessages: networkScope.unreadMessages,
-            hasHistory: networkScope.hasHistory,
-            futureConverged: networkScope.futureConverged,
-            blocksJson: _encodeBlocks(blocks),
-            lastSyncedAtMillis: Value(networkScope.lastSyncedAtMillis),
-            lastSyncError: Value(networkScope.lastSyncError),
-          ),
-        );
+        .insertOnConflictUpdate(companion);
   }
 
   Future<bool> _cachedRootIsOrdinary({
@@ -239,9 +242,23 @@ extension _ChatRepositoryProjection on ChatRepository {
     final scopeRows = await (_database.select(
       _database.chatScopes,
     )..where((row) => row.accountId.equals(accountId))).get();
-    final messageRows = await (_database.select(
-      _database.cachedChatMessages,
-    )..where((row) => row.accountId.equals(accountId))).get();
+    final cached = _database.cachedChatMessages;
+    final messageRows = [
+      for (final row
+          in await (_database.selectOnly(cached)
+                ..addColumns([
+                  cached.roomToken,
+                  cached.threadId,
+                  cached.messageId,
+                ])
+                ..where(cached.accountId.equals(accountId)))
+              .get())
+        (
+          roomToken: row.read(cached.roomToken)!,
+          threadId: row.read(cached.threadId),
+          messageId: row.read(cached.messageId)!,
+        ),
+    ];
     final operationRows = await (_database.select(
       _database.textSendOperations,
     )..where((row) => row.accountId.equals(accountId))).get();
@@ -366,83 +383,115 @@ extension _ChatRepositoryProjection on ChatRepository {
     Iterable<ChatMessage> messages = const [],
     ChatScopeKey? syncedScope,
   }) async {
-    await (_database.update(
-      _database.chatCapabilities,
-    )..where((row) => row.accountId.equals(account.accountId.value))).write(
-      ChatCapabilitiesCompanion(
-        generation: Value(account.capabilityGeneration),
-        credentialGeneration: Value(account.credentialGeneration),
-        lane: Value(account.lane.name),
-        updatedAtMillis: Value(DateTime.now().toUtc().millisecondsSinceEpoch),
-      ),
-    );
+    final accountId = account.accountId.value;
+    // Rows that would not change are left alone on purpose: any write, even
+    // an identical one, wakes every watcher of the table.
+    await (_database.update(_database.chatCapabilities)..where(
+          (row) =>
+              row.accountId.equals(accountId) &
+              (row.generation.equals(account.capabilityGeneration).not() |
+                  row.credentialGeneration
+                      .equals(account.credentialGeneration)
+                      .not() |
+                  row.lane.equals(account.lane.name).not()),
+        ))
+        .write(
+          ChatCapabilitiesCompanion(
+            generation: Value(account.capabilityGeneration),
+            credentialGeneration: Value(account.credentialGeneration),
+            lane: Value(account.lane.name),
+            updatedAtMillis: Value(
+              DateTime.now().toUtc().millisecondsSinceEpoch,
+            ),
+          ),
+        );
 
+    final storedScopes = {
+      for (final row in await (_database.select(
+        _database.chatScopes,
+      )..where((row) => row.accountId.equals(accountId))).get())
+        (row.roomToken, row.scopeKey): row,
+    };
     final syncedAt = DateTime.now().toUtc().millisecondsSinceEpoch;
     for (final entry in account.scopes.entries) {
       final key = entry.key;
       final scope = entry.value;
       final wasSynced = syncedScope == key;
+      final scopeKey = _networkScopeKey(key.threadId);
+      final companion = ChatScopesCompanion.insert(
+        accountId: accountId,
+        roomToken: key.roomToken.value,
+        scopeKey: scopeKey,
+        threadId: Value(key.threadId),
+        historyCursor: scope.historyCursor.value,
+        futureCursor: scope.futureCursor.value,
+        lastCommonRead: scope.lastCommonRead?.value ?? '0',
+        lastReadMessage: scope.lastReadMessage,
+        unreadMessages: scope.unreadMessages,
+        hasHistory: scope.hasHistory,
+        futureConverged: scope.futureConverged,
+        blocksJson: _encodeBlocks(scope.blocks),
+        lastSyncedAtMillis: wasSynced ? Value(syncedAt) : const Value.absent(),
+        lastSyncError: wasSynced ? const Value(null) : const Value.absent(),
+      );
+      final stored = storedScopes[(key.roomToken.value, scopeKey)];
+      // Readers only ask whether a scope was ever synced, so one that already
+      // is does not need a fresh timestamp.
+      final syncSettled =
+          !wasSynced ||
+          (stored?.lastSyncedAtMillis != null && stored?.lastSyncError == null);
+      if (stored != null &&
+          syncSettled &&
+          stored.toCompanion(false) ==
+              companion.copyWith(
+                lastSyncedAtMillis: Value(stored.lastSyncedAtMillis),
+                lastSyncError: Value(stored.lastSyncError),
+              )) {
+        continue;
+      }
       await _database
           .into(_database.chatScopes)
-          .insertOnConflictUpdate(
-            ChatScopesCompanion.insert(
-              accountId: account.accountId.value,
-              roomToken: key.roomToken.value,
-              scopeKey: _networkScopeKey(key.threadId),
-              threadId: Value(key.threadId),
-              historyCursor: scope.historyCursor.value,
-              futureCursor: scope.futureCursor.value,
-              lastCommonRead: scope.lastCommonRead?.value ?? '0',
-              lastReadMessage: scope.lastReadMessage,
-              unreadMessages: scope.unreadMessages,
-              hasHistory: scope.hasHistory,
-              futureConverged: scope.futureConverged,
-              blocksJson: _encodeBlocks(scope.blocks),
-              lastSyncedAtMillis: wasSynced
-                  ? Value(syncedAt)
-                  : const Value.absent(),
-              lastSyncError: wasSynced
-                  ? const Value(null)
-                  : const Value.absent(),
-            ),
-          );
+          .insertOnConflictUpdate(companion);
     }
 
+    final storedOperations = {
+      for (final row in await (_database.select(
+        _database.textSendOperations,
+      )..where((row) => row.accountId.equals(accountId))).get())
+        row.operationId: row,
+    };
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
     for (final operation in account.operations.values) {
-      final existing =
-          await (_database.select(_database.textSendOperations)..where(
-                (row) =>
-                    row.accountId.equals(account.accountId.value) &
-                    row.operationId.equals(operation.operationId.value),
-              ))
-              .getSingleOrNull();
-      final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+      final existing = storedOperations[operation.operationId.value];
+      final companion = TextSendOperationsCompanion.insert(
+        accountId: accountId,
+        operationId: operation.operationId.value,
+        roomToken: operation.roomToken.value,
+        referenceId: operation.referenceId.value,
+        message: operation.message,
+        replayContractRevision: operation.replayContractRevision,
+        silent: Value(operation.silent),
+        enqueueSequence: operation.enqueueSequence,
+        outboxState: operation.state.name,
+        attemptCount: operation.attemptCount,
+        messageIdsJson: jsonEncode(operation.messageIds),
+        duplicateRiskAcknowledged: operation.duplicateRiskAcknowledged,
+        errorClass: Value(operation.errorClass),
+        nextAttemptAt: Value(operation.nextAttemptAt),
+        replyTo: Value(operation.replyTo),
+        threadId: Value(operation.threadId),
+        replyToToken: Value(operation.replyToToken?.value),
+        parentRoomToken: Value(operation.parentRoomToken?.value),
+        createdAtMillis: existing?.createdAtMillis ?? now,
+        updatedAtMillis: now,
+      );
+      if (existing?.toCompanion(false).copyWith(updatedAtMillis: Value(now)) ==
+          companion) {
+        continue;
+      }
       await _database
           .into(_database.textSendOperations)
-          .insertOnConflictUpdate(
-            TextSendOperationsCompanion.insert(
-              accountId: account.accountId.value,
-              operationId: operation.operationId.value,
-              roomToken: operation.roomToken.value,
-              referenceId: operation.referenceId.value,
-              message: operation.message,
-              replayContractRevision: operation.replayContractRevision,
-              silent: Value(operation.silent),
-              enqueueSequence: operation.enqueueSequence,
-              outboxState: operation.state.name,
-              attemptCount: operation.attemptCount,
-              messageIdsJson: jsonEncode(operation.messageIds),
-              duplicateRiskAcknowledged: operation.duplicateRiskAcknowledged,
-              errorClass: Value(operation.errorClass),
-              nextAttemptAt: Value(operation.nextAttemptAt),
-              replyTo: Value(operation.replyTo),
-              threadId: Value(operation.threadId),
-              replyToToken: Value(operation.replyToToken?.value),
-              parentRoomToken: Value(operation.parentRoomToken?.value),
-              createdAtMillis: existing?.createdAtMillis ?? now,
-              updatedAtMillis: now,
-            ),
-          );
+          .insertOnConflictUpdate(companion);
     }
 
     final messageList = messages.toList(growable: false);

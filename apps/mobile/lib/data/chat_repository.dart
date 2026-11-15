@@ -17,6 +17,12 @@ part 'chat_repository_read_markers.dart';
 const String _rootScopeKey = 'root';
 const String _networkRootScopeKey = 'network-root';
 
+/// How long a delivered text send stays in the outbox table.
+///
+/// A completed row only feeds the delivery tick of its own message, and the
+/// timeline derives the same tick from the server once the row is gone.
+const Duration _completedTextSendRetention = Duration(days: 7);
+
 final class ClaimedTextSend {
   const ClaimedTextSend({required this.request, required this.operation});
 
@@ -37,9 +43,10 @@ final class StoredOutgoingTextMessage {
 }
 
 final class ChatRepository {
-  const ChatRepository(this._database);
+  ChatRepository(this._database);
 
   final AppDatabase _database;
+  bool _completedTextSendsPruned = false;
 
   /// Messages of a room, or of one thread when [threadId] is given.
   ///
@@ -846,6 +853,9 @@ final class ChatRepository {
 
   Future<void> recoverInterruptedTextSends(String accountId) {
     return _database.transaction(() async {
+      // Before the snapshot is read, or a later persist would write the
+      // pruned rows straight back.
+      await _pruneCompletedTextSendsOnce();
       var snapshot = await _loadRuntime(accountId);
       final typedAccountId = AccountId.parse(accountId);
       final sending = snapshot.accounts[typedAccountId]!.operations.values
@@ -869,6 +879,23 @@ final class ChatRepository {
         await _persistAccount(snapshot.accounts[typedAccountId]!);
       }
     });
+  }
+
+  Future<void> _pruneCompletedTextSendsOnce() async {
+    if (_completedTextSendsPruned) {
+      return;
+    }
+    _completedTextSendsPruned = true;
+    final cutoff = DateTime.now()
+        .toUtc()
+        .subtract(_completedTextSendRetention)
+        .millisecondsSinceEpoch;
+    await (_database.delete(_database.textSendOperations)..where(
+          (operation) =>
+              operation.outboxState.equals(TextSendOutboxState.completed.name) &
+              operation.updatedAtMillis.isSmallerThanValue(cutoff),
+        ))
+        .go();
   }
 
   /// Drops a pending text send from the outbox for good.
@@ -934,7 +961,8 @@ final class ChatRepository {
           (scope) =>
               scope.accountId.equals(accountId) &
               scope.roomToken.equals(roomToken) &
-              scope.scopeKey.equals(_scopeKey(threadId)),
+              scope.scopeKey.equals(_scopeKey(threadId)) &
+              scope.lastSyncError.isNotNull(),
         ))
         .write(const ChatScopesCompanion(lastSyncError: Value(null)));
   }
