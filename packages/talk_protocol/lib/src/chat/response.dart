@@ -507,31 +507,35 @@ ChatSendResponse decodeChatSendResponse({
   ChatResponseHeaders? headers,
 }) {
   final responseHeaders = headers ?? ChatResponseHeaders.fromMap(const {});
-  // Decided on the status alone, before the body is parsed: these answers come
-  // from in front of the controller (authentication, permission, lobby, rate
-  // limit, maintenance mode), often without an OCS body, and none of them
-  // stored the message.
+  // Decided before the body is parsed, because these refusals often carry no
+  // OCS body and each of them is given before the request reaches the
+  // controller: authentication, a rate limiter, and maintenance mode, which
+  // Nextcloud marks with a header of its own. A 503 without that header may
+  // come from a proxy whose origin had already stored the message, so it is
+  // not among them.
   if (statusCode == 401) {
     return _sendResult(
       request,
       ChatSendClassification.reauthenticationRequired,
     );
   }
-  if (statusCode == 429 || statusCode == 503) {
+  if (statusCode == 429 ||
+      (statusCode == 503 &&
+          responseHeaders.value('X-Nextcloud-Maintenance-Mode') == '1')) {
     return _sendResult(
       request,
       ChatSendClassification.rateLimited,
       retryAfterSeconds: responseHeaders.retryAfterSeconds,
     );
   }
-  if (const <int>{403, 404, 412}.contains(statusCode)) {
-    return _sendResult(request, ChatSendClassification.deterministicFailure);
-  }
+  // From here on only an OCS envelope speaks for the server. A bare 403 or
+  // 404 from something in front of it fails to decode and stays ambiguous.
   final envelope = _decodeOcsEnvelope(body);
   final errorCode = envelope.data is Map<String, Object?>
       ? (envelope.data! as Map<String, Object?>)['error']
       : null;
-  if ((statusCode == 400 && errorCode == 'reply-to') ||
+  if (const <int>{403, 404, 412}.contains(statusCode) ||
+      (statusCode == 400 && errorCode == 'reply-to') ||
       (statusCode == 413 && errorCode == 'message')) {
     return _sendResult(request, ChatSendClassification.deterministicFailure);
   }

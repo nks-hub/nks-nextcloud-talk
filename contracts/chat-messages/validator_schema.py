@@ -376,7 +376,10 @@ def classify_send_response(
     error_code = raw_data.get("error") if isinstance(raw_data, dict) else None
     if status == "401":
         return {"classification": "reauth", "messages": [], "messageId": None}
-    if status in {"429", "503"}:
+    if status == "429" or (
+        status == "503"
+        and lookup_header(headers, "X-Nextcloud-Maintenance-Mode") == "1"
+    ):
         raw_retry_after = lookup_header(headers, "Retry-After")
         retry_after_seconds = None
         if raw_retry_after is not None and DECIMAL_CURSOR.fullmatch(raw_retry_after):

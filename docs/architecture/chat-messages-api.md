@@ -218,8 +218,9 @@ The admission rejects an unknown kind, a different revision or a missing capabil
 | The body may have been sent | awaitingConfirmation | No automatic POST |
 | A restart in sending | awaitingConfirmation | The process does not know the server outcome |
 | HTTP 400 `error=message` | awaitingConfirmation | The same code can also arise after the comment was saved |
-| HTTP 429 or 503 | retryable | The request is refused before the save (rate limit, maintenance mode); Retry-After or a local bounded backoff is used |
-| HTTP 403, 404 or 412 | failed | Permission, missing room or actor, and the lobby refuse the request before the save |
+| HTTP 429, or 503 with `X-Nextcloud-Maintenance-Mode: 1` | retryable | The request is refused before the save (rate limit, maintenance mode); Retry-After or a local bounded backoff is used |
+| HTTP 403, 404 or 412 with an OCS envelope | failed | Permission, missing room or actor, and the lobby refuse the request before the save |
+| HTTP 403, 404, 412 or 503 without the server's own mark | awaitingConfirmation | A proxy can answer this way after the origin stored the message |
 | Another HTTP 5xx or an unclear OCS error | awaitingConfirmation | It does not prove that the save did not happen |
 | One authoritative match | completed | The specific messageId is stored |
 | Several referenceId matches | completed | The lowest ID is the message; the copies come from a repeated ambiguous send and must not block the room |

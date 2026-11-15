@@ -322,21 +322,78 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       });
     }
 
-    for (final (statusCode, state, errorClass) in const [
-      (403, 'failed', 'deterministic-rejection'),
-      (404, 'failed', 'deterministic-rejection'),
-      (412, 'failed', 'deterministic-rejection'),
-      (429, 'retryable', 'rate-limited'),
-      (503, 'retryable', 'rate-limited'),
+    const proxyPage = '<html>Refused in front of Talk</html>';
+    const ocsRefusal =
+        '{"ocs":{"meta":{"status":"failure","statuscode":403},'
+        '"data":[]}}';
+    const retryAfter = <String, String>{'retry-after': '7'};
+    const maintenance = <String, String>{
+      'retry-after': '7',
+      'x-nextcloud-maintenance-mode': '1',
+    };
+    for (final (statusCode, source, body, headers, state, errorClass) in const [
+      (
+        403,
+        'the server',
+        ocsRefusal,
+        retryAfter,
+        'failed',
+        'deterministic-rejection',
+      ),
+      (
+        404,
+        'the server',
+        ocsRefusal,
+        retryAfter,
+        'failed',
+        'deterministic-rejection',
+      ),
+      (
+        412,
+        'the server',
+        ocsRefusal,
+        retryAfter,
+        'failed',
+        'deterministic-rejection',
+      ),
+      (
+        403,
+        'a proxy',
+        proxyPage,
+        retryAfter,
+        'awaitingConfirmation',
+        'ambiguous-transport',
+      ),
+      (
+        404,
+        'a proxy',
+        proxyPage,
+        retryAfter,
+        'awaitingConfirmation',
+        'ambiguous-transport',
+      ),
+      (429, 'a proxy', proxyPage, retryAfter, 'retryable', 'rate-limited'),
+      (
+        503,
+        'maintenance mode',
+        proxyPage,
+        maintenance,
+        'retryable',
+        'rate-limited',
+      ),
+      (
+        503,
+        'a proxy',
+        proxyPage,
+        retryAfter,
+        'awaitingConfirmation',
+        'ambiguous-transport',
+      ),
     ]) {
-      test('a send answered $statusCode without a body ends $state', () async {
+      test('a send answered $statusCode by $source ends $state', () async {
         final api = HttpNextcloudApi(
           client: _sendServer(
-            (request) => http.Response(
-              '<html>Refused in front of Talk</html>',
-              statusCode,
-              headers: const <String, String>{'retry-after': '7'},
-            ),
+            (request) => http.Response(body, statusCode, headers: headers),
           ),
         );
         addTearDown(api.close);

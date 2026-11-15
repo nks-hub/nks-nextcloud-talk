@@ -291,12 +291,18 @@ void main() {
       'roomToken': 'rooma123',
       'referenceId': '11111111-1111-4111-8111-111111111111',
     });
-    ChatSendClassification classify(int statusCode, String body) =>
-        decodeChatSendResponse(
-          request: request,
-          statusCode: statusCode,
-          body: Uint8List.fromList(utf8.encode(body)),
-        ).classification;
+    ChatSendClassification classify(
+      int statusCode,
+      String body, {
+      bool maintenance = false,
+    }) => decodeChatSendResponse(
+      request: request,
+      statusCode: statusCode,
+      body: Uint8List.fromList(utf8.encode(body)),
+      headers: ChatResponseHeaders.fromMap({
+        if (maintenance) 'x-nextcloud-maintenance-mode': '1',
+      }),
+    ).classification;
     const proxyPage = '<html>Service unavailable</html>';
     String ocsFailure(int statusCode) => jsonEncode({
       'ocs': {
@@ -310,29 +316,30 @@ void main() {
         classify(401, proxyPage),
         ChatSendClassification.reauthenticationRequired,
       );
+      expect(classify(429, proxyPage), ChatSendClassification.rateLimited);
+      expect(
+        classify(503, proxyPage, maintenance: true),
+        ChatSendClassification.rateLimited,
+      );
+    });
+
+    test('a refusal counts only inside an OCS envelope', () {
       for (final statusCode in [403, 404, 412]) {
-        expect(
-          classify(statusCode, proxyPage),
-          ChatSendClassification.deterministicFailure,
-          reason: '$statusCode',
-        );
         expect(
           classify(statusCode, ocsFailure(statusCode)),
           ChatSendClassification.deterministicFailure,
           reason: '$statusCode',
         );
-      }
-      for (final statusCode in [429, 503]) {
         expect(
-          classify(statusCode, proxyPage),
-          ChatSendClassification.rateLimited,
+          () => classify(statusCode, proxyPage),
+          throwsA(isA<TalkProtocolException>()),
           reason: '$statusCode',
         );
       }
     });
 
     test('an answer that may follow the save stays ambiguous', () {
-      for (final statusCode in [500, 502, 504]) {
+      for (final statusCode in [500, 502, 503, 504]) {
         expect(
           classify(statusCode, ocsFailure(statusCode)),
           ChatSendClassification.serverError,
