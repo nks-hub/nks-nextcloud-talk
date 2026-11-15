@@ -492,9 +492,13 @@ final clientPushCoordinatorProvider = Provider<ClientPushCoordinator?>((ref) {
   );
   final connectivityWakes = ref
       .watch(connectivityWakeEventsProvider)
-      .listen((_) => coordinator.wake());
+      .listen((_) => coordinator.reconnect());
+  final resumes = ref
+      .watch(appLifecycleResumeEventsProvider)
+      .listen((_) => coordinator.resumed());
   ref.onDispose(() {
     unawaited(connectivityWakes.cancel());
+    unawaited(resumes.cancel());
     unawaited(coordinator.dispose());
   });
 

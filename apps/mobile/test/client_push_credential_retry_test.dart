@@ -66,6 +66,9 @@ void main() {
           connectivityWakeEventsProvider.overrideWithValue(
             const Stream<void>.empty(),
           ),
+          appLifecycleResumeEventsProvider.overrideWithValue(
+            const Stream<void>.empty(),
+          ),
         ],
       );
       addTearDown(container.dispose);

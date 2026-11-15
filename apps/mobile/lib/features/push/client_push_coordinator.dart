@@ -102,6 +102,25 @@ final class ClientPushCoordinator {
     }
   }
 
+  /// For "the network changed": like [wake], and a channel that holds a
+  /// socket drops it and connects again at once. A socket opened over the old
+  /// network can be dead without a close frame, and the ping would only
+  /// notice after 30 to 60 seconds.
+  void reconnect() {
+    for (final channel in _channels.values) {
+      channel.reconnect();
+    }
+  }
+
+  /// For "the app is in front again": ends retry waits and syncs every
+  /// followed account, since nothing was listening reliably in between.
+  void resumed() {
+    wake();
+    for (final accountId in _channels.keys.toList(growable: false)) {
+      _onWakeUp(accountId);
+    }
+  }
+
   Future<void> dispose() async {
     final channels = _channels.values.toList(growable: false);
     _channels.clear();
@@ -139,6 +158,7 @@ final class ClientPushCoordinator {
         _onWakeUp(accountId);
         backoff = _firstRetry;
         final events = StreamIterator<ClientPushEvent>(session.events);
+        final drop = channel.sessionDrop = Completer<void>();
         // Bound to this session's account, so a signal can only ever reach a
         // room of the account whose socket carried it.
         final signals = session.roomSettingsSignals.listen((signal) {
@@ -153,6 +173,7 @@ final class ClientPushCoordinator {
             final hasEvent = await Future.any<bool>([
               events.moveNext(),
               channel.cancellation.then((_) => false),
+              drop.future.then((_) => false),
             ]);
             if (!hasEvent || channel.stopped) {
               break;
@@ -162,8 +183,13 @@ final class ClientPushCoordinator {
             }
           }
         } finally {
+          channel.sessionDrop = null;
           await signals.cancel();
           await events.cancel();
+          if (drop.isCompleted) {
+            channel.session = null;
+            await session.close();
+          }
         }
       } on Object {
         // Transport, token and temporary local-credential failures all become
@@ -172,6 +198,11 @@ final class ClientPushCoordinator {
       channel.session = null;
       if (channel.stopped) {
         return;
+      }
+      if (channel.reconnectNow) {
+        channel.reconnectNow = false;
+        backoff = _firstRetry;
+        continue;
       }
       final woken = channel.retryWake = Completer<void>();
       await Future.any<void>([
@@ -203,6 +234,21 @@ final class _AccountChannel {
     final waiting = retryWake;
     if (waiting != null && !waiting.isCompleted) {
       waiting.complete();
+    }
+  }
+
+  /// Set only while a session is open; completing it drops that session.
+  Completer<void>? sessionDrop;
+
+  /// One connection attempt without the retry wait, granted by [reconnect].
+  bool reconnectNow = false;
+
+  void reconnect() {
+    wake();
+    final drop = sessionDrop;
+    if (drop != null && !drop.isCompleted) {
+      reconnectNow = true;
+      drop.complete();
     }
   }
 

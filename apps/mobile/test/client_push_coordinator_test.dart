@@ -389,6 +389,62 @@ void main() {
     coordinator.wake();
   });
 
+  test('reconnect replaces an open socket at once', () async {
+    final connector = _Connector();
+    final delays = <Duration>[];
+    final woken = <String>[];
+    final coordinator = ClientPushCoordinator(
+      resolve: (_, _) async => _endpoints(),
+      fetchToken: (_, _, _) async => 'token',
+      connector: connector,
+      onWakeUp: woken.add,
+      delay: (duration) {
+        delays.add(duration);
+        return Completer<void>().future;
+      },
+    );
+
+    coordinator.follow('account-a');
+    await _settle();
+    expect(connector.sockets, hasLength(1));
+
+    coordinator.reconnect();
+    await _settle();
+    expect(connector.sockets, hasLength(2));
+    expect(connector.sockets.first.closed, isTrue);
+    expect(connector.sockets.last.closed, isFalse);
+    expect(delays, isEmpty, reason: 'no retry wait before the new socket');
+    expect(woken, <String>['account-a', 'account-a']);
+
+    await coordinator.dispose();
+    coordinator.reconnect();
+    expect(connector.sockets, hasLength(2));
+  });
+
+  test('resume syncs every followed account and keeps the socket', () async {
+    final connector = _Connector();
+    final woken = <String>[];
+    final coordinator = ClientPushCoordinator(
+      resolve: (_, _) async => _endpoints(),
+      fetchToken: (_, _, _) async => 'token',
+      connector: connector,
+      onWakeUp: woken.add,
+    );
+
+    coordinator.follow('account-a');
+    coordinator.follow('account-b');
+    await _settle();
+    woken.clear();
+
+    coordinator.resumed();
+    await _settle();
+    expect(woken, <String>['account-a', 'account-b']);
+    expect(connector.sockets, hasLength(2));
+    expect(connector.sockets.every((socket) => !socket.closed), isTrue);
+
+    await coordinator.dispose();
+  });
+
   test('a removed account stops holding a socket', () async {
     final connector = _Connector();
     final coordinator = ClientPushCoordinator(
