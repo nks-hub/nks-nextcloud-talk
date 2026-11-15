@@ -110,6 +110,9 @@ final class _NetworkAvatar extends StatelessWidget {
         : Image.memory(
             loaded.body,
             fit: BoxFit.cover,
+            // Avatars are square, so the width alone bounds the decode.
+            cacheWidth: (radius * 2 * MediaQuery.devicePixelRatioOf(context))
+                .round(),
             gaplessPlayback: true,
             errorBuilder: (_, _, _) => fallback,
           );

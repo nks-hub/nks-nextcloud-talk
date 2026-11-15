@@ -264,6 +264,9 @@ final class _ReferenceLeading extends ConsumerWidget {
         width: 40,
         height: 40,
         fit: BoxFit.cover,
+        // shortcut: decoded at twice the box so a 2:1 preview still covers it
+        // sharply; a wider one is slightly soft. Upgrade if that shows.
+        cacheWidth: (80 * MediaQuery.devicePixelRatioOf(context)).round(),
         gaplessPlayback: true,
         errorBuilder: (context, error, stackTrace) => fallback,
       ),
