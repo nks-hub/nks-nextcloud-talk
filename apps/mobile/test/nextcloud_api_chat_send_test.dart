@@ -53,6 +53,43 @@ void main() {
     expect(error.requestNotSent, isFalse);
   });
 
+  for (final (statusCode, contentLength, code) in const [
+    (302, null, NextcloudApiError.unexpectedStatus),
+    (201, 1 << 30, NextcloudApiError.responseTooLarge),
+  ]) {
+    test(
+      'a rejected $statusCode answer with an endless body still ends',
+      () async {
+        final body = StreamController<List<int>>();
+        final trickle = Timer.periodic(
+          const Duration(milliseconds: 20),
+          (_) => body.add(const [0x20]),
+        );
+        addTearDown(trickle.cancel);
+        final api = HttpNextcloudApi(
+          requestTimeout: const Duration(milliseconds: 300),
+          client: MockClient.streaming((request, sent) async {
+            await sent.drain<void>();
+            return http.StreamedResponse(
+              body.stream,
+              statusCode,
+              contentLength: contentLength,
+            );
+          }),
+        );
+        addTearDown(api.close);
+
+        final error = await failedSend(api).timeout(const Duration(seconds: 5));
+
+        expect(error.code, code);
+        // The status line settled it, whatever the body went on to do.
+        expect(error.requestNotSent, isFalse);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(body.hasListener, isFalse);
+      },
+    );
+  }
+
   test('a refused connection is provably unsent on a real socket', () async {
     final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     final closedPort = probe.port;

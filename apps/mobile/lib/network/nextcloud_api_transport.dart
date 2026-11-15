@@ -63,6 +63,9 @@ const _sipAdministrationAllowedStatusCodes = {
 };
 const _banAllowedStatusCodes = {200, 400, 401, 403, 404, 429, 503};
 const _chatReadAllowedStatusCodes = {200, 401, 404, 429, 503};
+const _discardedBodyLimitBytes = 64 * 1024;
+const _discardedBodyTimeout = Duration(seconds: 5);
+
 final Set<int> _chatSendAllowedStatusCodes = Set.unmodifiable({
   200,
   201,
@@ -362,11 +365,7 @@ abstract class _HttpNextcloudApiBase {
       unawaited(
         sending.then((late) {
           if (abandoned) {
-            unawaited(
-              late.stream.drain<void>().catchError((Object _, StackTrace _) {
-                return null;
-              }),
-            );
+            unawaited(_discardBody(late, effectiveTimeout));
           }
         }, onError: (Object _, StackTrace _) {}),
       );
@@ -395,11 +394,8 @@ abstract class _HttpNextcloudApiBase {
             request.url,
           );
         }
-        try {
-          await response.stream.timeout(effectiveTimeout).drain<void>();
-        } on TimeoutException {
-          // The invalidated request must not hold its account cleanup tail.
-        }
+        // The invalidated request must not hold its account cleanup tail.
+        await _discardBody(response, effectiveTimeout);
         throw const NextcloudApiException(NextcloudApiError.cancelled);
       }
       if (!_closed && sessionAccountId != null && sessionServer != null) {
@@ -420,7 +416,7 @@ abstract class _HttpNextcloudApiBase {
         );
       }
       if (!allowedStatusCodes.contains(response.statusCode)) {
-        await response.stream.drain<void>();
+        await _discardBody(response, effectiveTimeout);
         throw NextcloudApiException(
           NextcloudApiError.unexpectedStatus,
           statusCode: response.statusCode,
@@ -430,7 +426,7 @@ abstract class _HttpNextcloudApiBase {
       final shouldRead =
           readBodyForStatusCodes?.contains(response.statusCode) ?? true;
       if (!shouldRead) {
-        await response.stream.drain<void>();
+        await _discardBody(response, effectiveTimeout);
         if (sessionInvalidated()) {
           throw const NextcloudApiException(NextcloudApiError.cancelled);
         }
@@ -442,7 +438,7 @@ abstract class _HttpNextcloudApiBase {
       }
       final contentLength = response.contentLength;
       if (contentLength != null && contentLength > maximumBytes) {
-        await response.stream.drain<void>();
+        await _discardBody(response, effectiveTimeout);
         throw const NextcloudApiException(NextcloudApiError.responseTooLarge);
       }
       final bytes = BytesBuilder(copy: false);
@@ -472,6 +468,36 @@ abstract class _HttpNextcloudApiBase {
       // Native connection setup can fail before IOClient wraps the socket error.
       throw const NextcloudApiException(NextcloudApiError.network);
     }
+  }
+
+  /// Reads a body nobody wants to its end, so the connection can be reused,
+  /// and drops the connection instead when the body is long or slow. The
+  /// verdict on such a response is already known from its status line, and a
+  /// peer that never finishes the body must not be able to withhold it.
+  Future<void> _discardBody(
+    http.StreamedResponse response,
+    Duration timeout,
+  ) async {
+    final finished = Completer<void>();
+    void finish([Object? _, StackTrace? _]) {
+      if (!finished.isCompleted) finished.complete();
+    }
+
+    var length = 0;
+    final subscription = response.stream.listen(
+      (chunk) {
+        length += chunk.length;
+        if (length > _discardedBodyLimitBytes) finish();
+      },
+      onError: finish,
+      onDone: finish,
+      cancelOnError: true,
+    );
+    await finished.future.timeout(
+      timeout < _discardedBodyTimeout ? timeout : _discardedBodyTimeout,
+      onTimeout: finish,
+    );
+    unawaited(subscription.cancel().catchError((Object _, StackTrace _) {}));
   }
 
   Future<void> clearAccountSession(String accountId) {
