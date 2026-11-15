@@ -143,6 +143,46 @@ void _registerQuickEmojiComposerTests() {
     await _unmountComposer(tester);
   });
 
+  testWidgets('the stand-in bubble of a held emoji is drawn at the held '
+      'size from the first frame', (tester) async {
+    final harness = await openQuickEmojiComposer(tester);
+    final hold = Completer<void>();
+    harness.capabilitiesHold.add(hold);
+    addTearDown(() {
+      if (!hold.isCompleted) hold.complete();
+    });
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const Key('send-quick-emoji'))),
+    );
+    await tester.pump(kLongPressTimeout);
+    await tester.pump(QuickEmojiHoldButton.growDuration);
+    await gesture.up();
+    // Admission waits on the held capabilities request, so only the stand-in
+    // is on screen.
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('chat-pending-provisional-1'))
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    final text = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const Key('chat-pending-provisional-1')),
+        matching: find.text('\u{1F44D}'),
+      ),
+    );
+    expect(
+      text.style!.fontSize,
+      enlargedEmojiFontSizeForStep(ChatEmojiSizeReference.maxStep),
+    );
+    expect(harness.chatSendStarted, isEmpty);
+    hold.complete();
+    await _unmountComposer(tester);
+  });
+
   testWidgets('dragging away while holding cancels the send', (tester) async {
     final harness = await openQuickEmojiComposer(tester);
 

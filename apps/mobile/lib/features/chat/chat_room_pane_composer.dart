@@ -466,6 +466,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       key: targetKey,
       message: message,
       restorableDraft: sentDraft,
+      emojiSizeStep: emojiSizeStep,
     );
     _update(() => _provisionalSends.add(provisional));
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToNewest());

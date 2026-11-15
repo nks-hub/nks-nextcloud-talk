@@ -123,7 +123,7 @@ final class ChatMessageContent extends StatelessWidget {
                 if (attachments.isEmpty &&
                     parsed.messageParameters.isEmpty &&
                     isEmojiOnlyMessage(parsed.message))
-                  _EnlargedEmoji(
+                  ChatEnlargedEmoji(
                     key: Key('chat-enlarged-emoji-${parsed.messageId}'),
                     text: parsed.message.trim(),
                     color: foregroundColor,
@@ -187,8 +187,8 @@ final class ChatMessageContent extends StatelessWidget {
 /// the larger size the sender picked with [step] (0 for none). A held emoji is
 /// scaled down rather than wrapped when the bubble is too narrow for it,
 /// whatever the text scale.
-final class _EnlargedEmoji extends StatelessWidget {
-  const _EnlargedEmoji({
+final class ChatEnlargedEmoji extends StatelessWidget {
+  const ChatEnlargedEmoji({
     super.key,
     required this.text,
     required this.color,

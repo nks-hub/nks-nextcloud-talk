@@ -2,6 +2,9 @@ part of 'chat_room_pane.dart';
 
 const _provisionalOperationPrefix = 'provisional-';
 
+/// Stand-in correlation id; a provisional row is display only and never sent.
+const _provisionalReferenceUuid = '00000000-0000-4000-8000-000000000000';
+
 /// A line the user sent that the outbox has not admitted yet.
 ///
 /// Display only: nothing here is ever sent. The outbox row stays the one
@@ -13,6 +16,7 @@ final class _ProvisionalSend {
     required this.key,
     required this.message,
     this.restorableDraft,
+    this.emojiSizeStep,
   });
 
   final int id;
@@ -21,6 +25,10 @@ final class _ProvisionalSend {
 
   /// The composer text this line came from, when it can be put back.
   final String? restorableDraft;
+
+  /// The enlargement picked by holding the quick emoji, shown from the first
+  /// frame so the bubble does not change size once it is admitted.
+  final int? emojiSizeStep;
   String? operationId;
   bool failed = false;
 
@@ -29,7 +37,12 @@ final class _ProvisionalSend {
       accountId: accountId,
       operationId: '$_provisionalOperationPrefix$id',
       roomToken: key.roomToken,
-      referenceId: '',
+      referenceId: emojiSizeStep == null
+          ? ''
+          : ChatEmojiSizeReference(
+              uuid: _provisionalReferenceUuid,
+              step: emojiSizeStep!,
+            ).referenceId,
       message: message,
       replayContractRevision: '',
       silent: false,
@@ -119,6 +132,16 @@ final class _PendingMessageBubble extends StatelessWidget {
                         account: account,
                         resourceUrl: resourceUrl,
                         foregroundColor: onBubble,
+                      )
+                    else if (isEmojiOnlyMessage(operation.message))
+                      ChatEnlargedEmoji(
+                        text: operation.message.trim(),
+                        color: onBubble,
+                        step:
+                            ChatEmojiSizeReference.tryParse(
+                              operation.referenceId,
+                            )?.step ??
+                            0,
                       )
                     else
                       Text(

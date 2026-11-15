@@ -58,6 +58,7 @@ import '../settings/reply_layout_preference.dart';
 import 'chat_thread_context.dart';
 import 'chat_room_signaling.dart';
 import 'chat_typing_indicator.dart';
+import 'emoji_only_message.dart';
 import 'quick_emoji_hold_button.dart';
 import 'incoming_message_announcement.dart';
 import 'outgoing_message_status.dart';
