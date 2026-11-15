@@ -220,13 +220,22 @@ final androidPushRegistrationCoordinatorProvider =
         fcmStart = current;
       }
 
+      void recover() {
+        startFcm();
+        coordinator.retryNow();
+      }
+
       final resumeSubscription = ref
           .watch(appLifecycleResumeEventsProvider)
-          .listen((_) => startFcm());
+          .listen((_) => recover());
+      final connectivitySubscription = ref
+          .watch(connectivityWakeEventsProvider)
+          .listen((_) => recover());
       final platform = ref.watch(androidWebPushPlatformProvider);
       ref.onDispose(() {
         fcmDisposed = true;
         unawaited(resumeSubscription.cancel());
+        unawaited(connectivitySubscription.cancel());
         fcm.dispose();
         unawaited(coordinator.dispose());
       });
@@ -538,7 +547,20 @@ final applePushRegistrationCoordinatorProvider =
         pushEnvironment: kDebugMode ? 'development' : 'production',
         recordDeviceKeyAccount: deviceKeyChannel.recordAccount,
       );
-      ref.onDispose(() => unawaited(coordinator.dispose()));
+      final retrySubscriptions = [
+        ref
+            .watch(appLifecycleResumeEventsProvider)
+            .listen((_) => coordinator.retryNow()),
+        ref
+            .watch(connectivityWakeEventsProvider)
+            .listen((_) => coordinator.retryNow()),
+      ];
+      ref.onDispose(() {
+        for (final subscription in retrySubscriptions) {
+          unawaited(subscription.cancel());
+        }
+        unawaited(coordinator.dispose());
+      });
 
       // Same account-following shape as clientPushCoordinatorProvider: track
       // whoever the UI currently shows, without a second place having to

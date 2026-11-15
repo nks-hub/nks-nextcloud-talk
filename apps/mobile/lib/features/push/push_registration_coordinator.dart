@@ -115,6 +115,23 @@ final class PushRegistrationCoordinator {
   String? _voipToken;
   var _draining = false;
   var _disposed = false;
+  var _retryWake = Completer<void>();
+
+  /// Runs every waiting retry now and starts the backoff over.
+  ///
+  /// For "the network is back" and "the app is in front again": a
+  /// registration that failed while offline otherwise sits out a delay that
+  /// has grown to as much as [maximumRetry], with no push in the meantime.
+  void retryNow() {
+    if (_disposed) {
+      return;
+    }
+    _retryBackoff.clear();
+    _credentialRetryBackoff.clear();
+    final wake = _retryWake;
+    _retryWake = Completer<void>();
+    wake.complete();
+  }
   Future<void>? _activeDrain;
 
   /// Feeds a freshly issued (or refreshed) provider token in. Every account
@@ -595,7 +612,7 @@ final class PushRegistrationCoordinator {
   }
 
   Future<void> _retryAfter(AccountId accountId, Duration backoff) async {
-    await _delay(backoff);
+    await Future.any<void>([_delay(backoff), _retryWake.future]);
     _retryInFlight.remove(accountId);
     if (_disposed) {
       return;
@@ -635,7 +652,7 @@ final class PushRegistrationCoordinator {
     ({int retryGeneration, int lifecycleGeneration}) retry,
     Duration backoff,
   ) async {
-    await _delay(backoff);
+    await Future.any<void>([_delay(backoff), _retryWake.future]);
     if (_credentialRetries[accountId] != retry ||
         !_isCurrentFollow(accountId, retry.lifecycleGeneration)) {
       return;

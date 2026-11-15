@@ -329,6 +329,56 @@ void main() {
     },
   );
 
+  test('retryNow ends a waiting retry and starts the backoff over', () async {
+    await seedAccount('account-a');
+    final wired = wire();
+    addTearDown(wired.api.close);
+    final delays = <Duration>[];
+    final vault = _TransientCredentialVault(
+      value: 'fixture-app-password-never-use',
+      failOnReads: {1, 2},
+    );
+    final coordinator = PushRegistrationCoordinator(
+      accounts: accounts,
+      credentials: vault,
+      api: wired.api,
+      keyStore: _FakeDeviceKeyStore(),
+      gateway: gateway,
+      tokenHandlePrefix: 'fcm-token',
+      pushProvider: PushGatewayProvider.fcm,
+      gatewayClient: wired.gatewayClient,
+      firstRetry: const Duration(seconds: 5),
+      maximumRetry: const Duration(minutes: 30),
+      // No retry ever elapses by itself in this test.
+      delay: (duration) {
+        delays.add(duration);
+        return Completer<void>().future;
+      },
+    );
+    addTearDown(coordinator.dispose);
+
+    Future<void> settle() async {
+      for (var attempt = 0; attempt < 20; attempt++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+
+    coordinator.installToken(_fcmToken);
+    await coordinator.follow('account-a');
+    await settle();
+    expect(delays, const [Duration(seconds: 5)]);
+    expect(wired.gatewayRequests, isEmpty);
+
+    coordinator.retryNow();
+    await settle();
+    expect(delays, const [Duration(seconds: 5), Duration(seconds: 5)]);
+
+    coordinator.retryNow();
+    await settle();
+    expect(wired.gatewayRequests, hasLength(1));
+    expect(delays, hasLength(2));
+  });
+
   test('unfollow cancels a delayed credential retry', () async {
     await seedAccount('account-a');
     final wired = wire();
