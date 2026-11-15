@@ -339,6 +339,25 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
             value: _isFavorite,
             onChanged: _busy ? null : _toggleFavorite,
           ),
+          OwnTalkSharedAppearanceSection(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            roomType: _roomType,
+            federated: _room?.isFederated ?? false,
+          ),
+          if (sharedAppearance) ...[
+            OwnTalkSubheader(strings.ownTalkLocalGroup),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Text(
+                strings.ownTalkLocalGroupHint,
+                key: const Key('room-details-local-background-hint'),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
           ListTile(
             key: const Key('room-details-chat-background'),
             leading: const Icon(Icons.wallpaper_outlined),
@@ -360,12 +379,6 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
                     onPressed: _busy ? null : _resetChatBackground,
                   ),
             onTap: _busy ? null : _changeChatBackground,
-          ),
-          OwnTalkSharedAppearanceSection(
-            accountId: widget.account.id,
-            roomToken: widget.conversation.token,
-            roomType: _roomType,
-            federated: _room?.isFederated ?? false,
           ),
           if (_canSetAvatar)
             ListTile(

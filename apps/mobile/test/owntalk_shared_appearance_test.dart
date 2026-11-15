@@ -63,22 +63,26 @@ void main() {
     emojiUsageStoreProvider.overrideWithValue(_MemoryEmojiUsageStore()),
   ];
 
-  Widget sectionApp({int roomType = 2, bool federated = false}) =>
-      ProviderScope(
-        overrides: overrides(),
-        child: localizedTestApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: OwnTalkSharedAppearanceSection(
-                accountId: 'account-a',
-                roomToken: ownTalkTestToken,
-                roomType: roomType,
-                federated: federated,
-              ),
-            ),
+  Widget sectionApp({
+    int roomType = 2,
+    bool federated = false,
+    double textScale = 1,
+  }) => ProviderScope(
+    overrides: overrides(),
+    child: localizedTestApp(
+      textScale: textScale,
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: OwnTalkSharedAppearanceSection(
+            accountId: 'account-a',
+            roomToken: ownTalkTestToken,
+            roomType: roomType,
+            federated: federated,
           ),
         ),
-      );
+      ),
+    ),
+  );
 
   Future<void> unmount(WidgetTester tester) async {
     await tester.pumpWidget(const SizedBox.shrink());
@@ -146,6 +150,155 @@ void main() {
       );
       expect(find.byKey(_ownBubble), findsNothing);
       expect(find.byKey(_quickEmoji), findsNothing);
+      await unmount(tester);
+    });
+  });
+
+  group('grouping', () {
+    const ownText = Key('owntalk-shared-bubble-owntextcolor');
+    const otherBubble = Key('owntalk-shared-bubble-othercolor');
+    const otherText = Key('owntalk-shared-bubble-othertextcolor');
+    const preview = Key('owntalk-shared-preview');
+
+    String titleOf(WidgetTester tester, Key row) =>
+        (tester.widget<ListTile>(find.byKey(row)).title! as Text).data!;
+
+    Future<void> loaded(WidgetTester tester) =>
+        pumpUntil(tester, () => find.byKey(_background).evaluate().isNotEmpty);
+
+    /// Fill colours of the two sample bubbles, others' first.
+    List<Color?> sampleFills(WidgetTester tester) => tester
+        .widgetList<DecoratedBox>(
+          find.descendant(
+            of: find.byKey(preview),
+            matching: find.byType(DecoratedBox),
+          ),
+        )
+        .map((box) => (box.decoration as BoxDecoration).color)
+        .toList();
+
+    testWidgets('puts the colour rows under their own subheaders', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(sectionApp());
+      await loaded(tester);
+
+      final own = find.text('Your messages');
+      final other = find.text('Others’ messages');
+      expect(own, findsOneWidget);
+      expect(other, findsOneWidget);
+      expect(
+        tester.getSemantics(own),
+        matchesSemantics(label: 'Your messages', isHeader: true),
+      );
+      for (final row in [_ownBubble, otherBubble]) {
+        expect(titleOf(tester, row), 'Bubble colour');
+      }
+      for (final row in [ownText, otherText]) {
+        expect(titleOf(tester, row), 'Text colour');
+      }
+
+      double top(Finder finder) => tester.getTopLeft(finder).dy;
+      expect(top(find.byKey(_background)), lessThan(top(find.byKey(preview))));
+      expect(top(find.byKey(preview)), lessThan(top(own)));
+      expect(top(own), lessThan(top(find.byKey(_ownBubble))));
+      expect(top(find.byKey(ownText)), lessThan(top(other)));
+      expect(top(other), lessThan(top(find.byKey(otherBubble))));
+      expect(
+        top(find.byKey(otherText)),
+        lessThan(top(find.byKey(_quickEmoji))),
+      );
+      await unmount(tester);
+      semantics.dispose();
+    });
+
+    testWidgets('keeps the full title in the picker dialog', (tester) async {
+      await tester.pumpWidget(sectionApp());
+      await loaded(tester);
+      await tester.ensureVisible(find.byKey(otherText));
+      await tester.pump();
+      await tester.tap(find.byKey(otherText));
+      await pumpUntil(
+        tester,
+        () =>
+            find.byKey(const Key('color-palette-theme')).evaluate().isNotEmpty,
+      );
+      expect(find.text('Text of other people'), findsOneWidget);
+      await unmount(tester);
+    });
+
+    testWidgets('hides the groups and the preview without bubble fields', (
+      tester,
+    ) async {
+      server.capability = ownTalkCapabilityJson(
+        features: ['appearance.colors', 'composer.quickEmoji'],
+      );
+      await tester.pumpWidget(sectionApp());
+      await loaded(tester);
+
+      expect(find.text('Your messages'), findsNothing);
+      expect(find.text('Others’ messages'), findsNothing);
+      expect(find.byKey(preview), findsNothing);
+      expect(find.byKey(_ownBubble), findsNothing);
+      expect(find.byKey(_quickEmoji), findsOneWidget);
+      await unmount(tester);
+    });
+
+    testWidgets('the preview follows the saved colours and the theme', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      server.setExternally({
+        'bubble.ownColor': '#1E3A5F',
+        'bubble.ownTextColor': '#FFFFFF',
+      });
+      await tester.pumpWidget(sectionApp());
+      await pumpUntil(
+        tester,
+        () => subtitleOf(tester, _ownBubble) == '#1E3A5F',
+      );
+      final scheme = Theme.of(tester.element(find.byKey(preview))).colorScheme;
+
+      expect(sampleFills(tester), [
+        scheme.surfaceContainerHigh,
+        const Color(0xFF1E3A5F),
+      ]);
+      expect(
+        tester.widget<Text>(find.text('Hi, how are you?')).style?.color,
+        const Color(0xFFFFFFFF),
+      );
+      expect(find.bySemanticsLabel('Message preview'), findsOneWidget);
+      expect(find.bySemanticsLabel('Hi, how are you?'), findsNothing);
+
+      await tester.tap(find.byKey(_ownBubble));
+      await pumpUntil(
+        tester,
+        () =>
+            find.byKey(const Key('color-palette-theme')).evaluate().isNotEmpty,
+      );
+      await tester.tap(find.byKey(const Key('color-palette-theme')));
+      await pumpUntil(
+        tester,
+        () => subtitleOf(tester, _ownBubble) == 'Follow the theme',
+      );
+      expect(sampleFills(tester), [
+        scheme.surfaceContainerHigh,
+        scheme.primaryContainer,
+      ]);
+      await unmount(tester);
+      semantics.dispose();
+    });
+
+    testWidgets('survives a large text size', (tester) async {
+      await tester.pumpWidget(sectionApp(textScale: 2.5));
+      await loaded(tester);
+      for (final row in [_ownBubble, otherText, _quickEmoji]) {
+        await tester.ensureVisible(find.byKey(row));
+      }
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(preview), findsOneWidget);
       await unmount(tester);
     });
   });
@@ -360,6 +513,16 @@ void main() {
         findsOneWidget,
       );
       expect(tester.widget<ListTile>(find.byKey(_background)).onTap, isNull);
+      for (final row in const [
+        _ownBubble,
+        Key('owntalk-shared-bubble-owntextcolor'),
+        Key('owntalk-shared-bubble-othercolor'),
+        Key('owntalk-shared-bubble-othertextcolor'),
+        _quickEmoji,
+      ]) {
+        expect(tester.widget<ListTile>(find.byKey(row)).onTap, isNull);
+      }
+      expect(find.byKey(const Key('owntalk-shared-preview')), findsOneWidget);
       await tester.tap(find.byKey(_background), warnIfMissed: false);
       await tester.pump();
       expect(find.byKey(const Key('owntalk-shared-dialog')), findsNothing);

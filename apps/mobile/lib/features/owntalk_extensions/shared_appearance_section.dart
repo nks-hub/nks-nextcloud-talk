@@ -9,6 +9,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../chat/chat_background_theme.dart';
 import '../chat/chat_wallpaper.dart';
 import 'background_sheet.dart';
+import 'chat_appearance.dart';
 import 'emoji_sheet.dart';
 import 'owntalk_background_photo.dart';
 import 'owntalk_extensions_service.dart';
@@ -40,6 +41,40 @@ const List<OwnTalkSettingField> _backgroundFields = [
   OwnTalkSettingField.chatBackgroundColor,
 ];
 
+const List<OwnTalkSettingField> _ownFields = [
+  OwnTalkSettingField.bubbleOwnColor,
+  OwnTalkSettingField.bubbleOwnTextColor,
+];
+
+const List<OwnTalkSettingField> _otherFields = [
+  OwnTalkSettingField.bubbleOtherColor,
+  OwnTalkSettingField.bubbleOtherTextColor,
+];
+
+/// Smaller heading for a group inside a settings section.
+final class OwnTalkSubheader extends StatelessWidget {
+  const OwnTalkSubheader(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Semantics(
+        header: true,
+        child: Text(
+          text,
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// One row per setting, except that the background fields share a single row,
 /// represented by [OwnTalkSettingField.chatBackgroundColor].
 List<OwnTalkSettingField> _rowsFor(OwnTalkExtensionsCapability capability) => [
@@ -70,6 +105,18 @@ String _fieldTitle(
   OwnTalkSettingField.composerQuickEmoji => strings.ownTalkSharedQuickEmoji,
   OwnTalkSettingField.chatAccentColor => field.wireKey,
 };
+
+/// Title of a row inside its group, where the subheader already says whose
+/// messages it is. Dialogs and conflict lines keep the full [_fieldTitle].
+String _rowTitle(AppLocalizations strings, OwnTalkSettingField field) =>
+    switch (field) {
+      OwnTalkSettingField.bubbleOwnColor ||
+      OwnTalkSettingField.bubbleOtherColor => strings.ownTalkSharedBubbleColor,
+      OwnTalkSettingField.bubbleOwnTextColor ||
+      OwnTalkSettingField.bubbleOtherTextColor =>
+        strings.ownTalkSharedTextColor,
+      _ => _fieldTitle(strings, field),
+    };
 
 /// A value as a person reads it: "Follow the theme" for nothing, the wallpaper
 /// by name, a photo as "Your photo", a colour as its hex.
@@ -163,8 +210,7 @@ final class _OwnTalkSharedAppearanceSectionState
             ),
           ),
         ),
-        for (final field in _rowsFor(extras.capability!))
-          _row(context, strings, field, extras, canEdit),
+        ..._rows(context, strings, extras, canEdit),
         if (_uploading)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -176,6 +222,119 @@ final class _OwnTalkSharedAppearanceSectionState
             ),
           ),
       ],
+    );
+  }
+
+  /// Background, the message preview, the two colour groups, then quick emoji.
+  /// A group with no supported field leaves out its subheader, and the preview
+  /// needs at least one bubble or text field.
+  List<Widget> _rows(
+    BuildContext context,
+    AppLocalizations strings,
+    OwnTalkRoomExtras extras,
+    bool canEdit,
+  ) {
+    final supported = _rowsFor(extras.capability!).toSet();
+    final own = _ownFields.where(supported.contains).toList();
+    final other = _otherFields.where(supported.contains).toList();
+    Widget row(OwnTalkSettingField field) =>
+        _row(context, strings, field, extras, canEdit);
+    return [
+      if (supported.contains(OwnTalkSettingField.chatBackgroundColor))
+        row(OwnTalkSettingField.chatBackgroundColor),
+      if (own.isNotEmpty || other.isNotEmpty)
+        _preview(context, strings, extras),
+      if (own.isNotEmpty) ...[
+        OwnTalkSubheader(strings.ownTalkSharedOwnGroup),
+        for (final field in own) row(field),
+      ],
+      if (other.isNotEmpty) ...[
+        OwnTalkSubheader(strings.ownTalkSharedOtherGroup),
+        for (final field in other) row(field),
+      ],
+      if (supported.contains(OwnTalkSettingField.composerQuickEmoji))
+        row(OwnTalkSettingField.composerQuickEmoji),
+    ];
+  }
+
+  /// Two sample bubbles drawn by the resolver the chat uses, so the preview
+  /// cannot disagree with it. Read as one label by screen readers.
+  Widget _preview(
+    BuildContext context,
+    AppLocalizations strings,
+    OwnTalkRoomExtras extras,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    final other = resolveBubbleColors(
+      outgoing: false,
+      scheme: scheme,
+      sharedBubble: extras.valueOf(OwnTalkSettingField.bubbleOtherColor),
+      sharedText: extras.valueOf(OwnTalkSettingField.bubbleOtherTextColor),
+    );
+    final own = resolveBubbleColors(
+      outgoing: true,
+      scheme: scheme,
+      sharedBubble: extras.valueOf(OwnTalkSettingField.bubbleOwnColor),
+      sharedText: extras.valueOf(OwnTalkSettingField.bubbleOwnTextColor),
+    );
+    return Padding(
+      key: const Key('owntalk-shared-preview'),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Semantics(
+        container: true,
+        label: strings.ownTalkSharedPreviewLabel,
+        excludeSemantics: true,
+        child: Column(
+          children: [
+            _sampleBubble(
+              context,
+              other,
+              strings.ownTalkSharedPreviewOther,
+              outgoing: false,
+            ),
+            const SizedBox(height: 8),
+            _sampleBubble(
+              context,
+              own,
+              strings.ownTalkSharedPreviewOwn,
+              outgoing: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sampleBubble(
+    BuildContext context,
+    BubbleColors colors,
+    String text, {
+    required bool outgoing,
+  }) {
+    final bubble = Flexible(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.background,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Text(
+            text,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: colors.foreground),
+          ),
+        ),
+      ),
+    );
+    // Keeps the sample from spanning the row, like a real bubble.
+    const gutter = SizedBox(width: 48);
+    return Row(
+      mainAxisAlignment: outgoing
+          ? MainAxisAlignment.end
+          : MainAxisAlignment.start,
+      children: outgoing ? [gutter, bubble] : [bubble, gutter],
     );
   }
 
@@ -209,7 +368,7 @@ final class _OwnTalkSharedAppearanceSectionState
               )
             : _colorDot(scheme, color),
       ),
-      title: Text(_fieldTitle(strings, field)),
+      title: Text(_rowTitle(strings, field)),
       subtitle: Text(value ?? strings.ownTalkSharedThemeDefault),
       onTap: canEdit && !_busy ? () => _edit(field, value) : null,
     );

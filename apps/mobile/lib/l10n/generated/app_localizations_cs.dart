@@ -3996,6 +3996,33 @@ class AppLocalizationsCs extends AppLocalizations {
   String get ownTalkSharedQuickEmoji => 'Rychlé emoji';
 
   @override
+  String get ownTalkSharedOwnGroup => 'Vaše zprávy';
+
+  @override
+  String get ownTalkSharedOtherGroup => 'Zprávy ostatních';
+
+  @override
+  String get ownTalkSharedBubbleColor => 'Barva bubliny';
+
+  @override
+  String get ownTalkSharedTextColor => 'Barva textu';
+
+  @override
+  String get ownTalkSharedPreviewLabel => 'Náhled zpráv';
+
+  @override
+  String get ownTalkSharedPreviewOther => 'Ahoj!';
+
+  @override
+  String get ownTalkSharedPreviewOwn => 'Ahoj, jak se máš?';
+
+  @override
+  String get ownTalkLocalGroup => 'Jen na tomto zařízení';
+
+  @override
+  String get ownTalkLocalGroupHint => 'Má přednost před sdíleným pozadím.';
+
+  @override
   String get ownTalkSharedThemeDefault => 'Podle motivu';
 
   @override

@@ -7088,6 +7088,60 @@ abstract class AppLocalizations {
   /// **'Quick emoji'**
   String get ownTalkSharedQuickEmoji;
 
+  /// No description provided for @ownTalkSharedOwnGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Your messages'**
+  String get ownTalkSharedOwnGroup;
+
+  /// No description provided for @ownTalkSharedOtherGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Others’ messages'**
+  String get ownTalkSharedOtherGroup;
+
+  /// No description provided for @ownTalkSharedBubbleColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Bubble colour'**
+  String get ownTalkSharedBubbleColor;
+
+  /// No description provided for @ownTalkSharedTextColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Text colour'**
+  String get ownTalkSharedTextColor;
+
+  /// No description provided for @ownTalkSharedPreviewLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Message preview'**
+  String get ownTalkSharedPreviewLabel;
+
+  /// No description provided for @ownTalkSharedPreviewOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Hi!'**
+  String get ownTalkSharedPreviewOther;
+
+  /// No description provided for @ownTalkSharedPreviewOwn.
+  ///
+  /// In en, this message translates to:
+  /// **'Hi, how are you?'**
+  String get ownTalkSharedPreviewOwn;
+
+  /// No description provided for @ownTalkLocalGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Only on this device'**
+  String get ownTalkLocalGroup;
+
+  /// No description provided for @ownTalkLocalGroupHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Takes precedence over the shared background.'**
+  String get ownTalkLocalGroupHint;
+
   /// No description provided for @ownTalkSharedThemeDefault.
   ///
   /// In en, this message translates to:

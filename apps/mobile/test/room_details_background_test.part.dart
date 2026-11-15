@@ -1,6 +1,71 @@
 part of 'room_details_screen_test.dart';
 
 void _registerBackgroundTests() {
+  testWidgets('with shared appearance the device background follows it under '
+      'its own subheader', (tester) async {
+    final server = FakeOwnTalkServer();
+    final participants = participantsClient(const <Object?>[]);
+    await openDetails(
+      tester,
+      forAccount: account,
+      forConversation: conversation,
+      client: MockClient((request) async {
+        if (!request.url.path.endsWith('/participants')) {
+          return server.handle(request);
+        }
+        final copy = http.Request(request.method, request.url)
+          ..headers.addAll(request.headers);
+        return http.Response.fromStream(await participants.send(copy));
+      }),
+      overrides: [
+        ownTalkSettingsStoreProvider.overrideWith(
+          (ref) => Future<OwnTalkSettingsStore>.error(StateError('no store')),
+        ),
+        appLifecycleResumeEventsProvider.overrideWithValue(
+          const Stream<void>.empty(),
+        ),
+      ],
+    );
+    await _pumpUntil(
+      tester,
+      () =>
+          find.byKey(const Key('owntalk-shared-section')).evaluate().isNotEmpty,
+    );
+
+    double top(Finder finder) => tester.getTopLeft(finder).dy;
+    final tile = find.byKey(const Key('room-details-chat-background'));
+    expect(find.text('Only on this device'), findsOneWidget);
+    expect(
+      find.byKey(const Key('room-details-local-background-hint')),
+      findsOneWidget,
+    );
+    expect(
+      top(find.byKey(const Key('owntalk-shared-composer-quickemoji'))),
+      lessThan(top(find.text('Only on this device'))),
+    );
+    expect(top(find.text('Only on this device')), lessThan(top(tile)));
+  });
+
+  testWidgets('without shared appearance the device background has no extra '
+      'subheader', (tester) async {
+    await openDetails(
+      tester,
+      forAccount: account,
+      forConversation: conversation,
+      client: participantsClient(const <Object?>[]),
+    );
+
+    expect(
+      find.byKey(const Key('room-details-chat-background')),
+      findsOneWidget,
+    );
+    expect(find.text('Only on this device'), findsNothing);
+    expect(
+      find.byKey(const Key('room-details-local-background-hint')),
+      findsNothing,
+    );
+  });
+
   testWidgets('chat background colour is stored for only this room', (
     tester,
   ) async {

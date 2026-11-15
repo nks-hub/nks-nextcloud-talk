@@ -3988,6 +3988,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ownTalkSharedQuickEmoji => 'Quick emoji';
 
   @override
+  String get ownTalkSharedOwnGroup => 'Your messages';
+
+  @override
+  String get ownTalkSharedOtherGroup => 'Others’ messages';
+
+  @override
+  String get ownTalkSharedBubbleColor => 'Bubble colour';
+
+  @override
+  String get ownTalkSharedTextColor => 'Text colour';
+
+  @override
+  String get ownTalkSharedPreviewLabel => 'Message preview';
+
+  @override
+  String get ownTalkSharedPreviewOther => 'Hi!';
+
+  @override
+  String get ownTalkSharedPreviewOwn => 'Hi, how are you?';
+
+  @override
+  String get ownTalkLocalGroup => 'Only on this device';
+
+  @override
+  String get ownTalkLocalGroupHint =>
+      'Takes precedence over the shared background.';
+
+  @override
   String get ownTalkSharedThemeDefault => 'Follow the theme';
 
   @override

@@ -14,6 +14,8 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/features/chat/chat_background_store.dart';
 import 'package:nextcloudtalk/features/chat/chat_background_surface.dart';
+import 'package:nextcloudtalk/features/owntalk_extensions/owntalk_room_extras.dart';
+import 'package:nextcloudtalk/features/owntalk_extensions/owntalk_settings_store.dart';
 import 'package:nextcloudtalk/features/rooms/guest_link_sharer.dart';
 import 'package:nextcloudtalk/features/rooms/room_details_screen.dart';
 import 'package:nextcloudtalk/features/shareditems/shared_items_screen.dart';
@@ -24,6 +26,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import 'accessibility_probe.dart';
 import 'conversation_creation_test_support.dart';
+import 'owntalk_extensions_test_support.dart';
 import 'test_support.dart';
 
 part 'room_details_administration_test.part.dart';
