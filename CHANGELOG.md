@@ -8,6 +8,18 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.0.37 (105) — 15 November 2026
+
+- On Android, a message sent just before leaving the app is still delivered. The app stays reachable until the message is out, for at most three minutes when there is no network. If the message is still unsent after that, a notification says so and the message goes out when the app is opened.
+- A message the server may or may not have received is no longer left for the sender to sort out. The app reads the conversation, and when the message is not there it sends it again by itself, up to three times.
+- Closing the app right after tapping Send no longer leaves the same text both sent and waiting in the message field.
+- On Android and Windows, an image copied to the clipboard is offered as a small preview above the message field, with one button to send it and one to dismiss it.
+- The Send button is round and filled, and the quick emoji shares its place. It changes to Send as soon as an attachment is added.
+- An open conversation holds its newest 300 messages and loads older ones while scrolling back.
+- "Jump to the newest messages" lands on the newest message even when messages arrived while the app was in the background, and the list follows new messages again afterwards.
+- The replies chip on a reply inside a thread opens that thread.
+- On a phone in battery saver, signing in no longer stays on "Finish signing in in the browser" after access was granted.
+
 ## 1.0.36 (104) — 14 November 2026
 
 - Holding the quick emoji button sends the emoji enlarged: the longer the hold, the bigger it grows, in three steps. OwnTalk shows it at that size to everyone in the conversation; other Talk clients show an ordinary emoji. The shared quick emoji is now chosen from the full emoji picker.
