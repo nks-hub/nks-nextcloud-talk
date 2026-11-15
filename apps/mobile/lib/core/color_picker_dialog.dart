@@ -303,17 +303,24 @@ final class _HueBar extends StatelessWidget {
   final String label;
   final ValueChanged<HSVColor> onChanged;
 
+  // White, greys and black have no visible hue; lift them to full saturation
+  // and brightness where needed so the bar does something visible.
+  HSVColor _withHue(double hue) {
+    final next = hsv.withHue(hue);
+    return next.saturation == 0 || next.value == 0
+        ? next
+              .withSaturation(next.saturation == 0 ? 1 : next.saturation)
+              .withValue(next.value == 0 ? 1 : next.value)
+        : next;
+  }
+
   void _at(double dx, double width) =>
-      onChanged(hsv.withHue((dx / width).clamp(0.0, 1.0) * 359.9));
+      onChanged(_withHue((dx / width).clamp(0.0, 1.0) * 359.9));
 
   @override
   Widget build(BuildContext context) {
-    // A grey has no hue to move; give it full saturation so the bar does
-    // something visible.
-    HSVColor lifted(HSVColor next) =>
-        next.saturation == 0 && next.value > 0 ? next.withSaturation(1) : next;
-    final up = lifted(hsv.withHue((hsv.hue + 10) % 360));
-    final down = lifted(hsv.withHue((hsv.hue + 350) % 360));
+    final up = _withHue((hsv.hue + 10) % 360);
+    final down = _withHue((hsv.hue + 350) % 360);
     return Semantics(
       label: label,
       value: '${hsv.hue.round()}°',

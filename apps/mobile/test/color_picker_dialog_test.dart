@@ -117,4 +117,22 @@ void main() {
     expect(picked.hue, closeTo(180, 3));
     expect(picked.saturation, closeTo(1, 0.01));
   });
+
+  for (final start in ['#FFFFFF', '#000000', '#808080']) {
+    testWidgets('dragging the hue bar on $start gives a coloured result', (
+      tester,
+    ) async {
+      await open(tester, start);
+      final hue = find.byKey(const Key('color-picker-hue'));
+      await tester.tapAt(tester.getCenter(hue));
+      await tester.pump();
+      final text = tester
+          .widget<TextField>(find.byKey(const Key('field')))
+          .controller!
+          .text;
+      final picked = HSVColor.fromColor(colorPickerParse(text)!);
+      expect(picked.saturation, closeTo(1, 0.01));
+      expect(picked.value, greaterThan(0.4));
+    });
+  }
 }
