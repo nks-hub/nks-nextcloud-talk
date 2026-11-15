@@ -231,31 +231,65 @@ List<ChatWallpaperPreset> offeredChatWallpaperPresets(
 ) => [for (final id in serverIds) ?chatWallpaperPresetById(id)];
 
 /// Paints [preset] to fill its parent, in the colours of the current theme.
-final class ChatWallpaper extends StatelessWidget {
+///
+/// Patterns are laid out for the tallest height seen at the current width and
+/// anchored top-left, so a keyboard sliding over the chat crops the wallpaper
+/// instead of reflowing every shape.
+final class ChatWallpaper extends StatefulWidget {
   const ChatWallpaper({super.key, required this.preset});
 
   final ChatWallpaperPreset preset;
 
   @override
+  State<ChatWallpaper> createState() => _ChatWallpaperState();
+}
+
+final class _ChatWallpaperState extends State<ChatWallpaper> {
+  double _width = 0;
+  double _height = 0;
+
+  @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _WallpaperPainter(
-        preset.kind,
-        preset.colorsFor(Theme.of(context).colorScheme),
-      ),
-      child: const SizedBox.expand(),
+    final colors = widget.preset.colorsFor(Theme.of(context).colorScheme);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = constraints.biggest;
+        if (size.width != _width) {
+          _width = size.width;
+          _height = size.height;
+        } else if (size.height > _height) {
+          _height = size.height;
+        }
+        return CustomPaint(
+          painter: _WallpaperPainter(
+            widget.preset.kind,
+            colors,
+            Size(_width, _height),
+          ),
+          child: const SizedBox.expand(),
+        );
+      },
     );
   }
 }
 
 final class _WallpaperPainter extends CustomPainter {
-  const _WallpaperPainter(this.kind, this.colors);
+  const _WallpaperPainter(this.kind, this.colors, this.layout);
 
   final ChatWallpaperKind kind;
   final List<Color> colors;
 
+  /// The size the pattern is laid out for; the canvas only shows its
+  /// top-left part.
+  final Size layout;
+
   @override
-  void paint(Canvas canvas, Size size) {
+  void paint(Canvas canvas, Size canvasSize) {
+    final stretches =
+        kind == ChatWallpaperKind.diagonal ||
+        kind == ChatWallpaperKind.vertical;
+    final size = stretches ? canvasSize : layout;
+    canvas.clipRect(Offset.zero & canvasSize);
     final rect = Offset.zero & size;
     switch (kind) {
       case ChatWallpaperKind.diagonal:
@@ -507,7 +541,9 @@ final class _WallpaperPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_WallpaperPainter oldDelegate) =>
-      oldDelegate.kind != kind || !_sameColors(oldDelegate.colors, colors);
+      oldDelegate.kind != kind ||
+      oldDelegate.layout != layout ||
+      !_sameColors(oldDelegate.colors, colors);
 
   bool _sameColors(List<Color> a, List<Color> b) {
     if (a.length != b.length) {

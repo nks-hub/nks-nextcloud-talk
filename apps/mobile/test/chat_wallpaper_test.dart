@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
@@ -153,6 +156,63 @@ void main() {
             findsWidgets,
           );
         }
+      }
+    });
+  });
+
+  group('resizing', () {
+    testWidgets('a shorter surface crops a laid out pattern instead of '
+        'reflowing it', (tester) async {
+      final boundary = GlobalKey();
+      Future<Uint8List> render(
+        ChatWallpaperPreset preset,
+        double height,
+      ) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.light(),
+            home: Align(
+              alignment: Alignment.topLeft,
+              child: RepaintBoundary(
+                key: boundary,
+                child: SizedBox(
+                  width: 200,
+                  height: height,
+                  child: ChatWallpaper(preset: preset),
+                ),
+              ),
+            ),
+          ),
+        );
+        final image = await tester.runAsync(() {
+          final render =
+              boundary.currentContext!.findRenderObject()!
+                  as RenderRepaintBoundary;
+          return render.toImage();
+        });
+        final bytes = await tester.runAsync(
+          () => image!.toByteData(format: ui.ImageByteFormat.rawRgba),
+        );
+        return bytes!.buffer.asUint8List();
+      }
+
+      const stretching = {
+        ChatWallpaperKind.diagonal,
+        ChatWallpaperKind.vertical,
+      };
+      for (final preset in chatWallpaperPresets.where(
+        (preset) => !stretching.contains(preset.kind),
+      )) {
+        // The tall frame comes first, as it does when the keyboard is closed.
+        final tall = await render(preset, 300);
+        final short = await render(preset, 200);
+        var worst = 0;
+        for (var i = 0; i < short.length; i++) {
+          worst = math.max(worst, (short[i] - tall[i]).abs());
+        }
+        // Anti-aliasing and gradient dithering differ by a few levels; a moved shape differs by
+        // far more.
+        expect(worst, lessThanOrEqualTo(12), reason: '${preset.id} reflowed');
       }
     });
   });
