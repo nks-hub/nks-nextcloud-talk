@@ -372,6 +372,23 @@ final class _EmojiPickerState extends State<EmojiPicker> {
     );
   }
 
+  /// Sized to the hint, so it is never cut short next to the category chips.
+  double _searchWidth(double width) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: widget.labels.searchHint,
+        style: Theme.of(context).textTheme.bodyLarge,
+      ),
+      textScaler: MediaQuery.textScalerOf(context),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+    )..layout();
+    final hintWidth = painter.width;
+    painter.dispose();
+    // 24 of content padding plus room for the border and cursor.
+    return (hintWidth + 40).clamp(0.0, width * 0.5);
+  }
+
   Widget _buildPicker(
     BuildContext context, {
     required Locale? locale,
@@ -417,20 +434,6 @@ final class _EmojiPickerState extends State<EmojiPicker> {
             : null,
       ),
     );
-    // Sized to its hint, so the hint is never cut short next to the chips.
-    final hintWidth =
-        (TextPainter(
-                text: TextSpan(
-                  text: widget.labels.searchHint,
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                textScaler: MediaQuery.textScalerOf(context),
-                textDirection: Directionality.of(context),
-                maxLines: 1,
-              )..layout())
-            .width;
-    // 24 of content padding plus room for the border and cursor.
-    final searchWidth = (hintWidth + 40).clamp(0.0, width * 0.5);
     final categories = SizedBox(
       height: 48,
       child: ListView(
@@ -469,7 +472,7 @@ final class _EmojiPickerState extends State<EmojiPicker> {
               children: [
                 // Sideways the width is spare, so the categories share the
                 // search row and the grid keeps the height.
-                SizedBox(width: searchWidth, child: search),
+                SizedBox(width: _searchWidth(width), child: search),
                 Expanded(
                   child: query.isEmpty ? categories : const SizedBox.shrink(),
                 ),
