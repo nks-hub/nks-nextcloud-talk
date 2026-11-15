@@ -242,11 +242,14 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     if (!mounted || generation != _syncGeneration) {
       return;
     }
-    _update(() {
-      _syncing = false;
-      _initialAttemptFinished = true;
-      _localError = null;
-    });
+    // Every long-poll round ends here, and most of them change nothing.
+    if (_syncing || !_initialAttemptFinished || _localError != null) {
+      _update(() {
+        _syncing = false;
+        _initialAttemptFinished = true;
+        _localError = null;
+      });
+    }
     _startPendingJump();
     _scheduleVisibleReadMarker(generation);
   }
