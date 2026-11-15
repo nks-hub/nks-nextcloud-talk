@@ -9,11 +9,7 @@ extension _BackgroundReaderCases on _ChatServiceIntegrationSuite {
       talkFeatures: features,
       observedAt: DateTime.utc(2026, 1, 1),
     );
-    final offline = _readerService(
-      MockClient((request) async {
-        throw http.ClientException('offline', request.url);
-      }),
-    );
+    final offline = _readerService(OfflineClient());
     for (final message in ['first queued', 'second queued']) {
       await offline.sendText(
         accountId: 'account-a',
@@ -21,6 +17,8 @@ extension _BackgroundReaderCases on _ChatServiceIntegrationSuite {
         message: message,
       );
     }
+    await waitForUnsentTextSends(database);
+    await offline.close();
   }
 
   void registerBackgroundReaderCases() {
@@ -242,6 +240,8 @@ extension _BackgroundReaderCases on _ChatServiceIntegrationSuite {
         expect(sent, ['first queued']);
         deliverConfirmation = true;
         await binding.synchronize();
+        // A poll hands the outbox on without waiting for it.
+        await _waitForOutboxSettled(chat);
         final completed = await database
             .select(database.textSendOperations)
             .get();
@@ -259,7 +259,8 @@ extension _BackgroundReaderCases on _ChatServiceIntegrationSuite {
           completed.map((row) => row.outboxState),
           everyElement('completed'),
         );
-        expect(completed.map((row) => row.attemptCount), everyElement(1));
+        // The first was already tried once in the tunnel that queued it.
+        expect(completed.map((row) => row.attemptCount), [2, 1]);
         expect(
           {for (final row in completed) row.operationId: row.referenceId},
           {for (final row in admitted) row.operationId: row.referenceId},

@@ -463,9 +463,10 @@ final class ChatService {
           parentRoomToken: parentRoomToken,
           privateReplyEligibility: privateReplyEligibility,
         );
-        if (prepared.capabilitiesVerifiedOnline) {
-          unawaited(_deliverPending(prepared, threadId: threadId));
-        }
+        // Also when the capabilities came from storage because the server
+        // could not be asked: a send that finds no network ends unsent and
+        // arms its own retry, where waiting here left it to chance.
+        unawaited(_deliverPending(prepared, threadId: threadId));
         return operationId;
       }, threadId: threadId);
     });

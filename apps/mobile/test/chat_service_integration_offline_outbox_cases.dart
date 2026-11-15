@@ -3,7 +3,7 @@ part of 'chat_service_integration_test.dart';
 extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
   void registerOfflineOutboxCases() {
     test(
-      'offline send queues from a matching ready snapshot and resumes once',
+      'offline send is kept from a matching ready snapshot and resumes once',
       () async {
         const storedFeatures = <String>{
           'conversation-v4',
@@ -17,38 +17,30 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
           observedAt: DateTime.utc(2026, 1, 1),
         );
 
-        var offlineNonCapabilityRequests = 0;
-        final offlineApi = HttpNextcloudApi(
-          client: MockClient((request) async {
-            if (request.url.path.endsWith('/cloud/capabilities')) {
-              throw http.ClientException(
-                'Synthetic offline capability failure',
-                request.url,
-              );
-            }
-            offlineNonCapabilityRequests++;
-            throw StateError('Offline send must not reach chat transport');
-          }),
-        );
+        final offlineApi = HttpNextcloudApi(client: OfflineClient());
         addTearDown(offlineApi.close);
-
-        await ChatService(
+        final offline = ChatService(
           accounts: accounts,
           chat: chat,
           credentials: credentials,
           api: offlineApi,
-        ).sendText(
+        );
+        await offline.sendText(
           accountId: 'account-a',
           roomToken: 'rooma123',
           message: 'Queued while offline',
         );
+        await waitForUnsentTextSends(database);
+        await offline.close();
 
+        // Admitted from the stored snapshot and tried at once: the attempt
+        // found no network, so the row is unsent and due again.
         final queued = await database
             .select(database.textSendOperations)
             .getSingle();
-        expect(offlineNonCapabilityRequests, 0);
-        expect(queued.outboxState, 'queued');
-        expect(queued.attemptCount, 0);
+        expect(queued.outboxState, 'retryable');
+        expect(queued.errorClass, 'transport-before-send');
+        expect(queued.attemptCount, 1);
 
         var sendRequests = 0;
         final onlineApi = HttpNextcloudApi(
@@ -85,7 +77,7 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
           chat: ChatRepository(database),
           credentials: credentials,
           api: onlineApi,
-        ).syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+        ).drainPendingSends();
 
         final completed = await database
             .select(database.textSendOperations)
@@ -108,11 +100,7 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
         talkFeatures: storedFeatures,
         observedAt: DateTime.utc(2026, 1, 1),
       );
-      final offlineApi = HttpNextcloudApi(
-        client: MockClient((request) async {
-          throw http.ClientException('offline', request.url);
-        }),
-      );
+      final offlineApi = HttpNextcloudApi(client: OfflineClient());
       addTearDown(offlineApi.close);
       final offline = ChatService(
         accounts: accounts,
@@ -130,6 +118,8 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
         roomToken: 'rooma123',
         message: 'second in the tunnel',
       );
+      await waitForUnsentTextSends(database);
+      await offline.close();
       expect(await chat.roomsWithPendingTextSends(), hasLength(1));
 
       final admitted = await database.select(database.textSendOperations).get();
@@ -184,7 +174,8 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
             .join(', '),
       );
       expect(states.map((row) => row.outboxState), ['completed', 'completed']);
-      expect(states.map((row) => row.attemptCount), everyElement(1));
+      // The first was tried once in the tunnel; the second waited behind it.
+      expect(states.map((row) => row.attemptCount), [2, 1]);
       expect(
         {for (final row in states) row.operationId: row.referenceId},
         {for (final row in admitted) row.operationId: row.referenceId},
@@ -851,6 +842,194 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       );
     }
 
+    test('a send goes out when only the capabilities read fails', () async {
+      await accounts.updateTalkFeatures('account-a', _sendFeatures);
+      await chat.recordCapabilities(
+        accountId: 'account-a',
+        talkFeatures: _sendFeatures,
+        observedAt: DateTime.utc(2026, 1, 1),
+      );
+      final sent = <String>[];
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            throw http.ClientException('capabilities timed out', request.url);
+          }
+          if (request.method == 'GET') {
+            return http.Response('', 304);
+          }
+          sent.add(request.bodyFields['message']!);
+          return _acceptedSend(request, 121);
+        }),
+      );
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      addTearDown(service.close);
+
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'the room itself is reachable',
+      );
+      await _waitForOutboxSettled(chat);
+
+      expect(sent, ['the room itself is reachable']);
+      final rows = await database.select(database.textSendOperations).get();
+      expect(rows.single.outboxState, 'completed');
+    });
+
+    test('a retry after the capabilities changed is prepared afresh', () async {
+      var features = _sendFeatures.toList();
+      var reachable = false;
+      final sent = <String>[];
+      final api = HttpNextcloudApi(
+        capabilityCacheTtl: Duration.zero,
+        client: _UnreachableClient(
+          MockClient((request) async {
+            if (request.url.path.endsWith('/cloud/capabilities')) {
+              return http.Response(
+                jsonEncode(_chatCapabilities(talkFeatures: features)),
+                200,
+              );
+            }
+            if (request.method == 'GET') {
+              return http.Response('', 304);
+            }
+            sent.add(request.bodyFields['message']!);
+            return _acceptedSend(request, 121);
+          }),
+          unreachable: (request) => !reachable && request.method == 'POST',
+        ),
+      );
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      addTearDown(service.close);
+      await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'outlives a server upgrade',
+      );
+      await _waitForTextSends(
+        database,
+        (rows) => rows.single.outboxState == 'retryable',
+      );
+
+      // The server gains a feature, and another part of the app stores the
+      // new snapshot: the generation the failed attempt was made under is
+      // gone by the time its timer fires.
+      features = [...features, 'chat-replies'];
+      await accounts.updateTalkFeatures('account-a', features.toSet());
+      await chat.recordCapabilities(
+        accountId: 'account-a',
+        talkFeatures: features.toSet(),
+        observedAt: DateTime.now().toUtc(),
+      );
+      reachable = true;
+
+      for (var attempt = 0; attempt < 400 && sent.isEmpty; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+      }
+      await _waitForOutboxSettled(chat);
+      expect(sent, ['outlives a server upgrade']);
+    });
+
+    test('a send that hangs does not hold back incoming messages', () async {
+      final answer = Completer<void>();
+      var posts = 0;
+      int? incoming;
+      final api = HttpNextcloudApi(
+        client: _sendServer((request) async {
+          posts++;
+          await answer.future;
+          return _acceptedSend(request, 131);
+        }, incomingId: () => incoming),
+      );
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      addTearDown(service.close);
+      final binding = service.bindLiveRoom(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      );
+      addTearDown(binding.close);
+      await binding.synchronize();
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'stuck on the wire',
+      );
+      await _waitForChatCondition(() => posts == 1);
+
+      // The poll that brings someone else's message, and the ones after it,
+      // all finish while the POST is still unanswered.
+      incoming = 130;
+      for (var round = 0; round < 3; round++) {
+        await binding.synchronize().timeout(const Duration(seconds: 3));
+      }
+      final received = await (database.select(
+        database.cachedChatMessages,
+      )..where((row) => row.messageId.equals(130))).get();
+      expect(received, hasLength(1));
+      expect(posts, 1);
+
+      answer.complete();
+      await _waitForOutboxSettled(chat);
+    });
+
+    test(
+      'a binding closed between rounds reports no further progress',
+      () async {
+        int? incoming;
+        final api = HttpNextcloudApi(
+          client: _sendServer(
+            (request) => _acceptedSend(request, 131),
+            incomingId: () => incoming,
+          ),
+        );
+        addTearDown(api.close);
+        final service = ChatService(
+          accounts: accounts,
+          chat: chat,
+          credentials: credentials,
+          api: api,
+        );
+        addTearDown(service.close);
+        final binding = service.bindLiveRoom(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+        );
+        addTearDown(binding.close);
+        await binding.synchronize();
+        incoming = 130;
+        for (var round = 0; round < 4 && !binding.lastRoundAdvanced; round++) {
+          await binding.synchronize();
+        }
+        expect(binding.lastRoundAdvanced, isTrue);
+
+        // A caller that polls again for as long as the last round advanced
+        // would never stop if the closed binding kept saying so.
+        await service.suspendAccount('account-a');
+        await binding.synchronize();
+        expect(binding.lastRoundAdvanced, isFalse);
+      },
+    );
+
     test(
       'offline send rejects a missing persisted capability snapshot',
       () async {
@@ -972,11 +1151,7 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
         );
       }
 
-      final offlineApi = HttpNextcloudApi(
-        client: MockClient((request) async {
-          throw http.ClientException('offline', request.url);
-        }),
-      );
+      final offlineApi = HttpNextcloudApi(client: OfflineClient());
       addTearDown(offlineApi.close);
       final offline = ChatService(
         accounts: accounts,
@@ -991,6 +1166,13 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
           message: 'queued for $accountId',
         );
       }
+      await _waitForTextSends(
+        database,
+        (rows) =>
+            rows.length == 2 &&
+            rows.every((row) => row.outboxState == 'retryable'),
+      );
+      await offline.close();
 
       // Neither server answers until both have been reached. A drain that
       // walks the rooms in one line only ever reaches the account it starts
@@ -1057,9 +1239,13 @@ const _sendFeatures = <String>{
 };
 
 /// Answers capabilities and chat reads, and hands every POST to [onSend].
+///
+/// When [incomingId] names a message, a chat read that has not seen it yet
+/// is answered with it, as a message from someone else.
 MockClient _sendServer(
   FutureOr<http.Response> Function(http.Request request) onSend, {
   List<String>? requests,
+  int? Function()? incomingId,
 }) {
   return MockClient((request) async {
     final capabilities = request.url.path.endsWith('/cloud/capabilities');
@@ -1071,6 +1257,30 @@ MockClient _sendServer(
       );
     }
     if (request.method == 'GET') {
+      final known = int.tryParse(
+        request.url.queryParameters['lastKnownMessageId'] ?? '',
+      );
+      final incoming = incomingId?.call();
+      if (incoming != null &&
+          known != null &&
+          known < incoming &&
+          request.url.queryParameters['lookIntoFuture'] == '1') {
+        return http.Response(
+          jsonEncode(
+            _externalMessageResponse(
+              messageId: incoming,
+              timestamp: 1770000000 + incoming,
+              message: 'From someone else',
+              threadId: incoming,
+            ),
+          ),
+          200,
+          headers: <String, String>{
+            'X-Chat-Last-Given': '$incoming',
+            'X-Chat-Last-Common-Read': '110',
+          },
+        );
+      }
       return http.Response('', 304);
     }
     return onSend(request);

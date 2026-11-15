@@ -4,11 +4,40 @@ import 'dart:io';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:nextcloudtalk/core/app_theme.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/onboarding/onboarding_coordinator.dart';
 import 'package:nextcloudtalk/l10n/generated/app_localizations.dart';
+
+/// A client with no network at all. Every request fails before its body is
+/// asked for, the way a refused connection does. A `MockClient` that throws
+/// has already read the body, which stands for a request that may have been
+/// stored and so leaves a send unconfirmed instead of unsent.
+final class OfflineClient extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async =>
+      throw http.ClientException('offline', request.url);
+}
+
+/// Waits for what a send into a tunnel leaves behind: every room's oldest
+/// operation tried once and put back as unsent, nothing still on its way.
+Future<void> waitForUnsentTextSends(AppDatabase database) async {
+  for (var attempt = 0; attempt < 500; attempt++) {
+    final rows = await database.select(database.textSendOperations).get();
+    if (rows.isNotEmpty &&
+        rows.every(
+          (row) =>
+              row.outboxState == 'queued' || row.outboxState == 'retryable',
+        ) &&
+        rows.any((row) => row.outboxState == 'retryable')) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+  }
+  fail('The offline send did not end unsent');
+}
 
 AppDatabase openTestDatabase() {
   return AppDatabase.forTesting(NativeDatabase.memory());

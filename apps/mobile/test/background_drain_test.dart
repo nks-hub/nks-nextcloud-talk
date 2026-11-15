@@ -189,27 +189,22 @@ void main() {
     /// Queues one message the way a tunnel does: the send is admitted from the
     /// stored capability snapshot and then fails to reach the server.
     Future<void> queueOfflineSend() async {
-      final offline = HttpNextcloudApi(
-        client: MockClient(
-          (request) async => throw http.ClientException('offline', request.url),
-        ),
-      );
+      final offline = HttpNextcloudApi(client: OfflineClient());
       addTearDown(offline.close);
-      await ChatService(
+      final service = ChatService(
         accounts: accounts,
         chat: chat,
         credentials: credentials,
         api: offline,
-      ).sendText(
+      );
+      await service.sendText(
         accountId: 'account-a',
         roomToken: 'rooma123',
         message: 'Queued while offline',
       );
-      expect(
-        (await database.select(database.textSendOperations).getSingle())
-            .outboxState,
-        'queued',
-      );
+      await waitForUnsentTextSends(database);
+      // Takes its retry timer with it; the app under test does the rest.
+      await service.close();
     }
 
     ProviderContainer runningApp({
@@ -327,7 +322,7 @@ void main() {
       expect(
         (await database.select(database.textSendOperations).getSingle())
             .outboxState,
-        'queued',
+        'retryable',
       );
     });
 
