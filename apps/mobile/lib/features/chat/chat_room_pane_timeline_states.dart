@@ -15,6 +15,7 @@ final class _ProvisionalSend {
     required this.id,
     required this.key,
     required this.message,
+    required this.knownOperationIds,
     this.restorableDraft,
     this.emojiSizeStep,
   });
@@ -22,6 +23,10 @@ final class _ProvisionalSend {
   final int id;
   final ChatRoomProviderKey key;
   final String message;
+
+  /// Outbox rows that existed before this line was sent, so none of them can
+  /// be the row it is admitted as.
+  final Set<String> knownOperationIds;
 
   /// The composer text this line came from, when it can be put back.
   final String? restorableDraft;

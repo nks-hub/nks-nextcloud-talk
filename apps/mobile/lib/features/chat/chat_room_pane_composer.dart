@@ -465,6 +465,12 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       id: ++_provisionalCounter,
       key: targetKey,
       message: message,
+      knownOperationIds: {
+        for (final operation
+            in ref.read(textSendOperationsProvider(targetKey)).valueOrNull ??
+                const <StoredTextSendOperation>[])
+          operation.operationId,
+      },
       restorableDraft: sentDraft,
       emojiSizeStep: emojiSizeStep,
     );

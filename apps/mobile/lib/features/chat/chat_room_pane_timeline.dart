@@ -58,8 +58,81 @@ final class _ChatHeader extends StatelessWidget {
   }
 }
 
+/// Recomputes only when [key] changes; lists in a record key compare by
+/// identity, so a stream that has not emitted costs nothing.
+final class _Memo<T> {
+  Object? _key;
+  T? _value;
+  bool _filled = false;
+
+  T call(Object? key, T Function() compute) {
+    if (!_filled || key != _key) {
+      _value = compute();
+      _key = key;
+      _filled = true;
+    }
+    return _value as T;
+  }
+
+  void clear() {
+    _filled = false;
+    _key = null;
+    _value = null;
+  }
+}
+
+/// What the timeline derives from the cached rows, apart from the bubbles.
+typedef _TimelineLayout = ({
+  List<ChatMessage?> parsed,
+  Set<int> pendingMessageIds,
+  Map<int, List<int>> albumRows,
+  Map<String, List<int>> confirmedAttachments,
+  Set<int> hidden,
+});
+
+/// Everything the pane derives from the current room's streams, kept across
+/// rebuilds. The pane rebuilds many times per send, and each of these is
+/// linear in the room's cached history.
+final class _TimelineCache {
+  final blocks = _Memo<List<ChatBlock>?>();
+  final visible = _Memo<List<CachedChatMessage>>();
+  final attachments = _Memo<List<PendingAttachmentBatch>>();
+  final layout = _Memo<_TimelineLayout>();
+  final Map<int, (String, ChatMessage?)> _parsed = {};
+
+  /// Decodes a row once per `rawJson`; an edit, reaction or delete rewrites
+  /// the JSON and is decoded again.
+  ChatMessage? parse(CachedChatMessage cached) {
+    final hit = _parsed[cached.messageId];
+    if (hit != null && hit.$1 == cached.rawJson) {
+      return hit.$2;
+    }
+    final parsed = _parseCachedMessage(cached);
+    _parsed[cached.messageId] = (cached.rawJson, parsed);
+    return parsed;
+  }
+
+  /// Drops decoded rows that left the timeline.
+  void retain(List<CachedChatMessage> messages) {
+    if (_parsed.isEmpty) {
+      return;
+    }
+    final ids = {for (final message in messages) message.messageId};
+    _parsed.removeWhere((messageId, _) => !ids.contains(messageId));
+  }
+
+  void clear() {
+    blocks.clear();
+    visible.clear();
+    attachments.clear();
+    layout.clear();
+    _parsed.clear();
+  }
+}
+
 final class _ChatTimeline extends StatelessWidget {
   const _ChatTimeline({
+    required this.cache,
     required this.account,
     required this.conversation,
     required this.threadId,
@@ -88,6 +161,7 @@ final class _ChatTimeline extends StatelessWidget {
     required this.anchorMessageId,
   });
 
+  final _TimelineCache cache;
   final StoredAccount account;
   final CachedConversation conversation;
   final int? threadId;
@@ -152,49 +226,20 @@ final class _ChatTimeline extends StatelessWidget {
         pending.length +
         attachments.length +
         (hasOlder ? 1 : 0);
-    final parsedMessages = messages
-        .map(
-          (message) => message.referenceId.startsWith('otg1.')
-              ? _parseCachedMessage(message)
-              : null,
-        )
-        .toList();
-    final pendingMessageIds = {
-      for (final batch in attachments) ...batch.confirmedMessageIds,
-    };
-    final albums = groupPhotoAlbums(
-      parsedMessages,
-      canGroup: (index) =>
-          !pendingMessageIds.contains(messages[index].messageId) &&
-          !messages[index].deleted &&
-          parsedMessages[index] != null &&
-          (inlineReplies || (parsedMessages[index]!.threadReplies ?? 0) == 0) &&
-          chatGalleryImage(account, parsedMessages[index]!) != null,
-      boundaryBefore: (index) =>
-          _gapBeforeContentIndex(index) ||
-          !_sameLocalDay(
-            messages[index - 1].timestamp,
-            messages[index].timestamp,
-          ) ||
-          (anchorMessageId != null &&
-              messages[index - 1].messageId <= anchorMessageId! &&
-              messages[index].messageId > anchorMessageId!),
-    );
-    final albumRows = {for (final album in albums) album.last: album};
-    final confirmedAttachments = {
-      for (final batch in attachments)
-        batch.key: [
-          for (var index = 0; index < messages.length; index++)
-            if (batch.confirmedMessageIds.contains(messages[index].messageId) &&
-                parsedMessages[index] != null &&
-                chatGalleryImage(account, parsedMessages[index]!) != null)
-              index,
-        ],
-    };
-    final hidden = {
-      for (final album in albums) ...album.take(album.length - 1),
-      for (final indices in confirmedAttachments.values) ...indices,
-    };
+    final (
+      parsed: parsedMessages,
+      :pendingMessageIds,
+      :albumRows,
+      :confirmedAttachments,
+      :hidden,
+    ) = cache.layout((
+      messages,
+      blocks,
+      attachments,
+      inlineReplies,
+      anchorMessageId,
+      account,
+    ), _layout);
     Widget buildAt(BuildContext context, int chronologicalIndex) {
       if (hasOlder && chronologicalIndex == 0) {
         return Center(
@@ -238,8 +283,7 @@ final class _ChatTimeline extends StatelessWidget {
         final firstIndex = album?.first ?? contentIndex;
         final message = messages[firstIndex];
         final lastMessage = messages[contentIndex];
-        final parsed =
-            parsedMessages[firstIndex] ?? _parseCachedMessage(message);
+        final parsed = parsedMessages[firstIndex] ?? cache.parse(message);
         final previous = firstIndex == 0 ? null : messages[firstIndex - 1];
         final next = contentIndex + 1 >= messages.length
             ? null
@@ -446,6 +490,63 @@ final class _ChatTimeline extends StatelessWidget {
       ],
     );
   }
+
+  /// Album grouping and the rows folded into another bubble. Linear in the
+  /// cached history, so it runs through [_TimelineCache.layout].
+  _TimelineLayout _layout() {
+    final parsedMessages = messages
+        .map(
+          (message) => message.referenceId.startsWith('otg1.')
+              ? cache.parse(message)
+              : null,
+        )
+        .toList();
+    final pendingMessageIds = {
+      for (final batch in attachments) ...batch.confirmedMessageIds,
+    };
+    final albums = groupPhotoAlbums(
+      parsedMessages,
+      canGroup: (index) =>
+          !pendingMessageIds.contains(messages[index].messageId) &&
+          !messages[index].deleted &&
+          parsedMessages[index] != null &&
+          (inlineReplies || (parsedMessages[index]!.threadReplies ?? 0) == 0) &&
+          chatGalleryImage(account, parsedMessages[index]!) != null,
+      boundaryBefore: (index) =>
+          _gapBeforeContentIndex(index) ||
+          !_sameLocalDay(
+            messages[index - 1].timestamp,
+            messages[index].timestamp,
+          ) ||
+          (anchorMessageId != null &&
+              messages[index - 1].messageId <= anchorMessageId! &&
+              messages[index].messageId > anchorMessageId!),
+    );
+    final albumRows = {for (final album in albums) album.last: album};
+    final confirmedAttachments = {
+      for (final batch in attachments)
+        batch.key: _confirmedIndices(batch.confirmedMessageIds, parsedMessages),
+    };
+    return (
+      parsed: parsedMessages,
+      pendingMessageIds: pendingMessageIds,
+      albumRows: albumRows,
+      confirmedAttachments: confirmedAttachments,
+      hidden: {
+        for (final album in albums) ...album.take(album.length - 1),
+        for (final indices in confirmedAttachments.values) ...indices,
+      },
+    );
+  }
+
+  List<int> _confirmedIndices(Set<int> confirmed, List<ChatMessage?> parsed) =>
+      [
+        for (var index = 0; index < messages.length; index++)
+          if (confirmed.contains(messages[index].messageId) &&
+              parsed[index] != null &&
+              chatGalleryImage(account, parsed[index]!) != null)
+            index,
+      ];
 
   /// Chronological index the centre sliver ends at.
   ///

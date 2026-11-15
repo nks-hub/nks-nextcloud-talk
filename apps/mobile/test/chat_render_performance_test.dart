@@ -252,6 +252,153 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a rebuild decodes no row again and an edit decodes only it', (
+    tester,
+  ) async {
+    const token = 'roome5';
+    await openRoom(tester, await seedRoom(token, 30));
+
+    // The bubble is handed the decoded model, so the same instance after a
+    // rebuild means the row was not decoded a second time.
+    Map<int, ChatMessage?> decoded() => {
+      for (final dynamic widget in tester.widgetList(
+        find.byWidgetPredicate(
+          (widget) => widget.runtimeType.toString() == '_MessageBubble',
+        ),
+      ))
+        (widget.message as CachedChatMessage).messageId:
+            widget.parsed as ChatMessage?,
+    };
+
+    final first = decoded();
+    expect(first.length, greaterThan(2));
+    final pane = tester.element(find.byType(ChatRoomPane));
+    for (var round = 0; round < 3; round++) {
+      pane.markNeedsBuild();
+      await tester.pump();
+    }
+    final rebuilt = decoded();
+    expect(rebuilt.keys, first.keys);
+    for (final id in first.keys) {
+      expect(identical(rebuilt[id], first[id]), isTrue, reason: 'row $id');
+    }
+
+    // An edit rewrites the row's JSON under the same message id.
+    final edited = _wireMessage(token, 129, 29)..['message'] = 'Edited body';
+    await (database.update(database.cachedChatMessages)
+          ..where((row) => row.messageId.equals(129)))
+        .write(CachedChatMessagesCompanion(rawJson: Value(jsonEncode(edited))));
+    for (var pump = 0; pump < 8; pump++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    final afterEdit = decoded();
+    await closeRoom(tester);
+
+    expect(afterEdit[129]!.message, 'Edited body');
+    for (final id in first.keys.where((id) => id != 129)) {
+      expect(identical(afterEdit[id], first[id]), isTrue, reason: 'row $id');
+    }
+  });
+
+  testWidgets('a confirmed send is on screen exactly once in every frame', (
+    tester,
+  ) async {
+    const token = 'roomf6';
+    final room = await seedRoom(token, 20);
+    Future<void> insertOperation(String id, String state, String messageIds) {
+      return database
+          .into(database.textSendOperations)
+          .insert(
+            TextSendOperationsCompanion.insert(
+              accountId: account.id,
+              operationId: id,
+              roomToken: token,
+              referenceId: 'reference-$id',
+              message: 'Handed over',
+              replayContractRevision: 'fixture-revision',
+              enqueueSequence: id.hashCode,
+              outboxState: state,
+              attemptCount: 0,
+              messageIdsJson: messageIds,
+              duplicateRiskAcknowledged: false,
+              createdAtMillis: 1,
+              updatedAtMillis: 1,
+            ),
+          );
+    }
+
+    // Completed before the room was opened and its message is not cached:
+    // that is history, not a send to stand in for.
+    await insertOperation('op-old', 'completed', '[999]');
+    await openRoom(tester, room);
+    await insertOperation('op-new', 'sending', '[]');
+    final pending = find.byKey(const ValueKey('chat-pending-op-new'));
+    final sent = find.byKey(ValueKey('chat-message-${account.id}-$token-120'));
+    for (var pump = 0; pump < 8; pump++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(pending, findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-pending-op-old')), findsNothing);
+    final heightWhilePending = tester.getSize(pending).height;
+
+    Future<void> expectOnceInEveryFrame() async {
+      for (var pump = 0; pump < 8; pump++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(
+          pending.evaluate().length + sent.evaluate().length,
+          1,
+          reason: 'frame $pump',
+        );
+      }
+    }
+
+    // One transaction feeds three streams; they are replayed here one at a
+    // time, slowest last, which is the order the pane sees them in.
+    await (database.update(
+      database.textSendOperations,
+    )..where((row) => row.operationId.equals('op-new'))).write(
+      const TextSendOperationsCompanion(
+        outboxState: Value('completed'),
+        messageIdsJson: Value('[120]'),
+      ),
+    );
+    await expectOnceInEveryFrame();
+    expect(pending, findsOneWidget);
+    expect(tester.getSize(pending).height, heightWhilePending);
+
+    await database
+        .into(database.cachedChatMessages)
+        .insert(
+          CachedChatMessagesCompanion.insert(
+            accountId: account.id,
+            roomToken: token,
+            messageId: 120,
+            actorType: 'users',
+            actorId: account.loginName,
+            actorDisplayName: 'Fixture user',
+            timestamp: 1724300000 + (20 * 60),
+            systemMessage: '',
+            messageType: 'comment',
+            referenceId: 'reference-op-new',
+            displayText: 'Handed over',
+            deleted: false,
+            rawJson: jsonEncode(_wireMessage(token, 120, 20)),
+          ),
+        );
+    // Still outside the scope's confirmed range, so not displayed yet.
+    await expectOnceInEveryFrame();
+    expect(pending, findsOneWidget);
+
+    await (database.update(database.chatScopes)..where(
+          (row) =>
+              row.accountId.equals(account.id) & row.roomToken.equals(token),
+        ))
+        .write(const ChatScopesCompanion(blocksJson: Value('[["100","120"]]')));
+    await expectOnceInEveryFrame();
+    expect(sent, findsOneWidget);
+    await closeRoom(tester);
+  });
+
   // Documents a known defect rather than a wanted behaviour: see the closing
   // expectation for what a fix has to change here.
   testWidgets('a message arriving while the reader is in history moves it', (

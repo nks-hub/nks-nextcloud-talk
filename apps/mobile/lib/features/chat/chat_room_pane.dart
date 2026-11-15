@@ -159,6 +159,12 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   int _textSendGeneration = 0;
   final List<_ProvisionalSend> _provisionalSends = <_ProvisionalSend>[];
   int _provisionalCounter = 0;
+  final _TimelineCache _timelineCache = _TimelineCache();
+
+  /// Sends this pane saw waiting. Only these are carried over the gap between
+  /// the outbox reporting `completed` and the message reaching the timeline;
+  /// a row that was already completed when the room opened is history.
+  final Set<String> _handoverOperationIds = <String>{};
   int _giphyGeneration = 0;
   bool _syncing = false;
   bool _loadingOlder = false;
@@ -318,6 +324,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     // The selected text belonged to the room just left; the right-click menu
     // offered to copy it in the next room.
     _selectedText = null;
+    _timelineCache.clear();
+    _handoverOperationIds.clear();
     _historyGeneration++;
     _loadingOlder = false;
     _scrollController.resetExtentTracking();
@@ -553,6 +561,65 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     });
   }
 
+  /// Stand-ins whose outbox row is already in [operations].
+  ///
+  /// The operation id is only known once `sendText` returns, which is after
+  /// the admission is committed, so the row can be on screen first. Until
+  /// then a stand-in is matched to a row that appeared after it with the same
+  /// text; admissions keep tap order, so the first such row is its own. A
+  /// failed stand-in was refused and has no row to wait for.
+  Set<_ProvisionalSend> _admittedProvisionals(
+    List<StoredTextSendOperation> operations,
+  ) {
+    final sends = _provisionalSends.where((send) => send.key == _key).toList();
+    if (sends.isEmpty) {
+      return const <_ProvisionalSend>{};
+    }
+    final claimed = <String>{
+      for (final send in sends)
+        if (send.operationId != null) send.operationId!,
+    };
+    final admitted = <_ProvisionalSend>{};
+    for (final send in sends) {
+      final operationId = send.operationId;
+      final text = send.message.trim();
+      for (final operation in operations) {
+        if (operationId != null
+            ? operation.operationId == operationId
+            : !send.failed &&
+                  !send.knownOperationIds.contains(operation.operationId) &&
+                  operation.message == text &&
+                  claimed.add(operation.operationId)) {
+          admitted.add(send);
+          break;
+        }
+      }
+    }
+    return admitted;
+  }
+
+  /// Whether a completed send still has to stand in for its message.
+  bool _awaitsTimeline(StoredTextSendOperation operation, int lastDisplayedId) {
+    if (!_handoverOperationIds.contains(operation.operationId)) {
+      return false;
+    }
+    var confirmedId = 0;
+    try {
+      for (final id in jsonDecode(operation.messageIdsJson) as List) {
+        confirmedId = math.max(confirmedId, id as int);
+      }
+    } on Object {
+      // Nothing to wait for without a readable message id.
+    }
+    // At or below the newest shown message it is either on screen or was
+    // deleted since; either way nothing more will arrive for it.
+    if (confirmedId > lastDisplayedId) {
+      return true;
+    }
+    _handoverOperationIds.remove(operation.operationId);
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen(windowActiveProvider, (_, _) {
@@ -686,7 +753,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     }
 
     final scope = scopeValue.valueOrNull;
-    final scopeBlocks = _decodeScopeBlocks(scope);
+    final scopeBlocks = _timelineCache.blocks(
+      scope?.blocksJson,
+      () => _decodeScopeBlocks(scope),
+    );
     // Cached rows are keyed only by (account, room, thread); the scope's
     // blocks are the authoritative record of which message IDs the client
     // actually confirmed by fetching them. Filtering here means a stray
@@ -694,10 +764,13 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     // jump-to-message feature caching a preview ahead of the surrounding
     // history) is never silently glued into the timeline as if it were
     // contiguous with what is shown around it.
-    final messages = _messagesWithinBlocks(
-      messagesValue.valueOrNull ?? const <CachedChatMessage>[],
-      scopeBlocks,
-    );
+    final cachedMessages =
+        messagesValue.valueOrNull ?? const <CachedChatMessage>[];
+    final messages = _timelineCache.visible((cachedMessages, scopeBlocks), () {
+      final visible = _messagesWithinBlocks(cachedMessages, scopeBlocks);
+      _timelineCache.retain(visible);
+      return visible;
+    });
     final operations =
         operationsValue.valueOrNull ?? const <StoredTextSendOperation>[];
     final deliveryStates = <int, OutgoingMessageDeliveryState>{
@@ -711,6 +784,11 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final operationIds = {
       for (final operation in operations) operation.operationId,
     };
+    for (final operation in operations) {
+      if (operation.outboxState != 'completed') {
+        _handoverOperationIds.add(operation.operationId);
+      }
+    }
     if (_provisionalSends.any(
       (send) =>
           send.operationId != null && operationIds.contains(send.operationId),
@@ -723,17 +801,27 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         );
       });
     }
+    final admitted = _admittedProvisionals(operations);
+    final lastDisplayedId = messages.isEmpty ? 0 : messages.last.messageId;
     final pending = <StoredTextSendOperation>[
-      ...operations.where((operation) => operation.outboxState != 'completed'),
+      for (final operation in operations)
+        if (operation.outboxState != 'completed')
+          operation
+        else if (_awaitsTimeline(operation, lastDisplayedId))
+          // The outbox, the messages and the scope are three streams fed by
+          // one transaction. Dropping the bubble on the first of them left a
+          // frame or more with the message nowhere on screen.
+          operation.copyWith(outboxState: 'sending'),
       for (final send in _provisionalSends)
-        if (send.key == _key &&
-            !(send.operationId != null &&
-                operationIds.contains(send.operationId)))
+        if (send.key == _key && !admitted.contains(send))
           send.asOperation(widget.account.id),
     ];
-    final pendingAttachments = pendingAttachmentBatches(
-      attachmentJobs,
-      serverUrl: widget.account.serverUrl,
+    final pendingAttachments = _timelineCache.attachments(
+      (attachmentJobs, widget.account.serverUrl),
+      () => pendingAttachmentBatches(
+        attachmentJobs,
+        serverUrl: widget.account.serverUrl,
+      ),
     );
     final showInitialLoading =
         !_initialAttemptFinished &&
@@ -974,6 +1062,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                     children: [
                       _pointerSelectable(
                         _ChatTimeline(
+                          cache: _timelineCache,
                           account: widget.account,
                           conversation: widget.conversation,
                           threadId: widget.threadId,

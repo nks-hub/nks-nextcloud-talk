@@ -1,6 +1,87 @@
 part of 'chat_room_pane_test.dart';
 
 void _registerChatRoomPaneSendScopeTests() {
+  testWidgets(
+    'an outbox row that lands before the send returns replaces its stand-in',
+    (tester) async {
+      final heldVault = _HeldSendCredentialVault();
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async => http.Response('', 404)),
+      );
+      final service = ChatService(
+        accounts: accounts,
+        chat: ChatRepository(database),
+        credentials: heldVault,
+        api: api,
+      );
+      addTearDown(service.close);
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        app(
+          overrides: [chatServiceProvider.overrideWithValue(service)],
+          home: Scaffold(
+            body: ChatRoomPane(account: account, conversation: conversation),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const Key('chat-composer')),
+        'Sent once',
+      );
+      await tester.pump();
+      heldVault.hold = true;
+      await tester.tap(find.byKey(const Key('send-message-gesture')));
+      await _pumpUntil(tester, () => heldVault.started.isCompleted);
+      await tester.pump();
+      const standIn = Key('chat-pending-provisional-1');
+      const row = Key('chat-pending-op-early');
+      expect(find.byKey(standIn), findsOneWidget);
+
+      // The send is still held, so the pane has no operation id to go by.
+      await tester.runAsync(
+        () => _insertPendingOperation(
+          database,
+          account,
+          conversation,
+          operationId: 'op-early',
+          outboxState: 'queued',
+          message: 'Sent once',
+        ),
+      );
+      for (
+        var frame = 0;
+        frame < 100 && find.byKey(row).evaluate().isEmpty;
+        frame++
+      ) {
+        await tester.pump(const Duration(milliseconds: 10));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 1)),
+        );
+        expect(
+          find.byKey(standIn).evaluate().length +
+              find.byKey(row).evaluate().length,
+          1,
+          reason: 'frame $frame',
+        );
+      }
+      expect(find.byKey(row), findsOneWidget);
+      expect(find.text('Sent once'), findsOneWidget);
+
+      heldVault.hold = false;
+      heldVault.release.complete(null);
+      for (var i = 0; i < 50; i++) {
+        await tester.pump(const Duration(milliseconds: 10));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 1)),
+        );
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(service.close);
+      await tester.pumpAndSettle();
+    },
+  );
+
   for (final switchRoom in [false, true]) {
     for (final unexpected in [false, true]) {
       testWidgets(
