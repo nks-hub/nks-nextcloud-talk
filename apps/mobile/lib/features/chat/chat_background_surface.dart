@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -73,7 +74,8 @@ final class ChatBackgroundSurface extends ConsumerWidget {
         : safeChatBackground(requested, scheme);
     // A colour of this device hides the shared layers, so their photo is not
     // even downloaded.
-    final wallpaper = local == null ? _sharedWallpaper(ref, shared) : null;
+    final photo = local == null ? _sharedPhoto(ref, shared) : null;
+    final wallpaper = local == null ? _sharedWallpaper(shared, photo) : null;
     final layer = Positioned.fill(
       child: wallpaper == null
           ? const SizedBox.shrink()
@@ -101,7 +103,7 @@ final class ChatBackgroundSurface extends ConsumerWidget {
                       _HeaderVeil(
                         // A photo can be anything; the header text gets the
                         // same protection as text on a chip.
-                        alpha: _hasPhoto(ref, shared, local)
+                        alpha: photo != null
                             ? wallpaperChipAlpha(scheme)
                             : wallpaper != null
                             ? 0.35
@@ -120,28 +122,9 @@ final class ChatBackgroundSurface extends ConsumerWidget {
     );
   }
 
-  bool _hasPhoto(WidgetRef ref, OwnTalkRoomExtras shared, Color? local) {
+  Uint8List? _sharedPhoto(WidgetRef ref, OwnTalkRoomExtras shared) {
     final sha = shared.valueOf(OwnTalkSettingField.chatBackgroundImage);
-    return local == null &&
-        sha != null &&
-        ref
-                .watch(
-                  ownTalkRoomImageProvider((
-                    accountId: accountId,
-                    roomToken: roomToken,
-                    sha256: sha,
-                  )),
-                )
-                .valueOrNull !=
-            null;
-  }
-
-  Widget? _sharedWallpaper(WidgetRef ref, OwnTalkRoomExtras shared) {
-    final preset = chatWallpaperPresetById(
-      shared.valueOf(OwnTalkSettingField.chatBackgroundPreset),
-    );
-    final sha = shared.valueOf(OwnTalkSettingField.chatBackgroundImage);
-    final bytes = sha == null
+    return sha == null
         ? null
         : ref
               .watch(
@@ -152,6 +135,12 @@ final class ChatBackgroundSurface extends ConsumerWidget {
                 )),
               )
               .valueOrNull;
+  }
+
+  Widget? _sharedWallpaper(OwnTalkRoomExtras shared, Uint8List? bytes) {
+    final preset = chatWallpaperPresetById(
+      shared.valueOf(OwnTalkSettingField.chatBackgroundPreset),
+    );
     if (preset == null && bytes == null) {
       return null;
     }
