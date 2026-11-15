@@ -63,6 +63,9 @@ void main() {
           appDatabaseProvider.overrideWithValue(database),
           accountRepositoryProvider.overrideWithValue(accounts),
           credentialVaultProvider.overrideWithValue(vault),
+          connectivityWakeEventsProvider.overrideWithValue(
+            const Stream<void>.empty(),
+          ),
         ],
       );
       addTearDown(container.dispose);
