@@ -121,10 +121,10 @@ final class PinnedMessageBanner extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
     final cached = ref
         .watch(
-          chatMessagesProvider((
+          chatMessageProvider((
             accountId: account.id,
             roomToken: conversation.token,
-            threadId: null,
+            messageId: pinned.messageId,
           )),
         )
         .valueOrNull;

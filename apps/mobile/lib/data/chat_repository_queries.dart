@@ -22,6 +22,96 @@ extension ValidatedChatRepositoryThreadQueries on ChatRepository {
   );
 }
 
+/// Reads for an open room that do not load its whole cached history.
+extension ChatRepositoryMessageWindow on ChatRepository {
+  /// The newest [limit] messages of a room's main timeline, oldest first.
+  ///
+  /// The cache is never pruned, so the unbounded read grew with the room and
+  /// ran again on every write to the table.
+  Stream<List<CachedChatMessage>> watchRecentMessages({
+    required String accountId,
+    required String roomToken,
+    required int limit,
+    bool includeThreadReplies = false,
+  }) {
+    final query = _database.select(_database.cachedChatMessages)
+      ..where(
+        (message) => _timelineMessages(
+          message,
+          accountId: accountId,
+          roomToken: roomToken,
+          threadId: null,
+          includeThreadReplies: includeThreadReplies,
+        ),
+      )
+      ..orderBy([(message) => OrderingTerm.desc(message.messageId)])
+      ..limit(limit);
+    return query.watch().map((rows) => rows.reversed.toList(growable: false));
+  }
+
+  /// How many main-timeline messages are at or after [messageId]: the window
+  /// [watchRecentMessages] needs to reach it.
+  Future<int> countMessagesFrom({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+    bool includeThreadReplies = false,
+  }) async {
+    final messages = _database.cachedChatMessages;
+    final count = messages.messageId.count();
+    final query = _database.selectOnly(messages)
+      ..addColumns([count])
+      ..where(
+        _timelineMessages(
+              messages,
+              accountId: accountId,
+              roomToken: roomToken,
+              threadId: null,
+              includeThreadReplies: includeThreadReplies,
+            ) &
+            messages.messageId.isBiggerOrEqualValue(messageId),
+      );
+    return (await query.getSingle()).read(count) ?? 0;
+  }
+
+  /// One message, as a list so it reads like the timeline does: empty while
+  /// it is not cached.
+  Stream<List<CachedChatMessage>> watchMessage({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+  }) {
+    return (_database.select(_database.cachedChatMessages)..where(
+          (message) =>
+              message.accountId.equals(accountId) &
+              message.roomToken.equals(roomToken) &
+              message.messageId.equals(messageId),
+        ))
+        .watch();
+  }
+}
+
+Expression<bool> _timelineMessages(
+  $CachedChatMessagesTable message, {
+  required String accountId,
+  required String roomToken,
+  required int? threadId,
+  required bool includeThreadReplies,
+}) {
+  return message.accountId.equals(accountId) &
+      message.roomToken.equals(roomToken) &
+      message.systemMessage.isNotIn(
+        _ChatRepositoryQueries._noticeSystemMessages,
+      ) &
+      (threadId == null
+          ? (includeThreadReplies
+                ? const Constant(true)
+                : (message.threadId.isNull() |
+                      message.threadId.equalsExp(message.messageId)))
+          : (message.threadId.equals(threadId) |
+                message.messageId.equals(threadId)));
+}
+
 extension _ChatRepositoryQueries on ChatRepository {
   /// System messages the timeline never shows, because the thing they
   /// announce is already visible on the message they point at.
@@ -50,17 +140,13 @@ extension _ChatRepositoryQueries on ChatRepository {
   }) {
     final query = _database.select(_database.cachedChatMessages)
       ..where(
-        (message) =>
-            message.accountId.equals(accountId) &
-            message.roomToken.equals(roomToken) &
-            message.systemMessage.isNotIn(_noticeSystemMessages) &
-            (threadId == null
-                ? (includeThreadReplies
-                      ? const Constant(true)
-                      : (message.threadId.isNull() |
-                            message.threadId.equalsExp(message.messageId)))
-                : (message.threadId.equals(threadId) |
-                      message.messageId.equals(threadId))),
+        (message) => _timelineMessages(
+          message,
+          accountId: accountId,
+          roomToken: roomToken,
+          threadId: threadId,
+          includeThreadReplies: includeThreadReplies,
+        ),
       )
       ..orderBy([(message) => OrderingTerm.asc(message.messageId)]);
     return query.watch();

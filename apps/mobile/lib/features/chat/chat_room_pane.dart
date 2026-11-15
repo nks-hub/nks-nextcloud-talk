@@ -1113,7 +1113,15 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                           blocks: scopeBlocks,
                           pending: pending,
                           attachments: pendingAttachments,
-                          hasOlder: scope?.hasHistory ?? false,
+                          // Also while the window holds only the newest
+                          // part of what is cached: paging back widens it.
+                          hasOlder:
+                              (scope?.hasHistory ?? false) ||
+                              (widget.threadId == null &&
+                                  cachedMessages.length >=
+                                      ref.watch(
+                                        chatMessageWindowProvider(_key),
+                                      )),
                           loadingOlder: _loadingOlder,
                           controller: _scrollController,
                           onLoadOlder: () => unawaited(_loadOlder()),

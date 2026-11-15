@@ -729,12 +729,46 @@ List<CachedChatMessage> _messagesWithinBlocks(
   if (blocks == null) {
     return messages;
   }
+  final bounds = _blockBounds(blocks);
   return messages
-      .where((message) => _blockIndexOf(blocks, message.messageId) != -1)
+      .where(
+        (message) => _blockIndexWithin(bounds, blocks, message.messageId) != -1,
+      )
       .toList(growable: false);
 }
 
-int _blockIndexOf(List<ChatBlock> blocks, int messageId) {
+int _blockIndexOf(List<ChatBlock> blocks, int messageId) =>
+    _blockIndexWithin(_blockBounds(blocks), blocks, messageId);
+
+/// The blocks as integer ranges, or null when a cursor does not fit an int.
+/// Message ids are ints, and building a cursor string for every row of the
+/// room just to compare it was most of the cost of the filter.
+List<(int, int)>? _blockBounds(List<ChatBlock> blocks) {
+  final bounds = <(int, int)>[];
+  for (final block in blocks) {
+    final start = int.tryParse(block.start.value);
+    final end = int.tryParse(block.end.value);
+    if (start == null || end == null) {
+      return null;
+    }
+    bounds.add((start, end));
+  }
+  return bounds;
+}
+
+int _blockIndexWithin(
+  List<(int, int)>? bounds,
+  List<ChatBlock> blocks,
+  int messageId,
+) {
+  if (bounds != null) {
+    for (var index = 0; index < bounds.length; index++) {
+      if (bounds[index].$1 <= messageId && messageId <= bounds[index].$2) {
+        return index;
+      }
+    }
+    return -1;
+  }
   final cursor = ChatCursor.parse(messageId.toString());
   for (var index = 0; index < blocks.length; index++) {
     if (blocks[index].contains(cursor)) {

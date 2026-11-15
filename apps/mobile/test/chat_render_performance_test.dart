@@ -415,6 +415,84 @@ void main() {
     await closeRoom(tester);
   });
 
+  Finder bubble(String token, int messageId) =>
+      find.byKey(ValueKey('chat-message-${account.id}-$token-$messageId'));
+
+  testWidgets('a long room opens on its newest messages and pages back '
+      'through the cache', (tester) async {
+    const token = 'roomg7';
+    await openRoom(tester, await seedRoom(token, 700));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatRoomPane)),
+    );
+    final key = (accountId: account.id, roomToken: token, threadId: null);
+    List<int> loaded() => [
+      for (final message
+          in container.read(chatMessagesProvider(key)).valueOrNull ??
+              const <CachedChatMessage>[])
+        message.messageId,
+    ];
+
+    expect(loaded().length, chatMessageWindowStep);
+    expect(loaded().first, 799 - chatMessageWindowStep + 1);
+    expect(loaded().last, 799);
+
+    // Everything is cached and the server has nothing older, so reaching the
+    // oldest message is the window's doing alone.
+    final list = find.byKey(const Key('chat-message-list'));
+    for (
+      var drag = 0;
+      drag < 200 && bubble(token, 100).evaluate().isEmpty;
+      drag++
+    ) {
+      await tester.drag(list, const Offset(0, 3000));
+      for (var pump = 0; pump < 4; pump++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+    }
+    expect(bubble(token, 100), findsOneWidget);
+    expect(loaded().length, 700);
+    expect(tester.takeException(), isNull);
+    await closeRoom(tester);
+  });
+
+  testWidgets('a jump reaches a cached message older than the window', (
+    tester,
+  ) async {
+    const token = 'roomh8';
+    final room = await seedRoom(token, 700);
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      app(
+        Scaffold(
+          body: ChatRoomPane(
+            account: account,
+            conversation: room,
+            jumpToMessageId: 110,
+          ),
+        ),
+      ),
+    );
+    for (
+      var attempt = 0;
+      attempt < 300 && bubble(token, 110).evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 1)),
+      );
+    }
+    expect(bubble(token, 110), findsOneWidget);
+    expect(find.byKey(const Key('chat-jump-not-found')), findsNothing);
+    for (var pump = 0; pump < 20; pump++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await closeRoom(tester);
+  });
+
   // Documents a known defect rather than a wanted behaviour: see the closing
   // expectation for what a fix has to change here.
   testWidgets('a message arriving while the reader is in history moves it', (

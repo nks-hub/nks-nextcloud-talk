@@ -435,9 +435,16 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   /// Returns whether the page was fetched. A refused or failed fetch is
   /// already surfaced through [_localError]; the boolean only lets a caller
   /// stop paging instead of retrying the same failure.
-  Future<bool> _loadOlder() async {
+  ///
+  /// Cached history the message window has not reached yet is shown first;
+  /// [fetchOnly] skips that for a jump, which widens the window to its target
+  /// itself and needs the page from the server.
+  Future<bool> _loadOlder({bool fetchOnly = false}) async {
     if (_loadingOlder) {
       return false;
+    }
+    if (!fetchOnly && _widenMessageWindow()) {
+      return true;
     }
     final scope = ref.read(chatScopeProvider(_key)).valueOrNull;
     if (scope?.hasHistory != true) {
@@ -474,6 +481,56 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       if (isCurrent()) {
         _update(() => _loadingOlder = false);
       }
+    }
+  }
+
+  /// Shows the next step of cached history. False when the window already
+  /// holds everything cached, so only the server has more.
+  bool _widenMessageWindow() {
+    final key = _key;
+    if (key.threadId != null) {
+      return false;
+    }
+    final window = ref.read(chatMessageWindowProvider(key).notifier);
+    final shown = ref.read(chatMessagesProvider(key)).valueOrNull?.length ?? 0;
+    if (shown < window.state) {
+      return false;
+    }
+    window.state += chatMessageWindowStep;
+    return true;
+  }
+
+  /// Makes the message window reach back to [messageId], and waits for the
+  /// rows, so a jump finds a target that is cached but older than the window.
+  Future<void> _widenMessageWindowTo(
+    int messageId,
+    ChatRoomProviderKey key,
+  ) async {
+    if (key.threadId != null) {
+      return;
+    }
+    final needed = await ref
+        .read(chatRepositoryProvider)
+        .countMessagesFrom(
+          accountId: key.accountId,
+          roomToken: key.roomToken,
+          messageId: messageId,
+          includeThreadReplies:
+              ref.read(replyLayoutProvider) == ReplyLayout.inline,
+        );
+    if (!mounted || key != _key) {
+      return;
+    }
+    final window = ref.read(chatMessageWindowProvider(key).notifier);
+    if (needed <= window.state) {
+      return;
+    }
+    // Some rows past the target, so it is not revealed at the very edge.
+    window.state = needed + chatMessageWindowStep ~/ 2;
+    try {
+      await ref.read(chatMessagesProvider(key).future);
+    } on Object {
+      // The reveal below reports a target that never shows up.
     }
   }
 
@@ -602,7 +659,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         }
         break;
       }
-      if (scope?.hasHistory != true || !await _loadOlder()) {
+      if (scope?.hasHistory != true || !await _loadOlder(fetchOnly: true)) {
         break;
       }
       final loadedScope = await chat.getScope(
@@ -644,6 +701,10 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     final blocks = _decodeScopeBlocks(scope);
     if (blocks == null || _blockIndexOf(blocks, messageId) == -1) {
       return null;
+    }
+    await _widenMessageWindowTo(messageId, key);
+    if (!mounted || !_isCurrentJump(key, generation)) {
+      return true;
     }
     return _revealMessage(messageId, key, generation);
   }

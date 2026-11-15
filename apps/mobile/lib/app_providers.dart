@@ -1066,16 +1066,52 @@ Future<ChatMediaImage?> _downscaledPreview(Uint8List original) async {
   }
 }
 
+/// How many messages an open room starts with, and how many more each step
+/// back through its cached history adds.
+const chatMessageWindowStep = 300;
+
+/// How many of the newest cached messages the open room holds. The pane
+/// raises it when the reader pages back or jumps to an older message.
+final chatMessageWindowProvider = StateProvider.autoDispose
+    .family<int, ChatRoomProviderKey>((ref, key) => chatMessageWindowStep);
+
+/// The messages a pane shows, oldest first.
+///
+/// A room's main timeline is the newest [chatMessageWindowProvider] rows; a
+/// thread is read whole, because its root has to be there however long the
+/// thread is.
 final chatMessagesProvider = StreamProvider.autoDispose
     .family<List<CachedChatMessage>, ChatRoomProviderKey>((ref, key) {
       final replyLayout = ref.watch(replyLayoutProvider);
+      final chat = ref.watch(chatRepositoryProvider);
+      if (key.threadId != null) {
+        return chat.watchMessages(
+          accountId: key.accountId,
+          roomToken: key.roomToken,
+          threadId: key.threadId,
+          includeThreadReplies: replyLayout == ReplyLayout.inline,
+        );
+      }
+      return chat.watchRecentMessages(
+        accountId: key.accountId,
+        roomToken: key.roomToken,
+        limit: ref.watch(chatMessageWindowProvider(key)),
+        includeThreadReplies: replyLayout == ReplyLayout.inline,
+      );
+    });
+
+/// One cached message of a room, however old; empty while it is not cached.
+final chatMessageProvider = StreamProvider.autoDispose
+    .family<
+      List<CachedChatMessage>,
+      ({String accountId, String roomToken, int messageId})
+    >((ref, key) {
       return ref
           .watch(chatRepositoryProvider)
-          .watchMessages(
+          .watchMessage(
             accountId: key.accountId,
             roomToken: key.roomToken,
-            threadId: key.threadId,
-            includeThreadReplies: replyLayout == ReplyLayout.inline,
+            messageId: key.messageId,
           );
     });
 

@@ -171,7 +171,7 @@ void main() {
     final key = keyFor(conversation);
     expect(
       container.read(chatMessagesProvider(key)).valueOrNull,
-      hasLength(messages),
+      hasLength(chatMessageWindowStep),
     );
 
     // Close the room the way the app does: the pane leaves the tree while the
@@ -215,10 +215,11 @@ void main() {
         'OPEN cached=$messages emitted=${emitted?.length} '
         'first_paint=${elapsed.elapsedMilliseconds}ms',
       );
-      expect(emitted, hasLength(messages));
-      // Measured at 90/140/231ms for 500/5000/20000 in a debug VM run, so the
-      // query is not what makes a deep room slow to open and no windowing is
-      // warranted. Generous bound: this only fires if that stops being true.
+      // The room opens on a window of its newest messages however much is
+      // cached. Unbounded, this measured 90/140/231ms for 500/5000/20000 in
+      // a debug VM run, and the same read ran again on every write to the
+      // messages table.
+      expect(emitted, hasLength(chatMessageWindowStep));
       expect(
         elapsed.elapsed,
         lessThan(const Duration(seconds: 2)),
