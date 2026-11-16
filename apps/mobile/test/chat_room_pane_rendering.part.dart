@@ -256,19 +256,6 @@ void _registerChatRoomPaneRenderingTests() {
     return () => copied;
   }
 
-  Future<void> rightClick(WidgetTester tester, Offset position) async {
-    final gesture = await tester.startGesture(
-      position,
-      kind: PointerDeviceKind.mouse,
-      buttons: kSecondaryMouseButton,
-    );
-    // A real click holds the button past the tap deadline, which is when the
-    // selection region used to open its own toolbar under the menu.
-    await tester.pump(const Duration(milliseconds: 150));
-    await gesture.up();
-    await tester.pumpAndSettle();
-  }
-
   testWidgets('a right click on a link offers the link and the message '
       'actions at the pointer', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
@@ -300,7 +287,7 @@ void _registerChatRoomPaneRenderingTests() {
 
     final link = find.text('the docs');
     expect(link, findsOneWidget);
-    await rightClick(tester, tester.getCenter(link));
+    await _rightClick(tester, tester.getCenter(link));
 
     expect(find.byKey(const Key('message-action-open-link')), findsOneWidget);
     expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
@@ -322,7 +309,7 @@ void _registerChatRoomPaneRenderingTests() {
     expect(copied(), 'https://docs.example.invalid/guide');
 
     // A right click on plain text of another message offers no link.
-    await rightClick(tester, tester.getCenter(find.text('Cached hello')));
+    await _rightClick(tester, tester.getCenter(find.text('Cached hello')));
     expect(find.byKey(const Key('message-action-open-link')), findsNothing);
     expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
     expect(find.text('Select all'), findsNothing);
@@ -366,7 +353,7 @@ void _registerChatRoomPaneRenderingTests() {
     await drag.up();
     await tester.pump();
 
-    await rightClick(tester, rect.centerLeft + const Offset(4, 0));
+    await _rightClick(tester, rect.centerLeft + const Offset(4, 0));
     final copySelection = find.byKey(
       const Key('message-action-copy-selection'),
     );
@@ -442,7 +429,7 @@ void _registerChatRoomPaneRenderingTests() {
     room.value = roomB;
     await tester.pump();
     await tester.pump();
-    await rightClick(tester, tester.getCenter(find.text('room b text')));
+    await _rightClick(tester, tester.getCenter(find.text('room b text')));
     expect(find.byKey(const Key('message-action-copy')), findsOneWidget);
     expect(
       find.byKey(const Key('message-action-copy-selection')),

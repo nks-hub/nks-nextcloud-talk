@@ -28,10 +28,16 @@ final class ChatContextMenuCollector {
   _Click? _click;
   _Click? _offered;
   List<ChatContextMenuEntry> _entries = const [];
+  bool _picture = false;
 
-  void offer(PointerDownEvent event, List<ChatContextMenuEntry> entries) {
+  void offer(
+    PointerDownEvent event,
+    List<ChatContextMenuEntry> entries, {
+    bool picture = false,
+  }) {
     _offered = _Click.of(event);
     _entries = entries;
+    _picture = picture;
   }
 
   /// Remembers a right click; any other press forgets it, so a click that
@@ -42,17 +48,23 @@ final class ChatContextMenuCollector {
 
   /// The position and target commands of the right click being handled, or
   /// null when the actions were asked for some other way (long press, key).
-  ({Offset position, List<ChatContextMenuEntry> entries})? take() {
+  /// `picture` says the click landed on a picture of the message.
+  ({Offset position, List<ChatContextMenuEntry> entries, bool picture})?
+  take() {
     final click = _click;
     final offered = _offered;
     final entries = _entries;
+    final picture = _picture;
     _click = null;
     _offered = null;
     _entries = const [];
+    _picture = false;
     if (click == null) return null;
+    final onTarget = offered == click;
     return (
       position: click.position,
-      entries: offered == click ? entries : const <ChatContextMenuEntry>[],
+      entries: onTarget ? entries : const <ChatContextMenuEntry>[],
+      picture: onTarget && picture,
     );
   }
 }
@@ -131,10 +143,15 @@ final class ChatContextMenuSource extends StatelessWidget {
     super.key,
     required this.entries,
     required this.child,
+    this.picture = false,
   });
 
   final List<ChatContextMenuEntry> Function() entries;
   final Widget child;
+
+  /// The picture's commands then lead the menu together with the message's
+  /// own forward, and replace the message's copy of the picture.
+  final bool picture;
 
   @override
   Widget build(BuildContext context) {
@@ -142,7 +159,9 @@ final class ChatContextMenuSource extends StatelessWidget {
     if (collector == null) return child;
     return Listener(
       onPointerDown: (event) {
-        if (_isSecondary(event)) collector.offer(event, entries());
+        if (_isSecondary(event)) {
+          collector.offer(event, entries(), picture: picture);
+        }
       },
       child: child,
     );

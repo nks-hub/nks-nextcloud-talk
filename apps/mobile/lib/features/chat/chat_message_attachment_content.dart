@@ -143,6 +143,40 @@ final class _ChatAttachment extends ConsumerWidget {
             compact: compact,
             onOpen: onOpenImage ?? openImage,
             onOpenFile: openFile,
+            onCopy:
+                fullScreenPreviewUri == null ||
+                    originalUri == null ||
+                    mimeType == null ||
+                    !imageClipboardSupported
+                ? null
+                : () => unawaited(
+                    copyChatImage(
+                      messageContext: context,
+                      account: account,
+                      image: ChatGalleryImage(
+                        previewUri: fullScreenPreviewUri,
+                        originalUri: originalUri,
+                        contentType: mimeType,
+                        name: name,
+                      ),
+                      repository: ref.read(chatMediaRepositoryProvider),
+                      exporter: ref.read(chatImageExporterProvider),
+                    ),
+                  ),
+            onSave: originalUri == null || mimeType == null
+                ? null
+                : () => unawaited(
+                    _exportDownloadedAttachment(
+                      context,
+                      ref,
+                      action: _ChatAttachmentMenuAction.save,
+                      account: account,
+                      uri: originalUri,
+                      fileName: name,
+                      contentType: mimeType,
+                      expectedBytes: _attachmentExpectedBytes(parameter),
+                    ),
+                  ),
             onRetry: () async {
               final cache = ref.read(chatMediaCacheProvider);
               final disk = ref.read(chatMediaDiskCacheProvider);

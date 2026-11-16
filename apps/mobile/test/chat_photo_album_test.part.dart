@@ -12,6 +12,80 @@ Map<String, Object?> _albumWire(
   ).referenceId;
 
 void _registerPhotoAlbumTests() {
+  testWidgets('a right click on an album picture on desktop acts on that '
+      'picture', (tester) async {
+    final preview = await _solidPreview(tester, 120, 80);
+    for (var index = 0; index < 4; index++) {
+      final wire = _albumWire(index);
+      ((wire['messageParameters']! as Map)['file']! as Map)
+        ..['name'] = 'photo-$index.png'
+        ..['path'] = 'Talk/photo-$index.png';
+      await _insertCachedMessage(database, wire, displayText: 'Photo');
+    }
+    final fakes = _PictureMenuFakes(preview.body);
+    await tester.pumpWidget(
+      app(
+        home: roomScreen(),
+        overrides: [
+          chatMediaProvider.overrideWith((ref, key) async => preview),
+          ...fakes.overrides,
+        ],
+      ),
+    );
+    final image = find.byKey(const Key('chat-image-102-0'));
+    await _pumpUntil(
+      tester,
+      () =>
+          image.hitTestable().evaluate().isNotEmpty &&
+          find.byKey(const Key('chat-image-loading-102-0')).evaluate().isEmpty,
+    );
+    Finder action(String name) => find.byKey(Key('message-action-$name'));
+
+    await _rightClick(tester, tester.getCenter(image));
+    expect(find.byType(BottomSheet), findsNothing);
+    for (final name in [
+      'copy-image',
+      'save-image',
+      'open-image',
+      'open-file',
+      'forward',
+    ]) {
+      expect(action(name), findsOneWidget, reason: name);
+    }
+    await tester.tap(action('copy-image'));
+    await _pumpUntil(tester, () => fakes.clipboard.copied.isNotEmpty);
+    expect(fakes.requested.single.path, endsWith('/Talk/photo-2.png'));
+    await tester.pumpAndSettle();
+
+    await _rightClick(tester, tester.getCenter(image));
+    await tester.tap(action('save-image'));
+    await tester.pumpAndSettle();
+    expect(fakes.files.saved, ['photo-2.png']);
+
+    await _rightClick(tester, tester.getCenter(image));
+    await tester.tap(action('open-file'));
+    await tester.pumpAndSettle();
+    expect(fakes.opener.uris.single.path, endsWith('/Talk/photo-2.png'));
+
+    await _rightClick(tester, tester.getCenter(image));
+    await tester.tap(action('open-image'));
+    await _pumpUntil(
+      tester,
+      () => find.byType(AuthenticatedImageGallery).evaluate().isNotEmpty,
+    );
+    expect(
+      tester
+          .widget<AuthenticatedImageGallery>(
+            find.byType(AuthenticatedImageGallery),
+          )
+          .initialIndex,
+      2,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
   testWidgets(
     'partial album keeps sent photos accessible inside the sending bubble',
     (tester) async {

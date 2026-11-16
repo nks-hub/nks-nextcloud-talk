@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gal/gal.dart';
 import 'package:mime/mime.dart';
 import 'package:share_plus/share_plus.dart';
@@ -82,6 +83,10 @@ final class PlatformChatImageExporter implements ChatImageExporter {
     }
   }
 }
+
+final chatImageExporterProvider = Provider<ChatImageExporter>(
+  (ref) => const PlatformChatImageExporter(),
+);
 
 /// Reduces a remote file name to something a gallery and a share sheet accept.
 ///

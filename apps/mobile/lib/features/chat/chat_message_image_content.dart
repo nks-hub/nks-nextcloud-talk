@@ -16,6 +16,8 @@ final class _InlineChatImagePreview extends StatefulWidget {
     required this.onOpen,
     required this.onRetry,
     this.onOpenFile,
+    this.onCopy,
+    this.onSave,
     this.compact = false,
   });
 
@@ -29,6 +31,10 @@ final class _InlineChatImagePreview extends StatefulWidget {
 
   /// Hands the file to the platform when the picture cannot be shown inline.
   final VoidCallback? onOpenFile;
+
+  /// Right-click commands for the original behind this picture.
+  final VoidCallback? onCopy;
+  final VoidCallback? onSave;
   final bool compact;
 
   @override
@@ -273,12 +279,34 @@ final class _InlineChatImagePreviewState
   }
 
   /// The right-click commands over the picture itself; the message's own
-  /// actions, copying the picture among them, follow in the same menu.
+  /// actions follow in the same menu.
   List<ChatContextMenuEntry> _contextMenuEntries() {
     final strings = AppLocalizations.of(context);
-    final onOpen = widget.onOpen;
+    // A failed or unavailable preview offers only the file itself: the
+    // viewer and the clipboard need a picture that decodes.
+    final broken =
+        !_retrying &&
+        !widget.image.isLoading &&
+        (_decodeFailed || _image == null);
+    final onOpen = broken ? null : widget.onOpen;
+    final onCopy = broken ? null : widget.onCopy;
+    final onSave = widget.onSave;
     final onOpenFile = widget.onOpenFile;
     return [
+      if (onCopy != null)
+        ChatContextMenuEntry(
+          key: const Key('message-action-copy-image'),
+          icon: Icons.image_outlined,
+          label: strings.copyImage,
+          onSelected: onCopy,
+        ),
+      if (onSave != null)
+        ChatContextMenuEntry(
+          key: const Key('message-action-save-image'),
+          icon: Icons.save_alt_rounded,
+          label: strings.saveImage,
+          onSelected: onSave,
+        ),
       if (onOpen != null)
         ChatContextMenuEntry(
           key: const Key('message-action-open-image'),
@@ -300,6 +328,7 @@ final class _InlineChatImagePreviewState
   Widget build(BuildContext context) {
     return ChatContextMenuSource(
       entries: _contextMenuEntries,
+      picture: true,
       child: _buildPreview(context),
     );
   }

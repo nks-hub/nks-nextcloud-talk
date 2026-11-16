@@ -39,6 +39,217 @@ void _registerChatAttachmentRenderingTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('a touch platform keeps the sheet for a picture, even on a '
+      'mouse right click', (tester) async {
+    final preview = await _solidPreview(tester, 120, 80);
+    await _insertCachedMessage(
+      database,
+      _layoutImageWire(100, width: 120, height: 80),
+      displayText: 'Photo',
+    );
+    await tester.pumpWidget(
+      app(
+        home: roomScreen(),
+        overrides: [
+          chatMediaProvider.overrideWith((ref, key) async => preview),
+        ],
+      ),
+    );
+    final image = find.byKey(const Key('chat-image-100-0'));
+    await _pumpUntil(
+      tester,
+      () =>
+          image.hitTestable().evaluate().isNotEmpty &&
+          find.byKey(const Key('chat-image-loading-100-0')).evaluate().isEmpty,
+    );
+    for (final open in <Future<void> Function()>[
+      () => tester.longPress(image),
+      () => _rightClick(tester, tester.getCenter(image)),
+    ]) {
+      await open();
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(find.byType(PopupMenuDivider), findsNothing);
+      expect(
+        find.byKey(const Key('message-action-copy-image')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('message-action-save-image')), findsNothing);
+      expect(find.byKey(const Key('message-action-open-image')), findsNothing);
+      await tester.tapAt(const Offset(1, 1));
+      await tester.pumpAndSettle();
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  }, variant: TargetPlatformVariant.mobile());
+
+  testWidgets('a right click on a picture on desktop leads with the picture '
+      'commands and runs the existing actions', (tester) async {
+    final preview = await _solidPreview(tester, 120, 80);
+    await _insertCachedMessage(
+      database,
+      _layoutImageWire(100, width: 120, height: 80),
+      displayText: 'Photo',
+    );
+    final fakes = _PictureMenuFakes(preview.body);
+    await tester.pumpWidget(
+      app(
+        home: roomScreen(),
+        overrides: [
+          chatMediaProvider.overrideWith((ref, key) async => preview),
+          ...fakes.overrides,
+          chatMessageActionsProfileProvider.overrideWith(
+            (ref, key) async => _capabilityProfile(reply: true),
+          ),
+        ],
+      ),
+    );
+    final image = find.byKey(const Key('chat-image-100-0'));
+    await _pumpUntil(
+      tester,
+      () =>
+          image.hitTestable().evaluate().isNotEmpty &&
+          find.byKey(const Key('chat-image-loading-100-0')).evaluate().isEmpty,
+    );
+    Finder action(String name) => find.byKey(Key('message-action-$name'));
+    // Linux has no image clipboard: neither the picture nor the message
+    // offers a copy there.
+    final copies = imageClipboardSupported;
+    void dropSnackBar() =>
+        ScaffoldMessenger.of(tester.element(image)).removeCurrentSnackBar();
+
+    await _rightClick(tester, tester.getCenter(image));
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byType(PopupMenuDivider), findsOneWidget);
+    final order = [
+      if (copies) 'copy-image',
+      'save-image',
+      'open-image',
+      'open-file',
+      'forward',
+      'reply',
+    ];
+    for (final name in order) {
+      expect(action(name), findsOneWidget, reason: name);
+    }
+    for (var index = 1; index < order.length; index++) {
+      expect(
+        tester.getTopLeft(action(order[index - 1])).dy,
+        lessThan(tester.getTopLeft(action(order[index])).dy),
+        reason: '${order[index - 1]} comes before ${order[index]}',
+      );
+    }
+
+    if (copies) {
+      await tester.tap(action('copy-image'));
+      await _pumpUntil(tester, () => fakes.clipboard.copied.isNotEmpty);
+      expect(fakes.requested.single.path, endsWith('/Talk/image.png'));
+      expect(fakes.clipboard.copied.single, preview.body);
+      await tester.pumpAndSettle();
+      expect(find.text('Image copied to clipboard.'), findsOneWidget);
+      dropSnackBar();
+    } else {
+      expect(action('copy-image'), findsNothing);
+      await tester.tapAt(Offset.zero);
+    }
+    await tester.pumpAndSettle();
+
+    await _rightClick(tester, tester.getCenter(image));
+    await tester.tap(action('save-image'));
+    await tester.pumpAndSettle();
+    expect(fakes.files.saved, ['image.png']);
+    expect(find.text('Attachment saved.'), findsOneWidget);
+    dropSnackBar();
+    await tester.pumpAndSettle();
+
+    await _rightClick(tester, tester.getCenter(image));
+    await tester.tap(action('open-file'));
+    await tester.pumpAndSettle();
+    expect(fakes.opener.uris.single.path, endsWith('/Talk/image.png'));
+    expect(fakes.opener.contentTypes, ['image/png']);
+
+    await _rightClick(tester, tester.getCenter(image));
+    await tester.tap(action('open-image'));
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('authenticated-image-close'))
+          .hitTestable()
+          .evaluate()
+          .isNotEmpty,
+    );
+    await tester.tap(find.byKey(const Key('authenticated-image-close')));
+    await _pumpUntil(tester, () => image.hitTestable().evaluate().isNotEmpty);
+
+    // Anywhere else on the bubble the message's own menu is what it was.
+    await _rightClick(
+      tester,
+      tester.getTopLeft(find.byKey(const Key('chat-message-target-100'))) +
+          const Offset(4, 4),
+    );
+    expect(find.byType(PopupMenuDivider), findsNothing);
+    expect(action('save-image'), findsNothing);
+    expect(action('open-image'), findsNothing);
+    expect(action('copy-image'), copies ? findsOneWidget : findsNothing);
+    expect(
+      tester.getTopLeft(action('reply')).dy,
+      lessThan(tester.getTopLeft(action('forward')).dy),
+      reason: 'forward stays among the message actions',
+    );
+    await tester.tapAt(Offset.zero);
+    await tester.pumpAndSettle();
+
+    await _rightClick(tester, tester.getCenter(image));
+    await tester.tap(action('forward'));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-forward-sheet')).evaluate().isNotEmpty,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  }, variant: TargetPlatformVariant.desktop());
+
+  testWidgets('a picture that failed to load offers only its file on a right '
+      'click', (tester) async {
+    await _insertCachedMessage(
+      database,
+      _layoutImageWire(100, width: 120, height: 80),
+      displayText: 'Photo',
+    );
+    final fakes = _PictureMenuFakes(Uint8List(0));
+    await tester.pumpWidget(
+      app(
+        home: roomScreen(),
+        overrides: [
+          chatMediaProvider.overrideWith(
+            (ref, key) async => throw const ChatMediaRepositoryException(
+              ChatMediaRepositoryError.unavailable,
+            ),
+          ),
+          ...fakes.overrides,
+        ],
+      ),
+    );
+    final failed = find.byKey(const Key('chat-image-error-100-0'));
+    await _pumpUntil(tester, () => failed.hitTestable().evaluate().isNotEmpty);
+
+    // Off the retry button in the middle of the placeholder.
+    await _rightClick(tester, tester.getTopLeft(failed) + const Offset(4, 4));
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byKey(const Key('message-action-copy-image')), findsNothing);
+    expect(find.byKey(const Key('message-action-open-image')), findsNothing);
+    expect(find.byKey(const Key('message-action-open-file')), findsOneWidget);
+    expect(find.byKey(const Key('message-action-forward')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('message-action-save-image')));
+    await tester.pumpAndSettle();
+    expect(fakes.files.saved, ['image.png']);
+    expect(fakes.clipboard.copied, isEmpty);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
   testWidgets('an image bubble keeps the box Talk declared before and after '
       'the preview lands', (tester) async {
     final decodedPreview = await _solidPreview(tester, 300, 600);
@@ -375,4 +586,101 @@ void _registerChatAttachmentRenderingTests() {
     expect(find.byKey(const Key('chat-open-attachment-34-0')), findsNothing);
     expect(opener.uris, isEmpty);
   });
+}
+
+Future<void> _rightClick(WidgetTester tester, Offset position) async {
+  final gesture = await tester.startGesture(
+    position,
+    kind: PointerDeviceKind.mouse,
+    buttons: kSecondaryMouseButton,
+  );
+  // A real click holds the button past the tap deadline, which is when the
+  // selection region used to open its own toolbar under the menu.
+  await tester.pump(const Duration(milliseconds: 150));
+  await gesture.up();
+  await tester.pumpAndSettle();
+}
+
+/// Stands in for everything a picture's menu commands reach outside the app:
+/// the original's download, the clipboard, the save dialog and the opener.
+final class _PictureMenuFakes {
+  _PictureMenuFakes(Uint8List original) {
+    vault.values[account.id] = 'fixture-password';
+    media = ChatMediaRepository(
+      vault,
+      client: MockClient((request) async {
+        requested.add(request.url);
+        return http.Response.bytes(
+          original,
+          200,
+          headers: const {'content-type': 'image/png'},
+        );
+      }),
+      wait: (_) async {},
+    );
+    addTearDown(media.close);
+  }
+
+  final requested = <Uri>[];
+  final clipboard = _RecordingImageExporter();
+  final files = _RecordingAttachmentExportAction();
+  final opener = _RecordingAttachmentOpenAction();
+  late final ChatMediaRepository media;
+
+  List<Override> get overrides => [
+    chatMediaRepositoryProvider.overrideWithValue(media),
+    chatImageExporterProvider.overrideWithValue(clipboard),
+    chatAttachmentExportActionFactoryProvider.overrideWithValue((_) => files),
+    chatAttachmentOpenActionFactoryProvider.overrideWithValue((_) => opener),
+  ];
+}
+
+final class _RecordingImageExporter implements ChatImageExporter {
+  final List<Uint8List> copied = [];
+
+  @override
+  Future<bool> copyToClipboard({required Uint8List bytes}) async {
+    copied.add(bytes);
+    return true;
+  }
+
+  @override
+  Future<ChatImageSaveResult> saveToGallery({
+    required Uint8List bytes,
+    required String fileName,
+    required String contentType,
+  }) async => ChatImageSaveResult.saved;
+
+  @override
+  Future<bool> share({
+    required Uint8List bytes,
+    required String fileName,
+    required String contentType,
+  }) async => true;
+}
+
+final class _RecordingAttachmentExportAction
+    implements ChatAttachmentExportAction {
+  final List<String> saved = [];
+
+  @override
+  Future<ChatAttachmentSaveResult> save({
+    required StoredAccount account,
+    required Uri uri,
+    required String fileName,
+    required String expectedContentType,
+    ChatDownloadProgress? onProgress,
+  }) async {
+    saved.add(fileName);
+    return ChatAttachmentSaveResult.saved;
+  }
+
+  @override
+  Future<ChatAttachmentShareResult> share({
+    required StoredAccount account,
+    required Uri uri,
+    required String fileName,
+    required String expectedContentType,
+    ChatDownloadProgress? onProgress,
+  }) async => ChatAttachmentShareResult.shared;
 }

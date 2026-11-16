@@ -44,6 +44,7 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
               account: widget.account,
               image: image,
               repository: ref.read(chatMediaRepositoryProvider),
+              exporter: ref.read(chatImageExporterProvider),
             ),
           ),
         ),
@@ -167,6 +168,20 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
     final click = _contextMenu.take();
     if (click != null) {
       final selection = _selectedText;
+      // On a picture its own copy stands in for the message's, and forward
+      // joins the picture's commands at the top.
+      final forward = click.picture
+          ? entries.where(
+              (entry) => entry.key == const Key('message-action-forward'),
+            )
+          : const <ChatContextMenuEntry>[];
+      final rest = click.picture
+          ? entries.where(
+              (entry) =>
+                  entry.key != const Key('message-action-copy-image') &&
+                  entry.key != const Key('message-action-forward'),
+            )
+          : entries;
       unawaited(
         showChatContextMenu(
           context: context,
@@ -181,8 +196,9 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
                   onSelected: () => unawaited(_copyMessageText(selection)),
                 ),
               ...click.entries,
+              ...forward,
             ],
-            entries,
+            rest.toList(),
           ],
         ),
       );

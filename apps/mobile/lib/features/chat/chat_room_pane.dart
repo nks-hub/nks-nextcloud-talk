@@ -64,6 +64,7 @@ import 'incoming_message_announcement.dart';
 import 'outgoing_message_status.dart';
 import 'media/proportional_image.dart';
 import 'media/chat_image_copy_action.dart';
+import 'media/chat_image_exporter.dart';
 import 'media/image_clipboard.dart';
 import 'media/remote_file_picker_screen.dart';
 import 'media/image_attachment_upload_panel.dart';

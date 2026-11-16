@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:drift/drift.dart' hide isNull;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +10,7 @@ import 'package:http/testing.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -171,9 +173,13 @@ void main() {
     return api;
   }
 
-  Widget app({required HttpNextcloudApi api}) {
+  Widget app({
+    required HttpNextcloudApi api,
+    List<Override> overrides = const [],
+  }) {
     return ProviderScope(
       overrides: [
+        ...overrides,
         appDatabaseProvider.overrideWithValue(database),
         credentialVaultProvider.overrideWithValue(vault),
         nextcloudApiProvider.overrideWithValue(api),
@@ -293,6 +299,106 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
+
+  testWidgets('a right click on an album picture on desktop forwards that '
+      'picture', (tester) async {
+    for (var index = 0; index < 4; index++) {
+      final referenceId = ChatPhotoAlbumReference(
+        albumId: 'a' * 32,
+        index: index,
+        count: 4,
+      ).referenceId;
+      await database
+          .into(database.cachedChatMessages)
+          .insert(
+            CachedChatMessagesCompanion.insert(
+              accountId: account.id,
+              roomToken: source.token,
+              messageId: 100 + index,
+              actorType: 'users',
+              actorId: 'someone-else',
+              actorDisplayName: 'Other person',
+              timestamp: 1724300100 + index,
+              systemMessage: '',
+              messageType: 'comment',
+              referenceId: referenceId,
+              displayText: 'Photo',
+              deleted: false,
+              threadId: Value(100 + index),
+              rawJson: jsonEncode({
+                'id': 100 + index,
+                'token': 'rooma123',
+                'actorType': 'users',
+                'actorId': 'someone-else',
+                'actorDisplayName': 'Other person',
+                'timestamp': 1724300100 + index,
+                'message': '{file}',
+                'messageType': 'comment',
+                'systemMessage': '',
+                'referenceId': referenceId,
+                'isReplyable': true,
+                'markdown': false,
+                'threadId': 100 + index,
+                'reactions': <String, Object?>{},
+                'messageParameters': {
+                  'file': {
+                    'type': 'file',
+                    'id': '${100 + index}',
+                    'name': 'photo-$index.png',
+                    'path': 'Talk/photo-$index.png',
+                    'link': '/index.php/f/${100 + index}',
+                    'mimetype': 'image/png',
+                    'preview-available': 'yes',
+                    'width': 800,
+                    'height': 600,
+                  },
+                },
+              }),
+            ),
+          );
+    }
+    await tester.pumpWidget(
+      app(
+        api: buildApi(),
+        overrides: [
+          // Previews are out of scope: a failed one still is the picture.
+          chatMediaProvider.overrideWith(
+            (ref, key) async => throw const ChatMediaRepositoryException(
+              ChatMediaRepositoryError.unavailable,
+            ),
+          ),
+        ],
+      ),
+    );
+    // Settled, not flushed: once the room's sync gets to run it opens a scope
+    // that covers none of the rows cached here, and they leave the timeline.
+    await settle(tester);
+
+    final picture = find.byKey(const Key('chat-image-error-102-0'));
+    expect(picture, findsOneWidget);
+    final click = await tester.startGesture(
+      tester.getTopLeft(picture) + const Offset(4, 4),
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pump(const Duration(milliseconds: 150));
+    await click.up();
+    await settle(tester);
+    expect(find.byType(BottomSheet), findsNothing);
+    await tester.tap(find.byKey(const Key('message-action-forward')));
+    await settle(tester);
+    await tester.tap(
+      find.byKey(const Key('chat-forward-conversation-roomb456')),
+    );
+    await flush(tester);
+
+    expect(sharedFiles, ['roomb456:/Talk/photo-2.png']);
+    expect(postedMessages, isEmpty);
+    expect(find.byKey(const Key('chat-forward-success')), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
   testWidgets('sends the message text straight to Note to self', (
     tester,
