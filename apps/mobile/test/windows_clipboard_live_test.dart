@@ -28,14 +28,14 @@ const _picture = Key('clipboard-image-offer-attach');
 /// a screenshot tool adds; that PNG is also written to [pngFile]. With
 /// [holdMs] the process then keeps the clipboard open that long, like an
 /// owner still busy with it, and creates [heldMarker] once it holds it.
-Future<void> _writeImage(
+List<String> _imageScript(
   int width,
   int height, {
   bool png = false,
   File? pngFile,
   int holdMs = 0,
   File? heldMarker,
-}) async {
+}) {
   final script = StringBuffer()
     ..writeln('Add-Type -AssemblyName System.Windows.Forms, System.Drawing')
     ..writeln('\$bmp = New-Object System.Drawing.Bitmap $width, $height')
@@ -74,12 +74,19 @@ Future<void> _writeImage(
       ..writeln('  [W.C]::CloseClipboard() | Out-Null')
       ..writeln('}');
   }
-  final result = await Process.run('powershell.exe', [
-    '-NoProfile',
-    '-STA',
-    '-Command',
-    script.toString(),
-  ]);
+  return ['-NoProfile', '-STA', '-Command', script.toString()];
+}
+
+Future<void> _writeImage(
+  int width,
+  int height, {
+  bool png = false,
+  File? pngFile,
+}) async {
+  final result = await Process.run(
+    'powershell.exe',
+    _imageScript(width, height, png: png, pngFile: pngFile),
+  );
   if (result.exitCode != 0) {
     fail('powershell exit ${result.exitCode}: ${result.stderr}');
   }
@@ -168,9 +175,11 @@ void main() {
     }
   }
 
+  /// The picture on show; while one tile replaces another both are there
+  /// for a moment, and the incoming one is the last.
   Size? pictureSize(WidgetTester tester) {
     final found = find.byKey(_picture);
-    return found.evaluate().isEmpty ? null : tester.getSize(found);
+    return found.evaluate().isEmpty ? null : tester.getSize(found.last);
   }
 
   testWidgets(
@@ -196,7 +205,12 @@ void main() {
       );
       await tester.runAsync(() => _writeImage(400, 900));
 
-      await waitFor(tester, () => pictureSize(tester)?.height == 160);
+      await waitFor(
+        tester,
+        () =>
+            find.byKey(_picture).evaluate().length == 1 &&
+            pictureSize(tester)?.height == 160,
+      );
       final second = pictureSize(tester);
       // ignore: avoid_print
       print('LIVE first=$first second=$second');
@@ -214,11 +228,16 @@ void main() {
       expect(find.byKey(_picture), findsNothing);
 
       final held = File('${scratch.path}\\held.txt');
-      final writer = tester.runAsync(
-        () => _writeImage(800, 800, holdMs: 900, heldMarker: held),
-      );
+      // Started, not awaited: the process writes and then holds the
+      // clipboard while the suggestion tries to read it.
+      final writer = (await tester.runAsync(
+        () => Process.start(
+          'powershell.exe',
+          _imageScript(800, 800, holdMs: 900, heldMarker: held),
+        ),
+      ))!;
       await waitFor(tester, () => pictureSize(tester) != null, rounds: 80);
-      await writer;
+      expect(await tester.runAsync(() => writer.exitCode), 0);
       // ignore: avoid_print
       print('LIVE held=${held.existsSync()} size=${pictureSize(tester)}');
       expect(held.existsSync(), isTrue, reason: 'the clipboard was held');
