@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nextcloudtalk/app_providers.dart';
+import 'package:nextcloudtalk/core/stale_modifier_repair.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/attachment_repository.dart';
@@ -578,7 +579,10 @@ final class _ComposerHarness {
   final List<String> finalizedFileNames;
   final List<Map<String, Object?>> finalizedMetadata;
 
-  static Future<_ComposerHarness> create({FakeOwnTalkServer? ownTalk}) async {
+  static Future<_ComposerHarness> create({
+    FakeOwnTalkServer? ownTalk,
+    int maximumSourceBytes = durableAttachmentDefaultMaximumBytes,
+  }) async {
     final database = openTestDatabase();
     final accounts = AccountRepository(database);
     final account = await accounts.upsertAccount(
@@ -628,7 +632,10 @@ final class _ComposerHarness {
     final attachmentRoot = await Directory.systemTemp.createTemp(
       'nctalk-composer-attachments-',
     );
-    final sourceStore = DurableAttachmentSourceStore(root: attachmentRoot);
+    final sourceStore = DurableAttachmentSourceStore(
+      root: attachmentRoot,
+      maximumSourceBytes: maximumSourceBytes,
+    );
     await sourceStore.initialize();
     final attachmentClient = MockClient((request) async {
       if (request.method == 'POST' && request.url.path.endsWith('/folder')) {

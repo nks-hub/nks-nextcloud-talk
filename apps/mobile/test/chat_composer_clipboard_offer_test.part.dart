@@ -5,12 +5,16 @@ void _registerClipboardOfferComposerTests() {
   pumpWithClipboardImage(
     WidgetTester tester, {
     FakeOwnTalkServer? ownTalk,
+    int maximumSourceBytes = durableAttachmentDefaultMaximumBytes,
   }) async {
     ClipboardImageOffer.debugForgetHandledClip();
     final clipboard = FakeClipboardImageSource()
       ..copyImage('clip-1', _animatedGif);
     final harness = (await tester.runAsync(
-      () => _ComposerHarness.create(ownTalk: ownTalk),
+      () => _ComposerHarness.create(
+        ownTalk: ownTalk,
+        maximumSourceBytes: maximumSourceBytes,
+      ),
     ))!;
     _addHarnessTearDown(tester, harness);
     await tester.pumpWidget(
@@ -159,6 +163,91 @@ void _registerClipboardOfferComposerTests() {
       expect(harness.uploadedAttachments.single, _animatedGif);
       expect(harness.finalizedFileNames.single, startsWith('screenshot-'));
       expect(find.byKey(const Key('clipboard-image-offer')), findsNothing);
+      expect(clipboard.reads, 1);
+      expect(tester.takeException(), isNull);
+      await _unmountComposer(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
+    'send on the clipboard card sends nothing when the image cannot be '
+    'prepared, and the typed text stays',
+    (tester) async {
+      final (:harness, :clipboard) = await pumpWithClipboardImage(
+        tester,
+        maximumSourceBytes: 16,
+      );
+      final field = find.byKey(const Key('chat-composer'));
+      await tester.enterText(field, 'caption');
+      await _pumpTransition(tester);
+
+      await tester.tap(find.byKey(const Key('clipboard-image-offer-send')));
+      for (var round = 0; round < 10; round++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(clipboard.reads, 1);
+      expect(harness.chatSendStarted, isEmpty);
+      expect(harness.attachmentUploadStarted, isEmpty);
+      expect(tester.widget<TextField>(field).controller!.text, 'caption');
+      await _unmountComposer(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
+    'an image pasted with Ctrl+V is not offered again once it went out',
+    (tester) async {
+      staleModifierRepair.attach();
+      final (:harness, :clipboard) = await pumpWithClipboardImage(tester);
+      // The plugin hands the image over as bytes, except on Windows, where
+      // it passes a file it deletes after reading.
+      final pasted = File('${harness.attachmentRoot.path}/pasted.gif');
+      const pasteboard = MethodChannel('pasteboard');
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        pasteboard,
+        (call) async {
+          if (call.method != 'image') {
+            return null;
+          }
+          if (!Platform.isWindows) {
+            return _animatedGif;
+          }
+          pasted.writeAsBytesSync(_animatedGif);
+          return pasted.path;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          pasteboard,
+          null,
+        ),
+      );
+      final controller = tester
+          .widget<ChatMediaComposer>(find.byType(ChatMediaComposer))
+          .controller!;
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await _pumpUntil(tester, () => controller.hasPreparedAttachment);
+      await _pumpTransition(tester);
+      expect(find.byKey(const Key('clipboard-image-offer')), findsNothing);
+
+      await _pumpUntil(tester, () => _sendButtonEnabled(tester));
+      await tester.tap(find.byKey(const Key('send-message-gesture')));
+      await _pumpUntil(tester, () => harness.finalizedFileNames.isNotEmpty);
+      await _pumpTransition(tester);
+      await _pumpTransition(tester);
+      expect(harness.uploadedAttachments.single, _animatedGif);
+      expect(
+        find.byKey(const Key('clipboard-image-offer')),
+        findsNothing,
+        reason: 'the clip went out with Ctrl+V',
+      );
       expect(clipboard.reads, 1);
       expect(tester.takeException(), isNull);
       await _unmountComposer(tester);

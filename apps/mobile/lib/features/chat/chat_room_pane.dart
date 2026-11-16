@@ -70,6 +70,7 @@ import 'media/image_attachment_upload_panel.dart';
 import 'composer/attachment_submission.dart';
 import 'composer/chat_media_composer.dart';
 import 'composer/clipboard_image_offer.dart';
+import 'composer/clipboard_image_source.dart';
 import 'composer/composer_text_editing.dart';
 import 'composer/pasted_image.dart';
 import 'composer/emoji_picker.dart';

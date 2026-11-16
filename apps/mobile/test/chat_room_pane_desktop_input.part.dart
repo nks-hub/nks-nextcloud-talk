@@ -59,11 +59,13 @@ void _registerChatRoomPaneDesktopInputTests() {
   }
 
   testWidgets(
-    'Ctrl+V reads clipboard files and preserves text paste',
+    'Ctrl+V reads clipboard files, preserves text paste and leaves the '
+    'bitmap of copied text alone',
     (tester) async {
       staleModifierRepair.attach();
       final calls = <String>[];
       var files = <String>[];
+      String? text;
       const channel = MethodChannel('pasteboard');
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
         call,
@@ -73,8 +75,11 @@ void _registerChatRoomPaneDesktopInputTests() {
       });
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
         SystemChannels.platform,
-        (call) async =>
-            call.method == 'Clipboard.getData' ? {'text': 'Pasted text'} : null,
+        (call) async => switch (call.method) {
+          'Clipboard.getData' => text == null ? null : {'text': text},
+          'Clipboard.hasStrings' => {'value': text != null},
+          _ => null,
+        },
       );
       addTearDown(() {
         tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -88,11 +93,14 @@ void _registerChatRoomPaneDesktopInputTests() {
       });
       await pumpRoom(tester);
       final field = find.byKey(const Key('chat-composer'));
-      for (final selection in [
-        <String>[],
-        ['slides.pptx', 'document.docx'],
+      // A spreadsheet range comes with a bitmap of itself beside its text.
+      for (final (selection, copied, asked) in [
+        (<String>[], 'Pasted text', ['files']),
+        (<String>[], null, ['files', 'image']),
+        (['slides.pptx', 'document.docx'], 'Pasted text', ['files']),
       ]) {
         files = selection;
+        text = copied;
         calls.clear();
         tester.widget<TextField>(field).controller!.clear();
         await tester.tap(field);
@@ -100,8 +108,8 @@ void _registerChatRoomPaneDesktopInputTests() {
         await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
         await tester.pumpAndSettle();
-        expect(calls, files.isEmpty ? ['files', 'image'] : ['files']);
-        expect(tester.widget<TextField>(field).controller!.text, 'Pasted text');
+        expect(calls, asked);
+        expect(tester.widget<TextField>(field).controller!.text, copied ?? '');
       }
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(milliseconds: 1));

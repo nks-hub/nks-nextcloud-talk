@@ -333,6 +333,7 @@ final class _ChatComposer extends ConsumerWidget {
 
   Future<void> _pasteAttachmentsFromClipboard(BuildContext context) async {
     final platform = Theme.of(context).platform;
+    final providers = ProviderScope.containerOf(context, listen: false);
     if (platform == TargetPlatform.windows ||
         platform == TargetPlatform.macOS ||
         platform == TargetPlatform.linux) {
@@ -349,7 +350,16 @@ final class _ChatComposer extends ConsumerWidget {
         // Some embedders expose only Flutter's text clipboard.
       }
     }
+    // The same rule as the clipboard suggestion's: a spreadsheet range or a
+    // document passage also offers a bitmap of itself, and the field already
+    // pastes its text.
+    if (platform == TargetPlatform.windows && await Clipboard.hasStrings()) {
+      return;
+    }
     final Uint8List? raw;
+    final clip = await ClipboardImageOffer.currentClip(
+      providers.read(clipboardImageSourceProvider),
+    );
     try {
       raw = await Pasteboard.image;
     } on Object {
@@ -360,18 +370,43 @@ final class _ChatComposer extends ConsumerWidget {
     }
     final image = await normalizePastedImage(raw);
     if (image != null) {
-      await onPasteImage(image);
+      await _attachAnswering(image, clip, providers);
     }
   }
 
-  Future<void> _insertKeyboardContent(KeyboardInsertedContent content) async {
+  Future<void> _insertKeyboardContent(
+    KeyboardInsertedContent content,
+    ProviderContainer providers,
+  ) async {
     final data = content.data;
     if (data == null || data.isEmpty) {
       return;
     }
+    // A keyboard may insert the clipboard's image or one of its own; either
+    // way the image on the clipboard is not worth offering right after.
+    final clip = await ClipboardImageOffer.currentClip(
+      providers.read(clipboardImageSourceProvider),
+    );
     final image = await normalizePastedImage(data);
     if (image != null) {
-      await onPasteImage(image);
+      await _attachAnswering(image, clip, providers);
+    }
+  }
+
+  /// Attaches [image] and, once it waits in the composer, answers [clip], so
+  /// the tile does not offer the same picture again when the composer frees.
+  Future<void> _attachAnswering(
+    PastedImage image,
+    String? clip,
+    ProviderContainer providers,
+  ) async {
+    final source = providers.read(clipboardImageSourceProvider);
+    if (await onPasteImage(image) && clip != null && source != null) {
+      ClipboardImageOffer.answer(
+        clip,
+        source,
+        providers.read(clipboardOfferMemoryProvider),
+      );
     }
   }
 
@@ -491,7 +526,13 @@ final class _ChatComposer extends ConsumerWidget {
                       refresh: media.changes,
                       sending: sending,
                       onAttach: onPasteImage,
-                      onSend: onSubmit,
+                      // Only with the image waiting: when its preparation
+                      // failed, a send would carry the text alone.
+                      onSend: () {
+                        if (hasAttachment()) {
+                          onSubmit();
+                        }
+                      },
                     ),
                     if (replyTo != null)
                       _ReplyBanner(message: replyTo!, onCancel: onCancelReply),
@@ -551,7 +592,15 @@ final class _ChatComposer extends ConsumerWidget {
                                 ref
                                     .read(windowActivityProvider)
                                     ?.recordInteraction();
-                                unawaited(_insertKeyboardContent(content));
+                                unawaited(
+                                  _insertKeyboardContent(
+                                    content,
+                                    ProviderScope.containerOf(
+                                      context,
+                                      listen: false,
+                                    ),
+                                  ),
+                                );
                               },
                             ),
                         decoration: InputDecoration(
