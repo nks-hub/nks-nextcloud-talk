@@ -45,6 +45,71 @@ void _registerNonBlockingComposerTests() {
   }
 
   testWidgets(
+    'a reply hands its stand-in over to its outbox row',
+    (tester) async {
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      _addHarnessTearDown(tester, harness);
+      await tester.runAsync(harness.seedReplyMessage);
+      final hold = Completer<void>();
+      harness.chatSendHold.add(hold);
+      addTearDown(() {
+        if (!hold.isCompleted) hold.complete();
+      });
+
+      await tester.pumpWidget(harness.app());
+      await _pumpUntil(
+        tester,
+        () =>
+            find
+                .byKey(const Key('chat-message-target-109'))
+                .evaluate()
+                .isNotEmpty &&
+            find.byType(ChatMediaComposer).evaluate().isNotEmpty,
+      );
+      await tester.longPress(find.byKey(const Key('chat-message-target-109')));
+      await _pumpTransition(tester);
+      await tester.tap(find.byKey(const Key('message-action-reply')));
+      await _pumpTransition(tester);
+      await tester.enterText(
+        find.byKey(const Key('chat-composer')),
+        'reply line',
+      );
+      await _pumpUntil(tester, () => _sendButtonEnabled(tester));
+      await tester.tap(find.byKey(const Key('send-message-gesture')));
+      await tester.pump();
+      const standIn = Key('chat-pending-provisional-1');
+      expect(find.byKey(standIn), findsOneWidget);
+
+      // A reply is stored under the message it answers, outside the room's
+      // own outbox stream. The stand-in waited for a row that never came and
+      // stayed "Waiting to send" under a message long delivered.
+      await _pumpUntil(tester, () => harness.chatSendStarted.length == 1);
+      expect(harness.chatSendFields.single['replyTo'], '109');
+      await _pumpUntil(tester, () => find.byKey(standIn).evaluate().isEmpty);
+      final row = (await tester.runAsync(
+        harness.database.select(harness.database.textSendOperations).getSingle,
+      ))!;
+      expect(row.replyTo, 109);
+      expect(
+        find.byKey(Key('chat-pending-${row.operationId}')),
+        findsOneWidget,
+      );
+      expect(find.text('reply line'), findsOneWidget);
+      expect(find.text('Sending…'), findsOneWidget);
+      expect(find.text('Waiting to send'), findsNothing);
+
+      hold.complete();
+      await _pumpUntil(tester, () => harness.sentMessages.length == 1);
+      await _pumpTransition(tester);
+      expect(find.byKey(standIn), findsNothing);
+      expect(harness.sentMessages, ['reply line']);
+      expect(tester.takeException(), isNull);
+      await _unmountComposer(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
     'the composer is free again while the first line is still on the wire',
     (tester) async {
       final harness = (await tester.runAsync(_ComposerHarness.create))!;

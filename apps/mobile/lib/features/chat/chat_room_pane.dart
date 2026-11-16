@@ -167,6 +167,11 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// the outbox reporting `completed` and the message reaching the timeline;
   /// a row that was already completed when the room opened is history.
   final Set<String> _handoverOperationIds = <String>{};
+
+  /// Messages this pane answered. A reply is stored like a post into the
+  /// thread of the message it answers, so the room's own outbox stream leaves
+  /// its row out and the row is read from that thread's stream instead.
+  final Set<int> _replyTargets = <int>{};
   int _giphyGeneration = 0;
   bool _syncing = false;
   bool _loadingOlder = false;
@@ -366,6 +371,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _selectedText = null;
     _timelineCache.clear();
     _handoverOperationIds.clear();
+    _replyTargets.clear();
     _historyGeneration++;
     _loadingOlder = false;
     _scrollController.resetExtentTracking();
@@ -659,6 +665,32 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     return admitted;
   }
 
+  /// [operations] with the rows of the replies sent from this pane.
+  ///
+  /// Without them a reply's stand-in was never replaced: its row never showed
+  /// up, so the line stayed "queued" under a message long delivered.
+  List<StoredTextSendOperation> _withOwnReplies(
+    List<StoredTextSendOperation> operations,
+  ) {
+    if (_replyTargets.isEmpty) {
+      return operations;
+    }
+    return [
+      ...operations,
+      for (final target in _replyTargets)
+        ...?ref
+            .watch(
+              textSendOperationsProvider((
+                accountId: _key.accountId,
+                roomToken: _key.roomToken,
+                threadId: target,
+              )),
+            )
+            .valueOrNull
+            ?.where((operation) => operation.replyTo == target),
+    ]..sort((a, b) => a.enqueueSequence.compareTo(b.enqueueSequence));
+  }
+
   /// Whether a completed send still has to stand in for its message.
   bool _awaitsTimeline(StoredTextSendOperation operation, int lastDisplayedId) {
     if (!_handoverOperationIds.contains(operation.operationId)) {
@@ -841,8 +873,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       _timelineCache.retain(visible);
       return visible;
     });
-    final operations =
-        operationsValue.valueOrNull ?? const <StoredTextSendOperation>[];
+    final operations = _withOwnReplies(
+      operationsValue.valueOrNull ?? const <StoredTextSendOperation>[],
+    );
     final deliveryStates = <int, OutgoingMessageDeliveryState>{
       for (final status
           in statusesValue.valueOrNull ?? const <OutgoingMessageStatus>[])

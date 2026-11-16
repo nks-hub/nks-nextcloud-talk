@@ -476,7 +476,12 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       restorableDraft: sentDraft,
       emojiSizeStep: emojiSizeStep,
     );
-    _update(() => _provisionalSends.add(provisional));
+    _update(() {
+      if (rootReply != null) {
+        _replyTargets.add(rootReply.messageId);
+      }
+      _provisionalSends.add(provisional);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToNewest());
     // Not held by _sending: a send is a queue entry, not a mode of the
     // composer. Calls reach the service in tap order and its admission lane
