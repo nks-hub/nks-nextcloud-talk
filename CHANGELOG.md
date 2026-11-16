@@ -8,6 +8,17 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.0.39 (107) — 16 November 2026
+
+- The conversation list marks the last message you wrote: one tick once the server stored it, two once everyone in the conversation read it.
+- On the desktop, a right click on a picture in the chat offers Copy image, Save image, Open image, Open file and Forward. In an album the commands apply to the picture clicked.
+- The clipboard image suggestion on Windows shows the newest screenshot. It used to show the one before when the screenshot tool handed the window its focus back before writing the clipboard. It follows the clipboard while the window is on screen without the focus, and a screenshot taken while a message is being sent is offered once the send is done.
+- The suggestion tile takes the shape of the picture and no more than its own size, within 220 by 160 points, and stays below the top bar when little room is left above the message field.
+- The clipboard image suggestion works on iOS. iOS asks before an app may read what another app copied, so the tile shows no preview and the picture is read only when the tile is tapped.
+- Ctrl+V on Windows pastes a copied spreadsheet range or document passage as text only, without attaching the picture of it the source puts on the clipboard. A picture pasted with Ctrl+V, or inserted from the keyboard, is not offered again by the tile.
+- Send on the suggestion tile no longer sends the typed text on its own when the picture could not be prepared.
+- A reply sent from the conversation no longer stays as "Waiting to send" under the delivered message until the app is restarted.
+
 ## 1.0.38 (106) — 15 November 2026
 
 - On Android in battery saver, a message that is still waiting to be sent goes out when the next notification arrives, without the app being opened. Until now it waited for the app to be opened.
