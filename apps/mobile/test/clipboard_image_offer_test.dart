@@ -35,9 +35,21 @@ void main() {
     memory = Directory.systemTemp.createTempSync('nctalk-clipboard-offer-');
   });
 
-  tearDown(() {
+  tearDown(() async {
     blocked.dispose();
-    memory.deleteSync(recursive: true);
+    // An answer is written to disk without being awaited, and on Windows a
+    // file still open cannot be deleted; a loaded machine finishes late.
+    for (var attempt = 1; ; attempt++) {
+      try {
+        memory.deleteSync(recursive: true);
+        return;
+      } on FileSystemException {
+        if (attempt == 40) {
+          rethrow;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+    }
   });
 
   // The framework asserts on a lifecycle jump that skips a state.
