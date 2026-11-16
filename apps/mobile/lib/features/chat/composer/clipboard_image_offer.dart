@@ -16,11 +16,11 @@ import 'pasted_image.dart';
 /// sent or dismissed in one tap. It takes no room in the composer: nothing
 /// moves when it comes or goes.
 ///
-/// The clipboard is only looked at while the field has focus and the app is
-/// in front, and its content is only read for a clip that was not offered
-/// before. The bytes stay in memory and are dropped when the offer is
-/// dismissed, when this widget goes away (its key carries the room) and when
-/// the app leaves the foreground.
+/// On a phone the clipboard is looked at while the field has focus and the
+/// app is in front; on a desktop while the window is on screen, focused or
+/// not, because the screenshot is taken next to it. A clip's content is read
+/// once and kept until the clip is answered or replaced, or the app is
+/// hidden.
 final class ClipboardImageOffer extends ConsumerStatefulWidget {
   const ClipboardImageOffer({
     required this.focusNode,
@@ -32,7 +32,8 @@ final class ClipboardImageOffer extends ConsumerStatefulWidget {
     super.key,
   });
 
-  /// The message field's focus: nothing is read while it is elsewhere.
+  /// The message field's focus: on a phone nothing is read while it is
+  /// elsewhere.
   final FocusNode focusNode;
 
   /// Whether something else already occupies the composer: a prepared
@@ -50,12 +51,33 @@ final class ClipboardImageOffer extends ConsumerStatefulWidget {
   /// Sends what the composer holds, same as the send button.
   final VoidCallback onSend;
 
+  /// The identity of the image now on the clipboard, for [answer] once that
+  /// image went into the composer some other way, such as Ctrl+V.
+  static Future<String?> currentClip(ClipboardImageSource? source) async {
+    try {
+      return await source?.peek();
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Marks the clip [id] as answered in every pane, so no tile offers it
+  /// again until something new is copied.
+  static void answer(
+    String id,
+    ClipboardImageSource source,
+    ClipboardOfferMemory memory,
+  ) => _ClipboardImageOfferState._answer(id, source, memory);
+
   /// Forgets which clip was last sent or dismissed, as a restart of the app
   /// does to what is only held in memory.
   @visibleForTesting
   static void debugForgetHandledClip() {
-    _ClipboardImageOfferState._handledClip = null;
-    _ClipboardImageOfferState._restored = false;
+    _ClipboardImageOfferState._handledClip.value = null;
+    _ClipboardImageOfferState._unreadable = null;
+    _ClipboardImageOfferState._restoring = null;
+    _ClipboardImageOfferState._lastRead = null;
+    _ClipboardImageOfferState._inFlight = null;
   }
 
   @override
@@ -63,20 +85,38 @@ final class ClipboardImageOffer extends ConsumerStatefulWidget {
       _ClipboardImageOfferState();
 }
 
-/// [image] and [thumbnail] are null where the content may only be read once
+/// [raw] and [thumbnail] are null where the content may only be read once
 /// the person takes the suggestion.
-typedef _Offer = ({String id, PastedImage? image, ui.Image? thumbnail});
+typedef _Offer = ({String id, Uint8List? raw, ui.Image? thumbnail});
 
 final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
     with WidgetsBindingObserver {
   final LayerLink _anchor = LayerLink();
   final OverlayPortalController _portal = OverlayPortalController();
 
-  /// The clip the user already answered, in any room: it is not offered again
-  /// until something new is copied. Restored from [ClipboardOfferMemory] the
-  /// first time a clip is looked at.
-  static String? _handledClip;
-  static bool _restored = false;
+  /// The clip the user already answered, in any room and any pane: it is not
+  /// offered again until something new is copied. Every pane listens, so a
+  /// tile answered in a thread does not stay behind in the room under it.
+  static final ValueNotifier<String?> _handledClip = ValueNotifier<String?>(
+    null,
+  );
+
+  /// A clip whose content arrived and is no image the engine decodes. Not
+  /// stored: it only keeps the same clip from being read on every look.
+  static String? _unreadable;
+
+  /// Restores [_handledClip] from [ClipboardOfferMemory] once; every look
+  /// waits for it, so none offers a clip answered before a restart.
+  static Future<void>? _restoring;
+
+  /// The content of the last clip read. Another room, or a return from a
+  /// lost focus, offers it again without reading it again, which on Android
+  /// would raise the system's paste notice each time.
+  static ({String id, Uint8List raw})? _lastRead;
+
+  /// The read under way, which a second pane looking at the same clip joins
+  /// instead of copying the whole bitmap once more.
+  static ({String id, Future<Uint8List?> bytes})? _inFlight;
 
   ClipboardImageSource? _source;
   _Offer? _offer;
@@ -85,7 +125,31 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
   /// The clip being read right now and the round reading it. A check that
   /// finds the same clip leaves that read alone instead of starting over.
   ({String id, int round})? _reading;
+
+  /// The clip being taken: while the system asks the person, the app goes
+  /// inactive and back, and that must not offer the same clip again.
+  String? _taking;
   bool _foreground = true;
+  bool _listening = false;
+
+  /// Logical pixels between the top bar and the composer, measured after
+  /// layout. The tile is fitted into them, and left out where it does not
+  /// fit, such as a phone held sideways with the keyboard open.
+  double? _spaceAbove;
+
+  static void _answer(
+    String id,
+    ClipboardImageSource source,
+    ClipboardOfferMemory memory,
+  ) {
+    _handledClip.value = id;
+    if (_lastRead?.id == id) {
+      _lastRead = null;
+    }
+    if (source.survivesRestart(id)) {
+      unawaited(memory.write(id));
+    }
+  }
 
   @override
   void initState() {
@@ -96,7 +160,8 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
     WidgetsBinding.instance.addObserver(this);
     widget.focusNode.addListener(_check);
     widget.refresh.addListener(_handleRefresh);
-    _source?.changes?.addListener(_check);
+    _handledClip.addListener(_handleAnswered);
+    _listen(_foreground);
     // The field can already hold the focus when a room opens on desktop.
     WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_check()));
   }
@@ -112,6 +177,10 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
       oldWidget.refresh.removeListener(_handleRefresh);
       widget.refresh.addListener(_handleRefresh);
     }
+    if (oldWidget.sending && !widget.sending) {
+      // A screenshot taken while the last message went out was skipped.
+      WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_check()));
+    }
   }
 
   @override
@@ -119,10 +188,26 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
     WidgetsBinding.instance.removeObserver(this);
     widget.focusNode.removeListener(_check);
     widget.refresh.removeListener(_handleRefresh);
-    _source?.changes?.removeListener(_check);
+    _handledClip.removeListener(_handleAnswered);
+    _listen(false);
     _round++;
     _offer = null;
     super.dispose();
+  }
+
+  /// Follows the clipboard's change signal only while the app is on screen;
+  /// on Windows that signal is a timer.
+  void _listen(bool on) {
+    final changes = _source?.changes;
+    if (changes == null || on == _listening) {
+      return;
+    }
+    _listening = on;
+    if (on) {
+      changes.addListener(_check);
+    } else {
+      changes.removeListener(_check);
+    }
   }
 
   /// Resumed, and on a desktop also inactive: a window that lost the focus
@@ -136,6 +221,7 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = _visible(state);
+    _listen(_foreground);
     if (_foreground) {
       unawaited(_check());
     } else if (state != AppLifecycleState.inactive) {
@@ -143,6 +229,7 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
       // permission dialog; the image only has to go once the app is hidden.
       _round++;
       _reading = null;
+      _lastRead = null;
       if (_offer != null) {
         _drop();
         // A hidden app gets no frames on its own, and the card on screen
@@ -152,9 +239,40 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
     }
   }
 
+  @override
+  void didChangeMetrics() {
+    // The keyboard or a resize moved the composer.
+    if (_offer != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _measureSpace());
+    }
+  }
+
   void _handleRefresh() {
-    if (_offer != null && widget.blocked()) {
+    if (widget.blocked()) {
       _drop();
+    } else {
+      // A screenshot taken while the composer was busy was skipped.
+      unawaited(_check());
+    }
+  }
+
+  void _handleAnswered() {
+    final offer = _offer;
+    if (offer != null && offer.id == _handledClip.value) {
+      _drop();
+    }
+  }
+
+  void _measureSpace() {
+    final box = mounted ? context.findRenderObject() : null;
+    if (box is! RenderBox || !box.attached || !box.hasSize) {
+      return;
+    }
+    final view = View.of(context);
+    final top = view.padding.top / view.devicePixelRatio + kToolbarHeight;
+    final space = box.localToGlobal(Offset.zero).dy - top;
+    if (_spaceAbove == null || (space - _spaceAbove!).abs() >= 1) {
+      setState(() => _spaceAbove = space);
     }
   }
 
@@ -169,12 +287,9 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
     }
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
     bool gone() => !mounted || !_foreground || widget.blocked();
-    String? id;
-    try {
-      id = await source.peek().timeout(const Duration(seconds: 1));
-    } on Object {
-      id = null;
-    }
+    final id = await ClipboardImageOffer.currentClip(
+      source,
+    ).timeout(const Duration(seconds: 1), onTimeout: () => null);
     if (gone()) {
       return;
     }
@@ -182,23 +297,32 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
       // A read still running is for an image that is no longer there.
       _round++;
       _reading = null;
+      _lastRead = null;
       _drop();
       return;
     }
-    if (!_restored) {
-      _restored = true;
-      _handledClip ??= await ref.read(clipboardOfferMemoryProvider).read();
-      if (gone()) {
-        return;
-      }
+    await (_restoring ??= () async {
+      _handledClip.value ??= await ref
+          .read(clipboardOfferMemoryProvider)
+          .read();
+    }());
+    if (gone()) {
+      return;
     }
-    if (id == _handledClip || id == _offer?.id || id == _reading?.id) {
+    if (id == _handledClip.value || id == _unreadable) {
+      _drop();
+      return;
+    }
+    if (id == _offer?.id || id == _reading?.id || id == _taking) {
       return;
     }
     final round = ++_round;
     bool stale() => gone() || round != _round;
+    // The tile must not keep showing, and sending, the picture before this
+    // one while the new one is read, or when reading it fails.
+    _drop();
     if (source.readNeedsConsent) {
-      final offer = (id: id, image: null, thumbnail: null);
+      final offer = (id: id, raw: null, thumbnail: null);
       setState(() => _offer = offer);
       return;
     }
@@ -218,55 +342,84 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
     double pixelRatio,
     bool Function() stale,
   ) async {
-    PastedImage? image;
-    ui.Image? thumbnail;
-    // A clipboard that is busy right now answers null; one whose owner never
-    // produces the data does not answer at all. Only the first is worth
-    // asking again.
-    for (var attempt = 0; attempt < 3 && image == null; attempt++) {
-      if (attempt > 0) {
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        if (stale()) {
-          return;
+    var raw = _lastRead?.id == id ? _lastRead!.raw : null;
+    if (raw == null) {
+      // Null is a clipboard another program still holds open, or one that
+      // changed in the meantime; neither says anything about this clip, so
+      // it is asked again on a later look. No time limit: an owner that
+      // renders on demand may take a while, and a newer clip makes this
+      // read stale anyway.
+      for (var attempt = 0; attempt < 3 && raw == null; attempt++) {
+        if (attempt > 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          if (stale()) {
+            return;
+          }
+        }
+        try {
+          raw = await _readOnce(source, id);
+        } on Object {
+          raw = null;
         }
       }
-      try {
-        // The owner may take as long as it likes; the suggestion is not
-        // worth waiting for.
-        final raw = await source.read().timeout(const Duration(seconds: 3));
-        image = raw == null ? null : await normalizePastedImage(raw);
-      } on TimeoutException {
-        break;
-      } on Object {
-        image = null;
+      if (raw == null || stale()) {
+        return;
       }
-    }
-    if (image != null) {
-      try {
-        thumbnail = await _decodeThumbnail(
-          image.bytes,
-          (ClipboardImageOfferCard.maximumHeight * pixelRatio).round(),
-        );
-      } on Object {
-        thumbnail = null;
+      // The identity was taken before the content. A tool that writes in
+      // steps may have moved on in between; that newer clip is read anew.
+      if (await ClipboardImageOffer.currentClip(source) != id) {
+        if (!stale()) {
+          unawaited(_check());
+        }
+        return;
       }
+      _lastRead = (id: id, raw: raw);
     }
-    if (image == null || thumbnail == null) {
-      // Unreadable after that is unreadable again; do not ask on every focus.
-      _handledClip = id;
+    ui.Image? thumbnail;
+    try {
+      thumbnail = await _decodeThumbnail(
+        raw,
+        (ClipboardImageOfferCard.maximumHeight * pixelRatio).round(),
+      );
+    } on Object {
+      thumbnail = null;
+    }
+    if (thumbnail == null) {
+      _unreadable = id;
+      if (_lastRead?.id == id) {
+        _lastRead = null;
+      }
       return;
     }
-    if (stale()) {
+    if (stale() || id == _handledClip.value) {
       thumbnail.dispose();
       return;
     }
-    final offer = (id: id, image: image, thumbnail: thumbnail);
+    final offer = (id: id, raw: raw, thumbnail: thumbnail);
     setState(() => _offer = offer);
+  }
+
+  static Future<Uint8List?> _readOnce(ClipboardImageSource source, String id) {
+    final running = _inFlight;
+    if (running != null && running.id == id) {
+      return running.bytes;
+    }
+    final bytes = source.read();
+    _inFlight = (id: id, bytes: bytes);
+    void done() {
+      if (identical(_inFlight?.bytes, bytes)) {
+        _inFlight = null;
+      }
+    }
+
+    unawaited(bytes.then<void>((_) => done(), onError: (Object _) => done()));
+    return bytes;
   }
 
   /// The picture at the size it is shown, decoded by the engine off the UI
   /// thread; the full screenshot never becomes a bitmap here. [extent] is
   /// what the shorter side needs, the most the cropped tile can show of it.
+  /// A picture smaller than that keeps its own size.
   static Future<ui.Image> _decodeThumbnail(Uint8List bytes, int extent) async {
     final codec = await ui.instantiateImageCodecWithSize(
       await ui.ImmutableBuffer.fromUint8List(bytes),
@@ -308,9 +461,9 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
   }
 
   void _answered(String id) {
-    _handledClip = id;
-    if (_source?.survivesRestart(id) ?? false) {
-      unawaited(ref.read(clipboardOfferMemoryProvider).write(id));
+    final source = _source;
+    if (source != null) {
+      _answer(id, source, ref.read(clipboardOfferMemoryProvider));
     }
   }
 
@@ -324,28 +477,43 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
 
   Future<void> _take({required bool send}) async {
     final offer = _offer;
-    if (offer == null) {
+    final source = _source;
+    if (offer == null || source == null) {
       return;
     }
     // Cleared before the first await, so a second tap finds nothing to send.
-    _answered(offer.id);
     _drop();
-    var image = offer.image;
-    if (image == null) {
-      // The system asks the person here, and waits for the answer.
-      try {
-        final raw = await _source?.read().timeout(const Duration(minutes: 1));
-        image = raw == null ? null : await normalizePastedImage(raw);
-      } on Object {
-        image = null;
+    _taking = offer.id;
+    try {
+      // Only what the tile showed: the clipboard may hold something newer by
+      // now, and the tile for that is on its way.
+      if (await ClipboardImageOffer.currentClip(source) != offer.id) {
+        return;
       }
+      var raw = offer.raw;
+      if (raw == null) {
+        // The system asks the person here and waits for the answer. A
+        // refusal leaves the clip unanswered, for the next look to offer.
+        try {
+          raw = await source.read().timeout(const Duration(minutes: 1));
+        } on Object {
+          raw = null;
+        }
+      }
+      final image = raw == null ? null : await normalizePastedImage(raw);
       if (image == null || !mounted) {
         return;
       }
-    }
-    final attached = await widget.onAttach(image);
-    if (send && attached && mounted) {
-      widget.onSend();
+      _answered(offer.id);
+      final attached = await widget.onAttach(image);
+      if (send && attached && mounted) {
+        widget.onSend();
+      }
+    } finally {
+      _taking = null;
+      if (mounted) {
+        unawaited(_check());
+      }
     }
   }
 
@@ -354,20 +522,34 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
     // Nothing of the offer takes part in the composer's layout: this is a
     // point at the composer's top edge, and the tile hangs above it in the
     // overlay, over the end of the message list.
-    return CompositedTransformTarget(
-      link: _anchor,
-      child: OverlayPortal(
-        controller: _portal,
-        overlayChildBuilder: _buildOverlay,
-        child: const SizedBox(width: double.infinity),
+    return LayoutBuilder(
+      builder: (context, constraints) => CompositedTransformTarget(
+        link: _anchor,
+        child: OverlayPortal(
+          controller: _portal,
+          overlayChildBuilder: (context) =>
+              _buildOverlay(context, constraints.maxWidth),
+          child: const SizedBox(width: double.infinity),
+        ),
       ),
     );
   }
 
-  Widget _buildOverlay(BuildContext context) {
+  Widget _buildOverlay(BuildContext context, double paneWidth) {
     final offer = _offer;
     final rtl = Directionality.of(context) == TextDirection.rtl;
-    final child = offer == null
+    if (offer != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _measureSpace());
+    }
+    final space = _spaceAbove;
+    final maxHeight = space == null
+        ? 0.0
+        : math.min(
+            ClipboardImageOfferCard.maximumHeight,
+            space - 16 - ClipboardImageOfferCard.overhang,
+          );
+    final child =
+        offer == null || maxHeight < ClipboardImageOfferCard.minimumSide
         ? const SizedBox.shrink()
         // Part of the field's own tap region, so a tap on the tile does not
         // take the focus, and with it the soft keyboard, away.
@@ -375,8 +557,14 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
             key: ValueKey<String>(offer.id),
             child: ClipboardImageOfferCard(
               thumbnail: offer.thumbnail,
+              // Half the pane at most, so the tile never covers a narrow chat.
+              maxWidth: paneWidth / 2,
+              maxHeight: maxHeight,
               onAttach: () => unawaited(_take(send: false)),
               onDismiss: _dismiss,
+              // Without a preview the person has not seen the picture yet:
+              // it goes into the composer first, where they do.
+              offersSend: offer.raw != null,
               onSend: widget.sending
                   ? null
                   : () => unawaited(_take(send: true)),
@@ -393,32 +581,30 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
         // The anchor sits inside the composer's 8 dp padding; the tile keeps
         // another 8 dp clear of the composer itself.
         offset: const Offset(0, -16),
-        // Leaving the foreground skips the exit transition too: the frames
-        // that would play it are not coming.
-        child:
-            MediaQuery.disableAnimationsOf(context) ||
-                (offer == null && !_foreground)
-            ? child
-            : AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                layoutBuilder: (current, previous) => Stack(
-                  alignment: AlignmentDirectional.bottomEnd,
-                  children: [...previous, ?current],
-                ),
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: ScaleTransition(
-                    scale: Tween<double>(begin: 0.6, end: 1).animate(animation),
-                    alignment: rtl
-                        ? Alignment.bottomLeft
-                        : Alignment.bottomRight,
-                    child: child,
-                  ),
-                ),
-                child: child,
-              ),
+        child: AnimatedSwitcher(
+          // A hidden app gets no frames to play an exit in, so a new switcher
+          // drops the card at once. A change of the motion setting keeps
+          // this one, and with it the card and its picture.
+          key: ValueKey<bool>(offer == null && !_foreground),
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 180),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          layoutBuilder: (current, previous) => Stack(
+            alignment: AlignmentDirectional.bottomEnd,
+            children: [...previous, ?current],
+          ),
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.6, end: 1).animate(animation),
+              alignment: rtl ? Alignment.bottomLeft : Alignment.bottomRight,
+              child: child,
+            ),
+          ),
+          child: child,
+        ),
       ),
     );
   }
@@ -434,6 +620,9 @@ final class ClipboardImageOfferCard extends StatefulWidget {
     required this.onAttach,
     required this.onDismiss,
     required this.onSend,
+    this.maxWidth = maximumWidth,
+    this.maxHeight = maximumHeight,
+    this.offersSend = true,
     super.key,
   });
 
@@ -441,22 +630,37 @@ final class ClipboardImageOfferCard extends StatefulWidget {
   static const double maximumWidth = 220;
   static const double maximumHeight = 160;
 
-  /// Neither side gets smaller than this, so a thin strip stays a tile.
-  static const double minimumSide = 72;
+  /// Neither side gets smaller than this, so a thin strip stays a tile and
+  /// the middle of the picture stays clear of the send button's 48 dp
+  /// target. Also the side of the tile shown without a preview.
+  static const double minimumSide = 96;
 
-  /// The side of the tile shown where the picture cannot be previewed.
-  static const double placeholderSide = 96;
+  /// How far the two buttons reach past the picture, both together: the
+  /// badge is centred on its corner, the send button sits a quarter out.
+  static const double overhang = _badgeOverhang + _sendOverhang;
+  static const double _badgeOverhang = 18;
+  static const double _sendOverhang = 12;
 
-  /// How large the picture of [width] x [height] pixels is drawn when
-  /// [available] logical pixels of width are there for it.
-  static Size tileSize(int width, int height, double available) {
-    final boxWidth = math.max(minimumSide, math.min(maximumWidth, available));
-    // Past 3:1 either way the picture is cropped rather than shrunk further.
+  /// How large a picture of [width] x [height] pixels is drawn: in its own
+  /// shape, cropped past 3:1, and never larger than it is on a screen of
+  /// [pixelRatio], than [maximumWidth] x [maximumHeight], or than [maxWidth]
+  /// x [maxHeight].
+  static Size tileSize(
+    int width,
+    int height, {
+    double maxWidth = maximumWidth,
+    double maxHeight = maximumHeight,
+    double pixelRatio = 1,
+  }) {
     final aspect = (width / height).clamp(1 / 3, 3.0);
-    var tileWidth = boxWidth;
+    var tileWidth = math.min(
+      math.min(maximumWidth, maxWidth),
+      width / pixelRatio,
+    );
     var tileHeight = tileWidth / aspect;
-    if (tileHeight > maximumHeight) {
-      tileHeight = maximumHeight;
+    final heightLimit = math.min(maximumHeight, maxHeight);
+    if (tileHeight > heightLimit) {
+      tileHeight = heightLimit;
       tileWidth = tileHeight * aspect;
     }
     return Size(
@@ -467,10 +671,15 @@ final class ClipboardImageOfferCard extends StatefulWidget {
 
   /// Null where the content is read only once the suggestion is taken.
   final ui.Image? thumbnail;
+  final double maxWidth;
+  final double maxHeight;
 
   /// Moves the image into the composer, where it can get a caption.
   final VoidCallback onAttach;
   final VoidCallback onDismiss;
+
+  /// Whether the tile has its own send button.
+  final bool offersSend;
 
   /// Null while a send is already in flight.
   final VoidCallback? onSend;
@@ -482,11 +691,6 @@ final class ClipboardImageOfferCard extends StatefulWidget {
 
 final class _ClipboardImageOfferCardState
     extends State<ClipboardImageOfferCard> {
-  // How far the two buttons reach past the picture. Both are 48 dp targets:
-  // the badge is centred on its corner, the send button sits a quarter out.
-  static const _badgeOverhang = 18.0;
-  static const _sendOverhang = 12.0;
-
   @override
   void dispose() {
     widget.thumbnail?.dispose();
@@ -498,14 +702,14 @@ final class _ClipboardImageOfferCardState
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final image = widget.thumbnail;
-    // Half the pane at most, so the tile never covers a narrow chat.
-    final available = MediaQuery.sizeOf(context).width * 0.5;
     final size = image == null
-        ? const Size.square(ClipboardImageOfferCard.placeholderSide)
+        ? const Size.square(ClipboardImageOfferCard.minimumSide)
         : ClipboardImageOfferCard.tileSize(
             image.width,
             image.height,
-            available,
+            maxWidth: widget.maxWidth,
+            maxHeight: widget.maxHeight,
+            pixelRatio: MediaQuery.devicePixelRatioOf(context),
           );
     return Semantics(
       container: true,
@@ -513,13 +717,13 @@ final class _ClipboardImageOfferCardState
       label: strings.clipboardImageOfferTitle,
       child: SizedBox(
         key: const Key('clipboard-image-offer'),
-        width: _badgeOverhang + size.width + _sendOverhang,
-        height: _badgeOverhang + size.height + _sendOverhang,
+        width: size.width + ClipboardImageOfferCard.overhang,
+        height: size.height + ClipboardImageOfferCard.overhang,
         child: Stack(
           children: [
             PositionedDirectional(
-              start: _badgeOverhang,
-              top: _badgeOverhang,
+              start: ClipboardImageOfferCard._badgeOverhang,
+              top: ClipboardImageOfferCard._badgeOverhang,
               child: Tooltip(
                 message: strings.clipboardImageOfferAttach,
                 child: Semantics(
@@ -580,26 +784,27 @@ final class _ClipboardImageOfferCardState
                 icon: const Icon(Icons.close_rounded),
               ),
             ),
-            PositionedDirectional(
-              end: 0,
-              bottom: 0,
-              child: IconButton.filled(
-                key: const Key('clipboard-image-offer-send'),
-                tooltip: strings.clipboardImageOfferSend,
-                onPressed: widget.onSend,
-                // Smaller than the composer's own send button, so the two
-                // are not read as one control; the target stays 48 dp.
-                style: IconButton.styleFrom(
-                  tapTargetSize: MaterialTapTargetSize.padded,
-                  minimumSize: const Size.square(40),
-                  fixedSize: const Size.square(40),
-                  iconSize: 20,
-                  elevation: 3,
-                  shadowColor: scheme.shadow,
+            if (widget.offersSend)
+              PositionedDirectional(
+                end: 0,
+                bottom: 0,
+                child: IconButton.filled(
+                  key: const Key('clipboard-image-offer-send'),
+                  tooltip: strings.clipboardImageOfferSend,
+                  onPressed: widget.onSend,
+                  // Smaller than the composer's own send button, so the two
+                  // are not read as one control; the target stays 48 dp.
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.padded,
+                    minimumSize: const Size.square(40),
+                    fixedSize: const Size.square(40),
+                    iconSize: 20,
+                    elevation: 3,
+                    shadowColor: scheme.shadow,
+                  ),
+                  icon: const Icon(Icons.send_rounded),
                 ),
-                icon: const Icon(Icons.send_rounded),
               ),
-            ),
           ],
         ),
       ),

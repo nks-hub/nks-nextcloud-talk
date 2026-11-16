@@ -14,7 +14,7 @@ final Uint8List tinyPng = base64Decode(
 final class FakeClipboardImageSource implements ClipboardImageSource {
   String? _clip;
   Uint8List? _bytes;
-  final ValueNotifier<int> _changes = ValueNotifier<int>(0);
+  final _CountedNotifier _changes = _CountedNotifier();
 
   int peeks = 0;
   int reads = 0;
@@ -33,17 +33,31 @@ final class FakeClipboardImageSource implements ClipboardImageSource {
   /// still holds open.
   int busyReads = 0;
 
+  /// Runs inside [read] before the content is taken, like a program that
+  /// writes the clipboard while it is being read.
+  VoidCallback? duringRead;
+
+  /// While set and not completed, [read] waits for it.
+  Completer<void>? hold;
+
+  /// How many listen to [changes] right now.
+  int get listeners => _changes.count;
+
   /// Puts an image clip on the clipboard; null [bytes] make it unreadable.
-  void copyImage(String id, Uint8List? bytes) {
+  /// Without [notify] the change is not announced, as between two ticks of
+  /// a polled clipboard.
+  void copyImage(String id, Uint8List? bytes, {bool notify = true}) {
     _clip = id;
     _bytes = bytes;
-    _changes.value++;
+    if (notify) {
+      _changes.tell();
+    }
   }
 
   void copyText() {
     _clip = null;
     _bytes = null;
-    _changes.value++;
+    _changes.tell();
   }
 
   @override
@@ -62,12 +76,33 @@ final class FakeClipboardImageSource implements ClipboardImageSource {
   }
 
   @override
-  Future<Uint8List?> read() {
+  Future<Uint8List?> read() async {
     reads++;
+    duringRead?.call();
+    final bytes = _bytes;
+    await hold?.future;
     if (busyReads > 0) {
       busyReads--;
-      return Future.value(null);
+      return null;
     }
-    return hangs ? Completer<Uint8List?>().future : Future.value(_bytes);
+    return hangs ? Completer<Uint8List?>().future : bytes;
+  }
+}
+
+final class _CountedNotifier extends ChangeNotifier {
+  int count = 0;
+
+  void tell() => notifyListeners();
+
+  @override
+  void addListener(VoidCallback listener) {
+    count++;
+    super.addListener(listener);
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    count--;
+    super.removeListener(listener);
   }
 }

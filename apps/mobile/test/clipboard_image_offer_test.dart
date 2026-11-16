@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -74,6 +75,8 @@ void main() {
     bool rtl = false,
     VoidCallback? onTimelineTap,
     Object room = 'room-a',
+    bool sending = false,
+    double? paneWidth,
   }) async {
     addTearDown(() => toForeground(tester));
     await tester.pumpWidget(
@@ -93,29 +96,35 @@ void main() {
                 ).copyWith(disableAnimations: reduceMotion),
                 child: Directionality(
                   textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          key: _timeline,
-                          behavior: HitTestBehavior.opaque,
-                          onTap: onTimelineTap,
-                        ),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: SizedBox(
+                      width: paneWidth ?? double.infinity,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              key: _timeline,
+                              behavior: HitTestBehavior.opaque,
+                              onTap: onTimelineTap,
+                            ),
+                          ),
+                          ClipboardImageOffer(
+                            key: ValueKey<Object>(room),
+                            focusNode: focus,
+                            blocked: () => blocked.value || sending,
+                            refresh: blocked,
+                            sending: sending,
+                            onAttach: (image) async {
+                              attached.add(image);
+                              return true;
+                            },
+                            onSend: () => sends++,
+                          ),
+                          TextField(key: _field, focusNode: focus),
+                        ],
                       ),
-                      ClipboardImageOffer(
-                        key: ValueKey<Object>(room),
-                        focusNode: focus,
-                        blocked: () => blocked.value,
-                        refresh: blocked,
-                        sending: false,
-                        onAttach: (image) async {
-                          attached.add(image);
-                          return true;
-                        },
-                        onSend: () => sends++,
-                      ),
-                      TextField(key: _field, focusNode: focus),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -281,8 +290,10 @@ void main() {
     expect(find.byKey(_card), findsNothing);
     expect((clipboard.peeks, clipboard.reads), (0, 0));
 
+    // Freed, the composer offers the clip that came while it was busy,
+    // without any other nudge.
     blocked.value = false;
-    await refocusField(tester);
+    await settle(tester);
     expect(find.byKey(_card), findsOneWidget);
 
     final thumbnail = tester.widget<RawImage>(find.byType(RawImage)).image!;
@@ -346,9 +357,18 @@ void main() {
   ) async {
     clipboard.copyImage('clip-1', tinyPng);
     await pumpComposer(tester, reduceMotion: true);
-    await focusField(tester);
-    expect(find.byKey(_card), findsOneWidget);
-    expect(find.byType(AnimatedSwitcher), findsNothing);
+    await tester.tap(find.byKey(_field));
+    // Past the field's own focus animation, so only the card could move.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    for (var round = 0; find.byKey(_card).evaluate().isEmpty; round++) {
+      expect(round, lessThan(50));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 5)),
+      );
+      await tester.pump();
+    }
+    expect(tester.hasRunningAnimations, isFalse);
 
     await tester.tap(find.byKey(const Key('clipboard-image-offer-dismiss')));
     await tester.pump();
@@ -405,6 +425,11 @@ void main() {
     await settle(tester);
     expect(find.byKey(_card), findsNothing);
     expect(tester.takeException(), isNull);
+
+    // Content that arrived and is no picture is not read on every look.
+    final reads = clipboard.reads;
+    await refocusField(tester);
+    expect(clipboard.reads, reads);
   });
 
   testWidgets('the tile floats: nothing in the layout moves when it comes '
@@ -499,6 +524,14 @@ void main() {
     semantics.dispose();
   });
 
+  test('clipboard padding after the PNG end is cut off', () {
+    final padded = Uint8List.fromList([...tinyPng, 0, 0, 0, 0, 0, 0, 0]);
+    expect(pngWithoutPadding(padded), tinyPng);
+    expect(pngWithoutPadding(tinyPng), same(tinyPng));
+    final notPng = Uint8List.fromList(List<int>.filled(32, 7));
+    expect(pngWithoutPadding(notPng), same(notPng));
+  });
+
   testWidgets('a clipboard bitmap becomes a file the engine decodes', (
     tester,
   ) async {
@@ -527,39 +560,50 @@ void main() {
 
     expect(bitmapFileFromDib(Uint8List(12)), isNull);
   });
-  test('the tile keeps the shape of the picture inside a bounded box', () {
-    Size tile(int w, int h, [double available = 400]) =>
-        ClipboardImageOfferCard.tileSize(w, h, available);
+  test('the tile keeps the shape and at most the size of the picture', () {
+    void tile(
+      int w,
+      int h,
+      double width,
+      double height, {
+      double maxWidth = 400,
+      double maxHeight = 400,
+      double pixelRatio = 1,
+    }) {
+      final size = ClipboardImageOfferCard.tileSize(
+        w,
+        h,
+        maxWidth: maxWidth,
+        maxHeight: maxHeight,
+        pixelRatio: pixelRatio,
+      );
+      expect(size.width, moreOrLessEquals(width), reason: '$w x $h');
+      expect(size.height, moreOrLessEquals(height), reason: '$w x $h');
+    }
 
     // A full HD screenshot: as wide as allowed, its own 16:9 shape.
-    expect(tile(1920, 1080), const Size(220, 220 * 1080 / 1920));
-    // A phone screenshot: as tall as allowed, its own shape.
-    expect(tile(1080, 2400), const Size(72, 160));
-    // A thin strip is cropped to 3:1 instead of becoming a line.
-    expect(tile(3000, 40), const Size(220, 220 / 3));
-    // A narrow pane gets a smaller tile, never more than half its width.
-    expect(tile(1920, 1080, 150).width, 150);
-    // A tiny picture is not blown up past the box either way.
-    expect(tile(16, 16), const Size(160, 160));
+    tile(1920, 1080, 220, 220 * 1080 / 1920);
+    // A phone screenshot: as tall as allowed, cropped to the narrowest tile.
+    tile(1080, 2400, 96, 160);
+    // A thin strip is cropped to a tile instead of becoming a line.
+    tile(3000, 40, 220, 96);
+    // A narrow pane gets a narrower tile.
+    tile(1920, 1080, 180, 180 * 1080 / 1920, maxWidth: 180);
+    // Little room above the composer makes it lower, in the same shape.
+    tile(1920, 1080, 110 * 1920 / 1080, 110, maxHeight: 110);
+    // A small picture keeps the size it has on the screen it came from.
+    tile(200, 150, 200, 150);
+    tile(400, 300, 200, 150, pixelRatio: 2);
+    // A tiny one is raised to a tile still worth a tap.
+    tile(16, 16, 96, 96);
   });
 
   testWidgets('a big screenshot shows larger than a small one, in its shape', (
     tester,
   ) async {
-    Future<Uint8List> png(int width, int height) async {
-      final recorder = ui.PictureRecorder();
-      Canvas(recorder).drawRect(
-        Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
-        Paint()..color = const Color(0xFF3366CC),
-      );
-      final image = await recorder.endRecording().toImage(width, height);
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      image.dispose();
-      return data!.buffer.asUint8List();
-    }
-
-    final wide = (await tester.runAsync(() => png(1600, 900)))!;
-    final tall = (await tester.runAsync(() => png(400, 900)))!;
+    final wide = await _png(tester, 1600, 900);
+    final tall = await _png(tester, 400, 900);
+    final small = await _png(tester, 150, 100);
     clipboard.copyImage('clip-wide', wide);
     await pumpComposer(tester);
     await focusField(tester);
@@ -575,6 +619,12 @@ void main() {
     final tallSize = tester.getSize(picture);
     expect(tallSize.height, greaterThan(tallSize.width));
     expect(tallSize.height, lessThanOrEqualTo(160 + 1));
+
+    // 150 x 100 pixels are 50 x 33 dp on this 3x screen, raised to the
+    // smallest tile instead of being blown up to the box.
+    clipboard.copyImage('clip-small', small);
+    await settle(tester);
+    expect(tester.getSize(picture), const Size(96, 96));
   });
 
   testWidgets('a clipboard still held by the screenshot tool is asked again', (
@@ -664,12 +714,17 @@ void main() {
       await focusField(tester);
       expect(find.byKey(_card), findsOneWidget);
       expect(clipboard.reads, 0, reason: 'showing the tile reads nothing');
+      expect(
+        find.byKey(const Key('clipboard-image-offer-send')),
+        findsNothing,
+        reason: 'a picture nobody has seen yet is not sent straight away',
+      );
 
-      await tester.tap(find.byKey(const Key('clipboard-image-offer-send')));
+      await tester.tap(find.byKey(const Key('clipboard-image-offer-attach')));
       await settle(tester);
       expect(clipboard.reads, 1);
       expect(attached, hasLength(1));
-      expect(sends, 1);
+      expect(sends, 0);
       expect(find.byKey(_card), findsNothing);
     },
   );
@@ -706,4 +761,324 @@ void main() {
     expect(reads, before);
     expect(changes, 1);
   });
+
+  testWidgets('a newer clip that cannot be read yet takes the older tile '
+      'away and is asked again on a later look', (tester) async {
+    clipboard
+      ..offersWhileVisible = true
+      ..copyImage('clip-1', tinyPng);
+    await pumpComposer(tester);
+    await settle(tester);
+    expect(find.byKey(_card), findsOneWidget);
+
+    clipboard
+      ..busyReads = 3
+      ..copyImage('clip-2', tinyPng);
+    for (var round = 0; round < 12; round++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 5)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.byKey(_card), findsNothing, reason: 'clip-1 is not shown');
+    expect(clipboard.reads, 4);
+
+    // A busy clipboard says nothing about the clip itself.
+    toBackground(tester);
+    toForeground(tester);
+    await settle(tester);
+    expect(find.byKey(_card), findsOneWidget);
+    expect(clipboard.reads, 5);
+  });
+
+  testWidgets('a tile the clipboard has moved past sends nothing and makes '
+      'way for the newer picture', (tester) async {
+    final newer = Uint8List.fromList(tinyPng);
+    clipboard.copyImage('clip-1', tinyPng);
+    await pumpComposer(tester);
+    await focusField(tester);
+    // Copied between two looks, so no change was announced yet.
+    clipboard.copyImage('clip-2', newer, notify: false);
+    await tester.tap(find.byKey(const Key('clipboard-image-offer-send')));
+    await settle(tester);
+    expect(attached, isEmpty);
+    expect(sends, 0);
+    expect(find.byKey(_card), findsOneWidget);
+    expect(clipboard.reads, 2);
+
+    await tester.tap(find.byKey(const Key('clipboard-image-offer-send')));
+    await settle(tester);
+    expect(attached.single.bytes, same(newer));
+    expect(sends, 1);
+  });
+
+  testWidgets('a clip copied while a message went out is offered once it '
+      'is gone', (tester) async {
+    await pumpComposer(tester, sending: true);
+    await focusField(tester);
+    clipboard.copyImage('clip-1', tinyPng);
+    await settle(tester);
+    expect((clipboard.peeks, clipboard.reads), (0, 0));
+
+    await pumpComposer(tester);
+    await settle(tester);
+    expect(find.byKey(_card), findsOneWidget);
+  });
+
+  testWidgets('another room offers the same clip without reading it again', (
+    tester,
+  ) async {
+    clipboard.copyImage('clip-1', tinyPng);
+    await pumpComposer(tester);
+    await focusField(tester);
+    expect(find.byKey(_card), findsOneWidget);
+
+    await pumpComposer(tester, room: 'room-b');
+    await refocusField(tester);
+    expect(find.byKey(_card), findsOneWidget);
+    expect(clipboard.reads, 1);
+  });
+
+  testWidgets('content that changed while it was read is offered under its '
+      'own identity', (tester) async {
+    final newer = Uint8List.fromList(tinyPng);
+    clipboard
+      ..copyImage('clip-1', tinyPng)
+      ..duringRead = () {
+        clipboard
+          ..duringRead = null
+          ..copyImage('clip-2', newer, notify: false);
+      };
+    await pumpComposer(tester);
+    await focusField(tester);
+    expect(find.byKey(_card), findsOneWidget);
+    expect(clipboard.reads, 2);
+
+    await tester.tap(find.byKey(const Key('clipboard-image-offer-attach')));
+    await settle(tester);
+    expect(attached.single.bytes, same(newer));
+    await refocusField(tester);
+    expect(find.byKey(_card), findsNothing, reason: 'clip-2 is answered');
+  });
+
+  testWidgets('the clipboard is followed only while the app is on screen', (
+    tester,
+  ) async {
+    await pumpComposer(tester);
+    await settle(tester);
+    expect(clipboard.listeners, 1);
+    toBackground(tester);
+    expect(clipboard.listeners, 0);
+    toForeground(tester);
+    expect(clipboard.listeners, 1);
+  });
+
+  group('two panes', () {
+    late FocusNode other;
+
+    setUp(() => other = FocusNode());
+    tearDown(() => other.dispose());
+
+    Future<void> pumpPanes(WidgetTester tester) async {
+      Widget pane(String key, FocusNode node) => Expanded(
+        child: Column(
+          children: [
+            const Spacer(),
+            ClipboardImageOffer(
+              key: ValueKey<String>(key),
+              focusNode: node,
+              blocked: () => false,
+              refresh: blocked,
+              sending: false,
+              onAttach: (image) async {
+                attached.add(image);
+                return true;
+              },
+              onSend: () => sends++,
+            ),
+            TextField(focusNode: node),
+          ],
+        ),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            clipboardImageSourceProvider.overrideWithValue(clipboard),
+            clipboardOfferMemoryProvider.overrideWithValue(
+              ClipboardOfferMemory(directory: memory),
+            ),
+          ],
+          child: localizedTestApp(
+            home: Scaffold(
+              body: Row(children: [pane('room', focus), pane('thread', other)]),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('share one read, and a clip answered in one leaves both', (
+      tester,
+    ) async {
+      clipboard
+        ..offersWhileVisible = true
+        ..copyImage('clip-1', tinyPng);
+      await pumpPanes(tester);
+      await settle(tester);
+      expect(find.byKey(_card), findsNWidgets(2));
+      expect(clipboard.reads, 1);
+
+      await tester.tap(
+        find.byKey(const Key('clipboard-image-offer-dismiss')).first,
+      );
+      await settle(tester);
+      expect(find.byKey(_card), findsNothing);
+    });
+
+    testWidgets('opening at once both remember a clip answered before a '
+        'restart', (tester) async {
+      await tester.runAsync(
+        () => ClipboardOfferMemory(directory: memory).write('clip-1'),
+      );
+      clipboard
+        ..offersWhileVisible = true
+        ..copyImage('clip-1', tinyPng);
+      await pumpPanes(tester);
+      await settle(tester);
+      expect(find.byKey(_card), findsNothing);
+      expect(clipboard.reads, 0);
+    });
+  });
+
+  testWidgets('a clipboard bitmap with a colour table is read past it', (
+    tester,
+  ) async {
+    // A 1x1 24-bit DIB listing two green colours before its one red pixel.
+    final dib = Uint8List(40 + 8 + 4);
+    ByteData.sublistView(dib)
+      ..setUint32(0, 40, Endian.little)
+      ..setInt32(4, 1, Endian.little)
+      ..setInt32(8, 1, Endian.little)
+      ..setUint16(12, 1, Endian.little)
+      ..setUint16(14, 24, Endian.little)
+      ..setUint32(32, 2, Endian.little)
+      ..setUint32(40, 0x0000FF00, Endian.little)
+      ..setUint32(44, 0x0000FF00, Endian.little)
+      ..setUint8(50, 0xFF);
+    final file = bitmapFileFromDib(dib)!;
+    final pixel = await tester.runAsync(() async {
+      final codec = await ui.instantiateImageCodec(file);
+      final frame = await codec.getNextFrame();
+      final data = await frame.image.toByteData();
+      frame.image.dispose();
+      codec.dispose();
+      return data!.buffer.asUint8List().sublist(0, 4);
+    });
+    expect(pixel, [0xFF, 0, 0, 0xFF]);
+  });
+
+  testWidgets('switching reduced motion while the tile is shown keeps its '
+      'picture', (tester) async {
+    clipboard.copyImage('clip-1', tinyPng);
+    await pumpComposer(tester);
+    await focusField(tester);
+    final thumbnail = tester.widget<RawImage>(find.byType(RawImage)).image!;
+
+    await pumpComposer(tester, reduceMotion: true);
+    await tester.pump();
+    expect(find.byKey(_card), findsOneWidget);
+    expect(thumbnail.debugDisposed, isFalse);
+    expect(
+      tester.widget<RawImage>(find.byType(RawImage)).image,
+      same(thumbnail),
+    );
+  });
+
+  testWidgets('while the system asks about the paste the tile stays away', (
+    tester,
+  ) async {
+    clipboard
+      ..readNeedsConsent = true
+      ..copyImage('clip-1', tinyPng);
+    await pumpComposer(tester);
+    await focusField(tester);
+    clipboard.hold = Completer<void>();
+    await tester.tap(find.byKey(const Key('clipboard-image-offer-attach')));
+    await settle(tester);
+    expect(find.byKey(_card), findsNothing);
+
+    // The system's question takes the app out of resumed and back.
+    lifecycle(tester, const [
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]);
+    await settle(tester);
+    expect(find.byKey(_card), findsNothing);
+
+    clipboard.hold!.complete();
+    await settle(tester);
+    expect(attached, hasLength(1));
+    expect(find.byKey(_card), findsNothing);
+  });
+
+  testWidgets('a refused paste leaves the clip on offer', (tester) async {
+    clipboard
+      ..readNeedsConsent = true
+      ..copyImage('clip-1', null);
+    await pumpComposer(tester);
+    await focusField(tester);
+    await tester.tap(find.byKey(const Key('clipboard-image-offer-attach')));
+    await settle(tester);
+    expect(attached, isEmpty);
+    expect(find.byKey(_card), findsOneWidget);
+  });
+
+  testWidgets('the tile fits its pane and the room above the composer', (
+    tester,
+  ) async {
+    addTearDown(tester.view.reset);
+    final wide = await _png(tester, 1600, 900);
+    final picture = find.byKey(const Key('clipboard-image-offer-attach'));
+    clipboard.copyImage('clip-1', wide);
+    await pumpComposer(tester, paneWidth: 300);
+    await focusField(tester);
+    expect(tester.getSize(picture).width, moreOrLessEquals(150));
+
+    // A low window: 110 dp left for the picture between a top bar and the
+    // composer, so the tile gets lower and stays below that bar.
+    await pumpComposer(tester);
+    await settle(tester);
+    final field = tester.getSize(find.byKey(_field)).height;
+    double windowFor(double room) =>
+        3 *
+        (kToolbarHeight + 16 + ClipboardImageOfferCard.overhang + room + field);
+    tester.view.physicalSize = Size(2400, windowFor(110));
+    await settle(tester);
+    expect(tester.getSize(picture).height, moreOrLessEquals(110));
+    expect(
+      tester.getRect(find.byKey(_card)).top,
+      moreOrLessEquals(kToolbarHeight),
+    );
+
+    // Too low for any tile worth a tap: none is shown.
+    tester.view.physicalSize = Size(2400, windowFor(80));
+    await settle(tester);
+    expect(find.byKey(_card), findsNothing);
+  });
+}
+
+/// A [width] x [height] PNG of one colour, encoded by the engine.
+Future<Uint8List> _png(WidgetTester tester, int width, int height) async {
+  final bytes = await tester.runAsync(() async {
+    final recorder = ui.PictureRecorder();
+    Canvas(recorder).drawRect(
+      Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+      Paint()..color = const Color(0xFF3366CC),
+    );
+    final image = await recorder.endRecording().toImage(width, height);
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    return data!.buffer.asUint8List();
+  });
+  return bytes!;
 }

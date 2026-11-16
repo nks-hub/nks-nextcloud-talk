@@ -42,16 +42,19 @@ abstract interface class ClipboardImageSource {
   bool get offersWhileVisible;
 }
 
-/// Null where the suggestion is off: iOS (any automatic pasteboard read shows
-/// the system paste banner), macOS (the pasteboard is read on the main thread
-/// and can wait on another device, see PasteboardProbeGuard) and Linux.
+/// Null where the suggestion is off: macOS (the pasteboard is read on the
+/// main thread and can wait on another device, see PasteboardProbeGuard) and
+/// Linux.
 final clipboardImageSourceProvider = Provider<ClipboardImageSource?>((ref) {
   // A widget test must not look at the clipboard of the machine it runs on.
   if (kIsWeb || Platform.environment.containsKey('FLUTTER_TEST')) {
     return null;
   }
   if (Platform.isAndroid) {
-    return AndroidClipboardImageSource.instance;
+    return ChannelClipboardImageSource.android;
+  }
+  if (Platform.isIOS) {
+    return ChannelClipboardImageSource.ios;
   }
   if (Platform.isWindows) {
     return const WindowsClipboardImageSource();
@@ -108,9 +111,14 @@ const int clipboardImageMaximumBytes = 25 * 1024 * 1024;
 /// file that gets sent: a 4K screenshot is 33 MB raw and about 2 MB as PNG.
 const int clipboardBitmapMaximumBytes = 80 * 1024 * 1024;
 
-/// Asks the Android clip description, which costs no clipboard access notice.
-final class AndroidClipboardImageSource implements ClipboardImageSource {
-  AndroidClipboardImageSource._() {
+/// The app's own clipboard channel: on Android the clip description, which
+/// costs no clipboard access notice, and on iOS whether the pasteboard holds
+/// an image and its change count, which raise no paste prompt.
+final class ChannelClipboardImageSource implements ClipboardImageSource {
+  ChannelClipboardImageSource._({
+    required this.readNeedsConsent,
+    required this.idSurvivesRestart,
+  }) {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'changed') {
         _changes.value++;
@@ -118,20 +126,34 @@ final class AndroidClipboardImageSource implements ClipboardImageSource {
     });
   }
 
-  static final AndroidClipboardImageSource instance =
-      AndroidClipboardImageSource._();
+  // The clip's own timestamp does; the change count of a release without
+  // one starts over with the process.
+  static final ChannelClipboardImageSource android =
+      ChannelClipboardImageSource._(
+        readNeedsConsent: false,
+        idSurvivesRestart: (id) => !id.startsWith('android-change-'),
+      );
+
+  // iOS asks the person before the app may see what another app put on the
+  // pasteboard, so the picture is read only once the suggestion is taken.
+  // The change count starts over when the device restarts.
+  static final ChannelClipboardImageSource ios = ChannelClipboardImageSource._(
+    readNeedsConsent: true,
+    idSurvivesRestart: (id) => false,
+  );
 
   static const _channel = MethodChannel(
     'com.nkshub.nextcloudtalk/clipboard_image',
   );
 
   final ValueNotifier<int> _changes = ValueNotifier<int>(0);
+  final bool Function(String id) idSurvivesRestart;
+
+  @override
+  final bool readNeedsConsent;
 
   @override
   Listenable get changes => _changes;
-
-  @override
-  bool get readNeedsConsent => false;
 
   @override
   bool get offersWhileVisible => false;
@@ -139,10 +161,8 @@ final class AndroidClipboardImageSource implements ClipboardImageSource {
   @override
   Future<String?> peek() => _channel.invokeMethod<String>('peek');
 
-  // The clip's own timestamp does; the change count of a release without
-  // one starts over with the process.
   @override
-  bool survivesRestart(String id) => !id.startsWith('android-change-');
+  bool survivesRestart(String id) => idSurvivesRestart(id);
 
   @override
   Future<Uint8List?> read() =>
@@ -190,25 +210,42 @@ final class WindowsClipboardImageSource implements ClipboardImageSource {
     return 'windows-${_windowsClipboardSequence()}';
   }
 
-  // shortcut: an owner that never renders its promised bitmap leaves this
-  // isolate blocked for good (the caller times out and moves on); spawn a
-  // killable helper process if that ever shows up in the field.
+  static Future<void> _lastRead = Future<void>.value();
+
+  // One read at a time: a second one would find the clipboard still open by
+  // the first and fail.
+  // shortcut: an owner that never renders its promised bitmap keeps the
+  // isolate, the clipboard it opened, and every later read waiting on it;
+  // spawn a killable helper process if that ever shows up in the field.
   @override
-  Future<Uint8List?> read() =>
-      Isolate.run(() => _readWindowsBitmap(clipboardBitmapMaximumBytes));
+  Future<Uint8List?> read() {
+    final result = _lastRead.then(
+      (_) => Isolate.run(
+        () => _readWindowsBitmap(
+          fileMaximumBytes: clipboardImageMaximumBytes,
+          bitmapMaximumBytes: clipboardBitmapMaximumBytes,
+        ),
+      ),
+    );
+    _lastRead = result.then<void>((_) {}, onError: (Object _) {});
+    return result;
+  }
 }
 
-final int Function() _windowsClipboardSequence = DynamicLibrary.open(
-  'user32.dll',
-).lookupFunction<Uint32 Function(), int Function()>('GetClipboardSequenceNumber');
+final int Function() _windowsClipboardSequence =
+    DynamicLibrary.open(
+      'user32.dll',
+    ).lookupFunction<Uint32 Function(), int Function()>(
+      'GetClipboardSequenceNumber',
+    );
 
-/// Tells its listeners when a clipboard counter moved, by asking for it once
-/// a second while anybody listens. Reading the counter opens nothing and
-/// touches no clipboard content.
+/// Tells its listeners when a clipboard counter moved, by asking for it four
+/// times a second while anybody listens. Reading the counter opens nothing
+/// and touches no clipboard content.
 final class ClipboardSequenceWatch extends ChangeNotifier {
   ClipboardSequenceWatch(
     this._read, {
-    this.interval = const Duration(seconds: 1),
+    this.interval = const Duration(milliseconds: 250),
   });
 
   final int Function() _read;
@@ -243,7 +280,10 @@ final class ClipboardSequenceWatch extends ChangeNotifier {
 const int _cfDib = 8;
 const int _cfUnicodeText = 13;
 
-Uint8List? _readWindowsBitmap(int maximumBytes) {
+Uint8List? _readWindowsBitmap({
+  required int fileMaximumBytes,
+  required int bitmapMaximumBytes,
+}) {
   final user32 = DynamicLibrary.open('user32.dll');
   final kernel32 = DynamicLibrary.open('kernel32.dll');
   final open = user32.lookupFunction<Int32 Function(IntPtr), int Function(int)>(
@@ -301,11 +341,7 @@ Uint8List? _readWindowsBitmap(int maximumBytes) {
     return null;
   }
   try {
-    Uint8List? copy(int format) {
-      final handle = data(format);
-      if (handle == nullptr) {
-        return null;
-      }
+    Uint8List? copy(Pointer<Void> handle, int maximumBytes) {
       final length = size(handle);
       if (length <= 0 || length > maximumBytes) {
         return null;
@@ -331,17 +367,35 @@ Uint8List? _readWindowsBitmap(int maximumBytes) {
       png = register(name);
       localFree(name);
     }
-    if (png != 0) {
-      final file = copy(png);
-      if (file != null) {
-        return file;
-      }
+    final file = png == 0 ? nullptr : data(png);
+    if (file != nullptr) {
+      // Too large as a file is too large to send; the bitmap is larger still.
+      final bytes = copy(file, fileMaximumBytes);
+      return bytes == null ? null : pngWithoutPadding(bytes);
     }
-    final dib = copy(_cfDib);
+    final bitmap = data(_cfDib);
+    final dib = bitmap == nullptr ? null : copy(bitmap, bitmapMaximumBytes);
     return dib == null ? null : bitmapFileFromDib(dib);
   } finally {
     close();
   }
+}
+
+/// [bytes] cut after the PNG end chunk. The size Windows reports for
+/// clipboard memory may be larger than what the owner wrote, and the rest
+/// would travel with the file.
+Uint8List pngWithoutPadding(Uint8List bytes) {
+  // IEND: its type, then the four bytes of its checksum.
+  for (var index = bytes.length - 8; index >= 8; index--) {
+    if (bytes[index] == 0x49 &&
+        bytes[index + 1] == 0x45 &&
+        bytes[index + 2] == 0x4E &&
+        bytes[index + 3] == 0x44) {
+      final end = index + 8;
+      return end == bytes.length ? bytes : Uint8List.sublistView(bytes, 0, end);
+    }
+  }
+  return bytes;
 }
 
 /// Puts the 14-byte file header in front of a clipboard DIB, which makes it
@@ -362,10 +416,12 @@ Uint8List? bitmapFileFromDib(Uint8List dib) {
       paletteEntries = colorsUsed != 0 ? colorsUsed : 1 << bitCount;
     case 16 || 32:
       // BI_BITFIELDS keeps three colour masks after a plain 40-byte header;
-      // the longer V4/V5 headers carry them inside.
-      paletteEntries = compression == 3 && headerSize == 40 ? 3 : 0;
+      // the longer V4/V5 headers carry them inside. A colour table may
+      // follow even here, as a hint for palette displays.
+      paletteEntries =
+          (compression == 3 && headerSize == 40 ? 3 : 0) + colorsUsed;
     case 24:
-      paletteEntries = 0;
+      paletteEntries = colorsUsed;
     default:
       return null;
   }
