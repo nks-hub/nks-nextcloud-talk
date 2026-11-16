@@ -10,8 +10,10 @@ import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../calls/call_state.dart';
+import '../chat/outgoing_message_status.dart';
 import '../rooms/room_settings_service.dart';
 import 'conversation_avatar_widget.dart';
+import 'conversation_delivery.dart';
 import 'conversation_presence.dart';
 import 'conversation_sync_service.dart';
 
@@ -334,9 +336,12 @@ final class _ConversationTile extends StatelessWidget {
     final statusMessage = presence?.message;
     final hasCall =
         ConversationCallState.fromConversation(conversation) != null;
+    final delivery = lastMessageDelivery(conversation);
+    final read = delivery == OutgoingMessageDeliveryState.read;
     final semanticsValue = [
       if (hasCall) strings.callBannerTitle,
       if (presence != null) presence.description(strings),
+      if (delivery != null) read ? strings.messageRead : strings.messageSent,
       preview,
       _formatActivity(context, conversation.lastActivity),
       strings.unreadMessages(conversation.unreadMessages),
@@ -469,6 +474,24 @@ final class _ConversationTile extends StatelessWidget {
                             const SizedBox(height: 4),
                             Row(
                               children: [
+                                if (delivery != null) ...[
+                                  // The marks of the chat bubbles: one tick
+                                  // once stored, two once everyone read it.
+                                  Icon(
+                                    read
+                                        ? Icons.done_all_rounded
+                                        : Icons.done_rounded,
+                                    key: Key(
+                                      'conversation-delivery-'
+                                      '${conversation.token}',
+                                    ),
+                                    size: 16,
+                                    color: read
+                                        ? scheme.primary
+                                        : scheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
                                 Expanded(
                                   child: Text(
                                     preview,

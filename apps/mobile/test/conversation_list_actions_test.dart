@@ -53,15 +53,19 @@ void main() {
     required String token,
     bool isArchived = false,
     int unreadMessages = 0,
+    Map<String, Object?> roomFields = const {},
+    Map<String, Object?> lastMessageFields = const {},
   }) async {
     final roomJson = Map<String, Object?>.from(_conversationRoomJson())
       ..['token'] = token
       ..['isArchived'] = isArchived
-      ..['unreadMessages'] = unreadMessages;
-    final lastMessage = roomJson['lastMessage'];
-    if (lastMessage is Map<String, Object?>) {
-      roomJson['lastMessage'] = Map<String, Object?>.from(lastMessage)
-        ..['token'] = token;
+      ..['unreadMessages'] = unreadMessages
+      ..addAll(roomFields);
+    final fixtureLastMessage = roomJson['lastMessage'];
+    if (fixtureLastMessage is Map<String, Object?>) {
+      roomJson['lastMessage'] = Map<String, Object?>.from(fixtureLastMessage)
+        ..['token'] = token
+        ..addAll(lastMessageFields);
     }
     final room = ConversationRoom.fromJson(roomJson);
     await database
@@ -189,6 +193,55 @@ void main() {
 
     expectEveryButtonNamed(tester, screen: 'the conversation list');
     expectReadingOrderFollowsLayout(tester, screen: 'the conversation list');
+    semantics.dispose();
+  });
+
+  testWidgets('a last message of this account shows one tick once stored and '
+      'two once everyone read it', (tester) async {
+    final semantics = tester.ensureSemantics();
+    // The fixture's last message, id 42, is by the room's own participant.
+    final conversations = [
+      await insertConversation(
+        token: 'stored',
+        roomFields: const {'lastCommonReadMessage': 41},
+      ),
+      await insertConversation(
+        token: 'read',
+        roomFields: const {'lastCommonReadMessage': 42},
+      ),
+      await insertConversation(
+        token: 'theirs',
+        lastMessageFields: const {'actorId': 'somebody-else'},
+      ),
+      await insertConversation(
+        token: 'system',
+        roomFields: const {'lastCommonReadMessage': 42},
+        lastMessageFields: const {'systemMessage': 'call_ended'},
+      ),
+    ];
+
+    await tester.pumpWidget(
+      app(
+        conversations: conversations,
+        client: MockClient((request) async => http.Response('', 404)),
+      ),
+    );
+    await tester.pump();
+
+    IconData? tick(String token) => tester
+        .widgetList<Icon>(find.byKey(Key('conversation-delivery-$token')))
+        .singleOrNull
+        ?.icon;
+    expect(tick('stored'), Icons.done_rounded);
+    expect(tick('read'), Icons.done_all_rounded);
+    expect(tick('theirs'), isNull);
+    expect(tick('system'), isNull);
+
+    String value(String token) =>
+        tester.getSemantics(find.byKey(Key('conversation-tile-$token'))).value;
+    expect(value('stored'), contains('Sent'));
+    expect(value('read'), contains('Read'));
+    expect(value('theirs'), isNot(contains('Sent')));
     semantics.dispose();
   });
 
