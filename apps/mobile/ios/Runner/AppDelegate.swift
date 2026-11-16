@@ -120,6 +120,7 @@ final class AppleDeepLinkDelivery {
   private var voiceMessageTranscriber: VoiceMessageTranscriber?
   private var incomingShareChannel: AppleIncomingShareChannel?
   private var callAudioInterruptions: CallAudioInterruptions?
+  private var clipboardImageChannel: ClipboardImageChannel?
   private var callPictureInPicture: CallPictureInPicture?
   /// Built at launch, not with the engine: a VoIP push can arrive at a
   /// terminated app, and iOS requires the call to be reported to CallKit from
@@ -315,6 +316,10 @@ final class AppleDeepLinkDelivery {
     )
     callAudioInterruptions?.dispose()
     callAudioInterruptions = CallAudioInterruptions(
+      messenger: engineBridge.applicationRegistrar.messenger()
+    )
+    clipboardImageChannel?.dispose()
+    clipboardImageChannel = ClipboardImageChannel(
       messenger: engineBridge.applicationRegistrar.messenger()
     )
     // The window draws a layer of its own, so it needs a view to live in as
