@@ -17,20 +17,35 @@ final class ClipboardImageChannel {
     qos: .userInitiated
   )
   private var observers: [NSObjectProtocol] = []
-  private var seenChangeCount = UIPasteboard.general.changeCount
+
+  /// The change count `peek` names the clip by. iOS also moves the count
+  /// while this app is in front and nothing was copied, by four each time the
+  /// keyboard comes up. Following those left the tile on show naming an old
+  /// count, so its first tap took nothing, and brought a dismissed picture
+  /// back. The count is taken when this app copies, and when it comes back
+  /// from the background, where another app may have copied.
+  ///
+  /// The count moves during an app switch too, and nothing iOS tells without
+  /// the paste alert separates that from a new copy: a picture dismissed
+  /// before a visit to another app is offered again after it. A copy made
+  /// next to the app while it stays in front (iPad split view) is seen only
+  /// once the app was in the background.
+  private var clipCount = UIPasteboard.general.changeCount
 
   init(messenger: FlutterBinaryMessenger) {
     channel = FlutterMethodChannel(name: Self.channelName, binaryMessenger: messenger)
     channel.setMethodCallHandler { [weak self] call, result in
       self?.handle(call, result)
     }
-    // `changedNotification` only covers copies made inside this app. One made
-    // elsewhere shows up as a new change count once the app is active again.
-    for name in [UIPasteboard.changedNotification, UIApplication.didBecomeActiveNotification] {
+    // `changedNotification` only covers copies made inside this app.
+    for (name, object) in [
+      (UIPasteboard.changedNotification, UIPasteboard.general),
+      (UIApplication.willEnterForegroundNotification, nil),
+    ] as [(Notification.Name, Any?)] {
       observers.append(
-        NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) {
+        NotificationCenter.default.addObserver(forName: name, object: object, queue: .main) {
           [weak self] _ in
-          self?.reportChange()
+          self?.take(UIPasteboard.general.changeCount)
         }
       )
     }
@@ -42,20 +57,18 @@ final class ClipboardImageChannel {
     channel.setMethodCallHandler(nil)
   }
 
-  private func reportChange() {
-    let changeCount = UIPasteboard.general.changeCount
-    guard changeCount != seenChangeCount else {
+  private func take(_ changeCount: Int) {
+    guard changeCount != clipCount else {
       return
     }
-    seenChangeCount = changeCount
+    clipCount = changeCount
     channel.invokeMethod("changed", arguments: nil)
   }
 
   private func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     switch call.method {
     case "peek":
-      let pasteboard = UIPasteboard.general
-      result(pasteboard.hasImages ? "ios-\(pasteboard.changeCount)" : nil)
+      result(UIPasteboard.general.hasImages ? "ios-\(clipCount)" : nil)
     case "read":
       guard let maximumBytes = (call.arguments as? NSNumber)?.intValue, maximumBytes > 0 else {
         result(
