@@ -63,7 +63,9 @@ final class ClipboardImageOffer extends ConsumerStatefulWidget {
       _ClipboardImageOfferState();
 }
 
-typedef _Offer = ({String id, PastedImage image, ui.Image thumbnail});
+/// [image] and [thumbnail] are null where the content may only be read once
+/// the person takes the suggestion.
+typedef _Offer = ({String id, PastedImage? image, ui.Image? thumbnail});
 
 final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
     with WidgetsBindingObserver {
@@ -79,6 +81,10 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
   ClipboardImageSource? _source;
   _Offer? _offer;
   int _round = 0;
+
+  /// The clip being read right now and the round reading it. A check that
+  /// finds the same clip leaves that read alone instead of starting over.
+  ({String id, int round})? _reading;
   bool _foreground = true;
 
   @override
@@ -86,8 +92,7 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
     super.initState();
     _source = ref.read(clipboardImageSourceProvider);
     _portal.show();
-    final state = WidgetsBinding.instance.lifecycleState;
-    _foreground = state == null || state == AppLifecycleState.resumed;
+    _foreground = _visible(WidgetsBinding.instance.lifecycleState);
     WidgetsBinding.instance.addObserver(this);
     widget.focusNode.addListener(_check);
     widget.refresh.addListener(_handleRefresh);
@@ -120,15 +125,24 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
     super.dispose();
   }
 
+  /// Resumed, and on a desktop also inactive: a window that lost the focus
+  /// to the screenshot tool is still on screen.
+  bool _visible(AppLifecycleState? state) =>
+      state == null ||
+      state == AppLifecycleState.resumed ||
+      (state == AppLifecycleState.inactive &&
+          (_source?.offersWhileVisible ?? false));
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _foreground = state == AppLifecycleState.resumed;
+    _foreground = _visible(state);
     if (_foreground) {
       unawaited(_check());
     } else if (state != AppLifecycleState.inactive) {
       // Inactive is also a desktop window that merely lost focus, or a
       // permission dialog; the image only has to go once the app is hidden.
       _round++;
+      _reading = null;
       if (_offer != null) {
         _drop();
         // A hidden app gets no frames on its own, and the card on screen
@@ -149,55 +163,96 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
     if (source == null ||
         !mounted ||
         !_foreground ||
-        !widget.focusNode.hasFocus ||
+        (!source.offersWhileVisible && !widget.focusNode.hasFocus) ||
         widget.blocked()) {
       return;
     }
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
-    final round = ++_round;
-    bool stale() =>
-        !mounted || round != _round || !_foreground || widget.blocked();
+    bool gone() => !mounted || !_foreground || widget.blocked();
     String? id;
     try {
       id = await source.peek().timeout(const Duration(seconds: 1));
     } on Object {
       id = null;
     }
-    if (stale()) {
+    if (gone()) {
       return;
     }
     if (id == null) {
+      // A read still running is for an image that is no longer there.
+      _round++;
+      _reading = null;
       _drop();
       return;
     }
     if (!_restored) {
       _restored = true;
       _handledClip ??= await ref.read(clipboardOfferMemoryProvider).read();
-      if (stale()) {
+      if (gone()) {
         return;
       }
     }
-    if (id == _handledClip || id == _offer?.id) {
+    if (id == _handledClip || id == _offer?.id || id == _reading?.id) {
       return;
     }
+    final round = ++_round;
+    bool stale() => gone() || round != _round;
+    if (source.readNeedsConsent) {
+      final offer = (id: id, image: null, thumbnail: null);
+      setState(() => _offer = offer);
+      return;
+    }
+    _reading = (id: id, round: round);
+    try {
+      await _readAndOffer(source, id, pixelRatio, stale);
+    } finally {
+      if (_reading?.round == round) {
+        _reading = null;
+      }
+    }
+  }
+
+  Future<void> _readAndOffer(
+    ClipboardImageSource source,
+    String id,
+    double pixelRatio,
+    bool Function() stale,
+  ) async {
     PastedImage? image;
     ui.Image? thumbnail;
-    try {
-      // A clipboard owner may produce its data only when asked, and take as
-      // long as it likes; the suggestion is not worth waiting for.
-      final raw = await source.read().timeout(const Duration(seconds: 3));
-      image = raw == null ? null : await normalizePastedImage(raw);
-      if (image != null) {
+    // A clipboard that is busy right now answers null; one whose owner never
+    // produces the data does not answer at all. Only the first is worth
+    // asking again.
+    for (var attempt = 0; attempt < 3 && image == null; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        if (stale()) {
+          return;
+        }
+      }
+      try {
+        // The owner may take as long as it likes; the suggestion is not
+        // worth waiting for.
+        final raw = await source.read().timeout(const Duration(seconds: 3));
+        image = raw == null ? null : await normalizePastedImage(raw);
+      } on TimeoutException {
+        break;
+      } on Object {
+        image = null;
+      }
+    }
+    if (image != null) {
+      try {
         thumbnail = await _decodeThumbnail(
           image.bytes,
-          (ClipboardImageOfferCard.thumbnailExtent * pixelRatio).round(),
+          (ClipboardImageOfferCard.maximumHeight * pixelRatio).round(),
         );
+      } on Object {
+        thumbnail = null;
       }
-    } on Object {
-      thumbnail = null;
     }
     if (image == null || thumbnail == null) {
-      // Unreadable once is unreadable again; do not ask on every focus.
+      // Unreadable after that is unreadable again; do not ask on every focus.
       _handledClip = id;
       return;
     }
@@ -275,7 +330,20 @@ final class _ClipboardImageOfferState extends ConsumerState<ClipboardImageOffer>
     // Cleared before the first await, so a second tap finds nothing to send.
     _answered(offer.id);
     _drop();
-    final attached = await widget.onAttach(offer.image);
+    var image = offer.image;
+    if (image == null) {
+      // The system asks the person here, and waits for the answer.
+      try {
+        final raw = await _source?.read().timeout(const Duration(minutes: 1));
+        image = raw == null ? null : await normalizePastedImage(raw);
+      } on Object {
+        image = null;
+      }
+      if (image == null || !mounted) {
+        return;
+      }
+    }
+    final attached = await widget.onAttach(image);
     if (send && attached && mounted) {
       widget.onSend();
     }
@@ -369,10 +437,36 @@ final class ClipboardImageOfferCard extends StatefulWidget {
     super.key,
   });
 
-  /// The longer side of the picture on screen.
-  static const double thumbnailExtent = 112;
+  /// The box the picture is fitted into; it keeps its own shape inside.
+  static const double maximumWidth = 220;
+  static const double maximumHeight = 160;
 
-  final ui.Image thumbnail;
+  /// Neither side gets smaller than this, so a thin strip stays a tile.
+  static const double minimumSide = 72;
+
+  /// The side of the tile shown where the picture cannot be previewed.
+  static const double placeholderSide = 96;
+
+  /// How large the picture of [width] x [height] pixels is drawn when
+  /// [available] logical pixels of width are there for it.
+  static Size tileSize(int width, int height, double available) {
+    final boxWidth = math.max(minimumSide, math.min(maximumWidth, available));
+    // Past 3:1 either way the picture is cropped rather than shrunk further.
+    final aspect = (width / height).clamp(1 / 3, 3.0);
+    var tileWidth = boxWidth;
+    var tileHeight = tileWidth / aspect;
+    if (tileHeight > maximumHeight) {
+      tileHeight = maximumHeight;
+      tileWidth = tileHeight * aspect;
+    }
+    return Size(
+      math.max(minimumSide, tileWidth),
+      math.max(minimumSide, tileHeight),
+    );
+  }
+
+  /// Null where the content is read only once the suggestion is taken.
+  final ui.Image? thumbnail;
 
   /// Moves the image into the composer, where it can get a caption.
   final VoidCallback onAttach;
@@ -395,7 +489,7 @@ final class _ClipboardImageOfferCardState
 
   @override
   void dispose() {
-    widget.thumbnail.dispose();
+    widget.thumbnail?.dispose();
     super.dispose();
   }
 
@@ -404,13 +498,15 @@ final class _ClipboardImageOfferCardState
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final image = widget.thumbnail;
-    // The picture keeps its shape up to 16:9 either way; a panorama or a
-    // very tall capture is cropped to stay a tile.
-    final aspect = (image.width / image.height).clamp(9 / 16, 16 / 9);
-    const extent = ClipboardImageOfferCard.thumbnailExtent;
-    final size = aspect >= 1
-        ? Size(extent, extent / aspect)
-        : Size(extent * aspect, extent);
+    // Half the pane at most, so the tile never covers a narrow chat.
+    final available = MediaQuery.sizeOf(context).width * 0.5;
+    final size = image == null
+        ? const Size.square(ClipboardImageOfferCard.placeholderSide)
+        : ClipboardImageOfferCard.tileSize(
+            image.width,
+            image.height,
+            available,
+          );
     return Semantics(
       container: true,
       liveRegion: true,
@@ -441,12 +537,21 @@ final class _ClipboardImageOfferCardState
                     child: InkWell(
                       key: const Key('clipboard-image-offer-attach'),
                       onTap: widget.onAttach,
-                      child: RawImage(
-                        image: image,
-                        width: size.width,
-                        height: size.height,
-                        fit: BoxFit.cover,
-                      ),
+                      child: image == null
+                          ? SizedBox.fromSize(
+                              size: size,
+                              child: Icon(
+                                Icons.image_outlined,
+                                size: 40,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            )
+                          : RawImage(
+                              image: image,
+                              width: size.width,
+                              height: size.height,
+                              fit: BoxFit.cover,
+                            ),
                     ),
                   ),
                 ),

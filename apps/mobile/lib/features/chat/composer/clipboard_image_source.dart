@@ -1,5 +1,6 @@
+import 'dart:async';
 import 'dart:ffi';
-import 'dart:io' show Directory, File, Platform;
+import 'dart:io' show Directory, File, Platform, sleep;
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
@@ -28,6 +29,17 @@ abstract interface class ClipboardImageSource {
   /// Fires when the clipboard got a new clip, where the platform says so
   /// without being polled.
   Listenable? get changes;
+
+  /// True where the system asks the person before [read] may see the
+  /// content. The suggestion is then shown without a preview and the image
+  /// is read only once it is taken.
+  bool get readNeedsConsent;
+
+  /// True on a desktop, where the window stays on screen next to the program
+  /// a screenshot is taken in. The suggestion then follows the clipboard
+  /// while the window is visible, focused or not, and the message field need
+  /// not hold the focus.
+  bool get offersWhileVisible;
 }
 
 /// Null where the suggestion is off: iOS (any automatic pasteboard read shows
@@ -119,6 +131,12 @@ final class AndroidClipboardImageSource implements ClipboardImageSource {
   Listenable get changes => _changes;
 
   @override
+  bool get readNeedsConsent => false;
+
+  @override
+  bool get offersWhileVisible => false;
+
+  @override
   Future<String?> peek() => _channel.invokeMethod<String>('peek');
 
   // The clip's own timestamp does; the change count of a release without
@@ -136,8 +154,21 @@ final class AndroidClipboardImageSource implements ClipboardImageSource {
 final class WindowsClipboardImageSource implements ClipboardImageSource {
   const WindowsClipboardImageSource();
 
+  static final ClipboardSequenceWatch _watch = ClipboardSequenceWatch(
+    _windowsClipboardSequence,
+  );
+
+  // A screenshot tool gives the window its focus back first and writes the
+  // clipboard a moment later, so a look taken on focus alone still saw the
+  // screenshot before it and offered that one.
   @override
-  Listenable? get changes => null;
+  Listenable get changes => _watch;
+
+  @override
+  bool get readNeedsConsent => false;
+
+  @override
+  bool get offersWhileVisible => true;
 
   // The sequence number starts over with the Windows session, so a stored
   // one could match an unrelated clip after a reboot.
@@ -156,11 +187,7 @@ final class WindowsClipboardImageSource implements ClipboardImageSource {
     if (available(_cfDib) == 0 || available(_cfUnicodeText) != 0) {
       return null;
     }
-    final sequence = user32
-        .lookupFunction<Uint32 Function(), int Function()>(
-          'GetClipboardSequenceNumber',
-        );
-    return 'windows-${sequence()}';
+    return 'windows-${_windowsClipboardSequence()}';
   }
 
   // shortcut: an owner that never renders its promised bitmap leaves this
@@ -171,16 +198,57 @@ final class WindowsClipboardImageSource implements ClipboardImageSource {
       Isolate.run(() => _readWindowsBitmap(clipboardBitmapMaximumBytes));
 }
 
+final int Function() _windowsClipboardSequence = DynamicLibrary.open(
+  'user32.dll',
+).lookupFunction<Uint32 Function(), int Function()>('GetClipboardSequenceNumber');
+
+/// Tells its listeners when a clipboard counter moved, by asking for it once
+/// a second while anybody listens. Reading the counter opens nothing and
+/// touches no clipboard content.
+final class ClipboardSequenceWatch extends ChangeNotifier {
+  ClipboardSequenceWatch(
+    this._read, {
+    this.interval = const Duration(seconds: 1),
+  });
+
+  final int Function() _read;
+  final Duration interval;
+  Timer? _timer;
+  int? _last;
+
+  @override
+  void addListener(VoidCallback listener) {
+    super.addListener(listener);
+    _timer ??= Timer.periodic(interval, (_) {
+      final now = _read();
+      final moved = _last != null && now != _last;
+      _last = now;
+      if (moved) {
+        notifyListeners();
+      }
+    });
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    super.removeListener(listener);
+    if (!hasListeners) {
+      _timer?.cancel();
+      _timer = null;
+      _last = null;
+    }
+  }
+}
+
 const int _cfDib = 8;
 const int _cfUnicodeText = 13;
 
 Uint8List? _readWindowsBitmap(int maximumBytes) {
   final user32 = DynamicLibrary.open('user32.dll');
   final kernel32 = DynamicLibrary.open('kernel32.dll');
-  final open = user32
-      .lookupFunction<Int32 Function(IntPtr), int Function(int)>(
-        'OpenClipboard',
-      );
+  final open = user32.lookupFunction<Int32 Function(IntPtr), int Function(int)>(
+    'OpenClipboard',
+  );
   final close = user32.lookupFunction<Int32 Function(), int Function()>(
     'CloseClipboard',
   );
@@ -204,28 +272,73 @@ Uint8List? _readWindowsBitmap(int maximumBytes) {
         Int32 Function(Pointer<Void>),
         int Function(Pointer<Void>)
       >('GlobalUnlock');
+  final register = user32
+      .lookupFunction<
+        Uint32 Function(Pointer<Uint8>),
+        int Function(Pointer<Uint8>)
+      >('RegisterClipboardFormatA');
+  final localAlloc = kernel32
+      .lookupFunction<
+        Pointer<Uint8> Function(Uint32, IntPtr),
+        Pointer<Uint8> Function(int, int)
+      >('LocalAlloc');
+  final localFree = kernel32
+      .lookupFunction<
+        Pointer<Uint8> Function(Pointer<Uint8>),
+        Pointer<Uint8> Function(Pointer<Uint8>)
+      >('LocalFree');
 
-  if (open(0) == 0) {
+  // A screenshot tool still holds the clipboard open for a moment after the
+  // counter moved; giving up on the first refusal lost that screenshot.
+  var opened = false;
+  for (var attempt = 0; attempt < 20 && !opened; attempt++) {
+    opened = open(0) != 0;
+    if (!opened) {
+      sleep(const Duration(milliseconds: 25));
+    }
+  }
+  if (!opened) {
     return null;
   }
   try {
-    final handle = data(_cfDib);
-    if (handle == nullptr) {
-      return null;
+    Uint8List? copy(int format) {
+      final handle = data(format);
+      if (handle == nullptr) {
+        return null;
+      }
+      final length = size(handle);
+      if (length <= 0 || length > maximumBytes) {
+        return null;
+      }
+      final bytes = lock(handle);
+      if (bytes == nullptr) {
+        return null;
+      }
+      try {
+        return Uint8List.fromList(bytes.asTypedList(length));
+      } finally {
+        unlock(handle);
+      }
     }
-    final length = size(handle);
-    if (length <= 0 || length > maximumBytes) {
-      return null;
+
+    // The file a screenshot tool put there itself, when it did: smaller than
+    // the bitmap and with nothing left to guess about its alpha channel.
+    // "PNG" as a zero-terminated ANSI string in memory user32 can read.
+    final name = localAlloc(0x40, 4);
+    var png = 0;
+    if (name != nullptr) {
+      name.asTypedList(4).setAll(0, const [0x50, 0x4E, 0x47, 0]);
+      png = register(name);
+      localFree(name);
     }
-    final bytes = lock(handle);
-    if (bytes == nullptr) {
-      return null;
+    if (png != 0) {
+      final file = copy(png);
+      if (file != null) {
+        return file;
+      }
     }
-    try {
-      return bitmapFileFromDib(Uint8List.fromList(bytes.asTypedList(length)));
-    } finally {
-      unlock(handle);
-    }
+    final dib = copy(_cfDib);
+    return dib == null ? null : bitmapFileFromDib(dib);
   } finally {
     close();
   }

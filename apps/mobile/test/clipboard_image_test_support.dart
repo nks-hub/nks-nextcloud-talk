@@ -29,6 +29,10 @@ final class FakeClipboardImageSource implements ClipboardImageSource {
   /// and went away.
   bool hangs = false;
 
+  /// How many reads answer null first, like a clipboard another program
+  /// still holds open.
+  int busyReads = 0;
+
   /// Puts an image clip on the clipboard; null [bytes] make it unreadable.
   void copyImage(String id, Uint8List? bytes) {
     _clip = id;
@@ -46,6 +50,12 @@ final class FakeClipboardImageSource implements ClipboardImageSource {
   Listenable get changes => _changes;
 
   @override
+  bool readNeedsConsent = false;
+
+  @override
+  bool offersWhileVisible = false;
+
+  @override
   Future<String?> peek() async {
     peeks++;
     return _clip;
@@ -54,6 +64,10 @@ final class FakeClipboardImageSource implements ClipboardImageSource {
   @override
   Future<Uint8List?> read() {
     reads++;
+    if (busyReads > 0) {
+      busyReads--;
+      return Future.value(null);
+    }
     return hangs ? Completer<Uint8List?>().future : Future.value(_bytes);
   }
 }

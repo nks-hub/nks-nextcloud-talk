@@ -527,4 +527,183 @@ void main() {
 
     expect(bitmapFileFromDib(Uint8List(12)), isNull);
   });
+  test('the tile keeps the shape of the picture inside a bounded box', () {
+    Size tile(int w, int h, [double available = 400]) =>
+        ClipboardImageOfferCard.tileSize(w, h, available);
+
+    // A full HD screenshot: as wide as allowed, its own 16:9 shape.
+    expect(tile(1920, 1080), const Size(220, 220 * 1080 / 1920));
+    // A phone screenshot: as tall as allowed, its own shape.
+    expect(tile(1080, 2400), const Size(72, 160));
+    // A thin strip is cropped to 3:1 instead of becoming a line.
+    expect(tile(3000, 40), const Size(220, 220 / 3));
+    // A narrow pane gets a smaller tile, never more than half its width.
+    expect(tile(1920, 1080, 150).width, 150);
+    // A tiny picture is not blown up past the box either way.
+    expect(tile(16, 16), const Size(160, 160));
+  });
+
+  testWidgets('a big screenshot shows larger than a small one, in its shape', (
+    tester,
+  ) async {
+    Future<Uint8List> png(int width, int height) async {
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawRect(
+        Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+        Paint()..color = const Color(0xFF3366CC),
+      );
+      final image = await recorder.endRecording().toImage(width, height);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      return data!.buffer.asUint8List();
+    }
+
+    final wide = (await tester.runAsync(() => png(1600, 900)))!;
+    final tall = (await tester.runAsync(() => png(400, 900)))!;
+    clipboard.copyImage('clip-wide', wide);
+    await pumpComposer(tester);
+    await focusField(tester);
+    final picture = find.byKey(const Key('clipboard-image-offer-attach'));
+    final wideSize = tester.getSize(picture);
+    expect(
+      wideSize.width / wideSize.height,
+      moreOrLessEquals(16 / 9, epsilon: 0.05),
+    );
+
+    clipboard.copyImage('clip-tall', tall);
+    await settle(tester);
+    final tallSize = tester.getSize(picture);
+    expect(tallSize.height, greaterThan(tallSize.width));
+    expect(tallSize.height, lessThanOrEqualTo(160 + 1));
+  });
+
+  testWidgets('a clipboard still held by the screenshot tool is asked again', (
+    tester,
+  ) async {
+    clipboard
+      ..busyReads = 2
+      ..copyImage('clip-1', tinyPng);
+    await pumpComposer(tester);
+    await tester.tap(find.byKey(_field));
+    for (var round = 0; round < 20; round++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 5)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.byKey(_card), findsOneWidget);
+    expect(clipboard.reads, 3);
+  });
+
+  testWidgets('on a desktop a new screenshot is offered without a click into '
+      'the field', (tester) async {
+    clipboard.offersWhileVisible = true;
+    await pumpComposer(tester);
+    await settle(tester);
+    expect(find.byKey(_card), findsNothing);
+
+    clipboard.copyImage('clip-1', tinyPng);
+    await settle(tester);
+    expect(find.byKey(_card), findsOneWidget);
+    expect(focus.hasFocus, isFalse);
+
+    // The next screenshot replaces the one on show, without any focus change.
+    clipboard.copyImage('clip-2', tinyPng);
+    await settle(tester);
+    expect(find.byKey(_card), findsOneWidget);
+    expect(clipboard.reads, 2);
+  });
+
+  testWidgets('on a desktop the tile follows the clipboard while the window '
+      'is on screen without the focus', (tester) async {
+    clipboard
+      ..offersWhileVisible = true
+      ..copyImage('clip-1', tinyPng);
+    await pumpComposer(tester);
+    await focusField(tester);
+    expect(find.byKey(_card), findsOneWidget);
+
+    // The screenshot tool takes the focus; the window stays on screen.
+    lifecycle(tester, const [AppLifecycleState.inactive]);
+    await settle(tester);
+    clipboard.copyImage('clip-2', tinyPng);
+    await settle(tester);
+    expect(find.byKey(_card), findsOneWidget);
+    expect(clipboard.reads, 2, reason: 'the new screenshot was read');
+    lifecycle(tester, const [AppLifecycleState.resumed]);
+    await settle(tester);
+    expect(
+      clipboard.reads,
+      2,
+      reason: 'getting the focus back reads nothing new',
+    );
+  });
+
+  testWidgets('on a phone an inactive app reads nothing', (tester) async {
+    clipboard.copyImage('clip-1', tinyPng);
+    await pumpComposer(tester);
+    await focusField(tester);
+    lifecycle(tester, const [AppLifecycleState.inactive]);
+    await settle(tester);
+    clipboard.copyImage('clip-2', tinyPng);
+    await settle(tester);
+    expect(clipboard.reads, 1);
+    lifecycle(tester, const [AppLifecycleState.resumed]);
+    await settle(tester);
+    expect(clipboard.reads, 2);
+  });
+
+  testWidgets(
+    'where reading needs consent the tile shows without a preview and '
+    'the image is read only when taken',
+    (tester) async {
+      clipboard
+        ..readNeedsConsent = true
+        ..copyImage('clip-1', tinyPng);
+      await pumpComposer(tester);
+      await focusField(tester);
+      expect(find.byKey(_card), findsOneWidget);
+      expect(clipboard.reads, 0, reason: 'showing the tile reads nothing');
+
+      await tester.tap(find.byKey(const Key('clipboard-image-offer-send')));
+      await settle(tester);
+      expect(clipboard.reads, 1);
+      expect(attached, hasLength(1));
+      expect(sends, 1);
+      expect(find.byKey(_card), findsNothing);
+    },
+  );
+
+  testWidgets('the clipboard counter is watched only while somebody listens', (
+    tester,
+  ) async {
+    var sequence = 7;
+    var reads = 0;
+    final watch = ClipboardSequenceWatch(() {
+      reads++;
+      return sequence;
+    }, interval: const Duration(milliseconds: 100));
+    var changes = 0;
+    void listener() => changes++;
+
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(reads, 0, reason: 'nobody listens yet');
+
+    watch.addListener(listener);
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(changes, 0, reason: 'the counter has not moved');
+
+    sequence = 8;
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(changes, 1);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(changes, 1, reason: 'one change is told once');
+
+    watch.removeListener(listener);
+    final before = reads;
+    sequence = 9;
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(reads, before);
+    expect(changes, 1);
+  });
 }
