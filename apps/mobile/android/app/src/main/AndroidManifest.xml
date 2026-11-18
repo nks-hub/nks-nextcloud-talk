@@ -94,6 +94,15 @@
         android:label="OwnTalk"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <provider
+            android:name=".clipboard.ClipboardImageFileProvider"
+            android:authorities="${applicationId}.clipboard_images"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/clipboard_image_paths" />
+        </provider>
         <activity
             android:name=".push.AndroidWebPushActivity"
             android:exported="true"

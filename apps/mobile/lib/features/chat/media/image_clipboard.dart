@@ -1,7 +1,10 @@
+import 'dart:io' show Platform;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:pasteboard/pasteboard.dart';
+
+import '../composer/clipboard_image_source.dart';
 
 bool get imageClipboardSupported =>
     kIsWeb || defaultTargetPlatform != TargetPlatform.linux;
@@ -25,9 +28,16 @@ Future<bool> copyImageBytes(Uint8List bytes) async {
               format: ui.ImageByteFormat.png,
             );
             if (png == null) return false;
-            await Pasteboard.writeImage(
-              png.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes),
+            final pngBytes = png.buffer.asUint8List(
+              png.offsetInBytes,
+              png.lengthInBytes,
             );
+            if (!kIsWeb && Platform.isAndroid) {
+              return await ChannelClipboardImageSource.android.writePng(
+                pngBytes,
+              );
+            }
+            await Pasteboard.writeImage(pngBytes);
             return true;
           } finally {
             frame.image.dispose();

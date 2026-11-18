@@ -24,14 +24,13 @@ final _live = Platform.environment['OWNTALK_LIVE_CLIPBOARD'] == '1';
 const _picture = Key('clipboard-image-offer-attach');
 
 /// Puts a [width] x [height] picture on the clipboard from a separate
-/// process, as a bitmap and, with [png], also in the registered "PNG" format
-/// a screenshot tool adds; that PNG is also written to [pngFile]. With
+/// process, as a bitmap or, with [pngFile], in the registered "PNG" format
+/// a screenshot tool uses. The PNG is also written to [pngFile]. With
 /// [holdMs] the process then keeps the clipboard open that long, like an
 /// owner still busy with it, and creates [heldMarker] once it holds it.
 List<String> _imageScript(
   int width,
   int height, {
-  bool png = false,
   File? pngFile,
   int holdMs = 0,
   File? heldMarker,
@@ -45,14 +44,15 @@ List<String> _imageScript(
       '${height % 256}, 120))',
     )
     ..writeln('\$g.Dispose()')
-    ..writeln('\$data = New-Object System.Windows.Forms.DataObject')
-    ..writeln('\$data.SetImage(\$bmp)');
-  if (png) {
+    ..writeln('\$data = New-Object System.Windows.Forms.DataObject');
+  if (pngFile == null) {
+    script.writeln('\$data.SetImage(\$bmp)');
+  } else {
     script
       ..writeln('\$ms = New-Object System.IO.MemoryStream')
       ..writeln('\$bmp.Save(\$ms, [System.Drawing.Imaging.ImageFormat]::Png)')
       ..writeln(
-        "[System.IO.File]::WriteAllBytes('${pngFile!.path}', "
+        "[System.IO.File]::WriteAllBytes('${pngFile.path}', "
         '\$ms.ToArray())',
       )
       ..writeln("\$data.SetData('PNG', \$false, \$ms)");
@@ -77,15 +77,10 @@ List<String> _imageScript(
   return ['-NoProfile', '-STA', '-Command', script.toString()];
 }
 
-Future<void> _writeImage(
-  int width,
-  int height, {
-  bool png = false,
-  File? pngFile,
-}) async {
+Future<void> _writeImage(int width, int height, {File? pngFile}) async {
   final result = await Process.run(
     'powershell.exe',
-    _imageScript(width, height, png: png, pngFile: pngFile),
+    _imageScript(width, height, pngFile: pngFile),
   );
   if (result.exitCode != 0) {
     fail('powershell exit ${result.exitCode}: ${result.stderr}');
@@ -247,12 +242,10 @@ void main() {
   );
 
   testWidgets(
-    'a clip with the PNG a screenshot tool adds is taken as that PNG',
+    'a clip that only advertises PNG is offered and taken as that PNG',
     (tester) async {
       final png = File('${scratch.path}\\shot.png');
-      await tester.runAsync(
-        () => _writeImage(640, 360, png: true, pngFile: png),
-      );
+      await tester.runAsync(() => _writeImage(640, 360, pngFile: png));
       await pumpComposer(tester);
       await waitFor(tester, () => pictureSize(tester) != null);
       expect(pictureSize(tester), isNotNull);

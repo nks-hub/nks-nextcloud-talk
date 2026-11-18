@@ -42,9 +42,6 @@ abstract interface class ClipboardImageSource {
   bool get offersWhileVisible;
 }
 
-/// Null where the suggestion is off: macOS (the pasteboard is read on the
-/// main thread and can wait on another device, see PasteboardProbeGuard) and
-/// Linux.
 final clipboardImageSourceProvider = Provider<ClipboardImageSource?>((ref) {
   // A widget test must not look at the clipboard of the machine it runs on.
   if (kIsWeb || Platform.environment.containsKey('FLUTTER_TEST')) {
@@ -55,6 +52,9 @@ final clipboardImageSourceProvider = Provider<ClipboardImageSource?>((ref) {
   }
   if (Platform.isIOS) {
     return ChannelClipboardImageSource.ios;
+  }
+  if (Platform.isMacOS) {
+    return ChannelClipboardImageSource.macOS;
   }
   if (Platform.isWindows) {
     return const WindowsClipboardImageSource();
@@ -118,12 +118,16 @@ final class ChannelClipboardImageSource implements ClipboardImageSource {
   ChannelClipboardImageSource._({
     required this.readNeedsConsent,
     required this.idSurvivesRestart,
-  }) {
-    _channel.setMethodCallHandler((call) async {
-      if (call.method == 'changed') {
-        _changes.value++;
-      }
-    });
+    this.offersWhileVisible = false,
+    Listenable? watch,
+  }) : _watch = watch {
+    if (watch == null) {
+      _channel.setMethodCallHandler((call) async {
+        if (call.method == 'changed') {
+          _changes.value++;
+        }
+      });
+    }
   }
 
   // The clip's own timestamp does; the change count of a release without
@@ -142,24 +146,39 @@ final class ChannelClipboardImageSource implements ClipboardImageSource {
     idSurvivesRestart: (id) => false,
   );
 
+  static final ChannelClipboardImageSource macOS =
+      ChannelClipboardImageSource._(
+        readNeedsConsent: true,
+        idSurvivesRestart: (id) => false,
+        offersWhileVisible: true,
+        watch: ClipboardSequenceWatch(
+          null,
+          interval: const Duration(milliseconds: 750),
+        ),
+      );
+
   static const _channel = MethodChannel(
     'com.nkshub.nextcloudtalk/clipboard_image',
   );
 
   final ValueNotifier<int> _changes = ValueNotifier<int>(0);
+  final Listenable? _watch;
   final bool Function(String id) idSurvivesRestart;
+  Future<String?>? _peeking;
 
   @override
   final bool readNeedsConsent;
 
   @override
-  Listenable get changes => _changes;
+  Listenable get changes => _watch ?? _changes;
 
   @override
-  bool get offersWhileVisible => false;
+  final bool offersWhileVisible;
 
   @override
-  Future<String?> peek() => _channel.invokeMethod<String>('peek');
+  Future<String?> peek() => _peeking ??= _channel
+      .invokeMethod<String>('peek')
+      .whenComplete(() => _peeking = null);
 
   @override
   bool survivesRestart(String id) => idSurvivesRestart(id);
@@ -167,6 +186,9 @@ final class ChannelClipboardImageSource implements ClipboardImageSource {
   @override
   Future<Uint8List?> read() =>
       _channel.invokeMethod<Uint8List>('read', clipboardImageMaximumBytes);
+
+  Future<bool> writePng(Uint8List bytes) async =>
+      await _channel.invokeMethod<bool>('writePng', bytes) ?? false;
 }
 
 /// Reads the Windows clipboard through user32 directly: the sequence number
@@ -204,7 +226,9 @@ final class WindowsClipboardImageSource implements ClipboardImageSource {
         );
     // A copied spreadsheet range or document also offers a bitmap rendering
     // of itself; with text beside it the copy was not meant as a picture.
-    if (available(_cfDib) == 0 || available(_cfUnicodeText) != 0) {
+    final png = _windowsPngFormat;
+    if (available(_cfUnicodeText) != 0 ||
+        (available(_cfDib) == 0 && (png == 0 || available(png) == 0))) {
       return null;
     }
     return 'windows-${_windowsClipboardSequence()}';
@@ -219,11 +243,13 @@ final class WindowsClipboardImageSource implements ClipboardImageSource {
   // spawn a killable helper process if that ever shows up in the field.
   @override
   Future<Uint8List?> read() {
+    final pngFormat = _windowsPngFormat;
     final result = _lastRead.then(
       (_) => Isolate.run(
         () => _readWindowsBitmap(
           fileMaximumBytes: clipboardImageMaximumBytes,
           bitmapMaximumBytes: clipboardBitmapMaximumBytes,
+          pngFormat: pngFormat,
         ),
       ),
     );
@@ -239,16 +265,15 @@ final int Function() _windowsClipboardSequence =
       'GetClipboardSequenceNumber',
     );
 
-/// Tells its listeners when a clipboard counter moved, by asking for it four
-/// times a second while anybody listens. Reading the counter opens nothing
-/// and touches no clipboard content.
+/// Polls only while there are listeners. If the platform has an asynchronous
+/// clipboard probe, it uses each tick to run that probe instead.
 final class ClipboardSequenceWatch extends ChangeNotifier {
   ClipboardSequenceWatch(
     this._read, {
     this.interval = const Duration(milliseconds: 250),
   });
 
-  final int Function() _read;
+  final int Function()? _read;
   final Duration interval;
   Timer? _timer;
   int? _last;
@@ -256,8 +281,16 @@ final class ClipboardSequenceWatch extends ChangeNotifier {
   @override
   void addListener(VoidCallback listener) {
     super.addListener(listener);
-    _timer ??= Timer.periodic(interval, (_) {
-      final now = _read();
+    if (_timer != null) {
+      return;
+    }
+    _last = _read?.call();
+    _timer = Timer.periodic(interval, (_) {
+      final now = _read?.call();
+      if (now == null) {
+        notifyListeners();
+        return;
+      }
       final moved = _last != null && now != _last;
       _last = now;
       if (moved) {
@@ -280,9 +313,42 @@ final class ClipboardSequenceWatch extends ChangeNotifier {
 const int _cfDib = 8;
 const int _cfUnicodeText = 13;
 
+final int _windowsPngFormat = _registerWindowsPngFormat();
+
+int _registerWindowsPngFormat() {
+  final user32 = DynamicLibrary.open('user32.dll');
+  final kernel32 = DynamicLibrary.open('kernel32.dll');
+  final register = user32
+      .lookupFunction<
+        Uint32 Function(Pointer<Uint8>),
+        int Function(Pointer<Uint8>)
+      >('RegisterClipboardFormatA');
+  final localAlloc = kernel32
+      .lookupFunction<
+        Pointer<Uint8> Function(Uint32, IntPtr),
+        Pointer<Uint8> Function(int, int)
+      >('LocalAlloc');
+  final localFree = kernel32
+      .lookupFunction<
+        Pointer<Uint8> Function(Pointer<Uint8>),
+        Pointer<Uint8> Function(Pointer<Uint8>)
+      >('LocalFree');
+  final name = localAlloc(0x40, 4);
+  if (name == nullptr) {
+    return 0;
+  }
+  try {
+    name.asTypedList(4).setAll(0, const [0x50, 0x4E, 0x47, 0]);
+    return register(name);
+  } finally {
+    localFree(name);
+  }
+}
+
 Uint8List? _readWindowsBitmap({
   required int fileMaximumBytes,
   required int bitmapMaximumBytes,
+  required int pngFormat,
 }) {
   final user32 = DynamicLibrary.open('user32.dll');
   final kernel32 = DynamicLibrary.open('kernel32.dll');
@@ -312,21 +378,6 @@ Uint8List? _readWindowsBitmap({
         Int32 Function(Pointer<Void>),
         int Function(Pointer<Void>)
       >('GlobalUnlock');
-  final register = user32
-      .lookupFunction<
-        Uint32 Function(Pointer<Uint8>),
-        int Function(Pointer<Uint8>)
-      >('RegisterClipboardFormatA');
-  final localAlloc = kernel32
-      .lookupFunction<
-        Pointer<Uint8> Function(Uint32, IntPtr),
-        Pointer<Uint8> Function(int, int)
-      >('LocalAlloc');
-  final localFree = kernel32
-      .lookupFunction<
-        Pointer<Uint8> Function(Pointer<Uint8>),
-        Pointer<Uint8> Function(Pointer<Uint8>)
-      >('LocalFree');
 
   // A screenshot tool still holds the clipboard open for a moment after the
   // counter moved; giving up on the first refusal lost that screenshot.
@@ -359,15 +410,7 @@ Uint8List? _readWindowsBitmap({
 
     // The file a screenshot tool put there itself, when it did: smaller than
     // the bitmap and with nothing left to guess about its alpha channel.
-    // "PNG" as a zero-terminated ANSI string in memory user32 can read.
-    final name = localAlloc(0x40, 4);
-    var png = 0;
-    if (name != nullptr) {
-      name.asTypedList(4).setAll(0, const [0x50, 0x4E, 0x47, 0]);
-      png = register(name);
-      localFree(name);
-    }
-    final file = png == 0 ? nullptr : data(png);
+    final file = pngFormat == 0 ? nullptr : data(pngFormat);
     if (file != nullptr) {
       // Too large as a file is too large to send; the bitmap is larger still.
       final bytes = copy(file, fileMaximumBytes);

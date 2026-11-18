@@ -14,6 +14,7 @@ class MainFlutterWindow: NSWindow {
   private var deepLinkChannel: FlutterMethodChannel?
   private var desktopAutostartChannel: FlutterMethodChannel?
   private var desktopUpdater: DesktopUpdater?
+  private var clipboardImageChannel: ClipboardImageChannel?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -49,6 +50,9 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     desktopUpdater = DesktopUpdater(messenger: flutterViewController.engine.binaryMessenger)
+    clipboardImageChannel = ClipboardImageChannel(
+      messenger: flutterViewController.engine.binaryMessenger
+    )
 
     let desktopAutostartChannel = FlutterMethodChannel(
       name: "com.nkshub.nextcloudtalk/desktop_autostart",

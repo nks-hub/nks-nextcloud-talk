@@ -326,6 +326,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         if (!hasFocus) {
             return
         }
+        clipboardImageChannel?.windowFocused()
         // Coming back from another activity - the picture picker above all - is
         // where Flutter's keyboard-inset deferral gets stuck, and where the
         // whole app is left laying out into a keyboard-sized viewport. Posted,

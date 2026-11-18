@@ -40,8 +40,6 @@ void _registerClipboardOfferComposerTests() {
       tester,
       () => find.byType(ChatMediaComposer).evaluate().isNotEmpty,
     );
-    expect(clipboard.peeks, 0, reason: 'an unfocused field asks nothing');
-    await tester.tap(find.byKey(const Key('chat-composer')));
     await _pumpUntil(
       tester,
       () =>
@@ -230,6 +228,8 @@ void _registerClipboardOfferComposerTests() {
           .widget<ChatMediaComposer>(find.byType(ChatMediaComposer))
           .controller!;
 
+      await tester.tap(find.byKey(const Key('chat-composer')));
+      await tester.pump();
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);

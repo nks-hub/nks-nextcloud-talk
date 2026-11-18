@@ -188,8 +188,8 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.byKey(_field));
     await tester.pump();
+    expect(focus.hasFocus, isFalse);
   }
 
   /// Pumps real frames until [done] holds.

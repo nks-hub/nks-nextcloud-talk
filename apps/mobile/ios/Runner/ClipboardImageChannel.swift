@@ -10,6 +10,11 @@ import UIKit
 /// ask the user about a clip that came from another app.
 final class ClipboardImageChannel {
   static let channelName = "com.nkshub.nextcloudtalk/clipboard_image"
+  private static let originalTypes = [
+    "public.png", "public.jpeg", "com.compuserve.gif", "org.webmproject.webp",
+  ]
+  private static let convertedTypes = ["public.heic", "public.heif", "public.tiff"]
+  private static let imageTypes = originalTypes + convertedTypes
 
   private let channel: FlutterMethodChannel
   private let queue = DispatchQueue(
@@ -68,7 +73,7 @@ final class ClipboardImageChannel {
   private func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     switch call.method {
     case "peek":
-      result(UIPasteboard.general.hasImages ? "ios-\(clipCount)" : nil)
+      result(Self.hasImage(UIPasteboard.general) ? "ios-\(clipCount)" : nil)
     case "read":
       guard let maximumBytes = (call.arguments as? NSNumber)?.intValue, maximumBytes > 0 else {
         result(
@@ -89,19 +94,34 @@ final class ClipboardImageChannel {
     }
   }
 
+  private static func hasImage(_ pasteboard: UIPasteboard) -> Bool {
+    pasteboard.hasImages || pasteboard.contains(pasteboardTypes: imageTypes)
+  }
+
   private static func read(maximumBytes: Int) -> Data? {
     let pasteboard = UIPasteboard.general
-    guard pasteboard.hasImages else {
+    guard hasImage(pasteboard) else {
       return nil
     }
     // The file as it was copied, when the pasteboard still has it in a form
     // every Talk client can show.
-    for type in ["public.png", "public.jpeg"] {
-      if let data = pasteboard.data(forPasteboardType: type) {
-        return data.count <= maximumBytes ? data : nil
+    for type in originalTypes where pasteboard.contains(pasteboardTypes: [type]) {
+      guard let data = pasteboard.data(forPasteboardType: type) else {
+        return nil
+      }
+      if !data.isEmpty && data.count <= maximumBytes {
+        return data
       }
     }
-    guard let image = pasteboard.image, let data = upright(image).pngData(),
+    let image = pasteboard.image ?? convertedTypes.lazy.compactMap { type in
+      pasteboard.data(forPasteboardType: type).flatMap { data in
+        data.count <= maximumBytes ? UIImage(data: data) : nil
+      }
+    }.first
+    guard let image = image,
+      let bitmap = image.cgImage, bitmap.height > 0,
+      bitmap.width <= (32 * 1024 * 1024) / bitmap.height,
+      let data = upright(image).pngData(),
       data.count <= maximumBytes
     else {
       return nil

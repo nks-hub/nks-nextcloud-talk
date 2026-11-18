@@ -89,6 +89,7 @@ void main() {
     Object room = 'room-a',
     bool sending = false,
     double? paneWidth,
+    Future<bool> Function(PastedImage)? onAttach,
   }) async {
     addTearDown(() => toForeground(tester));
     await tester.pumpWidget(
@@ -127,10 +128,12 @@ void main() {
                             blocked: () => blocked.value || sending,
                             refresh: blocked,
                             sending: sending,
-                            onAttach: (image) async {
-                              attached.add(image);
-                              return true;
-                            },
+                            onAttach:
+                                onAttach ??
+                                (image) async {
+                                  attached.add(image);
+                                  return true;
+                                },
                             onSend: () => sends++,
                           ),
                           TextField(key: _field, focusNode: focus),
@@ -183,26 +186,60 @@ void main() {
     expect(clipboard.reads, 1);
   });
 
-  testWidgets('nothing is asked while the field is unfocused or the app is '
-      'in the background', (tester) async {
+  testWidgets(
+    'a phone offers the image on return without opening the keyboard',
+    (tester) async {
+      await pumpComposer(tester);
+      await settle(tester);
+      final peeks = clipboard.peeks;
+
+      toBackground(tester);
+      clipboard.copyImage('clip-1', tinyPng);
+      await settle(tester);
+      expect((clipboard.peeks, clipboard.reads), (peeks, 0));
+      expect(find.byKey(_card), findsNothing);
+
+      toForeground(tester);
+      await settle(tester);
+      expect(focus.hasFocus, isFalse);
+      expect(find.byKey(_card), findsOneWidget);
+      expect(clipboard.reads, 1);
+    },
+  );
+
+  testWidgets('a rejected attachment leaves the image available for retry', (
+    tester,
+  ) async {
     clipboard.copyImage('clip-1', tinyPng);
-    await pumpComposer(tester);
-    await settle(tester);
-    clipboard.copyImage('clip-2', tinyPng);
-    await settle(tester);
-    expect((clipboard.peeks, clipboard.reads), (0, 0));
-
-    toBackground(tester);
+    await pumpComposer(tester, onAttach: (_) async => false);
     await focusField(tester);
-    clipboard.copyImage('clip-3', tinyPng);
-    await settle(tester);
-    expect((clipboard.peeks, clipboard.reads), (0, 0));
-    expect(find.byKey(_card), findsNothing);
 
-    toForeground(tester);
+    await tester.tap(find.byKey(const Key('clipboard-image-offer-send')));
     await settle(tester);
+
+    expect(sends, 0);
     expect(find.byKey(_card), findsOneWidget);
     expect(clipboard.reads, 1);
+  });
+
+  testWidgets('a fading card cannot send the image on the card replacing it', (
+    tester,
+  ) async {
+    clipboard.copyImage('clip-1', tinyPng);
+    await pumpComposer(tester);
+    await focusField(tester);
+    final previous = tester
+        .widget<ClipboardImageOfferCard>(find.byType(ClipboardImageOfferCard))
+        .onSend!;
+
+    clipboard.copyImage('clip-2', tinyPng);
+    await settle(tester);
+    previous();
+    await settle(tester);
+
+    expect(attached, isEmpty);
+    expect(sends, 0);
+    expect(find.byKey(_card), findsOneWidget);
   });
 
   testWidgets('a dismissed clip is not offered again, a newer one is', (
@@ -350,7 +387,9 @@ void main() {
     expect(thumbnail.debugDisposed, isTrue);
   });
 
-  testWidgets('the image is dropped when the room changes', (tester) async {
+  testWidgets('a new room gets its own thumbnail without rereading the clip', (
+    tester,
+  ) async {
     clipboard.copyImage('clip-1', tinyPng);
     await pumpComposer(tester);
     await focusField(tester);
@@ -360,8 +399,9 @@ void main() {
     focus.unfocus();
     await pumpComposer(tester, room: 'room-b');
     await settle(tester);
-    expect(find.byKey(_card), findsNothing);
+    expect(find.byKey(_card), findsOneWidget);
     expect(thumbnail.debugDisposed, isTrue);
+    expect(clipboard.reads, 1);
   });
 
   testWidgets('reduced motion shows and hides the card without a transition', (
@@ -757,9 +797,6 @@ void main() {
     expect(reads, 0, reason: 'nobody listens yet');
 
     watch.addListener(listener);
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(changes, 0, reason: 'the counter has not moved');
-
     sequence = 8;
     await tester.pump(const Duration(milliseconds: 100));
     expect(changes, 1);
@@ -1045,6 +1082,29 @@ void main() {
     expect(find.byKey(_card), findsOneWidget);
   });
 
+  testWidgets(
+    'an image copied during consent is not attached by the old tile',
+    (tester) async {
+      clipboard
+        ..readNeedsConsent = true
+        ..copyImage('clip-1', tinyPng)
+        ..duringRead = () => clipboard.copyImage('clip-2', tinyPng);
+      await pumpComposer(tester);
+      await settle(tester);
+
+      final attach = find.byKey(const Key('clipboard-image-offer-attach'));
+      await tester.tap(attach);
+      await settle(tester);
+      expect(attached, isEmpty);
+      expect(attach, findsOneWidget);
+
+      clipboard.duringRead = null;
+      await tester.tap(attach);
+      await settle(tester);
+      expect(attached, hasLength(1));
+    },
+  );
+
   testWidgets('the tile fits its pane and the room above the composer', (
     tester,
   ) async {
@@ -1076,6 +1136,12 @@ void main() {
     tester.view.physicalSize = Size(2400, windowFor(80));
     await settle(tester);
     expect(find.byKey(_card), findsNothing);
+
+    tester.view.physicalSize = Size(2400, windowFor(150));
+    await settle(tester);
+    final thumbnail = tester.widget<RawImage>(find.byType(RawImage)).image!;
+    expect(thumbnail.debugDisposed, isFalse);
+    expect(clipboard.reads, 1);
   });
 }
 
