@@ -1,39 +1,5 @@
-# The Apple half of CI: iOS and macOS. Android, Linux and the Windows
-# installer live in `.github/workflows/build.yml` on GitHub-hosted runners,
-# because this Codemagic plan offers no Linux or Windows machine at all -
-# `linux`, `linux_x2` and `windows_x2` are all refused with "The selected
-# instance type is not available with the current billing plan".
-#
-# The Mac this project normally builds on (`build-mac`, driven over the RemoteCmd
-# relay) was offline for builds 43 and 44, which is why both shipped to Google
-# Play with no TestFlight half at all. This file exists so that stops being a
-# single point of failure.
-#
-# Both workflows run both test suites before they build anything. An artifact
-# that nobody tested is worth less than no artifact.
-#
-# DORMANT BY DECISION OF THE OWNER, 5 September 2026. The Apple targets are
-# built and released from `build-mac` (the owner's Apple Silicon host, reached over
-# the remote-cmd relay), NOT from Codemagic and NOT from any CI. Do not start
-# these workflows: there is no webhook, no schedule and no `triggering:`, so the
-# only way they run is a deliberate `POST /builds` — and that is what must not
-# happen. The file stays because it documents a working signing setup (the
-# Developer ID p12 with a SHA-1 MAC, the entitlement expansion, the notarised
-# zip) that `build-mac` follows step for step. Owner's words: "nevydavej verze pro
-# osx a ios pres codemagic pouze pres build-mac a ne pres CI".
-# No `triggering:` section on purpose - builds are started deliberately
-# (`POST /builds`), so a push does not spend macOS minutes.
-#
-# `flutter` is pinned rather than tracking `stable`: a newer analyzer than the
-# one this tree is developed against rejects three call sites in
-# `apps/mobile/test/attachment_repository_test.dart`, and CI drifting ahead of
-# the working tree turns every Flutter release into a red build.
-#
-# Nothing secret is in this file. The telemetry values come from the Codemagic
-# environment group `nks-talk-telemetry` and hold what `apps/mobile/
-# telemetry.env` holds locally - that file is gitignored and must stay that
-# way. No Android signing material is here or in this Codemagic app; the
-# upload keystore lives only in GitHub secrets.
+# Apple release workflows. Start both manually from the same release branch.
+# The tag-triggered workflows in GitHub Actions handle the other platforms.
 
 definitions:
   scripts:
@@ -152,6 +118,7 @@ definitions:
         for scheme in Runner ShareExtensionTests; do
           xcodebuild test -workspace ios/Runner.xcworkspace -scheme "$scheme"             -destination "platform=iOS Simulator,id=$udid"
         done
+        flutter test -d "$udid" integration_test/clipboard_image_ios_test.dart
 
 workflows:
   ios-testflight:
@@ -171,7 +138,7 @@ workflows:
       flutter: 3.44.4
       xcode: latest
       cocoapods: default
-      java: 17
+      java: 21
     scripts:
       # First, and not optional: with Swift Package Manager on, the build
       # resolves sentry-cocoa itself instead of honouring Podfile.lock, and
@@ -208,8 +175,10 @@ workflows:
           cd apps/mobile && xcode-project use-profiles
       - name: Build IPA
         script: |
+          set -eu
           cd apps/mobile
           flutter build ipa --release \
+            --dart-define="PUSH_GATEWAY_ORIGIN=$PUSH_GATEWAY_ORIGIN" \
             --dart-define=SENTRY_DSN=$SENTRY_DSN \
             --dart-define=RYBBIT_HOST=$RYBBIT_HOST \
             --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID \
@@ -217,13 +186,13 @@ workflows:
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - apps/mobile/build/ios/ipa/*.ipa
-    # NO `publishing:` BLOCK, DELIBERATELY. This workflow builds, tests and
-    # signs an IPA and leaves it as an artefact; it does not ship it. The
-    # owner's standing instruction is that iOS and macOS are released by hand
-    # from a Mac and never from CI, and `submit_to_testflight: true` stood
-    # here doing exactly the opposite on every tag build until 7 September 2026.
-    # Restoring it is one block — do that only if the owner changes that rule,
-    # not because a build looks incomplete without it.
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - "Testeři"
+          - "Externí testeři"
 
   macos-release:
     name: macOS build
@@ -238,11 +207,10 @@ workflows:
       groups:
         - nks-talk-telemetry
         - appstore_credentials
-        - nks-talk-github
       flutter: 3.44.4
       xcode: latest
       cocoapods: default
-      java: 17
+      java: 21
     scripts:
       - name: Pin dependency resolution to CocoaPods
         script: flutter config --no-enable-swift-package-manager
@@ -298,15 +266,16 @@ workflows:
           # a length and a digest of a secret are not the secret.
           printf '%s' "$MACOS_CERTIFICATE_P12" | base64 --decode > /tmp/devid.p12
           echo "p12 bytes $(wc -c < /tmp/devid.p12), password length ${#MACOS_CERTIFICATE_PASSWORD}"
-          echo "$MACOS_CERTIFICATE_P12_SHA256  /tmp/devid.p12" | shasum -a 256 -c -
           openssl pkcs12 -in /tmp/devid.p12 -passin "pass:$MACOS_CERTIFICATE_PASSWORD" -nokeys -clcerts -noout
           security import /tmp/devid.p12 -k "$KC" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
           rm -f /tmp/devid.p12
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci-temp "$KC"
           security list-keychains -d user -s "$KC" login.keychain-db
-          security find-identity -v -p codesigning
+          security find-identity -v -p codesigning "$KC" | grep -q 'Developer ID Application:'
+          app-store-connect profiles list --type MAC_APP_DIRECT --state ACTIVE --save >/dev/null
           cd apps/mobile
           flutter build macos --config-only --release \
+            --dart-define="PUSH_GATEWAY_ORIGIN=$PUSH_GATEWAY_ORIGIN" \
             --dart-define=SENTRY_DSN=$SENTRY_DSN \
             --dart-define=RYBBIT_HOST=$RYBBIT_HOST \
             --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID \
@@ -331,23 +300,20 @@ workflows:
           {
             security unlock-keychain -p ci-temp nks-build.keychain
             APP=build/macos/Build/Products/Release/nextcloudtalk.app
-            python3 -c "import io,sys; t=io.open(sys.argv[1]).read(); t=t.replace(chr(36)+'(APS_ENVIRONMENT)','production'); t=t.replace(chr(36)+'(AppIdentifierPrefix)',__import__('os').environ['APPLE_TEAM_ID']+'.'); io.open(sys.argv[2],'w').write(t)" macos/Runner/Release.entitlements /tmp/release.entitlements
-            # The full signing identity string ("Developer ID Application: <name> (<team>)")
-            # lives in the secure environment group, not in this file.
-            ID="${MACOS_SIGNING_IDENTITY:?MACOS_SIGNING_IDENTITY is not set}"
+            ID=$(security find-identity -v -p codesigning nks-build.keychain | awk '/"Developer ID Application:/{print $2}')
+            test -n "$ID"
+            python3 tool/codemagic_macos_profiles.py "$APP" "$APPLE_TEAM_ID" "$ID"
             bash tool/sign_sparkle.sh "$APP" "$ID"
-            # Inside out: a nested bundle signed after its container invalidates
-            # the container's seal.
             for f in "$APP"/Contents/Frameworks/*.framework "$APP"/Contents/Frameworks/*.dylib; do
               [ -e "$f" ] || continue
               codesign --force --options runtime --timestamp --sign "$ID" "$f"
             done
             for ext in "$APP"/Contents/PlugIns/*.appex; do
               [ -e "$ext" ] || continue
-              codesign --force --options runtime --timestamp --sign "$ID" "$ext"
+              codesign --force --options runtime --timestamp --entitlements /tmp/owntalk-appex.entitlements --sign "$ID" "$ext"
             done
-            codesign --force --options runtime --timestamp --entitlements /tmp/release.entitlements --sign "$ID" "$APP"
-            codesign --verify --strict --verbose=2 "$APP"
+            codesign --force --options runtime --timestamp --entitlements /tmp/owntalk-app.entitlements --sign "$ID" "$APP"
+            codesign --verify --deep --strict --verbose=2 "$APP"
           } 2>&1 | tee /tmp/macos-sign.log
       - name: Verify the signature carries the sandbox
         script: |
@@ -355,61 +321,32 @@ workflows:
           codesign -dv --entitlements - "$APP" 2>&1 | tee /tmp/sig.txt
           grep -q "TeamIdentifier=$APPLE_TEAM_ID" /tmp/sig.txt             || { echo "Unsigned or wrong team - refusing to publish."; exit 1; }
           codesign -d --entitlements - "$APP" 2>&1 | grep -q "app-sandbox"             || { echo "No app-sandbox entitlement - the app would lose its account."; exit 1; }
-      # Zipped rather than shipped as a .app directory, because an artifact
-      # download would otherwise lose the bundle's symlinks and the result
-      # would not launch.
-      - name: Package the app
+      - name: Notarize and package the app
         script: |
+          set -euo pipefail
           cd apps/mobile/build/macos/Build/Products/Release
-          ditto -c -k --sequesterRsrc --keepParent *.app nks-talk-macos.zip
-      # Pushed from here rather than pulled by a GitHub job: that job would
-      # have to guess when a Codemagic build was started and how long it takes.
-      # Nothing to guess if the build uploads when it is done. Only on a tag
-      # build - a branch build has no release to attach to.
-      # NO LONGER ATTACHES ANYTHING, since 7 September 2026. The owner's
-      # standing instruction is that macOS and iOS are released by hand from a
-      # Mac and never from CI; this step uploaded a signed zip to the GitHub
-      # release on every tag build, which is releasing macOS from CI. The build,
-      # the signing and the sandbox check above all stay — verifying a build is
-      # not publishing it, and they are what catch an unsigned or unsandboxed
-      # app. The zip remains an artefact of the run, so it can still be
-      # downloaded by hand and released from the Mac.
-      # To restore publishing, drop the `exit 0` below; do that only on the
-      # owner's word.
-      - name: Attach the zip to the GitHub release
-        script: |
-          set -e
-          echo "macOS is released by hand from a Mac, never from CI - not attaching."
-          exit 0
-          if [ -z "$CM_TAG" ]; then
-            echo "Not a tag build - nothing to attach."
-            exit 0
-          fi
-          cd apps/mobile/build/macos/Build/Products/Release
-          # Its own checksum file rather than a line in `SHA256SUMS`. That file
-          # is written by the GitHub Actions `release` job over the artifacts
-          # THAT job produced, and the two sides finish in an order neither can
-          # predict - appending to it from here would sometimes be overwritten
-          # by the other side's upload and the line would vanish without a word.
-          # A separate file for a separately built artefact cannot race.
-          shasum -a 256 nks-talk-macos.zip | tee nks-talk-macos.zip.sha256
-          export GH_TOKEN=$GITHUB_RELEASE_TOKEN
-          # WHICHEVER SIDE GETS HERE FIRST CREATES THE RELEASE. The GitHub
-          # Actions `release` job waits for the Windows installer, which takes
-          # longer than this whole build, so on the v0.1.0+60 tag this step ran
-          # against a release that did not exist yet and the macOS zip was lost.
-          # Waiting for it would burn Mac minutes on a metered plan, so the step
-          # is made order-independent instead: it creates the release if it is
-          # missing, and `softprops/action-gh-release` replaces the title and the
-          # notes when the other side arrives.
-          if ! gh release view "$CM_TAG" --repo nks-hub/nks-nextcloud-talk >/dev/null 2>&1; then
-            gh release create "$CM_TAG" --repo nks-hub/nks-nextcloud-talk \
-              --title "$CM_TAG" --notes "The other artifacts are still building."
-          fi
-          gh release upload "$CM_TAG" nks-talk-macos.zip nks-talk-macos.zip.sha256 \
-            --clobber --repo nks-hub/nks-nextcloud-talk
+          app=nextcloudtalk.app
+          out=$(mktemp -d)
+          trap 'rm -f "$out/api.p8" "$out/notarize.zip"; rmdir "$out"' EXIT
+          umask 077
+          printf '%s\n' "$APP_STORE_CONNECT_PRIVATE_KEY" > "$out/api.p8"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "$out/notarize.zip"
+          xcrun notarytool submit "$out/notarize.zip" --key "$out/api.p8" \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" --issuer "$APP_STORE_CONNECT_ISSUER_ID" \
+            --wait | tee /tmp/owntalk-notary.log
+          grep -q 'status: Accepted' /tmp/owntalk-notary.log
+          xcrun stapler staple "$app"
+          xcrun stapler validate "$app"
+          spctl --assess --type execute --verbose=2 "$app"
+          version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist")
+          build=$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$app/Contents/Info.plist")
+          zip="nks-talk-macos-$version-$build.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "$zip"
+          shasum -a 256 "$zip" > "$zip.sha256"
     artifacts:
-      - apps/mobile/build/macos/Build/Products/Release/nks-talk-macos.zip
+      - apps/mobile/build/macos/Build/Products/Release/nks-talk-macos-*.zip
+      - apps/mobile/build/macos/Build/Products/Release/nks-talk-macos-*.zip.sha256
+      - /tmp/owntalk-notary.log
       - /tmp/macos-build.log
       - /tmp/macos-sign.log
       - /tmp/macos-setup.log

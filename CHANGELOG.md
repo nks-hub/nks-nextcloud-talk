@@ -8,6 +8,12 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.0.40 (108) — 18 November 2026
+
+- On macOS, OwnTalk offers an image copied to the clipboard above the message field. Tap the card to attach the image.
+- On iPhone and iPad, the clipboard image offer appears while the chat is open, including when the keyboard is closed.
+- A rejected attachment leaves the image available for retry. A card that is fading out cannot attach the image that replaced it.
+
 ## 1.0.39 (107) — 16 November 2026
 
 - The conversation list marks the last message you wrote: one tick once the server stored it, two once everyone in the conversation read it.
