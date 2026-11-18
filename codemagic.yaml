@@ -118,6 +118,7 @@ definitions:
         for scheme in Runner ShareExtensionTests; do
           xcodebuild test -workspace ios/Runner.xcworkspace -scheme "$scheme"             -destination "platform=iOS Simulator,id=$udid"
         done
+        xcrun simctl bootstatus "$udid" -b
         flutter test -d "$udid" integration_test/clipboard_image_ios_test.dart
 
 workflows:
