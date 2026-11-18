@@ -207,6 +207,7 @@ workflows:
       groups:
         - nks-talk-telemetry
         - appstore_credentials
+        - owntalk-notarization-108
       flutter: 3.44.4
       xcode: latest
       cocoapods: default
@@ -329,7 +330,8 @@ workflows:
           out=$(mktemp -d)
           trap 'rm -f "$out/api.p8" "$out/notarize.zip"; rmdir "$out"' EXIT
           umask 077
-          printf '%s\n' "$APP_STORE_CONNECT_PRIVATE_KEY" > "$out/api.p8"
+          printf '%s' "$OWNTALK_NOTARY_P8_108_BASE64" | base64 --decode > "$out/api.p8"
+          openssl pkey -in "$out/api.p8" -noout
           ditto -c -k --sequesterRsrc --keepParent "$app" "$out/notarize.zip"
           xcrun notarytool submit "$out/notarize.zip" --key "$out/api.p8" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" --issuer "$APP_STORE_CONNECT_ISSUER_ID" \
