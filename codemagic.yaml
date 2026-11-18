@@ -1,6 +1,5 @@
-# Build and publish the Apple packages from the app tree verified in 9d8f9a61.
-# The Flutter and protocol suites passed in both Apple release runs on that tree.
-# Start these workflows manually.
+# These manual workflows build Apple distribution packages.
+# Run the app and protocol tests before starting a release build.
 
 definitions:
   scripts:
@@ -96,7 +95,6 @@ workflows:
       groups:
         - nks-talk-telemetry
         - appstore_credentials
-        - owntalk-notarization-108
       flutter: 3.44.4
       xcode: latest
       cocoapods: default
@@ -109,7 +107,19 @@ workflows:
           set -o pipefail
           {
           set -e
-          printf '%s' "$OWNTALK_NOTARY_P8_108_BASE64" | base64 --decode | openssl pkey -noout
+          umask 077
+          key=${APP_STORE_CONNECT_PRIVATE_KEY:?Missing App Store Connect private key}
+          notary_key=$(mktemp /tmp/owntalk-notary.XXXXXX)
+          trap 'rm -f "$notary_key"' EXIT
+          if [[ "$key" = /* && -f "$key" ]]; then
+            cp "$key" "$notary_key"
+          elif [[ "$key" = *"-----BEGIN PRIVATE KEY-----"* ]]; then
+            printf '%b\n' "$key" > "$notary_key"
+          else
+            printf '%s' "$key" | base64 --decode > "$notary_key"
+          fi
+          openssl pkey -in "$notary_key" -noout
+          echo "OWNTALK_NOTARY_KEY_PATH=$notary_key" >> "$CM_ENV"
           KC=nks-build.keychain
           security create-keychain -p ci-temp "$KC"
           security set-keychain-settings -lut 21600 "$KC"
@@ -146,6 +156,7 @@ workflows:
             --dart-define=RYBBIT_HOST=$RYBBIT_HOST \
             --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID \
             --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+          trap - EXIT
           } 2>&1 | tee /tmp/macos-setup.log
       - name: Build the app
         script: |
@@ -192,14 +203,10 @@ workflows:
           set -euo pipefail
           cd apps/mobile/build/macos/Build/Products/Release
           app=nextcloudtalk.app
-          out=$(mktemp -d)
-          trap 'rm -f "$out/api.p8"; rmdir "$out"' EXIT
-          umask 077
-          printf '%s' "$OWNTALK_NOTARY_P8_108_BASE64" | base64 --decode > "$out/api.p8"
-          openssl pkey -in "$out/api.p8" -noout
+          trap 'rm -f "$OWNTALK_NOTARY_KEY_PATH"' EXIT
           signed_zip=owntalk-macos-signed-for-notarization.zip
           ditto -c -k --sequesterRsrc --keepParent "$app" "$signed_zip"
-          xcrun notarytool submit "$signed_zip" --key "$out/api.p8" \
+          xcrun notarytool submit "$signed_zip" --key "$OWNTALK_NOTARY_KEY_PATH" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" --issuer "$APP_STORE_CONNECT_ISSUER_ID" \
             --wait | tee /tmp/owntalk-notary.log
           grep -q 'status: Accepted' /tmp/owntalk-notary.log
