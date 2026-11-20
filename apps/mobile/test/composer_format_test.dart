@@ -69,4 +69,18 @@ void main() {
     );
     expect(result.text, '```\na\nb\n```');
   });
+
+  test('code delimiters grow past backticks inside the selection', () {
+    final block = formatComposerSelection(
+      _value('print("```");', 0, 13),
+      ComposerFormat.codeBlock,
+    );
+    expect(block.text, '````\nprint("```");\n````');
+
+    final inline = formatComposerSelection(
+      _value('a`b', 0, 3),
+      ComposerFormat.inlineCode,
+    );
+    expect(inline.text, '``a`b``');
+  });
 }

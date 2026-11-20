@@ -87,6 +87,21 @@ void main() {
       expect(handed, isEmpty);
     });
 
+    test('committing an input method candidate is not treated as a paste', () {
+      final old = TextEditingValue(
+        text: 'a' * 19,
+        selection: const TextSelection.collapsed(offset: 19),
+        composing: const TextRange(start: 18, end: 19),
+      );
+      final next = TextEditingValue(
+        text: '${old.text}bc',
+        selection: const TextSelection.collapsed(offset: 21),
+      );
+
+      expect(formatter.formatEditUpdate(old, next), next);
+      expect(handed, isEmpty);
+    });
+
     test('one typed character at the limit is left to the length limit', () {
       final next = _at('a' * 21);
       expect(formatter.formatEditUpdate(_at('a' * 20), next), next);
@@ -154,6 +169,41 @@ void main() {
 
     test('a Markdown file says so in its type', () {
       expect(pastedTextFile('# a').mimeType, 'text/markdown');
+    });
+
+    test('recognised source text keeps a useful source extension', () {
+      final cases = <(String, String)>[
+        ('{"room":"alpha","message":"hello"}', 'json'),
+        ("import 'package:flutter/widgets.dart';\nvoid main() {}", 'dart'),
+        ('def greet(name):\n    return f"Hello {name}"', 'py'),
+        ('#!/usr/bin/env bash\nset -euo pipefail', 'sh'),
+        ('const greeting = "hello";\nconsole.log(greeting);', 'js'),
+        ('SELECT message FROM chat_messages;', 'sql'),
+        ('<!doctype html>\n<html><body>Hello</body></html>', 'html'),
+        ('<?xml version="1.0"?>\n<message>Hello</message>', 'xml'),
+      ];
+
+      for (final (text, extension) in cases) {
+        expect(pastedTextFile(text), (
+          extension: extension,
+          mimeType: 'text/plain',
+        ), reason: extension);
+      }
+    });
+
+    test('Markdown containing source code stays Markdown', () {
+      expect(
+        pastedTextFile(
+          "# Example\n\n```dart\nimport 'package:x/x.dart';\n```",
+        ).extension,
+        'md',
+      );
+      expect(
+        pastedTextFile(
+          'Example:\n\n```sql\nSELECT value FROM items;\n```',
+        ).extension,
+        'md',
+      );
     });
   });
 }

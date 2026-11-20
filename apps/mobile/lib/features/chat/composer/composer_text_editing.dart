@@ -93,12 +93,16 @@ TextEditingValue formatComposerSelection(
   final String before;
   final String after;
   if (format == ComposerFormat.codeBlock) {
+    final fence = _backtickFence(inner, minimum: 3);
     final needsLeadingBreak = start > 0 && text[start - 1] != '\n';
     final needsTrailingBreak = end < text.length && text[end] != '\n';
-    before = '${needsLeadingBreak ? '\n' : ''}```\n';
+    before = '${needsLeadingBreak ? '\n' : ''}$fence\n';
     after =
-        '${inner.endsWith('\n') ? '' : '\n'}```'
+        '${inner.endsWith('\n') ? '' : '\n'}$fence'
         '${needsTrailingBreak ? '\n' : ''}';
+  } else if (format == ComposerFormat.inlineCode) {
+    before = _backtickFence(inner, minimum: 1);
+    after = before;
   } else {
     before = format.marker;
     after = format.marker;
@@ -111,6 +115,23 @@ TextEditingValue formatComposerSelection(
       extentOffset: start + before.length + inner.length,
     ),
   );
+}
+
+String _backtickFence(String text, {required int minimum}) {
+  var longest = 0;
+  var current = 0;
+  for (final codeUnit in text.codeUnits) {
+    if (codeUnit == 0x60) {
+      current++;
+      if (current > longest) {
+        longest = current;
+      }
+    } else {
+      current = 0;
+    }
+  }
+  final length = longest >= minimum ? longest + 1 : minimum;
+  return '`' * length;
 }
 
 /// What the server accepts in one message.
@@ -134,16 +155,19 @@ final class OversizedPasteFormatter extends TextInputFormatter {
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    if (newValue.composing.isValid && !newValue.composing.isCollapsed) {
+    if ((oldValue.composing.isValid && !oldValue.composing.isCollapsed) ||
+        (newValue.composing.isValid && !newValue.composing.isCollapsed)) {
       return newValue;
     }
     final inserted = _insertedText(oldValue, newValue);
-    if (inserted == null || inserted.characters.length < 2 || !canDivert()) {
+    if (inserted == null ||
+        !_hasMoreThanCharacters(inserted, 1) ||
+        !canDivert()) {
       return newValue;
     }
-    if (inserted.characters.length <= 4000 &&
-        '\n'.allMatches(inserted).length < 40 &&
-        newValue.text.characters.length <= maximumCharacters) {
+    if (!_hasMoreThanCharacters(inserted, 4000) &&
+        '\n'.allMatches(inserted).take(40).length < 40 &&
+        !_hasMoreThanCharacters(newValue.text, maximumCharacters)) {
       return newValue;
     }
     onOversized(inserted);
@@ -180,6 +204,17 @@ final class OversizedPasteFormatter extends TextInputFormatter {
   }
 }
 
+bool _hasMoreThanCharacters(String value, int maximum) {
+  var count = 0;
+  for (final _ in value.characters) {
+    count++;
+    if (count > maximum) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /// The file a long paste is sent as.
 typedef PastedTextFile = ({String extension, String mimeType});
 
@@ -190,19 +225,70 @@ final RegExp _markdownStrong = RegExp(
 final RegExp _markdownList = RegExp(r'^\s*(?:[-*+]|\d+\.) \S', multiLine: true);
 final RegExp _markdownLink = RegExp(r'\[[^\]\n]+\]\([^)\s]+\)');
 final RegExp _markdownEmphasis = RegExp(r'\*\*[^*\n]+\*\*|`[^`\n]+`');
+final RegExp _jsonObject = RegExp(r'^[\{\[]\s*(?:\{\s*)?"(?:[^"\\]|\\.)+"\s*:');
+final List<({RegExp signature, PastedTextFile file})> _sourceTextFiles = [
+  (
+    signature: RegExp(
+      r'''^(?:import[ \t]+['"](?:dart:|package:)|void[ \t]+main[ \t]*\(|(?:mixin|extension)[ \t]+[A-Za-z_]\w*[ \t]+on\b)''',
+    ),
+    file: (extension: 'dart', mimeType: 'text/plain'),
+  ),
+  (
+    signature: RegExp(
+      r'^(?:#!.*\bpython\d*\b|def[ \t]+[A-Za-z_]\w*[ \t]*\([^\n]*\)[ \t]*:|from[ \t]+[A-Za-z_]\w*(?:\.\w+)*[ \t]+import[ \t]+|if[ \t]+__name__[ \t]*==)',
+    ),
+    file: (extension: 'py', mimeType: 'text/plain'),
+  ),
+  (
+    signature: RegExp(r'^(?:#!.*\b(?:ba|z|k)?sh\b|set[ \t]+-e(?:u|o|[ \t]|$))'),
+    file: (extension: 'sh', mimeType: 'text/plain'),
+  ),
+  (
+    signature: RegExp(
+      r'^(?:import[ \t]+.+[ \t]+from[ \t]+["\x27]|export[ \t]+(?:default|const|function|class)\b|(?:const|let|var)[ \t]+[A-Za-z_$]\w*[ \t]*=|function[ \t]+[A-Za-z_$]\w*[ \t]*\()',
+    ),
+    file: (extension: 'js', mimeType: 'text/plain'),
+  ),
+  (
+    signature: RegExp(
+      r'^(?:SELECT\b[^;\n]*\bFROM\b|INSERT[ \t]+INTO\b|UPDATE\b[^;\n]*\bSET\b|CREATE[ \t]+TABLE\b)',
+      caseSensitive: false,
+    ),
+    file: (extension: 'sql', mimeType: 'text/plain'),
+  ),
+  (
+    signature: RegExp(r'^<!doctype[ \t]+html\b|^<html\b', caseSensitive: false),
+    file: (extension: 'html', mimeType: 'text/plain'),
+  ),
+  (
+    signature: RegExp(r'^<\?xml\b', caseSensitive: false),
+    file: (extension: 'xml', mimeType: 'text/plain'),
+  ),
+];
 
-/// `.md` when [text] reads as Markdown, `.txt` otherwise.
+/// Chooses a useful extension for a long pasted text.
 ///
-/// A fence, a heading or a table is enough on its own. Lists, links and
-/// emphasis each turn up in plain logs and prose too, so two of them are
-/// needed together before the text counts as Markdown.
+/// Recognised source formats keep their extension. Otherwise a fence, heading
+/// or table is enough for Markdown. Lists, links and emphasis each turn up in
+/// plain logs too, so two of them are needed together before the text is `.md`.
+/// Only the first 65,536 code units are inspected so a large paste stays bounded.
 PastedTextFile pastedTextFile(String text) {
+  final sample = text.length <= 65536 ? text : text.substring(0, 65536);
+  final leading = sample.trimLeft();
+  if (_jsonObject.hasMatch(leading)) {
+    return (extension: 'json', mimeType: 'text/plain');
+  }
+  for (final source in _sourceTextFiles) {
+    if (source.signature.hasMatch(leading)) {
+      return source.file;
+    }
+  }
   final weak = [
     _markdownList,
     _markdownLink,
     _markdownEmphasis,
-  ].where((pattern) => pattern.hasMatch(text)).length;
-  final markdown = _markdownStrong.hasMatch(text) || weak >= 2;
+  ].where((pattern) => pattern.hasMatch(sample)).length;
+  final markdown = _markdownStrong.hasMatch(sample) || weak >= 2;
   return markdown
       ? (extension: 'md', mimeType: 'text/markdown')
       : (extension: 'txt', mimeType: 'text/plain');

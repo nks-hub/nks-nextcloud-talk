@@ -1,7 +1,11 @@
 part of 'chat_composer_integration_test.dart';
 
 void _registerNonBlockingComposerTests() {
-  for (final extension in ['md', 'txt']) {
+  for (final (extension, prefix) in [
+    ('md', '# Notes\n\n'),
+    ('txt', ''),
+    ('dart', "import 'package:flutter/widgets.dart';\n"),
+  ]) {
     testWidgets(
       'long pasted $extension waits for send and preserves all bytes',
       (tester) async {
@@ -19,8 +23,7 @@ void _registerNonBlockingComposerTests() {
         final controller = tester
             .widget<ChatMediaComposer>(find.byType(ChatMediaComposer))
             .controller!;
-        final source =
-            '${extension == 'md' ? '# Notes\n\n' : ''}${'Příloha ' * 700}';
+        final source = '$prefix${'Příloha ' * 700}';
         await tester.enterText(
           find.byKey(const Key('chat-composer')),
           'caption',
