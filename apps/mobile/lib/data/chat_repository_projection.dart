@@ -639,8 +639,14 @@ extension _ChatRepositoryProjection on ChatRepository {
       messageList,
     );
     final pendingMessages = <CachedChatMessagesCompanion>[];
-    final pendingMessageKeys = <({String roomToken, int messageId})>{};
+    final pendingMessageKeys = <_ChatMessageKey>{};
+    final pendingThreadRootUpdates =
+        <_ChatMessageKey, CachedChatMessagesCompanion>{};
     for (final message in messageList) {
+      final messageKey = (
+        roomToken: message.roomToken.value,
+        messageId: message.messageId,
+      );
       final requiredMessage = _requiredPriorCachedMessage(message);
       final mutationProjectsIntoQuotedParents =
           message.systemMessage == 'message_edited' ||
@@ -652,21 +658,35 @@ extension _ChatRepositoryProjection on ChatRepository {
         pendingMessages.clear();
         pendingMessageKeys.clear();
       }
+      final requiredThreadRoot = _requiredThreadRootRead(
+        message,
+        messagesAreSendResponse: messagesAreSendResponse,
+      );
+      if (pendingThreadRootUpdates.containsKey(messageKey) ||
+          (requiredThreadRoot != null &&
+              pendingThreadRootUpdates.containsKey(requiredThreadRoot))) {
+        await _flushThreadRootUpdates(
+          accountId: accountId,
+          updates: pendingThreadRootUpdates,
+        );
+        pendingThreadRootUpdates.clear();
+      }
       await _refreshThreadOriginalFromNamedSend(account, message);
-      await _refreshThreadOriginalFromParent(
+      final threadRootUpdate = await _refreshThreadOriginalFromParent(
         account,
         message,
         threadReplyAccumulators,
         adoptContent: !messagesAreSendResponse,
       );
+      if (threadRootUpdate != null) {
+        pendingThreadRootUpdates[threadRootUpdate.key] =
+            threadRootUpdate.companion;
+      }
       await _applyReactionsFromNotice(account, message);
       await _applyMutationFromNotice(account, message);
       final prepared = _prepareMessage(account, message);
       pendingMessages.add(prepared.companion);
-      pendingMessageKeys.add((
-        roomToken: message.roomToken.value,
-        messageId: message.messageId,
-      ));
+      pendingMessageKeys.add(messageKey);
       _trackConversationPreview(
         timestamps: conversationPreviewTimestamps,
         updates: conversationPreviewUpdates,
@@ -674,6 +694,10 @@ extension _ChatRepositoryProjection on ChatRepository {
         displayText: prepared.displayText,
       );
     }
+    await _flushThreadRootUpdates(
+      accountId: accountId,
+      updates: pendingThreadRootUpdates,
+    );
     await _flushPendingMessages(pendingMessages);
     await _persistConversationPreviews(
       accountId: accountId,
@@ -806,9 +830,7 @@ extension _ChatRepositoryProjection on ChatRepository {
     return normalizeGiphyReferencePreview(displayText);
   }
 
-  ({String roomToken, int messageId})? _requiredPriorCachedMessage(
-    ChatMessage message,
-  ) {
+  _ChatMessageKey? _requiredPriorCachedMessage(ChatMessage message) {
     final parent = message.parent;
     if (parent is ChatFullParent && parent.roomToken == message.roomToken) {
       return (roomToken: message.roomToken.value, messageId: parent.messageId);
@@ -821,6 +843,36 @@ extension _ChatRepositoryProjection on ChatRepository {
       return null;
     }
     return (roomToken: message.roomToken.value, messageId: threadId);
+  }
+
+  _ChatMessageKey? _requiredThreadRootRead(
+    ChatMessage message, {
+    required bool messagesAreSendResponse,
+  }) {
+    final threadId = message.threadId;
+    if (threadId != null &&
+        message.messageId != threadId &&
+        message.parent == null &&
+        message.threadReplies != null) {
+      return (roomToken: message.roomToken.value, messageId: threadId);
+    }
+    if (messagesAreSendResponse && _matchingThreadParent(message) != null) {
+      return (roomToken: message.roomToken.value, messageId: threadId!);
+    }
+    const notices = <String>{
+      'reaction',
+      'reaction_deleted',
+      'reaction_revoked',
+      'message_edited',
+      'message_deleted',
+    };
+    final parent = message.parent;
+    if (notices.contains(message.systemMessage) &&
+        parent is ChatFullParent &&
+        parent.roomToken == message.roomToken) {
+      return (roomToken: message.roomToken.value, messageId: parent.messageId);
+    }
+    return null;
   }
 
   ({CachedChatMessagesCompanion companion, String displayText}) _prepareMessage(

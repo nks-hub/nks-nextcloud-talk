@@ -6,6 +6,13 @@ typedef _ThreadReplyScope = ({
   int threadId,
 });
 
+typedef _ChatMessageKey = ({String roomToken, int messageId});
+
+typedef _PendingThreadRootUpdate = ({
+  _ChatMessageKey key,
+  CachedChatMessagesCompanion companion,
+});
+
 final class _ThreadReplyAccumulator {
   _ThreadReplyAccumulator({
     required this.replyIds,

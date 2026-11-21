@@ -113,7 +113,9 @@ void main() {
 
     expect(queryCounter.threadCountSelects, 1);
     expect(queryCounter.directMessageInserts, 0);
-    expect(queryCounter.messageBatchExecutions, 1);
+    expect(queryCounter.messageInsertBatchExecutions, 1);
+    expect(queryCounter.directMessageUpdates, 0);
+    expect(queryCounter.messageUpdateBatchExecutions, 1);
     final roots =
         await (database.select(database.cachedChatMessages)..where(
               (row) =>
@@ -127,6 +129,82 @@ void main() {
       final wire = jsonDecode(root.rawJson) as Map<String, Object?>;
       expect(wire['threadReplies'], 1);
     }
+  });
+
+  test('a reaction sees a preceding deferred thread-root update', () async {
+    const threadId = 4000;
+    final root = _messageJson(
+      id: threadId,
+      threadId: threadId,
+      message: 'Thread $threadId',
+      isThread: true,
+      threadReplies: 0,
+    );
+    await database
+        .into(database.cachedChatMessages)
+        .insert(
+          CachedChatMessagesCompanion.insert(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            messageId: threadId,
+            actorType: 'users',
+            actorId: 'fixture-user',
+            actorDisplayName: 'Fixture User',
+            timestamp: threadId,
+            systemMessage: '',
+            messageType: 'comment',
+            referenceId: 'reference-$threadId',
+            displayText: 'Thread $threadId',
+            deleted: false,
+            threadId: const Value(threadId),
+            rawJson: jsonEncode(root),
+          ),
+        );
+    final updatedRoot = _messageJson(
+      id: threadId,
+      threadId: threadId,
+      message: 'Thread $threadId',
+      isThread: true,
+      threadReplies: 1,
+    );
+    final reply = _messageJson(
+      id: threadId + 1,
+      threadId: threadId,
+      message: 'Reply ${threadId + 1}',
+      parent: updatedRoot,
+    );
+    final reactedRoot = Map<String, Object?>.of(updatedRoot)
+      ..['reactions'] = {'thumbs-up': 2}
+      ..['reactionsSelf'] = <String>['thumbs-up'];
+    final reaction =
+        _messageJson(
+            id: threadId + 2,
+            threadId: threadId,
+            message: 'thumbs-up',
+            parent: reactedRoot,
+          )
+          ..['systemMessage'] = 'reaction'
+          ..['messageType'] = 'system';
+
+    expect(
+      await repository.applyChatGetResponse(
+        _rootFutureResponse([reply, reaction]),
+      ),
+      ChatMergeOutcome.applied,
+    );
+
+    final stored =
+        await (database.select(database.cachedChatMessages)..where(
+              (row) =>
+                  row.accountId.equals('account-a') &
+                  row.roomToken.equals('rooma123') &
+                  row.messageId.equals(threadId),
+            ))
+            .getSingle();
+    final message = ChatMessage.fromJson(jsonDecode(stored.rawJson));
+    expect(message.threadReplies, 1);
+    expect(message.reactions, {'thumbs-up': 2});
+    expect(message.reactionsSelf, ['thumbs-up']);
   });
 }
 
@@ -202,7 +280,9 @@ final class _CachedThreadSelectCounter extends QueryInterceptor {
   bool enabled = false;
   int threadCountSelects = 0;
   int directMessageInserts = 0;
-  int messageBatchExecutions = 0;
+  int messageInsertBatchExecutions = 0;
+  int directMessageUpdates = 0;
+  int messageUpdateBatchExecutions = 0;
 
   @override
   Future<List<Map<String, Object?>>> runSelect(
@@ -226,12 +306,19 @@ final class _CachedThreadSelectCounter extends QueryInterceptor {
     QueryExecutor executor,
     BatchedStatements statements,
   ) {
-    if (enabled &&
-        statements.statements.any(
-          (statement) =>
-              statement.toLowerCase().contains('into "cached_chat_messages"'),
-        )) {
-      messageBatchExecutions++;
+    if (enabled) {
+      if (statements.statements.any(
+        (statement) =>
+            statement.toLowerCase().contains('into "cached_chat_messages"'),
+      )) {
+        messageInsertBatchExecutions++;
+      }
+      if (statements.statements.any(
+        (statement) =>
+            statement.toLowerCase().contains('update "cached_chat_messages"'),
+      )) {
+        messageUpdateBatchExecutions++;
+      }
     }
     return super.runBatched(executor, statements);
   }
@@ -247,5 +334,18 @@ final class _CachedThreadSelectCounter extends QueryInterceptor {
       directMessageInserts++;
     }
     return super.runInsert(executor, statement, args);
+  }
+
+  @override
+  Future<int> runUpdate(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) {
+    if (enabled &&
+        statement.toLowerCase().contains('update "cached_chat_messages"')) {
+      directMessageUpdates++;
+    }
+    return super.runUpdate(executor, statement, args);
   }
 }

@@ -145,7 +145,7 @@ extension _ChatRepositoryThreadReplies on ChatRepository {
         );
   }
 
-  Future<void> _refreshThreadOriginalFromParent(
+  Future<_PendingThreadRootUpdate?> _refreshThreadOriginalFromParent(
     ChatAccountState account,
     ChatMessage message,
     Map<_ThreadReplyScope, _ThreadReplyAccumulator> replyAccumulators, {
@@ -154,11 +154,11 @@ extension _ChatRepositoryThreadReplies on ChatRepository {
     // Same rule as the accumulator: a system message about a reaction or a
     // deletion carries its thread, but it is not a reply to anything.
     if (message.systemMessage.isNotEmpty) {
-      return;
+      return null;
     }
     final parent = _matchingThreadParent(message);
     if (parent == null) {
-      return;
+      return null;
     }
 
     final accountId = account.accountId.value;
@@ -188,7 +188,7 @@ extension _ChatRepositoryThreadReplies on ChatRepository {
               ))
               .getSingleOrNull();
       if (cachedRow == null) {
-        return;
+        return null;
       }
       final cachedWire = Map<String, Object?>.of(
         jsonDecode(cachedRow.rawJson) as Map<String, Object?>,
@@ -210,31 +210,47 @@ extension _ChatRepositoryThreadReplies on ChatRepository {
               rawJson: Value(jsonEncode(cachedWire)),
             ),
           );
-      return;
+      return null;
     }
     final originalWire = Map<String, Object?>.of(original.wire)
       ..['threadReplies'] = threadReplies;
     final displayText = _displayText(account.server, original);
-    await (_database.update(_database.cachedChatMessages)..where(
-          (row) =>
+    return (
+      key: (roomToken: message.roomToken.value, messageId: threadId),
+      companion: CachedChatMessagesCompanion(
+        actorType: Value(original.actorType),
+        actorId: Value(original.actorId),
+        actorDisplayName: Value(original.actorDisplayName),
+        timestamp: Value(original.timestamp),
+        systemMessage: Value(original.systemMessage),
+        messageType: Value(original.messageType),
+        referenceId: Value(original.referenceId),
+        displayText: Value(displayText),
+        deleted: Value(original.deleted),
+        threadId: Value(threadId),
+        rawJson: Value(jsonEncode(originalWire)),
+      ),
+    );
+  }
+
+  Future<void> _flushThreadRootUpdates({
+    required String accountId,
+    required Map<_ChatMessageKey, CachedChatMessagesCompanion> updates,
+  }) async {
+    if (updates.isEmpty) {
+      return;
+    }
+    await _database.batch((batch) {
+      for (final MapEntry(key: key, value: companion) in updates.entries) {
+        batch.update(
+          _database.cachedChatMessages,
+          companion,
+          where: (row) =>
               row.accountId.equals(accountId) &
-              row.roomToken.equals(message.roomToken.value) &
-              row.messageId.equals(threadId),
-        ))
-        .write(
-          CachedChatMessagesCompanion(
-            actorType: Value(original.actorType),
-            actorId: Value(original.actorId),
-            actorDisplayName: Value(original.actorDisplayName),
-            timestamp: Value(original.timestamp),
-            systemMessage: Value(original.systemMessage),
-            messageType: Value(original.messageType),
-            referenceId: Value(original.referenceId),
-            displayText: Value(displayText),
-            deleted: Value(original.deleted),
-            threadId: Value(threadId),
-            rawJson: Value(jsonEncode(originalWire)),
-          ),
+              row.roomToken.equals(key.roomToken) &
+              row.messageId.equals(key.messageId),
         );
+      }
+    });
   }
 }
