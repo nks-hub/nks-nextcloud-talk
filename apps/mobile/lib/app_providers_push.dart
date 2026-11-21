@@ -454,34 +454,72 @@ final appleConversationIdentityProvider = Provider<void>((ref) {
   // again. The names go to the keychain, which is slow enough that writing
   // twenty of them on every sync was the larger half of this problem.
   final sent = <String, Map<String, String>>{};
-  // Keychain writes are asynchronous. Serialising them per account prevents a
-  // slower old room list from completing after a newer one, and only a
-  // platform-acknowledged batch advances [sent], so an unchanged later sync
-  // retries a refused write.
-  final pending = <String, Future<void>>{};
-  void schedule(String accountId, Map<String, String> named) {
-    final snapshot = Map<String, String>.unmodifiable(named);
-    final task = (pending[accountId] ?? Future<void>.value()).then((_) async {
+  // Keychain writes are asynchronous. Keep only the newest waiting snapshot
+  // per account, so a slow write cannot build a queue of stale room lists.
+  // Only a fully acknowledged batch advances the sent snapshot; refused or
+  // partial writes are retried by the next conversation emission.
+  final desired = <String, Map<String, String>>{};
+  final uncertain = <String, Set<String>>{};
+  final running = <String>{};
+
+  Future<Map<String, String>> drain(String accountId) async {
+    while (true) {
+      final snapshot = desired[accountId]!;
       final previous = sent[accountId] ?? const <String, String>{};
       final changed = <String, String>{
         for (final entry in snapshot.entries)
           if (previous[entry.key] != entry.value) entry.key: entry.value,
         for (final token in previous.keys)
           if (!snapshot.containsKey(token)) token: '',
+        for (final token in uncertain[accountId] ?? const <String>{})
+          token: snapshot[token] ?? '',
       };
-      if (changed.isEmpty) {
-        return;
+      if (changed.isNotEmpty) {
+        final stored = await coordinator.recordConversationNames(
+          accountId,
+          changed,
+        );
+        final expected = changed.values.where((name) => name.isNotEmpty).length;
+        if (stored == expected) {
+          sent[accountId] = snapshot;
+          uncertain.remove(accountId);
+        } else {
+          uncertain
+              .putIfAbsent(accountId, () => <String>{})
+              .addAll(changed.keys);
+        }
       }
-      final stored = await coordinator.recordConversationNames(
-        accountId,
-        changed,
-      );
-      if (stored != null) {
-        sent[accountId] = snapshot;
+      if (identical(desired[accountId], snapshot)) {
+        return snapshot;
       }
-    });
-    pending[accountId] = task;
-    unawaited(task);
+      // Conversation streams can deliver several queued snapshots in adjacent
+      // microtasks. Give that burst one event turn to settle before the next
+      // Keychain call, then write only its newest state.
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
+
+  Future<void> start(String accountId) async {
+    if (!running.add(accountId)) {
+      return;
+    }
+    Map<String, String>? processed;
+    try {
+      processed = await drain(accountId);
+    } finally {
+      running.remove(accountId);
+      // A stream event can arrive after drain's final identity check but
+      // before this completion callback. Start once more rather than leaving
+      // that newest snapshot waiting forever.
+      if (processed != null && !identical(desired[accountId], processed)) {
+        unawaited(start(accountId));
+      }
+    }
+  }
+
+  void schedule(String accountId, Map<String, String> named) {
+    desired[accountId] = Map<String, String>.unmodifiable(named);
+    unawaited(start(accountId));
   }
 
   for (final account in accounts) {

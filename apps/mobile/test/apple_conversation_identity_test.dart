@@ -24,8 +24,12 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           if (call.method == 'recordConversationNames') {
-            written.add(call.arguments as Map<Object?, Object?>);
-            return written.length;
+            final arguments = call.arguments as Map<Object?, Object?>;
+            written.add(arguments);
+            return (arguments['rooms']! as List<Object?>)
+                .cast<Map<Object?, Object?>>()
+                .where((room) => room['name'] != '')
+                .length;
           }
           return null;
         });
@@ -201,4 +205,95 @@ void main() {
       expect(written, hasLength(2));
     },
   );
+
+  test('a partial keychain batch is retried in full', () async {
+    var attempt = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          if (call.method != 'recordConversationNames') {
+            return null;
+          }
+          written.add(call.arguments as Map<Object?, Object?>);
+          return attempt++ == 0 ? 1 : 2;
+        });
+    final probe = harness(accounts: [account('account-a')]);
+    await probe.container.read(accountsProvider.future);
+    probe.container.read(appleConversationIdentityProvider);
+
+    final rooms = [room('one', 'Pimpula'), room('two', 'Vývoj')];
+    probe.emit('account-a', rooms);
+    await Future<void>.delayed(Duration.zero);
+    probe.emit('account-a', rooms);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(written, hasLength(2));
+    expect(written.first['rooms'], written.last['rooms']);
+  });
+
+  test(
+    'a newer snapshot cleans names left uncertain by a partial batch',
+    () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            if (call.method != 'recordConversationNames') {
+              return null;
+            }
+            written.add(call.arguments as Map<Object?, Object?>);
+            return 1;
+          });
+      final probe = harness(accounts: [account('account-a')]);
+      await probe.container.read(accountsProvider.future);
+      probe.container.read(appleConversationIdentityProvider);
+
+      probe.emit('account-a', [room('one', 'Pimpula'), room('two', 'Vývoj')]);
+      await Future<void>.delayed(Duration.zero);
+      probe.emit('account-a', [room('two', 'Vývoj')]);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(written, hasLength(2));
+      expect(
+        written.last['rooms'],
+        unorderedEquals(<Object?>[
+          <String, String>{'token': 'one', 'name': ''},
+          <String, String>{'token': 'two', 'name': 'Vývoj'},
+        ]),
+      );
+    },
+  );
+
+  test('rapid room changes skip intermediate keychain snapshots', () async {
+    final firstWrite = Completer<int>();
+    final firstStarted = Completer<void>();
+    final secondStarted = Completer<void>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          if (call.method != 'recordConversationNames') {
+            return null;
+          }
+          written.add(call.arguments as Map<Object?, Object?>);
+          if (written.length == 1) {
+            firstStarted.complete();
+            return firstWrite.future;
+          }
+          secondStarted.complete();
+          return 1;
+        });
+    final probe = harness(accounts: [account('account-a')]);
+    await probe.container.read(accountsProvider.future);
+    probe.container.read(appleConversationIdentityProvider);
+
+    probe.emit('account-a', [room('one', 'Original')]);
+    await firstStarted.future;
+    probe.emit('account-a', [room('one', 'Intermediate')]);
+    probe.emit('account-a', [room('one', 'Final')]);
+    firstWrite.complete(1);
+    await secondStarted.future;
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(written, hasLength(2));
+    expect(written.last['rooms'], <Object?>[
+      <String, String>{'token': 'one', 'name': 'Final'},
+    ]);
+  });
 }

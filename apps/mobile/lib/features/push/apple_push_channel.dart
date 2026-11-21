@@ -165,13 +165,17 @@ final class ApplePushCoordinator {
       return 0;
     }
     try {
-      return await _channel.invokeMethod<int>('recordConversationNames', {
-        'accountId': accountId,
-        'rooms': [
-          for (final entry in namesByToken.entries)
-            {'token': entry.key, 'name': entry.value},
-        ],
-      });
+      final result = await _channel.invokeMethod<Object?>(
+        'recordConversationNames',
+        {
+          'accountId': accountId,
+          'rooms': [
+            for (final entry in namesByToken.entries)
+              {'token': entry.key, 'name': entry.value},
+          ],
+        },
+      );
+      return result is int && result >= 0 ? result : null;
     } on PlatformException {
       // A Keychain that refuses to write is not worth failing a sync over: the
       // notification simply stays the ordinary kind.

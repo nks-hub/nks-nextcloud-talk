@@ -81,6 +81,16 @@ void main() {
         isNull,
       );
     });
+
+    test('a malformed platform result answers nothing', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async => 'not-a-count');
+
+      expect(
+        await coordinator.recordConversationNames('account-a', {'t': 'Room'}),
+        isNull,
+      );
+    });
   });
 
   test('requests permission and fetches the token once granted', () async {
