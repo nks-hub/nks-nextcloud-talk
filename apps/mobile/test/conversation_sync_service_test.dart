@@ -221,6 +221,130 @@ void main() {
     },
   );
 
+  test('single-flight sync classifies a shared 401 once', () async {
+    final firstRequestStarted = Completer<void>();
+    final releaseFirstRequest = Completer<void>();
+    var requests = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        requests++;
+        expect(request.url.path, endsWith('/cloud/capabilities'));
+        if (requests == 1) {
+          firstRequestStarted.complete();
+          await releaseFirstRequest.future;
+        }
+        return http.Response('', 401);
+      }),
+    );
+    addTearDown(api.close);
+    final authenticationLost = <String>[];
+    final service = ConversationSyncService(
+      accounts: repository,
+      credentials: vault,
+      api: api,
+      onAuthenticationLost: (accountId) async {
+        authenticationLost.add(accountId);
+      },
+      delay: (_) async {},
+    );
+
+    Future<Object?> capture(Future<void> sync) => sync.then<Object?>(
+      (_) => null,
+      onError: (Object error, StackTrace _) => error,
+    );
+
+    final first = service.sync('account-a');
+    await firstRequestStarted.future;
+    final second = service.sync('account-a');
+    await Future<void>.delayed(Duration.zero);
+    releaseFirstRequest.complete();
+    final failures = await Future.wait<Object?>([
+      capture(first),
+      capture(second),
+    ]);
+
+    expect(
+      failures,
+      everyElement(
+        isA<ConversationSyncException>().having(
+          (error) => error.code,
+          'code',
+          ConversationSyncError.reauthenticationRequired,
+        ),
+      ),
+    );
+    expect(requests, 2, reason: 'one failed request and one confirmation');
+    expect(authenticationLost, ['account-a']);
+  });
+
+  test('cancelling the final waiter stops pending 401 confirmation', () async {
+    final confirmationDelayStarted = Completer<void>();
+    final releaseConfirmationDelay = Completer<void>();
+    addTearDown(() {
+      if (!releaseConfirmationDelay.isCompleted) {
+        releaseConfirmationDelay.complete();
+      }
+    });
+    var capabilityRequests = 0;
+    var conversationRequests = 0;
+    final conversationResponse =
+        readFixtureJson(
+              'conversation-list/fixtures/conversations-full.response.json',
+            )
+            as Map<String, Object?>;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          capabilityRequests++;
+          if (capabilityRequests == 1) {
+            return http.Response('', 401);
+          }
+          return http.Response(jsonEncode(capabilitiesJson()), 200);
+        }
+        conversationRequests++;
+        return http.Response(
+          jsonEncode(conversationResponse),
+          200,
+          headers: const {
+            'X-Nextcloud-Talk-Hash': 'fixture-hash-a',
+            'X-Nextcloud-Talk-Modified-Before': '1724300001',
+          },
+        );
+      }),
+    );
+    addTearDown(api.close);
+    final authenticationLost = <String>[];
+    final service = ConversationSyncService(
+      accounts: repository,
+      credentials: vault,
+      api: api,
+      onAuthenticationLost: (accountId) async {
+        authenticationLost.add(accountId);
+      },
+      delay: (_) {
+        confirmationDelayStarted.complete();
+        return releaseConfirmationDelay.future;
+      },
+    );
+    final cancellation = Completer<void>();
+
+    final cancelled = service.sync(
+      'account-a',
+      abortTrigger: cancellation.future,
+    );
+    await confirmationDelayStarted.future;
+    cancellation.complete();
+    await cancelled.timeout(const Duration(seconds: 1));
+
+    await service.sync('account-a').timeout(const Duration(seconds: 1));
+
+    final account = await repository.getAccount('account-a');
+    expect(capabilityRequests, 2);
+    expect(conversationRequests, 1);
+    expect(account?.lastSyncError, isNull);
+    expect(authenticationLost, isEmpty);
+  });
+
   test('the loop asks for the whole list again after five minutes', () async {
     Map<String, Object?> response() =>
         jsonDecode(

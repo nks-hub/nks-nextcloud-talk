@@ -252,7 +252,11 @@ final class ConversationSyncService {
       }
     }
     if (appPassword == null) {
-      await _fail(accountId, ConversationSyncError.credentialMissing);
+      await _fail(
+        accountId,
+        ConversationSyncError.credentialMissing,
+        abortTrigger: abortTrigger,
+      );
     }
     _flightPasswords[accountId] = appPassword;
     final password = appPassword;
@@ -266,12 +270,17 @@ final class ConversationSyncService {
         abortTrigger: abortTrigger,
       );
       if (!capabilities.hasTalk) {
-        await _fail(accountId, ConversationSyncError.talkUnavailable);
+        await _fail(
+          accountId,
+          ConversationSyncError.talkUnavailable,
+          abortTrigger: abortTrigger,
+        );
       }
       if (!capabilities.supportsTalk('conversation-v4')) {
         await _fail(
           accountId,
           ConversationSyncError.conversationProfileUnsupported,
+          abortTrigger: abortTrigger,
         );
       }
       await _accounts.updateCapabilities(
@@ -330,9 +339,29 @@ final class ConversationSyncService {
           currentAccount = (await _accounts.getAccount(accountId))!;
           continue;
         }
-        await _fail(accountId, _classifyResponse(response));
+        await _fail(
+          accountId,
+          _classifyResponse(response),
+          abortTrigger: abortTrigger,
+        );
       }
-      await _fail(accountId, ConversationSyncError.invalidResponse);
+      await _fail(
+        accountId,
+        ConversationSyncError.invalidResponse,
+        abortTrigger: abortTrigger,
+      );
+    } on NextcloudApiException catch (error) {
+      if (error.code == NextcloudApiError.cancelled) {
+        rethrow;
+      }
+      // This belongs to the account-scoped flight, not to each caller waiting
+      // for it. Classifying here keeps confirmation requests, database writes
+      // and authentication-lost callbacks single-flight as well.
+      await _fail(
+        accountId,
+        _classifyApiException(error),
+        abortTrigger: abortTrigger,
+      );
     } on ConversationSyncException {
       rethrow;
     } on TalkProtocolException catch (error) {
@@ -341,7 +370,11 @@ final class ConversationSyncService {
           'Conversation sync rejected: ${error.code.name} at ${error.path}',
         );
       }
-      await _fail(accountId, ConversationSyncError.invalidResponse);
+      await _fail(
+        accountId,
+        ConversationSyncError.invalidResponse,
+        abortTrigger: abortTrigger,
+      );
     }
   }
 
@@ -388,10 +421,14 @@ final class ConversationSyncService {
     );
   }
 
-  Future<Never> _fail(String accountId, ConversationSyncError error) async {
+  Future<Never> _fail(
+    String accountId,
+    ConversationSyncError error, {
+    Future<void>? abortTrigger,
+  }) async {
     if (error == ConversationSyncError.reauthenticationRequired &&
         (await _isStaleCredentialFailure(accountId) ||
-            await _isTransient401(accountId))) {
+            await _isTransient401(accountId, abortTrigger: abortTrigger))) {
       throw const ConversationSyncException(ConversationSyncError.network);
     }
     await _accounts.recordSyncError(accountId, error.name);
@@ -440,25 +477,51 @@ final class ConversationSyncService {
   /// One 401 therefore is not proof the login is gone: it is confirmed with a
   /// fresh authenticated read after a pause, and only a second 401 signs the
   /// account out. Anything else — including a network error — is retried.
-  Future<bool> _isTransient401(String accountId) async {
+  Future<bool> _isTransient401(
+    String accountId, {
+    Future<void>? abortTrigger,
+  }) async {
     final account = await _accounts.getAccount(accountId);
     final appPassword = _flightPasswords[accountId];
     if (account == null || appPassword == null) {
       return false;
     }
-    await _delay(_reauthenticationConfirmDelay);
+    await _delayUnlessCancelled(_reauthenticationConfirmDelay, abortTrigger);
     try {
       await _api.getAuthenticatedCapabilitiesWithSource(
         server: ServerBase.parse(account.serverUrl),
         loginName: account.loginName,
         appPassword: appPassword,
+        abortTrigger: abortTrigger,
         forceRefresh: true,
       );
       return true;
     } on NextcloudApiException catch (error) {
+      if (error.code == NextcloudApiError.cancelled) {
+        rethrow;
+      }
       return error.statusCode != 401;
     } on Object {
       return true;
+    }
+  }
+
+  Future<void> _delayUnlessCancelled(
+    Duration duration,
+    Future<void>? abortTrigger,
+  ) async {
+    if (abortTrigger == null) {
+      await _delay(duration);
+      return;
+    }
+    var cancelled = false;
+    final cancellation = abortTrigger.then<void>(
+      (_) => cancelled = true,
+      onError: (Object _, StackTrace _) => cancelled = true,
+    );
+    await Future.any<void>([_delay(duration), cancellation]);
+    if (cancelled) {
+      throw const NextcloudApiException(NextcloudApiError.cancelled);
     }
   }
 
