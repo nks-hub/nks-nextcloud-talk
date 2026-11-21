@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -34,6 +35,9 @@ abstract interface class ChatAttachmentFileLauncher {
   Future<bool> open({required String path, required String contentType});
 }
 
+typedef ChatAttachmentLeaseScheduler =
+    void Function(Duration duration, Future<void> Function() onExpired);
+
 final class PlatformChatAttachmentFileLauncher
     implements ChatAttachmentFileLauncher {
   const PlatformChatAttachmentFileLauncher();
@@ -59,6 +63,8 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
         const PlatformChatAttachmentFileLauncher(),
     int maximumCacheBytes = 256 * 1024 * 1024,
     int maximumCacheEntries = 16,
+    Duration postLaunchLease = const Duration(minutes: 15),
+    ChatAttachmentLeaseScheduler leaseScheduler = _scheduleChatAttachmentLease,
   }) {
     if (maximumCacheBytes < 1) {
       throw ArgumentError.value(
@@ -74,12 +80,21 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
         'must be positive',
       );
     }
+    if (postLaunchLease <= Duration.zero) {
+      throw ArgumentError.value(
+        postLaunchLease,
+        'postLaunchLease',
+        'must be positive',
+      );
+    }
     return ChatAttachmentOpener._(
       repository,
       cacheDirectory ?? getApplicationCacheDirectory,
       launcher,
       maximumCacheBytes,
       maximumCacheEntries,
+      postLaunchLease,
+      leaseScheduler,
     );
   }
 
@@ -89,15 +104,20 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
     this._launcher,
     this._maximumCacheBytes,
     this._maximumCacheEntries,
+    this._postLaunchLease,
+    this._leaseScheduler,
   );
 
-  static final Set<String> _activeDownloadPaths = <String>{};
+  static final Map<String, _ChatAttachmentCacheCoordinator> _cacheCoordinators =
+      <String, _ChatAttachmentCacheCoordinator>{};
 
   final ChatMediaRepository _repository;
   final Future<Directory> Function() _cacheDirectory;
   final ChatAttachmentFileLauncher _launcher;
   final int _maximumCacheBytes;
   final int _maximumCacheEntries;
+  final Duration _postLaunchLease;
+  final ChatAttachmentLeaseScheduler _leaseScheduler;
 
   @override
   Future<ChatAttachmentOpenResult> open({
@@ -109,21 +129,26 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
   }) async {
     final File localFile;
     final Directory downloadDirectory;
+    final Directory accountDirectory;
+    final _ChatAttachmentCacheCoordinator cacheCoordinator;
     final String contentType;
     try {
       final root = await _cacheDirectory();
-      final directory = chatAttachmentCacheAccountDirectory(
+      accountDirectory = chatAttachmentCacheAccountDirectory(
         rootDirectory: root,
         accountId: account.id,
       );
-      await directory.create(recursive: true);
-      downloadDirectory = await directory.createTemp('download-');
-      _activeDownloadPaths.add(downloadDirectory.path);
-      await _pruneChatAttachmentOpenCache(
-        accountDirectory: directory,
+      await accountDirectory.create(recursive: true);
+      cacheCoordinator = _cacheCoordinators.putIfAbsent(
+        accountDirectory.path,
+        _ChatAttachmentCacheCoordinator.new,
+      );
+      downloadDirectory = await accountDirectory.createTemp('download-');
+      cacheCoordinator.protect(downloadDirectory.path);
+      await cacheCoordinator.prune(
+        accountDirectory: accountDirectory,
         maximumBytes: _maximumCacheBytes,
         maximumEntries: _maximumCacheEntries,
-        protectedPaths: _activeDownloadPaths,
       );
       localFile = File(
         '${downloadDirectory.path}${Platform.pathSeparator}'
@@ -138,6 +163,7 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
     }
 
     var opened = false;
+    var leaseScheduled = false;
     try {
       contentType = await _repository.downloadOriginalToFile(
         account: account,
@@ -158,11 +184,18 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
         contentType: contentType,
       );
       if (opened) {
-        await _pruneChatAttachmentOpenCache(
-          accountDirectory: downloadDirectory.parent,
+        leaseScheduled = cacheCoordinator.retainForLease(
+          path: downloadDirectory.path,
+          duration: _postLaunchLease,
+          scheduler: _leaseScheduler,
+          accountDirectory: accountDirectory,
           maximumBytes: _maximumCacheBytes,
           maximumEntries: _maximumCacheEntries,
-          protectedPaths: _activeDownloadPaths,
+        );
+        await cacheCoordinator.prune(
+          accountDirectory: accountDirectory,
+          maximumBytes: _maximumCacheBytes,
+          maximumEntries: _maximumCacheEntries,
         );
       }
       return opened
@@ -193,12 +226,87 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
           // Account removal may have already cleared this directory.
         }
       }
-      _activeDownloadPaths.remove(downloadDirectory.path);
+      if (!leaseScheduled) {
+        cacheCoordinator.unprotect(downloadDirectory.path);
+      }
     }
   }
 }
 
 const String _completedAttachmentMarkerName = '.open-complete';
+
+final class _ChatAttachmentCacheCoordinator {
+  final Set<String> _protectedPaths = <String>{};
+  Future<void> _pruneTail = Future<void>.value();
+
+  void protect(String path) => _protectedPaths.add(path);
+
+  void unprotect(String path) => _protectedPaths.remove(path);
+
+  bool retainForLease({
+    required String path,
+    required Duration duration,
+    required ChatAttachmentLeaseScheduler scheduler,
+    required Directory accountDirectory,
+    required int maximumBytes,
+    required int maximumEntries,
+  }) {
+    try {
+      scheduler(duration, () async {
+        unprotect(path);
+        await prune(
+          accountDirectory: accountDirectory,
+          maximumBytes: maximumBytes,
+          maximumEntries: maximumEntries,
+        );
+      });
+      return true;
+    } on Object {
+      unprotect(path);
+      return false;
+    }
+  }
+
+  Future<void> prune({
+    required Directory accountDirectory,
+    required int maximumBytes,
+    required int maximumEntries,
+  }) {
+    final result = _pruneTail.then((_) async {
+      try {
+        await _pruneChatAttachmentOpenCache(
+          accountDirectory: accountDirectory,
+          maximumBytes: maximumBytes,
+          maximumEntries: maximumEntries,
+          protectedPaths: _protectedPaths,
+        );
+      } on Object {
+        // Cache cleanup must not prevent opening an attachment.
+      }
+    });
+    _pruneTail = result;
+    return result;
+  }
+}
+
+void _scheduleChatAttachmentLease(
+  Duration duration,
+  Future<void> Function() onExpired,
+) {
+  Timer(duration, () {
+    unawaited(_runChatAttachmentLeaseExpiry(onExpired));
+  });
+}
+
+Future<void> _runChatAttachmentLeaseExpiry(
+  Future<void> Function() onExpired,
+) async {
+  try {
+    await onExpired();
+  } on Object {
+    // The OS may have cleared the cache or account removal may have won.
+  }
+}
 
 Future<void> _pruneChatAttachmentOpenCache({
   required Directory accountDirectory,

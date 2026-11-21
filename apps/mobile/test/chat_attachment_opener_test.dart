@@ -95,6 +95,8 @@ void main() {
   test('a cold opener preserves unfinished and foreign cache data', () async {
     final root = await Directory.systemTemp.createTemp('attachment-prune-');
     addTearDown(() => root.delete(recursive: true));
+    final leases = _ManualLeaseScheduler();
+    addTearDown(leases.expireAll);
     final launcher = _RecordingLauncher();
     final repository = _repository(
       (_) async => http.StreamedResponse(
@@ -109,6 +111,7 @@ void main() {
       launcher: launcher,
       maximumCacheBytes: 1024,
       maximumCacheEntries: 10,
+      leaseScheduler: leases.schedule,
     );
 
     final oldNames = ['oldest.txt', 'middle.txt', 'newest.txt'];
@@ -127,6 +130,7 @@ void main() {
         launcher.paths.last,
         DateTime.utc(2026, 1, 1).add(Duration(minutes: index)),
       );
+      await leases.expireNext();
     }
 
     final accountDirectory = chatAttachmentCacheAccountDirectory(
@@ -154,6 +158,7 @@ void main() {
       launcher: launcher,
       maximumCacheBytes: 8,
       maximumCacheEntries: 2,
+      leaseScheduler: leases.schedule,
     );
     expect(
       await restarted.open(
@@ -181,7 +186,7 @@ void main() {
   });
 
   test(
-    'pruning protects a completed download while its launcher runs',
+    'active and leased downloads survive pruning until lease expiry',
     () async {
       final root = await Directory.systemTemp.createTemp('attachment-active-');
       addTearDown(() => root.delete(recursive: true));
@@ -192,6 +197,10 @@ void main() {
           headers: const {'content-type': 'text/plain'},
         ),
       );
+      final blockedLeases = _ManualLeaseScheduler();
+      final pruningLeases = _ManualLeaseScheduler();
+      addTearDown(blockedLeases.expireAll);
+      addTearDown(pruningLeases.expireAll);
       final blockedLauncher = _BlockingLauncher();
       final blockedOpener = ChatAttachmentOpener(
         repository: repository,
@@ -199,6 +208,7 @@ void main() {
         launcher: blockedLauncher,
         maximumCacheBytes: 4,
         maximumCacheEntries: 1,
+        leaseScheduler: blockedLeases.schedule,
       );
       final blockedOpen = blockedOpener.open(
         account: _account,
@@ -220,6 +230,7 @@ void main() {
         launcher: launcher,
         maximumCacheBytes: 4,
         maximumCacheEntries: 1,
+        leaseScheduler: pruningLeases.schedule,
       );
       expect(
         await pruningOpener.open(
@@ -254,9 +265,127 @@ void main() {
         ),
         ChatAttachmentOpenResult.opened,
       );
+      expect(await File(activePath).exists(), isTrue);
+
+      await blockedLeases.expireNext();
       expect(await File(activePath).exists(), isFalse);
     },
   );
+
+  test(
+    'an oversized download is pruned automatically after its lease',
+    () async {
+      final root = await Directory.systemTemp.createTemp('attachment-lease-');
+      addTearDown(() => root.delete(recursive: true));
+      final leases = _ManualLeaseScheduler();
+      addTearDown(leases.expireAll);
+      final launcher = _RecordingLauncher();
+      final opener = ChatAttachmentOpener(
+        repository: _repository(
+          (_) async => http.StreamedResponse(
+            Stream<List<int>>.value(utf8.encode('data')),
+            200,
+            headers: const {'content-type': 'text/plain'},
+          ),
+        ),
+        cacheDirectory: () async => root,
+        launcher: launcher,
+        maximumCacheBytes: 3,
+        maximumCacheEntries: 1,
+        leaseScheduler: leases.schedule,
+      );
+
+      expect(await _open(opener), ChatAttachmentOpenResult.opened);
+      final path = launcher.paths.single;
+      expect(await File(path).exists(), isTrue);
+      expect(leases.durations, [const Duration(minutes: 15)]);
+
+      await leases.expireNext();
+
+      expect(await File(path).exists(), isFalse);
+    },
+  );
+
+  test('concurrent prune requests are serialized per account', () async {
+    final root = await Directory.systemTemp.createTemp('attachment-serial-');
+    addTearDown(() => root.delete(recursive: true));
+    final repository = _repository(
+      (_) async => http.StreamedResponse(
+        Stream<List<int>>.value(utf8.encode('data')),
+        200,
+        headers: const {'content-type': 'text/plain'},
+      ),
+    );
+    final seedLeases = _ManualLeaseScheduler();
+    addTearDown(seedLeases.expireAll);
+    final seedLauncher = _RecordingLauncher();
+    final seed = ChatAttachmentOpener(
+      repository: repository,
+      cacheDirectory: () async => root,
+      launcher: seedLauncher,
+      maximumCacheBytes: 1024,
+      maximumCacheEntries: 10,
+      leaseScheduler: seedLeases.schedule,
+    );
+    for (var index = 0; index < 2; index++) {
+      expect(
+        await seed.open(
+          account: _account,
+          uri: _uri.resolve('old-$index.txt'),
+          fileName: 'old-$index.txt',
+          expectedContentType: 'text/plain',
+        ),
+        ChatAttachmentOpenResult.opened,
+      );
+      await _setCacheCompletionTime(
+        seedLauncher.paths.last,
+        DateTime.utc(2026, 1, 1).add(Duration(minutes: index)),
+      );
+      await seedLeases.expireNext();
+    }
+
+    final concurrentLeases = _ManualLeaseScheduler();
+    addTearDown(concurrentLeases.expireAll);
+    final firstLauncher = _BlockingLauncher();
+    final secondLauncher = _BlockingLauncher();
+    final first = ChatAttachmentOpener(
+      repository: repository,
+      cacheDirectory: () async => root,
+      launcher: firstLauncher,
+      maximumCacheBytes: 1024,
+      maximumCacheEntries: 1,
+      leaseScheduler: concurrentLeases.schedule,
+    );
+    final second = ChatAttachmentOpener(
+      repository: repository,
+      cacheDirectory: () async => root,
+      launcher: secondLauncher,
+      maximumCacheBytes: 1024,
+      maximumCacheEntries: 1,
+      leaseScheduler: concurrentLeases.schedule,
+    );
+    final firstOpen = _open(first);
+    final secondOpen = _open(second);
+    addTearDown(() async {
+      firstLauncher.release();
+      secondLauncher.release();
+      await Future.wait([firstOpen, secondOpen]);
+    });
+
+    await Future.wait([firstLauncher.started, secondLauncher.started]);
+    final oldFilesStillPresent = await Future.wait(
+      seedLauncher.paths.map((path) => File(path).exists()),
+    );
+    expect(oldFilesStillPresent.where((exists) => exists), hasLength(1));
+
+    firstLauncher.release();
+    secondLauncher.release();
+    expect(
+      await Future.wait([firstOpen, secondOpen]),
+      everyElement(ChatAttachmentOpenResult.opened),
+    );
+    await concurrentLeases.expireAll();
+  });
 
   test(
     'does not invoke the platform when authenticated download fails',
@@ -464,6 +593,28 @@ final class _BlockingLauncher implements ChatAttachmentFileLauncher {
     _started.complete();
     await _released.future;
     return true;
+  }
+}
+
+final class _ManualLeaseScheduler {
+  final List<Duration> durations = <Duration>[];
+  final List<Future<void> Function()> _expirations =
+      <Future<void> Function()>[];
+
+  void schedule(Duration duration, Future<void> Function() onExpired) {
+    durations.add(duration);
+    _expirations.add(onExpired);
+  }
+
+  Future<void> expireNext() async {
+    expect(_expirations, isNotEmpty);
+    await _expirations.removeAt(0)();
+  }
+
+  Future<void> expireAll() async {
+    while (_expirations.isNotEmpty) {
+      await expireNext();
+    }
   }
 }
 
