@@ -207,6 +207,42 @@ void main() {
     );
     expect(find.byKey(const Key('fake-remote-video')), findsOneWidget);
   });
+
+  testWidgets('a large participant list builds peer rows lazily', (
+    tester,
+  ) async {
+    await _pumpSheet(
+      tester,
+      state: _joined(
+        participants: [
+          for (var index = 0; index < 80; index++)
+            _peer(peerId: 'peer-$index', actorId: 'user-$index'),
+        ],
+      ),
+    );
+
+    final listFinder = find.byKey(const Key('call-participant-peer-list'));
+    final list = tester.widget<SliverList>(listFinder);
+    expect(list.delegate, isA<SliverChildBuilderDelegate>());
+    expect(
+      find.byKey(const Key('call-participant-peer-79')),
+      findsNothing,
+      reason: 'off-screen participant widgets must not be built up front',
+    );
+
+    final sheetFinder = find.byKey(const Key('call-participants'));
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('call-participant-peer-79')),
+      500,
+      scrollable: find.descendant(
+        of: sheetFinder,
+        matching: find.byType(Scrollable),
+      ),
+    );
+
+    expect(find.byKey(const Key('call-participant-peer-79')), findsOneWidget);
+    expect(find.text('user-79'), findsOneWidget);
+  });
 }
 
 const String _attendanceCsv =

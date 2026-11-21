@@ -140,71 +140,98 @@ final class CallParticipantsSheet extends ConsumerWidget {
       peers: media.participants,
       selfActorId: null,
     );
+    final showAbsent = absent.isNotEmpty && join.phase == CallJoinPhase.joined;
+    final showAttendance =
+        join.canDownloadAttendance && join.phase == CallJoinPhase.joined;
     return SafeArea(
-      child: ListView(
+      child: CustomScrollView(
         key: const Key('call-participants'),
         shrinkWrap: true,
-        children: [
-          ListTile(
-            title: Text(
-              strings.callParticipantsTitle(media.participants.length + 1),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-          ListTile(
-            key: const Key('call-participant-self'),
-            leading: const CircleAvatar(child: Icon(Icons.person_rounded)),
-            title: Text(strings.callParticipantsYou),
-            subtitle: Text(
-              media.muted
-                  ? strings.callParticipantMuted
-                  : strings.callParticipantConnected,
-            ),
-            trailing: media.handRaised
-                ? Icon(
-                    Icons.front_hand_rounded,
-                    semanticLabel: strings.callParticipantHandRaised,
-                  )
-                : null,
-          ),
-          if (media.localVideo != null)
-            Padding(
-              key: const Key('call-participant-self-video'),
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: media.localVideo!.buildPreview(context),
+        slivers: [
+          SliverList.list(
+            children: [
+              ListTile(
+                title: Text(
+                  strings.callParticipantsTitle(media.participants.length + 1),
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
+              ListTile(
+                key: const Key('call-participant-self'),
+                leading: const CircleAvatar(child: Icon(Icons.person_rounded)),
+                title: Text(strings.callParticipantsYou),
+                subtitle: Text(
+                  media.muted
+                      ? strings.callParticipantMuted
+                      : strings.callParticipantConnected,
+                ),
+                trailing: media.handRaised
+                    ? Icon(
+                        Icons.front_hand_rounded,
+                        semanticLabel: strings.callParticipantHandRaised,
+                      )
+                    : null,
+              ),
+              if (media.localVideo != null)
+                Padding(
+                  key: const Key('call-participant-self-video'),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: media.localVideo!.buildPreview(context),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          SliverList.builder(
+            key: const Key('call-participant-peer-list'),
+            itemCount: media.participants.length,
+            itemBuilder: (context, index) => _PeerTile(
+              peer: media.participants[index],
+              names: names,
+              strings: strings,
             ),
-          for (final peer in media.participants)
-            _PeerTile(peer: peer, names: names, strings: strings),
+          ),
           // Everybody in the room who has not joined. Ringing exists for
           // exactly this: the call is running and they are not in it.
-          if (absent.isNotEmpty && join.phase == CallJoinPhase.joined) ...[
-            const Divider(height: 1),
-            ListTile(
-              key: const Key('call-ring-absent'),
-              dense: true,
-              title: Text(
-                strings.callRingAbsentTitle,
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
+          if (showAbsent)
+            SliverList.list(
+              children: [
+                const Divider(height: 1),
+                ListTile(
+                  key: const Key('call-ring-absent'),
+                  dense: true,
+                  title: Text(
+                    strings.callRingAbsentTitle,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+              ],
             ),
-            for (final participant in absent)
-              _AbsentTile(roomKey: roomKey, participant: participant),
-          ],
+          if (showAbsent)
+            SliverList.builder(
+              key: const Key('call-participant-absent-list'),
+              itemCount: absent.length,
+              itemBuilder: (context, index) =>
+                  _AbsentTile(roomKey: roomKey, participant: absent[index]),
+            ),
           // Moderator-only and only where the server advertises
           // `download-call-participants`. The list above is who this device
           // has media with; the export is what the server recorded, which is
           // not the same thing and includes whoever already left.
-          if (join.canDownloadAttendance &&
-              join.phase == CallJoinPhase.joined) ...[
-            const Divider(height: 1),
-            _AttendanceExportTile(roomKey: roomKey, exportSystem: exportSystem),
-          ],
+          if (showAttendance)
+            SliverList.list(
+              children: [
+                const Divider(height: 1),
+                _AttendanceExportTile(
+                  roomKey: roomKey,
+                  exportSystem: exportSystem,
+                ),
+              ],
+            ),
         ],
       ),
     );
