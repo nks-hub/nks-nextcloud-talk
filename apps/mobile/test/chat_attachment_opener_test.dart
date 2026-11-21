@@ -340,6 +340,7 @@ void main() {
         '${orphan.path}${Platform.pathSeparator}orphan.bin',
       );
       await orphanFile.writeAsString('old');
+      await orphanFile.setLastModified(clock.now());
       clock.advance(const Duration(hours: 72));
       final housekeeper = ChatAttachmentCacheHousekeeper(
         cacheDirectory: () async => root,
@@ -368,6 +369,7 @@ void main() {
     final path = await _seedCompletedAttachment(
       root: root,
       leaseUntil: leaseUntil,
+      completedAt: clock.now(),
       bytes: 4,
     );
     final housekeeper = ChatAttachmentCacheHousekeeper(
@@ -396,6 +398,7 @@ void main() {
     final path = await _seedCompletedAttachment(
       root: root,
       leaseUntil: clock.now().subtract(const Duration(minutes: 1)),
+      completedAt: clock.now(),
       bytes: 4,
     );
     final housekeeper = ChatAttachmentCacheHousekeeper(
@@ -420,6 +423,7 @@ void main() {
     await _seedCompletedAttachment(
       root: root,
       leaseUntil: clock.now().add(const Duration(minutes: 10)),
+      completedAt: clock.now(),
       bytes: 4,
     );
     final housekeeper = ChatAttachmentCacheHousekeeper(
@@ -803,6 +807,7 @@ Future<void> _setCacheCompletionTime(
 Future<String> _seedCompletedAttachment({
   required Directory root,
   required DateTime leaseUntil,
+  required DateTime completedAt,
   required int bytes,
 }) async {
   final accountDirectory = chatAttachmentCacheAccountDirectory(
@@ -815,12 +820,14 @@ Future<String> _seedCompletedAttachment({
     '${download.path}${Platform.pathSeparator}fixture.bin',
   );
   await attachment.writeAsBytes(List<int>.filled(bytes, 1));
-  await File(
+  final marker = File(
     '${download.path}${Platform.pathSeparator}.open-complete',
-  ).writeAsString(
+  );
+  await marker.writeAsString(
     'leaseUntil=${leaseUntil.millisecondsSinceEpoch}\n',
     flush: true,
   );
+  await marker.setLastModified(completedAt);
   return attachment.path;
 }
 
