@@ -14,6 +14,7 @@ import com.nkshub.nextcloudtalk.attachments.AttachmentSaverActivityLifecycle
 import com.nkshub.nextcloudtalk.attachments.AttachmentTransferChannel
 import com.nkshub.nextcloudtalk.attachments.AttachmentTransferService
 import com.nkshub.nextcloudtalk.background.BackgroundDrain
+import com.nkshub.nextcloudtalk.background.PendingRevocationStorage
 import com.nkshub.nextcloudtalk.calls.CallAudioFocus
 import com.nkshub.nextcloudtalk.calls.CallForegroundChannel
 import com.nkshub.nextcloudtalk.calls.CallForegroundService
@@ -231,6 +232,16 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
                     BackgroundDrain.scheduleOnce(applicationContext)
                     result.success(null)
                 }
+                "readPendingRevocations" -> PendingRevocationStorage.read(
+                    applicationContext,
+                    result,
+                )
+                "compareAndSetPendingRevocations" -> PendingRevocationStorage.compareAndSet(
+                    applicationContext,
+                    call.argument<String>("expected"),
+                    call.argument<String>("updated"),
+                    result,
+                )
                 else -> result.notImplemented()
             }
         }

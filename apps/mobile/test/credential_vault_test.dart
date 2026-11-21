@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -236,6 +237,43 @@ void main() {
     );
   });
 
+  test(
+    'pending revocation updates are locked across vault instances',
+    () async {
+      final storage = _RecordingSecureStorage();
+      final support = await Directory.systemTemp.createTemp('vault-support');
+      addTearDown(() => support.delete(recursive: true));
+      SecureCredentialVault vault() => SecureCredentialVault(
+        storage: storage,
+        supportDirectory: () async => support,
+      );
+      final firstWrite = storage.blockNextWrite('nks.pending_revocations');
+      var secondEntered = false;
+
+      final first = vault().updatePendingRevocations((current) => 'first');
+      Future<void>? second;
+      addTearDown(() async {
+        if (!firstWrite.release.isCompleted) {
+          firstWrite.release.complete();
+        }
+        await Future.wait(<Future<void>>[first, ?second]);
+      });
+      await firstWrite.started.future;
+      final secondWrite = vault().updatePendingRevocations((current) {
+        secondEntered = true;
+        return '$current,second';
+      });
+      second = secondWrite;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(secondEntered, isFalse);
+
+      firstWrite.release.complete();
+      await Future.wait(<Future<void>>[first, secondWrite]);
+
+      expect(storage.valueFor('nks.pending_revocations'), 'first,second');
+    },
+  );
+
   test('a queue left over from before the marker is drained again', () async {
     const queue = '[{"server":"https://example.invalid"}]';
     final storage = _RecordingSecureStorage()
@@ -390,6 +428,7 @@ final class _StorageCall {
 final class _RecordingSecureStorage extends FlutterSecureStorage {
   final Map<String, String> _values = {};
   final Set<String> _failingWrites = {};
+  final Map<String, _WriteGate> _blockingWrites = {};
   final List<int> _failingReadStatuses = [];
   final List<_StorageCall> calls = [];
 
@@ -398,6 +437,12 @@ final class _RecordingSecureStorage extends FlutterSecureStorage {
   String? valueFor(String key) => _values[key];
 
   void failNextWrite(String key) => _failingWrites.add(key);
+
+  _WriteGate blockNextWrite(String key) {
+    final gate = _WriteGate();
+    _blockingWrites[key] = gate;
+    return gate;
+  }
 
   void failNextReadWithAppleStatus(int status) {
     _failingReadStatuses.add(status);
@@ -423,6 +468,11 @@ final class _RecordingSecureStorage extends FlutterSecureStorage {
     );
     if (_failingWrites.remove(key)) {
       throw StateError('interrupted secure-storage write');
+    }
+    final gate = _blockingWrites.remove(key);
+    if (gate != null) {
+      gate.started.complete();
+      await gate.release.future;
     }
     if (value == null) {
       _values.remove(key);
@@ -496,4 +546,9 @@ final class _RecordingSecureStorage extends FlutterSecureStorage {
       ),
     );
   }
+}
+
+final class _WriteGate {
+  final started = Completer<void>();
+  final release = Completer<void>();
 }

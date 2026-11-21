@@ -39,28 +39,22 @@ final class AppPasswordRevocationQueue {
     required ServerBase server,
     required String loginName,
     required String appPassword,
-  }) async {
-    final entries = await _load();
-    entries.removeWhere(
-      (entry) =>
-          entry.server == server.uri.toString() &&
-          entry.loginName == loginName &&
-          entry.appPassword == appPassword,
+  }) => _store.updatePendingRevocations((raw) {
+    final entries = _decode(raw);
+    final added = _Entry(
+      server: server.uri.toString(),
+      loginName: loginName,
+      appPassword: appPassword,
+      since: _now(),
+      attempts: 0,
     );
-    entries.add(
-      _Entry(
-        server: server.uri.toString(),
-        loginName: loginName,
-        appPassword: appPassword,
-        since: _now(),
-        attempts: 0,
-      ),
-    );
+    entries.removeWhere((entry) => entry.sameSecretAs(added));
+    entries.add(added);
     while (entries.length > maximumEntries) {
       entries.removeAt(0);
     }
-    await _save(entries);
-  }
+    return _encode(entries);
+  });
 
   /// Number of revocations still owed; for diagnostics and tests.
   Future<int> pendingCount() async => (await _load()).length;
@@ -94,8 +88,29 @@ final class AppPasswordRevocationQueue {
         ? entries.length
         : _drainConcurrency;
     await Future.wait(List.generate(workerCount, (_) => revokeNext()));
-    final remaining = outcomes.whereType<_Entry>().toList(growable: false);
-    await _save(remaining);
+    final originalBySecret = <_Secret, int>{
+      for (var index = 0; index < entries.length; index++)
+        entries[index].secret: index,
+    };
+    await _store.updatePendingRevocations((raw) {
+      final latest = _decode(raw);
+      final reconciled = <_Entry>[];
+      for (final current in latest) {
+        final originalIndex = originalBySecret[current.secret];
+        if (originalIndex == null ||
+            !current.hasSameStateAs(entries[originalIndex])) {
+          // Added, retried or re-recorded by another isolate while the network
+          // calls were running. Its newer state belongs to the next drain.
+          reconciled.add(current);
+          continue;
+        }
+        final outcome = outcomes[originalIndex];
+        if (outcome != null) {
+          reconciled.add(outcome);
+        }
+      }
+      return _encode(reconciled);
+    });
   }
 
   Future<bool> _revoked(_Entry entry) async {
@@ -120,8 +135,10 @@ final class AppPasswordRevocationQueue {
     }
   }
 
-  Future<List<_Entry>> _load() async {
-    final raw = await _store.readPendingRevocations();
+  Future<List<_Entry>> _load() async =>
+      _decode(await _store.readPendingRevocations());
+
+  List<_Entry> _decode(String? raw) {
     if (raw == null || raw.isEmpty) {
       return <_Entry>[];
     }
@@ -140,12 +157,12 @@ final class AppPasswordRevocationQueue {
     ];
   }
 
-  Future<void> _save(List<_Entry> entries) => _store.writePendingRevocations(
-    entries.isEmpty
-        ? null
-        : jsonEncode([for (final entry in entries) entry.toJson()]),
-  );
+  String? _encode(List<_Entry> entries) => entries.isEmpty
+      ? null
+      : jsonEncode([for (final entry in entries) entry.toJson()]);
 }
+
+typedef _Secret = ({String server, String loginName, String appPassword});
 
 final class _Entry {
   const _Entry({
@@ -161,6 +178,14 @@ final class _Entry {
   final String appPassword;
   final DateTime since;
   final int attempts;
+
+  _Secret get secret =>
+      (server: server, loginName: loginName, appPassword: appPassword);
+
+  bool sameSecretAs(_Entry other) => secret == other.secret;
+
+  bool hasSameStateAs(_Entry other) =>
+      sameSecretAs(other) && since == other.since && attempts == other.attempts;
 
   static _Entry? fromJson(Map<String, Object?> json) {
     final server = json['server'];

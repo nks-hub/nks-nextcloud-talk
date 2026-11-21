@@ -44,11 +44,22 @@ class BackgroundDrainJobService : JobService() {
         engine = created
         MethodChannel(created.dartExecutor.binaryMessenger, BackgroundDrain.CHANNEL)
             .setMethodCallHandler { call, result ->
-                if (call.method == "finished") {
-                    result.success(null)
-                    finish(params, call.argument<Boolean>("retry") == true)
-                } else {
-                    result.notImplemented()
+                when (call.method) {
+                    "finished" -> {
+                        result.success(null)
+                        finish(params, call.argument<Boolean>("retry") == true)
+                    }
+                    "readPendingRevocations" -> PendingRevocationStorage.read(
+                        applicationContext,
+                        result,
+                    )
+                    "compareAndSetPendingRevocations" -> PendingRevocationStorage.compareAndSet(
+                        applicationContext,
+                        call.argument<String>("expected"),
+                        call.argument<String>("updated"),
+                        result,
+                    )
+                    else -> result.notImplemented()
                 }
             }
         created.dartExecutor.executeDartEntrypoint(

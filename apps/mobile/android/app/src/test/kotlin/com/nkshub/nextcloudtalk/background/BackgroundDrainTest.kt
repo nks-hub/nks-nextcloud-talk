@@ -65,4 +65,18 @@ class BackgroundDrainTest {
             assertTrue(job.isExpedited)
         }
     }
+
+    @Test
+    fun revocationWriteRejectsAStaleSnapshot() {
+        var stored: String? = "newer"
+        val queue = PendingRevocationCompareAndSet(
+            read = { stored },
+            write = { stored = it },
+        )
+
+        assertFalse(queue.compareAndSet("older", null))
+        assertEquals("newer", stored)
+        assertTrue(queue.compareAndSet("newer", "latest"))
+        assertEquals("latest", stored)
+    }
 }

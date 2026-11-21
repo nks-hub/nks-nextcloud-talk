@@ -139,6 +139,50 @@ void main() {
     expect(await q.pendingCount(), 0);
   });
 
+  test('another queue instance can record safely during a drain', () async {
+    final requestStarted = Completer<void>();
+    final releaseRequest = Completer<void>();
+    final drainingQueue = queue(
+      MockClient((request) async {
+        if (!requestStarted.isCompleted) {
+          requestStarted.complete();
+        }
+        await releaseRequest.future;
+        return http.Response(_okOcs(), 200);
+      }),
+    );
+    final recordingQueue = queue(
+      MockClient((request) async => throw StateError('unexpected request')),
+    );
+    await drainingQueue.record(
+      server: server,
+      loginName: 'first-user',
+      appPassword: 'first-secret',
+    );
+    final draining = drainingQueue.drain();
+    Future<void>? recording;
+    addTearDown(() async {
+      if (!releaseRequest.isCompleted) {
+        releaseRequest.complete();
+      }
+      await Future.wait(<Future<void>>[draining, ?recording]);
+    });
+    await requestStarted.future;
+
+    recording = recordingQueue.record(
+      server: server,
+      loginName: 'second-user',
+      appPassword: 'second-secret',
+    );
+    await recording;
+    releaseRequest.complete();
+    await draining;
+
+    expect(await drainingQueue.pendingCount(), 1);
+    expect(vault.pendingRevocations, contains('second-secret'));
+    expect(vault.pendingRevocations, isNot(contains('first-secret')));
+  });
+
   test('the queue is bounded by count, attempts and age', () async {
     final q = queue(
       MockClient((request) async => throw const SocketException('offline')),

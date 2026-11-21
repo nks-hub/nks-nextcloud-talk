@@ -224,6 +224,13 @@ final class _NoPendingRevocationStore implements PendingRevocationStore {
   Future<String?> readPendingRevocations() async => null;
 
   @override
+  Future<void> updatePendingRevocations(
+    String? Function(String? current) update,
+  ) async {
+    update(null);
+  }
+
+  @override
   Future<void> writePendingRevocations(String? json) async {}
 }
 

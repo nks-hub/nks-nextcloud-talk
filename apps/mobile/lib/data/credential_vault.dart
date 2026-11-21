@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:flutter/services.dart' show PlatformException;
+import 'package:flutter/services.dart' show MethodChannel, PlatformException;
 import 'package:path_provider/path_provider.dart';
 
 abstract interface class CredentialVault {
@@ -20,6 +20,12 @@ abstract interface class PendingRevocationStore {
   Future<String?> readPendingRevocations();
 
   Future<void> writePendingRevocations(String? json);
+
+  /// Changes the queue atomically against other writers on this platform.
+  /// The callback may run again when an Android compare-and-set loses a race.
+  Future<void> updatePendingRevocations(
+    String? Function(String? current) update,
+  );
 }
 
 /// The Apple credential store is intact but cannot be accessed in the current
@@ -117,6 +123,10 @@ final class SecureCredentialVault
   static const _pendingRevocationsKey = 'nks.pending_revocations';
   static const _pendingRevocationsMarker = 'pending-revocations';
   static const _pendingRevocationsReconciled = 'pending-revocations-reconciled';
+  static const _backgroundDrainChannel = MethodChannel(
+    'com.nkshub.nextcloudtalk/background_drain',
+  );
+  static Future<void> _pendingRevocationMutationTail = Future<void>.value();
 
   var _reconciled = false;
 
@@ -133,6 +143,11 @@ final class SecureCredentialVault
 
   @override
   Future<String?> readPendingRevocations() async {
+    if (Platform.isAndroid) {
+      return _backgroundDrainChannel.invokeMethod<String>(
+        'readPendingRevocations',
+      );
+    }
     if (!await (await _pendingRevocationsMarkerFile()).exists()) {
       return null;
     }
@@ -140,7 +155,29 @@ final class SecureCredentialVault
   }
 
   @override
-  Future<void> writePendingRevocations(String? json) async {
+  Future<void> writePendingRevocations(String? json) {
+    if (Platform.isAndroid) {
+      return _updateAndroidPendingRevocations((_) => json);
+    }
+    return _withLocalPendingRevocationsLock(
+      () => _writePendingRevocations(json),
+    );
+  }
+
+  @override
+  Future<void> updatePendingRevocations(
+    String? Function(String? current) update,
+  ) {
+    if (Platform.isAndroid) {
+      return _updateAndroidPendingRevocations(update);
+    }
+    return _withLocalPendingRevocationsLock(() async {
+      final current = await readPendingRevocations();
+      await _writePendingRevocations(update(current));
+    });
+  }
+
+  Future<void> _writePendingRevocations(String? json) async {
     final marker = await _pendingRevocationsMarkerFile();
     if (json == null) {
       await _delete(_pendingRevocationsKey);
@@ -155,6 +192,35 @@ final class SecureCredentialVault
     await _write(_pendingRevocationsKey, json);
   }
 
+  Future<void> _updateAndroidPendingRevocations(
+    String? Function(String? current) update,
+  ) async {
+    while (true) {
+      final current = await readPendingRevocations();
+      final next = update(current);
+      final written =
+          await _backgroundDrainChannel.invokeMethod<bool>(
+            'compareAndSetPendingRevocations',
+            <String, Object?>{'expected': current, 'updated': next},
+          ) ??
+          false;
+      if (written) {
+        return;
+      }
+    }
+  }
+
+  Future<T> _withLocalPendingRevocationsLock<T>(
+    Future<T> Function() operation,
+  ) {
+    final result = _pendingRevocationMutationTail.then((_) => operation());
+    _pendingRevocationMutationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
   /// Gives the marker to an installation that queued a revocation before the
   /// marker existed, which would otherwise never be drained again and would
   /// leave an app password alive on its server.
@@ -167,6 +233,12 @@ final class SecureCredentialVault
       return;
     }
     _reconciled = true;
+    // Android owns this one key in a process-wide native queue. It neither
+    // needs the Linux keyring marker nor may race that native writer through
+    // flutter_secure_storage from another engine.
+    if (Platform.isAndroid) {
+      return;
+    }
     final done = File(
       '${(await _supportDirectory()).path}/$_pendingRevocationsReconciled',
     );

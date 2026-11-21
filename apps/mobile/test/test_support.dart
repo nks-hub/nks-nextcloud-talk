@@ -66,6 +66,7 @@ AppDatabase openTestDatabase() {
 final class MemoryCredentialVault
     implements CredentialVault, PendingRevocationStore {
   final Map<String, String> values = {};
+  Future<void> _pendingMutationTail = Future<void>.value();
 
   @override
   Future<void> deleteAppPassword(String accountId) async {
@@ -86,8 +87,19 @@ final class MemoryCredentialVault
   Future<String?> readPendingRevocations() async => pendingRevocations;
 
   @override
+  Future<void> updatePendingRevocations(
+    String? Function(String? current) update,
+  ) {
+    final result = _pendingMutationTail.then((_) {
+      pendingRevocations = update(pendingRevocations);
+    });
+    _pendingMutationTail = result.catchError((Object _) {});
+    return result;
+  }
+
+  @override
   Future<void> writePendingRevocations(String? json) async {
-    pendingRevocations = json;
+    await updatePendingRevocations((_) => json);
   }
 }
 
