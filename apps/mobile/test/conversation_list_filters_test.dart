@@ -49,10 +49,14 @@ void main() {
     expect(cache.entryCount, 1000);
   });
 
-  test('mention cache evicts least recently used rooms at its bound', () {
+  test('mention cache stays effective one room above its bound', () {
+    var parseCount = 0;
     final cache = ConversationUnreadMentionCache(
       maximumEntries: 2,
-      parser: (_) => false,
+      parser: (_) {
+        parseCount++;
+        return false;
+      },
     );
     final rooms = [
       _conversation(token: 'bounded1', rawJson: 'one'),
@@ -63,7 +67,14 @@ void main() {
     for (final room in rooms) {
       cache.hasUnreadMention(room);
     }
+    expect(parseCount, 3);
+    expect(cache.entryCount, 2);
 
+    for (final room in rooms) {
+      cache.hasUnreadMention(room.copyWith());
+    }
+
+    expect(parseCount, 4);
     expect(cache.entryCount, 2);
   });
 

@@ -651,9 +651,9 @@ typedef _UnreadMentionEntry = ({
 
 /// Reuses mention parsing across Drift emissions, which create new row objects.
 ///
-/// Entries are scoped to the current list and capped as a second guard. A hit
-/// is moved to the end so a list larger than the cap retains the rooms used
-/// most recently instead of keeping stale rooms from an earlier emission.
+/// Entries are scoped to the current list and capped as a second guard. Once
+/// full, unknown rooms are parsed without displacing residents. This avoids a
+/// sequential scan above the cap evicting every entry needed by the next scan.
 @visibleForTesting
 final class ConversationUnreadMentionCache {
   ConversationUnreadMentionCache({
@@ -679,25 +679,19 @@ final class ConversationUnreadMentionCache {
 
   bool hasUnreadMention(CachedConversation conversation) {
     final key = (accountId: conversation.accountId, token: conversation.token);
-    final cached = _entries.remove(key);
+    final cached = _entries[key];
     if (cached != null &&
         cached.rawJson == conversation.rawJson &&
         cached.unreadMessages == conversation.unreadMessages) {
-      _entries[key] = (
-        rawJson: conversation.rawJson,
-        unreadMessages: conversation.unreadMessages,
-        hasUnreadMention: cached.hasUnreadMention,
-      );
       return cached.hasUnreadMention;
     }
     final result = parser(conversation);
-    _entries[key] = (
-      rawJson: conversation.rawJson,
-      unreadMessages: conversation.unreadMessages,
-      hasUnreadMention: result,
-    );
-    while (_entries.length > maximumEntries) {
-      _entries.remove(_entries.keys.first);
+    if (cached != null || _entries.length < maximumEntries) {
+      _entries[key] = (
+        rawJson: conversation.rawJson,
+        unreadMessages: conversation.unreadMessages,
+        hasUnreadMention: result,
+      );
     }
     return result;
   }
