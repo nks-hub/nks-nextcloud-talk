@@ -57,6 +57,15 @@ void main() {
     const threadCount = 40;
     const firstThreadId = 1000;
     const stride = 10;
+    final largeReply = 'x' * 8192;
+    await AccountRepository(database).upsertAccount(
+      accountId: 'account-b',
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'other-fixture-user',
+      serverProductName: 'Nextcloud',
+      talkFeatures: const {},
+      createdAt: DateTime.utc(2026, 1, 1),
+    );
     final messages = <Map<String, Object?>>[];
     await database.batch((batch) {
       for (var index = 0; index < threadCount; index++) {
@@ -83,11 +92,43 @@ void main() {
                 threadId: threadId,
                 message: 'Thread $threadId',
                 isThread: true,
-                threadReplies: 0,
+                threadReplies: index == 0 ? 4 : 0,
               ),
             ),
           ),
         );
+        for (final (replyAccount, replyRoom, offset) in const [
+          ('account-a', 'rooma123', 2),
+          ('account-a', 'roomb123', 3),
+          ('account-b', 'rooma123', 4),
+        ]) {
+          final replyId = threadId + offset;
+          batch.insert(
+            database.cachedChatMessages,
+            CachedChatMessagesCompanion.insert(
+              accountId: replyAccount,
+              roomToken: replyRoom,
+              messageId: replyId,
+              actorType: 'users',
+              actorId: 'fixture-user',
+              actorDisplayName: 'Fixture User',
+              timestamp: replyId,
+              systemMessage: '',
+              messageType: 'comment',
+              referenceId: 'reference-$replyId',
+              displayText: 'Cached reply',
+              deleted: false,
+              threadId: Value(threadId),
+              rawJson: jsonEncode(
+                _messageJson(
+                  id: replyId,
+                  threadId: threadId,
+                  message: largeReply,
+                )..['token'] = replyRoom,
+              ),
+            ),
+          );
+        }
         messages.add(
           _messageJson(
             id: threadId + 1,
@@ -112,6 +153,7 @@ void main() {
     );
 
     expect(queryCounter.threadCountSelects, 1);
+    expect(queryCounter.threadCountJsonPayloads, threadCount);
     expect(queryCounter.directMessageInserts, 0);
     expect(queryCounter.messageInsertBatchExecutions, 1);
     expect(queryCounter.directMessageUpdates, 0);
@@ -127,7 +169,7 @@ void main() {
     expect(roots, hasLength(threadCount));
     for (final root in roots) {
       final wire = jsonDecode(root.rawJson) as Map<String, Object?>;
-      expect(wire['threadReplies'], 1);
+      expect(wire['threadReplies'], root.messageId == firstThreadId ? 4 : 2);
     }
   });
 
@@ -279,6 +321,7 @@ Map<String, Object?> _messageJson({
 final class _CachedThreadSelectCounter extends QueryInterceptor {
   bool enabled = false;
   int threadCountSelects = 0;
+  int threadCountJsonPayloads = 0;
   int directMessageInserts = 0;
   int messageInsertBatchExecutions = 0;
   int directMessageUpdates = 0;
@@ -289,7 +332,8 @@ final class _CachedThreadSelectCounter extends QueryInterceptor {
     QueryExecutor executor,
     String statement,
     List<Object?> args,
-  ) {
+  ) async {
+    final rows = await super.runSelect(executor, statement, args);
     final sql = statement.toLowerCase();
     if (enabled &&
         sql.contains('from "cached_chat_messages"') &&
@@ -297,8 +341,13 @@ final class _CachedThreadSelectCounter extends QueryInterceptor {
         sql.contains('"raw_json"') &&
         !sql.contains('"actor_type"')) {
       threadCountSelects++;
+      threadCountJsonPayloads += rows
+          .expand((row) => row.values)
+          .whereType<String>()
+          .where((value) => value.startsWith('{'))
+          .length;
     }
-    return super.runSelect(executor, statement, args);
+    return rows;
   }
 
   @override

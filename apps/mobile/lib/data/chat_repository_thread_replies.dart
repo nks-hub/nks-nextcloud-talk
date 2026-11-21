@@ -50,6 +50,14 @@ extension _ChatRepositoryThreadReplies on ChatRepository {
         ),
     };
     final cached = _database.cachedChatMessages;
+    final rootJson = CaseWhenExpression<String>(
+      cases: [
+        CaseWhen(
+          cached.messageId.equalsExp(cached.threadId),
+          then: cached.rawJson,
+        ),
+      ],
+    );
     final roomTokens = fallbackScopes.map((scope) => scope.roomToken).toSet();
     final threadIds = fallbackScopes.map((scope) => scope.threadId).toSet();
     final rows =
@@ -58,7 +66,7 @@ extension _ChatRepositoryThreadReplies on ChatRepository {
                 cached.roomToken,
                 cached.threadId,
                 cached.messageId,
-                cached.rawJson,
+                rootJson,
               ])
               ..where(
                 cached.accountId.equals(accountId) &
@@ -87,7 +95,7 @@ extension _ChatRepositoryThreadReplies on ChatRepository {
         continue;
       }
       if (messageId == threadId) {
-        final rawJson = row.read(cached.rawJson);
+        final rawJson = row.read(rootJson);
         accumulator.cachedCountFloor = rawJson == null
             ? null
             : _storedThreadReplyCount(rawJson);
