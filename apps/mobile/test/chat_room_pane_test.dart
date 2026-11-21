@@ -335,24 +335,13 @@ Future<void> _insertPendingOperation(
       );
 }
 
-/// Pumps until [condition] holds, letting the real database work in between
-/// run through [WidgetTester.runAsync]; the fake clock alone never drives it.
-Future<void> _pumpUntil(
-  WidgetTester tester,
-  bool Function() condition, {
-  int maxAttempts = 100,
-}) async {
-  for (var attempt = 0; attempt < maxAttempts; attempt++) {
-    if (condition()) {
-      return;
-    }
-    await tester.pump(const Duration(milliseconds: 10));
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 1)),
+Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) =>
+    pumpUntilCondition(
+      tester,
+      condition,
+      reason: 'the chat room pane did not reach the expected state',
+      step: const Duration(milliseconds: 1),
     );
-  }
-  fail('Condition was not reached');
-}
 
 Key _dayKey(int timestamp) {
   final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000).toLocal();
