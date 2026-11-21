@@ -52,6 +52,9 @@ Future<void> joinCallAndPresent(
 
 /// Opens the full-screen view of a joined call.
 Future<void> showCallScreen(BuildContext context, CallRoomKey key) {
+  if (!context.mounted || ModalRoute.of(context)?.isCurrent == false) {
+    return Future<void>.value();
+  }
   return Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       settings: const RouteSettings(name: '/call'),

@@ -217,6 +217,48 @@ _pushCallScreen(WidgetTester tester, {bool ended = false}) async {
 }
 
 void main() {
+  testWidgets('duplicate open requests push one call screen', (tester) async {
+    final controller = _FrozenJoinController(_joined());
+    final pictureInPicture = _FakePictureInPicture();
+    addTearDown(pictureInPicture.modes.close);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          callJoinControllerProvider.overrideWith(() => controller),
+          callParticipantNamesProvider.overrideWith(
+            (ref, key) async => const {},
+          ),
+          callPictureInPictureProvider.overrideWithValue(pictureInPicture),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: ElevatedButton(
+                key: const Key('open-call-twice'),
+                onPressed: () {
+                  unawaited(showCallScreen(context, _key));
+                  unawaited(showCallScreen(context, _key));
+                },
+                child: const Text('Open call'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('open-call-twice')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byType(CallScreen, skipOffstage: false),
+      findsOneWidget,
+      reason: 'one action from the covered route may push only one call view',
+    );
+  });
+
   testWidgets('expanded peer follows identity through reorder and removal', (
     tester,
   ) async {
