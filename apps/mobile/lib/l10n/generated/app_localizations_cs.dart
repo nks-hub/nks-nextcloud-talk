@@ -1684,7 +1684,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get diagnosticsSyncLastError => 'Poslední chyba';
 
   @override
-  String get diagnosticsPushSection => 'Push';
+  String get diagnosticsPushSection => 'Push oznámení';
 
   @override
   String get diagnosticsPushTransport => 'Cesta oznámení';

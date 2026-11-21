@@ -3,23 +3,24 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test(
-    'source and merged Android manifests keep application policies',
-    () async {
-      final project = Directory.current;
-      final android = Directory(
-        '${project.path}${Platform.pathSeparator}android',
-      );
-      final sourceManifest = File(
-        '${android.path}${Platform.pathSeparator}app${Platform.pathSeparator}'
-        'src${Platform.pathSeparator}main${Platform.pathSeparator}'
-        'AndroidManifest.xml',
-      );
-      _expectBackupDisabled(sourceManifest);
-      _expectPredictiveBackEnabled(sourceManifest);
-      _expectCallPictureInPicture(sourceManifest);
-      _expectScreenShareService(sourceManifest);
+  final project = Directory.current;
+  final android = Directory('${project.path}${Platform.pathSeparator}android');
+  final sourceManifest = File(
+    '${android.path}${Platform.pathSeparator}app${Platform.pathSeparator}'
+    'src${Platform.pathSeparator}main${Platform.pathSeparator}'
+    'AndroidManifest.xml',
+  );
 
+  test('source Android manifest keeps application policies', () {
+    _expectBackupDisabled(sourceManifest);
+    _expectPredictiveBackEnabled(sourceManifest);
+    _expectCallPictureInPicture(sourceManifest);
+    _expectScreenShareService(sourceManifest);
+  });
+
+  test(
+    'merged Android manifest keeps application policies',
+    () async {
       final wrapper = File(
         '${android.path}${Platform.pathSeparator}'
         '${Platform.isWindows ? 'gradlew.bat' : 'gradlew'}',
@@ -59,7 +60,33 @@ void main() {
     // before it merges anything. Two minutes is a warm-cache budget and timed
     // out on both the Ubuntu and the Windows runner.
     timeout: const Timeout(Duration(minutes: 10)),
+    skip: _androidSdkSkipReason(android),
   );
+}
+
+String? _androidSdkSkipReason(Directory android) {
+  final candidates = <String?>[
+    Platform.environment['ANDROID_HOME'],
+    Platform.environment['ANDROID_SDK_ROOT'],
+  ];
+  final properties = File(
+    '${android.path}${Platform.pathSeparator}local.properties',
+  );
+  if (properties.existsSync()) {
+    for (final line in properties.readAsLinesSync()) {
+      if (line.startsWith('sdk.dir=')) {
+        candidates.add(
+          line.substring('sdk.dir='.length).replaceAll('\\\\', '\\'),
+        );
+      }
+    }
+  }
+  if (candidates.whereType<String>().any(
+    (path) => path.isNotEmpty && Directory(path).existsSync(),
+  )) {
+    return null;
+  }
+  return 'Android SDK is not available; source manifest checks still run.';
 }
 
 void _expectPredictiveBackEnabled(File manifest) {

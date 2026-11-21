@@ -38,13 +38,16 @@ void main() {
   tearDown(() async {
     blocked.dispose();
     // An answer is written to disk without being awaited, and on Windows a
-    // file still open cannot be deleted; a loaded machine finishes late.
-    for (var attempt = 1; ; attempt++) {
+    // file still open cannot be deleted. Use the same real deadline as the
+    // shared widget waits because a loaded full-suite worker can finish more
+    // than two seconds after the test body.
+    final deadline = DateTime.now().add(const Duration(seconds: 30));
+    while (true) {
       try {
         memory.deleteSync(recursive: true);
         return;
       } on FileSystemException {
-        if (attempt == 40) {
+        if (DateTime.now().isAfter(deadline)) {
           rethrow;
         }
         await Future<void>.delayed(const Duration(milliseconds: 50));

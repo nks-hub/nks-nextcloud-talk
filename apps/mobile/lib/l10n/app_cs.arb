@@ -579,7 +579,7 @@
   "diagnosticsSyncSection": "Synchronizace",
   "diagnosticsSyncLastSuccess": "Poslední úspěšná synchronizace",
   "diagnosticsSyncLastError": "Poslední chyba",
-  "diagnosticsPushSection": "Push",
+  "diagnosticsPushSection": "Push oznámení",
   "diagnosticsPushTransport": "Cesta oznámení",
   "diagnosticsPushTransportProxy": "Proxy",
   "diagnosticsPushTransportWebPush": "Web Push",
