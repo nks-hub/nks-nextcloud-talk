@@ -353,6 +353,113 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       expect((capabilityReads, chatReads, posts), requestsAfterDelivery);
     });
 
+    test('an in-flight stale retry stops after external delivery', () async {
+      var capabilityReads = 0;
+      var chatReads = 0;
+      var posts = 0;
+      final secondPostStarted = Completer<void>();
+      final releaseSecondPost = Completer<void>();
+      final retryDeliveryQueued = Completer<void>();
+      final retryEnteredLane = Completer<void>();
+      final releaseRetryLane = Completer<void>();
+      final api = HttpNextcloudApi(
+        capabilityCacheTtl: const Duration(milliseconds: 100),
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            capabilityReads++;
+            return http.Response(
+              jsonEncode(
+                _chatCapabilities(talkFeatures: _sendFeatures.toList()),
+              ),
+              200,
+            );
+          }
+          if (request.method == 'GET') {
+            chatReads++;
+            return http.Response('', 304);
+          }
+          posts++;
+          if (posts == 1) {
+            return http.Response(
+              '<html>Rate limited before the save</html>',
+              429,
+              headers: const <String, String>{'retry-after': '1'},
+            );
+          }
+          secondPostStarted.complete();
+          await releaseSecondPost.future;
+          return _acceptedSend(request, 122);
+        }),
+      );
+      addTearDown(() {
+        if (!releaseSecondPost.isCompleted) {
+          releaseSecondPost.complete();
+        }
+        if (!releaseRetryLane.isCompleted) {
+          releaseRetryLane.complete();
+        }
+        api.close();
+      });
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+        retryDeliveryQueuedForTesting: () {
+          retryDeliveryQueued.complete();
+        },
+        holdRetryDeliveryLaneForTesting: () async {
+          retryEnteredLane.complete();
+          await releaseRetryLane.future;
+        },
+      );
+      addTearDown(service.close);
+      await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'Complete while retry is in flight',
+      );
+      await _waitForTextSends(
+        database,
+        (rows) => rows.single.outboxState == 'retryable',
+      );
+      await (database.update(database.textSendOperations)
+            ..where((row) => row.outboxState.equals('retryable')))
+          .write(const TextSendOperationsCompanion(nextAttemptAt: Value(0)));
+
+      final externalDrain = service.drainPendingSends();
+      await secondPostStarted.future;
+      await retryDeliveryQueued.future.timeout(const Duration(seconds: 3));
+      releaseSecondPost.complete();
+      await retryEnteredLane.future.timeout(const Duration(seconds: 3));
+      await externalDrain;
+      await _waitForTextSends(
+        database,
+        (rows) => rows.single.outboxState == 'completed',
+      );
+      final requestsBeforeStaleDrain = (capabilityReads, chatReads, posts);
+      await chat.recordRoomError(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        threadId: null,
+        errorCode: ChatServiceError.serviceUnavailable.name,
+      );
+      releaseRetryLane.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+
+      final scope = await chat.getScope(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        threadId: null,
+      );
+      expect(scope?.lastSyncError, ChatServiceError.serviceUnavailable.name);
+      expect((capabilityReads, chatReads, posts), requestsBeforeStaleDrain);
+      expect(capabilityReads, greaterThanOrEqualTo(2));
+      expect(posts, 2);
+    });
+
     test(
       'cancelling a retry-delayed head immediately resumes the next send',
       () async {

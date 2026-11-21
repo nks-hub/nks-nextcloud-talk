@@ -55,7 +55,11 @@ final class ChatService {
     Uuid? uuid,
     int absenceGraceSeconds = textSendAbsenceGraceSeconds,
     void Function(bool active)? reportSendActivity,
+    void Function()? retryDeliveryQueuedForTesting,
+    Future<void> Function()? holdRetryDeliveryLaneForTesting,
   }) : _reportSendActivity = reportSendActivity,
+       _retryDeliveryQueuedForTesting = retryDeliveryQueuedForTesting,
+       _holdRetryDeliveryLaneForTesting = holdRetryDeliveryLaneForTesting,
        _accounts = accounts,
        _chat = chat,
        _credentials = credentials,
@@ -85,6 +89,8 @@ final class ChatService {
   /// delivered or given up for now, so the platform can keep the process
   /// alive in between. A send waiting for its retry holds nothing.
   final void Function(bool active)? _reportSendActivity;
+  final void Function()? _retryDeliveryQueuedForTesting;
+  final Future<void> Function()? _holdRetryDeliveryLaneForTesting;
   int _sendsInFlight = 0;
 
   void _sendActivity(int change) {
@@ -113,7 +119,8 @@ final class ChatService {
   /// The pending retry of a send that never left, or the pending check of
   /// one that may have, one per room: only the oldest undelivered send of a
   /// room is ever waiting for either.
-  final Map<String, ({String? operationId, Timer timer})> _retryTimers = {};
+  final Map<String, _ChatRetryWake> _retryTimers = {};
+  int _retryGeneration = 0;
   final Set<_ChatReadAdmission> _readAdmissions = {};
   final _readerWakes =
       StreamController<({String accountId, String roomToken})>.broadcast();
@@ -125,10 +132,9 @@ final class ChatService {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    for (final retry in _retryTimers.values) {
-      retry.timer.cancel();
+    for (final entry in _retryTimers.entries.toList(growable: false)) {
+      _cancelRetryWake(entry.key, entry.value);
     }
-    _retryTimers.clear();
     for (final binding in _liveBindings.toList()) {
       binding.close();
     }
@@ -212,10 +218,12 @@ final class ChatService {
         .whereType<Future<void>>()
         .toList(growable: true);
     final prefix = '$accountId\u0000';
-    _retryTimers.removeWhere((key, retry) {
-      if (key.startsWith(prefix)) retry.timer.cancel();
-      return key.startsWith(prefix);
-    });
+    for (final entry
+        in _retryTimers.entries
+            .where((entry) => entry.key.startsWith(prefix))
+            .toList(growable: false)) {
+      _cancelRetryWake(entry.key, entry.value);
+    }
     active.addAll(
       _liveNetworkPolls.entries
           .where((entry) => entry.key.startsWith(prefix))
@@ -552,10 +560,28 @@ final class ChatService {
     _PreparedChat prepared, {
     int? threadId,
     bool clearsRoomError = true,
+    _ChatRetryWake? retryWake,
   }) async {
     final accountId = prepared.account.id;
     final roomToken = prepared.room.token.value;
     try {
+      if (retryWake != null) {
+        final processed = await _withRoomErrorPersistence<bool>(
+          accountId,
+          roomToken,
+          () => _processPendingWithRetryGuard(prepared, retryWake),
+          threadId: threadId,
+          clearsRoomError: false,
+        );
+        if (processed) {
+          await _chat.clearRoomError(
+            accountId: accountId,
+            roomToken: roomToken,
+            threadId: threadId,
+          );
+        }
+        return;
+      }
       await _withRoomErrorPersistence(
         accountId,
         roomToken,
@@ -717,37 +743,70 @@ final class ChatService {
       return;
     }
     final key = _roomKey(prepared.account.id, prepared.room.token.value);
-    _retryTimers.remove(key)?.timer.cancel();
-    late final Timer timer;
-    timer = Timer(Duration(seconds: delaySeconds < 1 ? 1 : delaySeconds), () {
-      if (!identical(_retryTimers[key]?.timer, timer)) {
-        return;
-      }
-      _retryTimers.remove(key);
-      unawaited(_retryDelivery(prepared));
-    });
-    _retryTimers[key] = (operationId: operationId, timer: timer);
+    _cancelRetryWake(key, _retryTimers[key]);
+    final retry = _ChatRetryWake(
+      generation: ++_retryGeneration,
+      operationId: operationId,
+    );
+    retry.timer = Timer(
+      Duration(seconds: delaySeconds < 1 ? 1 : delaySeconds),
+      () {
+        if (!_retryWakeIsCurrent(key, retry)) {
+          return;
+        }
+        retry.running = true;
+        unawaited(_retryDelivery(prepared, key, retry));
+      },
+    );
+    _retryTimers[key] = retry;
+  }
+
+  bool _retryWakeIsCurrent(String key, _ChatRetryWake retry) {
+    final current = _retryTimers[key];
+    return !retry.cancelled &&
+        identical(current, retry) &&
+        current?.generation == retry.generation;
   }
 
   /// Prepared afresh, because the capabilities or the password may have
   /// changed while the timer ran and a claim made with the old ones is
   /// refused. If the room cannot be prepared right now the old state still
   /// keeps the retries going.
-  Future<void> _retryDelivery(_PreparedChat stale) async {
-    if (await _verifyPendingAbsence(stale)) {
-      return;
-    }
-    var prepared = stale;
+  Future<void> _retryDelivery(
+    _PreparedChat stale,
+    String key,
+    _ChatRetryWake retry,
+  ) async {
     try {
-      prepared = await _prepare(
-        stale.account.id,
-        stale.room.token.value,
-        allowPersistedCapabilitiesForSend: true,
-      );
-    } on Object {
-      // Falls back to [stale].
+      if (!_retryWakeIsCurrent(key, retry)) {
+        return;
+      }
+      if (await _verifyPendingAbsence(stale) ||
+          !_retryWakeIsCurrent(key, retry)) {
+        return;
+      }
+      var prepared = stale;
+      try {
+        prepared = await _prepare(
+          stale.account.id,
+          stale.room.token.value,
+          allowPersistedCapabilitiesForSend: true,
+        );
+      } on Object {
+        // Falls back to [stale].
+      }
+      if (!_retryWakeIsCurrent(key, retry)) {
+        return;
+      }
+      final delivery = _deliverPending(prepared, retryWake: retry);
+      _retryDeliveryQueuedForTesting?.call();
+      await delivery;
+    } finally {
+      retry.running = false;
+      if (identical(_retryTimers[key], retry)) {
+        _retryTimers.remove(key);
+      }
     }
-    await _deliverPending(prepared);
   }
 
   /// Removes a pending outbox operation. Returns `false` when the send may
@@ -762,7 +821,7 @@ final class ChatService {
     required String operationId,
   }) async {
     final roomKey = _roomKey(accountId, roomToken);
-    ({String? operationId, Timer timer})? retryWake;
+    _ChatRetryWake? retryWake;
     final cancelled = await _serializeRoom<bool>(
       _deliveryKey(roomKey),
       () async {
@@ -793,7 +852,7 @@ final class ChatService {
   Future<void> _resumePendingAfterCancel(
     String accountId,
     String roomToken, {
-    required ({String? operationId, Timer timer})? retryWake,
+    required _ChatRetryWake? retryWake,
   }) async {
     final roomKey = _roomKey(accountId, roomToken);
     try {
@@ -817,16 +876,15 @@ final class ChatService {
     }
   }
 
-  void _cancelRetryWake(
-    String roomKey,
-    ({String? operationId, Timer timer})? retry,
-  ) {
-    if (retry == null ||
-        !identical(_retryTimers[roomKey]?.timer, retry.timer)) {
+  void _cancelRetryWake(String roomKey, _ChatRetryWake? retry) {
+    if (retry == null || !identical(_retryTimers[roomKey], retry)) {
       return;
     }
-    _retryTimers.remove(roomKey);
+    retry.cancelled = true;
     retry.timer.cancel();
+    if (!retry.running) {
+      _retryTimers.remove(roomKey);
+    }
   }
 
   void _cancelRetryWakeForOperation(String roomKey, String operationId) {
@@ -1145,11 +1203,30 @@ final class ChatService {
   ///
   /// Serialized on the room's delivery lane, which callers may enter while
   /// holding the room lane but never the other way round.
-  Future<void> _processPending(_PreparedChat prepared) {
-    final key = _deliveryKey(
-      _roomKey(prepared.account.id, prepared.room.token.value),
-    );
-    return _serializeRoom<void>(key, () async {
+  Future<void> _processPending(_PreparedChat prepared) async {
+    await _processPendingInLane(prepared);
+  }
+
+  Future<bool> _processPendingWithRetryGuard(
+    _PreparedChat prepared,
+    _ChatRetryWake retry,
+  ) {
+    return _processPendingInLane(prepared, retryWake: retry);
+  }
+
+  Future<bool> _processPendingInLane(
+    _PreparedChat prepared, {
+    _ChatRetryWake? retryWake,
+  }) {
+    final roomKey = _roomKey(prepared.account.id, prepared.room.token.value);
+    final key = _deliveryKey(roomKey);
+    return _serializeRoom<bool>(key, () async {
+      if (retryWake != null) {
+        await _holdRetryDeliveryLaneForTesting?.call();
+        if (!_retryWakeIsCurrent(roomKey, retryWake)) {
+          return false;
+        }
+      }
       while (true) {
         _ensureAccountActive(prepared.account.id);
         final claim = await _chat.claimNextTextSend(
@@ -1160,12 +1237,12 @@ final class ChatService {
           now: _nowSeconds(),
         );
         if (claim == null) {
-          return;
+          return true;
         }
         _ensureAccountActive(prepared.account.id);
         if (!await _transmitClaim(prepared, claim)) {
           unawaited(_deliverWithCurrentCredentials(prepared));
-          return;
+          return true;
         }
       }
     });
@@ -1391,4 +1468,14 @@ final class ChatService {
       }
     }
   }
+}
+
+final class _ChatRetryWake {
+  _ChatRetryWake({required this.generation, required this.operationId});
+
+  final int generation;
+  final String? operationId;
+  late final Timer timer;
+  bool running = false;
+  bool cancelled = false;
 }
