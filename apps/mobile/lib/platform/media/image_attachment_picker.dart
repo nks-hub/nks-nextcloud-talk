@@ -66,6 +66,7 @@ abstract interface class MultipleImageSelectionBackend {
 typedef OpenAttachmentFile = Future<XFile?> Function({required bool imageOnly});
 typedef PickAttachmentImage =
     Future<XFile?> Function(platform_picker.ImageSource source);
+typedef MeasureAttachmentFile = Future<int> Function(XFile file);
 
 /// Photo batches use the native library on phones and file_selector on desktop.
 final class PlatformAttachmentSelectionBackend
@@ -74,13 +75,15 @@ final class PlatformAttachmentSelectionBackend
     : _targetPlatform = null,
       _isWeb = null,
       _openFile = null,
-      _pickImage = null;
+      _pickImage = null,
+      _measureFile = null;
 
   const PlatformAttachmentSelectionBackend._testing({
     required this._targetPlatform,
     required this._isWeb,
     required this._openFile,
     required this._pickImage,
+    required this._measureFile,
   });
 
   @visibleForTesting
@@ -89,12 +92,16 @@ final class PlatformAttachmentSelectionBackend
     required bool isWeb,
     required OpenAttachmentFile openFile,
     required PickAttachmentImage pickImage,
+    MeasureAttachmentFile? measureFile,
   }) => PlatformAttachmentSelectionBackend._testing(
     targetPlatform: targetPlatform,
     isWeb: isWeb,
     openFile: openFile,
     pickImage: pickImage,
+    measureFile: measureFile,
   );
+
+  static const _metadataConcurrency = 8;
 
   static const _imageTypes = XTypeGroup(
     label: 'Images',
@@ -127,6 +134,7 @@ final class PlatformAttachmentSelectionBackend
   final bool? _isWeb;
   final OpenAttachmentFile? _openFile;
   final PickAttachmentImage? _pickImage;
+  final MeasureAttachmentFile? _measureFile;
 
   @override
   Future<List<ImageSelection>> selectImages() async {
@@ -144,15 +152,7 @@ final class PlatformAttachmentSelectionBackend
                   platform == TargetPlatform.android)
           ? await platform_picker.ImagePicker().pickMultiImage()
           : await openFiles(acceptedTypeGroups: const [_imageTypes]);
-      return [
-        for (final file in files)
-          ImageSelection(
-            displayName: file.name,
-            declaredMimeType: file.mimeType,
-            byteLength: await file.length(),
-            openRead: ({int? start, int? end}) => file.openRead(start, end),
-          ),
-      ];
+      return _describeFiles(files);
     } on PlatformException catch (error) {
       throw ImageAttachmentPickerException(
         error.code == 'photo_access_denied' ||
@@ -165,6 +165,31 @@ final class PlatformAttachmentSelectionBackend
         ImageAttachmentPickerError.galleryUnavailable,
       );
     }
+  }
+
+  Future<List<ImageSelection>> _describeFiles(List<XFile> files) async {
+    final selections = List<ImageSelection?>.filled(files.length, null);
+    final measure = _measureFile ?? (XFile file) => file.length();
+    var nextFile = 0;
+
+    Future<void> describeNext() async {
+      while (nextFile < files.length) {
+        final index = nextFile++;
+        final file = files[index];
+        selections[index] = ImageSelection(
+          displayName: file.name,
+          declaredMimeType: file.mimeType,
+          byteLength: await measure(file),
+          openRead: ({int? start, int? end}) => file.openRead(start, end),
+        );
+      }
+    }
+
+    final workerCount = files.length < _metadataConcurrency
+        ? files.length
+        : _metadataConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => describeNext()));
+    return selections.cast<ImageSelection>();
   }
 
   @override

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
@@ -58,6 +59,83 @@ void main() {
         'photo-2.png',
         'photo-3.png',
       ]);
+    });
+
+    test('selected photo metadata uses bounded concurrency', () async {
+      const fileCount = 10;
+      final paths = List.generate(
+        fileCount,
+        (index) => File.fromUri(root.uri.resolve('photo-$index.png')).path,
+      );
+      final api = _RecordingAndroidPicker(paths);
+      final previous = ImagePickerPlatform.instance;
+      ImagePickerPlatform.instance = ImagePickerAndroid(api: api);
+      addTearDown(() => ImagePickerPlatform.instance = previous);
+      final gates = <Completer<void>>[];
+      final firstMeasurementStarted = Completer<void>();
+      var inFlight = 0;
+      var peakInFlight = 0;
+      final backend = PlatformAttachmentSelectionBackend.forTesting(
+        targetPlatform: TargetPlatform.android,
+        isWeb: false,
+        openFile: ({required imageOnly}) async =>
+            throw StateError('Single-file picker used'),
+        pickImage: (_) async => throw StateError('Single-image picker used'),
+        measureFile: (file) async {
+          final gate = Completer<void>();
+          gates.add(gate);
+          if (!firstMeasurementStarted.isCompleted) {
+            firstMeasurementStarted.complete();
+          }
+          inFlight++;
+          peakInFlight = max(peakInFlight, inFlight);
+          await gate.future;
+          inFlight--;
+          return file.name.length;
+        },
+      );
+      final selection = backend.selectImages();
+
+      Future<List<ImageSelection>> releaseAll() async {
+        while (gates.length < fileCount) {
+          for (final gate in gates) {
+            if (!gate.isCompleted) {
+              gate.complete();
+            }
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+        }
+        for (final gate in gates) {
+          if (!gate.isCompleted) {
+            gate.complete();
+          }
+        }
+        return selection;
+      }
+
+      addTearDown(releaseAll);
+      await firstMeasurementStarted.future;
+      for (var turn = 0; turn < 20 && gates.length < 8; turn++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(gates, hasLength(8));
+      expect(peakInFlight, 8);
+
+      gates.first.complete();
+      for (var turn = 0; turn < 20 && gates.length < 9; turn++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(gates, hasLength(9));
+      expect(peakInFlight, 8);
+
+      final selected = await releaseAll();
+      expect(selected.map((image) => image.displayName), [
+        for (var index = 0; index < fileCount; index++) 'photo-$index.png',
+      ]);
+      expect(
+        selected.map((image) => image.byteLength),
+        selected.map((image) => image.displayName.length),
+      );
     });
 
     test('iOS gallery opens the native photo library', () async {
