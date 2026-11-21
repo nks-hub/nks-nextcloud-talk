@@ -354,6 +354,105 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       },
     );
 
+    test('a failed cancel resume keeps the original retry wake', () async {
+      var capabilityReads = 0;
+      var failNextCapabilityRead = false;
+      var resumeFailures = 0;
+      var posts = 0;
+      var apiNow = DateTime.utc(2026, 1, 1);
+      final api = HttpNextcloudApi(
+        capabilityCacheTtl: const Duration(seconds: 1),
+        clock: () => apiNow,
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            capabilityReads++;
+            if (failNextCapabilityRead) {
+              failNextCapabilityRead = false;
+              resumeFailures++;
+              throw http.ClientException(
+                'Synthetic capability outage',
+                request.url,
+              );
+            }
+            return http.Response(
+              jsonEncode(
+                _chatCapabilities(talkFeatures: _sendFeatures.toList()),
+              ),
+              200,
+            );
+          }
+          if (request.method == 'GET') {
+            return http.Response('', 304);
+          }
+          posts++;
+          if (posts == 1) {
+            return http.Response(
+              '<html>Rate limited before the save</html>',
+              429,
+              headers: const <String, String>{'retry-after': '1'},
+            );
+          }
+          return _acceptedSend(request, 121);
+        }),
+      );
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      addTearDown(service.close);
+      await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+
+      final blockedOperationId = await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'Cancel before retry',
+      );
+      await _waitForTextSends(
+        database,
+        (rows) => rows.length == 1 && rows.single.outboxState == 'retryable',
+      );
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'Retry wake must send this',
+      );
+      await _waitForTextSends(
+        database,
+        (rows) =>
+            rows.length == 2 &&
+            rows.any((row) => row.outboxState == 'retryable') &&
+            rows.any((row) => row.outboxState == 'queued'),
+      );
+
+      apiNow = apiNow.add(const Duration(seconds: 2));
+      await accounts.updateTalkFeatures('account-a', const {
+        ..._sendFeatures,
+        'chat-replies',
+      });
+      failNextCapabilityRead = true;
+      expect(
+        await service.cancelText(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          operationId: blockedOperationId,
+        ),
+        isTrue,
+      );
+      await _waitForChatCondition(() => resumeFailures == 1);
+      final delivered = await _waitForTextSendsWithin(
+        database,
+        const Duration(seconds: 3),
+        (rows) => rows.length == 1 && rows.single.outboxState == 'completed',
+      );
+
+      expect(capabilityReads, 3);
+      expect(posts, 2);
+      expect(delivered.single.message, 'Retry wake must send this');
+    });
+
     for (final lost in const ['timed out', 'was reset']) {
       test('a send that $lost after its body left is not repeated inside '
           'its grace period', () async {

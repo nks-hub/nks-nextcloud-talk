@@ -762,6 +762,7 @@ final class ChatService {
     required String operationId,
   }) async {
     final roomKey = _roomKey(accountId, roomToken);
+    ({String? operationId, Timer timer})? retryWake;
     final cancelled = await _serializeRoom<bool>(
       _deliveryKey(roomKey),
       () async {
@@ -771,8 +772,7 @@ final class ChatService {
         );
         final retry = _retryTimers[roomKey];
         if (cancelled && retry?.operationId == operationId) {
-          _retryTimers.remove(roomKey);
-          retry!.timer.cancel();
+          retryWake = retry;
         }
         return cancelled;
       },
@@ -783,6 +783,7 @@ final class ChatService {
         _resumePendingAfterCancel(
           accountId,
           roomToken,
+          retryWake: retryWake,
         ).whenComplete(() => _sendActivity(-1)),
       );
     }
@@ -791,13 +792,16 @@ final class ChatService {
 
   Future<void> _resumePendingAfterCancel(
     String accountId,
-    String roomToken,
-  ) async {
+    String roomToken, {
+    required ({String? operationId, Timer timer})? retryWake,
+  }) async {
+    final roomKey = _roomKey(accountId, roomToken);
     try {
       final pending = await _chat.roomsWithPendingTextSends();
       if (!pending.any(
         (room) => room.accountId == accountId && room.roomToken == roomToken,
       )) {
+        _cancelRetryWake(roomKey, retryWake);
         return;
       }
       final prepared = await _prepare(
@@ -806,10 +810,23 @@ final class ChatService {
         allowPersistedCapabilitiesForSend: true,
         preferPersistedCapabilities: true,
       );
+      _cancelRetryWake(roomKey, retryWake);
       await _deliverPending(prepared, clearsRoomError: false);
     } on Object {
       // The durable row remains for its ordinary retry or the next wake.
     }
+  }
+
+  void _cancelRetryWake(
+    String roomKey,
+    ({String? operationId, Timer timer})? retry,
+  ) {
+    if (retry == null ||
+        !identical(_retryTimers[roomKey]?.timer, retry.timer)) {
+      return;
+    }
+    _retryTimers.remove(roomKey);
+    retry.timer.cancel();
   }
 
   Future<bool?> _validatedCachedRootIsNamedThread({
