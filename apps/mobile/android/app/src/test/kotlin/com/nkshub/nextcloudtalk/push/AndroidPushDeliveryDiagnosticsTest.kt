@@ -53,13 +53,13 @@ class AndroidPushDeliveryDiagnosticsTest {
             store.read(PushDeliveryTransport.PROXY, "account-a"),
         )
         val otherAccount = store.read(PushDeliveryTransport.PROXY, "account-b")
-        assertEquals(100, otherAccount.lastTransportReceivedAtMillis)
+        assertEquals(100L, otherAccount.lastTransportReceivedAtMillis)
         assertNull(otherAccount.lastDecryptedAtMillis)
         assertNull(otherAccount.displayOutcome)
         assertEquals("decryption-failed", otherAccount.transportFailureClass)
         assertNull(otherAccount.accountFailureClass)
         assertEquals(
-            200,
+            200L,
             store.read(PushDeliveryTransport.WEB_PUSH, "account-a").lastTransportReceivedAtMillis,
         )
     }
@@ -76,5 +76,73 @@ class AndroidPushDeliveryDiagnosticsTest {
             .all
         assertFalse(values.keys.any { it.contains("private-account-id") })
         assertFalse(values.values.any { it.toString().contains("private-account-id") })
+    }
+
+    @Test
+    fun wronglyTypedTimestampsAreRepairedWithoutBlockingWrites() {
+        val preferences = context.getSharedPreferences(
+            AndroidPushDeliveryDiagnosticsStore.PREFERENCES,
+            Context.MODE_PRIVATE,
+        )
+        preferences.edit().putString("proxy.receivedAt", "bad").commit()
+
+        store.recordReceived(PushDeliveryTransport.PROXY, 100)
+        assertEquals(100L, preferences.getLong("proxy.receivedAt", -1))
+
+        store.recordDisplay(
+            PushDeliveryTransport.PROXY,
+            "account-a",
+            PushDisplayOutcome.POSTED,
+            110,
+        )
+        val displayAt = preferences.all.keys.single { it.endsWith(".displayAt") }
+        preferences.edit().putString(displayAt, "bad").commit()
+        store.recordDisplay(
+            PushDeliveryTransport.PROXY,
+            "account-a",
+            PushDisplayOutcome.SUPPRESSED_OPEN_ROOM,
+            120,
+        )
+        assertEquals(120L, preferences.getLong(displayAt, -1))
+
+        store.recordFailure(PushDeliveryTransport.PROXY, "first", 125)
+        preferences.edit().putString("proxy.failureAt", "bad").commit()
+        store.recordFailure(PushDeliveryTransport.PROXY, "second", 130)
+        assertEquals(130L, preferences.getLong("proxy.failureAt", -1))
+    }
+
+    @Test
+    fun wronglyTypedStringsDoNotBreakReadingAndAreRepairedByTheNextWrite() {
+        val preferences = context.getSharedPreferences(
+            AndroidPushDeliveryDiagnosticsStore.PREFERENCES,
+            Context.MODE_PRIVATE,
+        )
+        store.recordDisplay(
+            PushDeliveryTransport.PROXY,
+            "account-a",
+            PushDisplayOutcome.POSTED,
+            100,
+        )
+        store.recordFailure(PushDeliveryTransport.PROXY, "first", 110)
+        val outcome = preferences.all.keys.single { it.endsWith(".displayOutcome") }
+        preferences.edit()
+            .putLong(outcome, 1)
+            .putLong("proxy.failureClass", 2)
+            .commit()
+
+        val damaged = store.read(PushDeliveryTransport.PROXY, "account-a")
+        assertNull(damaged.displayOutcome)
+        assertNull(damaged.transportFailureClass)
+
+        store.recordDisplay(
+            PushDeliveryTransport.PROXY,
+            "account-a",
+            PushDisplayOutcome.SUPPRESSED_OPEN_ROOM,
+            120,
+        )
+        store.recordFailure(PushDeliveryTransport.PROXY, "second", 130)
+        val repaired = store.read(PushDeliveryTransport.PROXY, "account-a")
+        assertEquals(PushDisplayOutcome.SUPPRESSED_OPEN_ROOM, repaired.displayOutcome)
+        assertEquals("second", repaired.transportFailureClass)
     }
 }

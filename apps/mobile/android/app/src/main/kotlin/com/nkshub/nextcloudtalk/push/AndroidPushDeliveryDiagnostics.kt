@@ -58,7 +58,9 @@ internal class AndroidPushDeliveryDiagnosticsStore(context: Context) {
     )
 
     fun recordReceived(transport: PushDeliveryTransport, atMillis: Long = now()) {
-        updateTimestamp(transportKey(transport, RECEIVED_AT), atMillis)
+        bestEffort {
+            updateTimestamp(transportKey(transport, RECEIVED_AT), atMillis)
+        }
     }
 
     fun recordDecrypted(
@@ -66,7 +68,9 @@ internal class AndroidPushDeliveryDiagnosticsStore(context: Context) {
         accountId: String,
         atMillis: Long = now(),
     ) {
-        updateTimestamp(accountKey(accountPrefix(transport, accountId), DECRYPTED_AT), atMillis)
+        bestEffort {
+            updateTimestamp(accountKey(accountPrefix(transport, accountId), DECRYPTED_AT), atMillis)
+        }
     }
 
     fun recordDisplay(
@@ -75,16 +79,18 @@ internal class AndroidPushDeliveryDiagnosticsStore(context: Context) {
         outcome: PushDisplayOutcome,
         atMillis: Long = now(),
     ) {
-        val prefix = accountPrefix(transport, accountId)
-        val timestampKey = accountKey(prefix, DISPLAY_AT)
-        synchronized(lock) {
-            if (atMillis < preferences.getLong(timestampKey, Long.MIN_VALUE)) {
-                return
+        bestEffort {
+            val prefix = accountPrefix(transport, accountId)
+            val timestampKey = accountKey(prefix, DISPLAY_AT)
+            synchronized(lock) {
+                if (atMillis < storedLong(timestampKey)) {
+                    return@synchronized
+                }
+                preferences.edit()
+                    .putLong(timestampKey, atMillis)
+                    .putString(accountKey(prefix, DISPLAY_OUTCOME), outcome.name)
+                    .apply()
             }
-            preferences.edit()
-                .putLong(timestampKey, atMillis)
-                .putString(accountKey(prefix, DISPLAY_OUTCOME), outcome.name)
-                .apply()
         }
     }
 
@@ -94,47 +100,52 @@ internal class AndroidPushDeliveryDiagnosticsStore(context: Context) {
         atMillis: Long = now(),
         accountId: String? = null,
     ) {
-        val prefix = accountId?.let { accountPrefix(transport, it) }
-        val timestampKey = prefix?.let { accountKey(it, FAILURE_AT) }
-            ?: transportKey(transport, FAILURE_AT)
-        val classKey = prefix?.let { accountKey(it, FAILURE_CLASS) }
-            ?: transportKey(transport, FAILURE_CLASS)
-        synchronized(lock) {
-            if (atMillis < preferences.getLong(timestampKey, Long.MIN_VALUE)) {
-                return
+        bestEffort {
+            val prefix = accountId?.let { accountPrefix(transport, it) }
+            val timestampKey = prefix?.let { accountKey(it, FAILURE_AT) }
+                ?: transportKey(transport, FAILURE_AT)
+            val classKey = prefix?.let { accountKey(it, FAILURE_CLASS) }
+                ?: transportKey(transport, FAILURE_CLASS)
+            synchronized(lock) {
+                if (atMillis < storedLong(timestampKey)) {
+                    return@synchronized
+                }
+                preferences.edit()
+                    .putLong(timestampKey, atMillis)
+                    .putString(classKey, failureClass)
+                    .apply()
             }
-            preferences.edit()
-                .putLong(timestampKey, atMillis)
-                .putString(classKey, failureClass)
-                .apply()
         }
     }
 
     fun read(
         transport: PushDeliveryTransport,
         accountId: String,
-    ): PushDeliveryDiagnostics = synchronized(lock) {
-        val prefix = accountPrefix(transport, accountId)
-        val globalFailure = failure(
-            transportKey(transport, FAILURE_AT),
-            transportKey(transport, FAILURE_CLASS),
-        )
-        val accountFailure = failure(
-            accountKey(prefix, FAILURE_AT),
-            accountKey(prefix, FAILURE_CLASS),
-        )
-        PushDeliveryDiagnostics(
-            lastTransportReceivedAtMillis = timestamp(transportKey(transport, RECEIVED_AT)),
-            lastDecryptedAtMillis = timestamp(accountKey(prefix, DECRYPTED_AT)),
-            lastDisplayAtMillis = timestamp(accountKey(prefix, DISPLAY_AT)),
-            displayOutcome = preferences
-                .getString(accountKey(prefix, DISPLAY_OUTCOME), null)
-                ?.let { runCatching { PushDisplayOutcome.valueOf(it) }.getOrNull() },
-            lastTransportFailureAtMillis = globalFailure?.first,
-            transportFailureClass = globalFailure?.second,
-            lastAccountFailureAtMillis = accountFailure?.first,
-            accountFailureClass = accountFailure?.second,
-        )
+    ): PushDeliveryDiagnostics = try {
+        synchronized(lock) {
+            val prefix = accountPrefix(transport, accountId)
+            val globalFailure = failure(
+                transportKey(transport, FAILURE_AT),
+                transportKey(transport, FAILURE_CLASS),
+            )
+            val accountFailure = failure(
+                accountKey(prefix, FAILURE_AT),
+                accountKey(prefix, FAILURE_CLASS),
+            )
+            PushDeliveryDiagnostics(
+                lastTransportReceivedAtMillis = timestamp(transportKey(transport, RECEIVED_AT)),
+                lastDecryptedAtMillis = timestamp(accountKey(prefix, DECRYPTED_AT)),
+                lastDisplayAtMillis = timestamp(accountKey(prefix, DISPLAY_AT)),
+                displayOutcome = storedString(accountKey(prefix, DISPLAY_OUTCOME))
+                    ?.let { runCatching { PushDisplayOutcome.valueOf(it) }.getOrNull() },
+                lastTransportFailureAtMillis = globalFailure?.first,
+                transportFailureClass = globalFailure?.second,
+                lastAccountFailureAtMillis = accountFailure?.first,
+                accountFailureClass = accountFailure?.second,
+            )
+        }
+    } catch (_: RuntimeException) {
+        PushDeliveryDiagnostics()
     }
 
     internal fun clearForTests() {
@@ -143,20 +154,39 @@ internal class AndroidPushDeliveryDiagnosticsStore(context: Context) {
 
     private fun updateTimestamp(key: String, atMillis: Long) {
         synchronized(lock) {
-            if (atMillis >= preferences.getLong(key, Long.MIN_VALUE)) {
+            if (atMillis >= storedLong(key)) {
                 preferences.edit().putLong(key, atMillis).apply()
             }
         }
     }
 
-    private fun timestamp(key: String): Long? = preferences
-        .getLong(key, Long.MIN_VALUE)
+    private fun timestamp(key: String): Long? = storedLong(key)
         .takeUnless { it == Long.MIN_VALUE }
 
     private fun failure(timestampKey: String, classKey: String): Pair<Long, String>? {
         val atMillis = timestamp(timestampKey) ?: return null
-        val failureClass = preferences.getString(classKey, null) ?: return null
+        val failureClass = storedString(classKey) ?: return null
         return atMillis to failureClass
+    }
+
+    private fun storedLong(key: String): Long = try {
+        preferences.getLong(key, Long.MIN_VALUE)
+    } catch (_: ClassCastException) {
+        Long.MIN_VALUE
+    }
+
+    private fun storedString(key: String): String? = try {
+        preferences.getString(key, null)
+    } catch (_: ClassCastException) {
+        null
+    }
+
+    private inline fun bestEffort(write: () -> Unit) {
+        try {
+            write()
+        } catch (_: RuntimeException) {
+            // Diagnostics must never stop the notification path they observe.
+        }
     }
 
     private fun transportKey(transport: PushDeliveryTransport, field: String): String =
