@@ -205,6 +205,35 @@ class AndroidWebPushRuntimeTest {
     }
 
     @Test
+    fun foreignAppMessageIsNotStoredOrPublishedToDart() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = AndroidWebPushStore(context)
+        val accountId = "instrumentation-foreign-app-${System.currentTimeMillis()}"
+        val instance = AndroidWebPushStore.newOpaqueInstance()
+        val published = CountDownLatch(1)
+        val listener: (Int) -> Unit = { published.countDown() }
+        store.beginRegistration(accountId, 1, instance)
+        AndroidWebPushNotifier.attach(listener)
+        try {
+            AndroidWebPushEventSink.message(
+                context,
+                PushMessage(
+                    """{"nid":5103,"app":"deck","subject":"Board updated"}"""
+                        .toByteArray(StandardCharsets.UTF_8),
+                    true,
+                ),
+                instance,
+            )
+
+            assertTrue(store.drain(accountId, 10).isEmpty())
+            assertFalse(published.await(250, TimeUnit.MILLISECONDS))
+        } finally {
+            AndroidWebPushNotifier.detach(listener)
+            store.markRetired(instance)
+        }
+    }
+
+    @Test
     fun duplicateMessageIsSuppressedAcrossStoreReopenAndAccountScope() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val instrumentation = InstrumentationRegistry.getInstrumentation()

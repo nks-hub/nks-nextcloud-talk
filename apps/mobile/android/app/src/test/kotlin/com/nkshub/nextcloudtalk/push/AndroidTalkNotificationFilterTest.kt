@@ -10,23 +10,43 @@ import org.junit.Test
 class AndroidTalkNotificationFilterTest {
     @Test
     fun talkMessagesSurface() {
-        assertTrue(
-            AndroidSystemNotifications.surfacesAsTalkNotification(
-                AndroidWebPushPayload.Message(11L, "spreed", "Someone: hi", "chat", "roomtoken"),
-            ),
+        val payload = AndroidWebPushPayload.Message(
+            11L,
+            "spreed",
+            "Someone: hi",
+            "chat",
+            "roomtoken",
         )
+        assertTrue(AndroidSystemNotifications.surfacesAsTalkNotification(payload))
+        assertTrue(AndroidSystemNotifications.wakesTalk(payload))
     }
 
     @Test
     fun otherAppsDoNotSurface() {
         for (app in listOf("deck", "files", "files_sharing", "notifications", "Nextcloud")) {
+            val payload = AndroidWebPushPayload.Message(
+                12L,
+                app,
+                "Board updated",
+                null,
+                null,
+            )
             assertFalse(
                 app,
-                AndroidSystemNotifications.surfacesAsTalkNotification(
-                    AndroidWebPushPayload.Message(12L, app, "Board updated", null, null),
-                ),
+                AndroidSystemNotifications.surfacesAsTalkNotification(payload),
             )
+            assertFalse(app, AndroidSystemNotifications.wakesTalk(payload))
         }
+    }
+
+    @Test
+    fun controlPayloadsStillWakeTalk() {
+        assertTrue(AndroidSystemNotifications.wakesTalk(AndroidWebPushPayload.DeleteAll))
+        assertTrue(
+            AndroidSystemNotifications.wakesTalk(
+                AndroidWebPushPayload.Activation("9f9bcfc4-93db-4f23-a8f4-5f2403f722cc"),
+            ),
+        )
     }
 
     @Test

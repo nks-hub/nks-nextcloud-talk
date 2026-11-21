@@ -362,9 +362,11 @@ class NksFirebaseMessagingService : FirebaseMessagingService() {
                 accountId = accountId,
             )
         }
-        AndroidFcmChannel.messageReceived(accountId)
-        if (AttachmentTransferService.unsentWaiting(applicationContext)) {
-            BackgroundDrain.scheduleForPush(applicationContext)
+        if (AndroidSystemNotifications.wakesTalk(payload)) {
+            AndroidFcmChannel.messageReceived(accountId)
+            if (AttachmentTransferService.unsentWaiting(applicationContext)) {
+                BackgroundDrain.scheduleForPush(applicationContext)
+            }
         }
     }
 

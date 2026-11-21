@@ -652,6 +652,10 @@ final class AndroidPushCoordinator {
       await _acknowledge(context.account.id, event.id);
       return;
     }
+    if (!payload.wakesTalk) {
+      await _acknowledge(context.account.id, event.id);
+      return;
+    }
     try {
       await _onWakeUp(context.account.id);
       await _acknowledge(context.account.id, event.id);
@@ -724,7 +728,7 @@ final class AndroidPushCoordinator {
         objectId != null && (objectId is! String || objectId.length > 512)) {
       return null;
     }
-    return const _DecodedPushPayload();
+    return _DecodedPushPayload(wakesTalk: app == 'spreed');
   }
 
   Future<_PushAccountContext?> _loadContext(String accountId) async {
@@ -982,9 +986,10 @@ bool _isRetryableApiError(Object error) {
 }
 
 final class _DecodedPushPayload {
-  const _DecodedPushPayload({this.activationToken});
+  const _DecodedPushPayload({this.activationToken, this.wakesTalk = true});
 
   final String? activationToken;
+  final bool wakesTalk;
 }
 
 final class _PushAccountContext {

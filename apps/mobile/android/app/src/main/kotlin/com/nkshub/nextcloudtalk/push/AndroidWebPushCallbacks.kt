@@ -26,6 +26,20 @@ internal object AndroidWebPushEventSink {
         val diagnostics = AndroidPushDeliveryDiagnosticsStore(context)
         diagnostics.recordReceived(PushDeliveryTransport.WEB_PUSH)
         val payload = AndroidWebPushPayloadParser.parse(message.content, message.decrypted)
+        val accountId = store.accountIdForInstance(instance)
+        if (!AndroidSystemNotifications.wakesTalk(payload)) {
+            accountId?.let {
+                if (message.decrypted) {
+                    diagnostics.recordDecrypted(PushDeliveryTransport.WEB_PUSH, it)
+                }
+                diagnostics.recordDisplay(
+                    PushDeliveryTransport.WEB_PUSH,
+                    it,
+                    PushDisplayOutcome.FILTERED_OTHER_APP,
+                )
+            }
+            return
+        }
         val result = when (payload) {
             is AndroidWebPushPayload.Activation -> store.storeActivation(
                 instance = instance,
@@ -39,7 +53,6 @@ internal object AndroidWebPushEventSink {
                 decrypted = message.decrypted,
             )
         }
-        val accountId = store.accountIdForInstance(instance)
         if (accountId != null) {
             if (message.decrypted) {
                 diagnostics.recordDecrypted(PushDeliveryTransport.WEB_PUSH, accountId)

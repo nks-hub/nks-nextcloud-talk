@@ -571,6 +571,41 @@ void _registerAndroidPushRegistrationTests() {
     expect(platform.acknowledgedEventIds, <String>['bad-message']);
   });
 
+  test('acks other-app messages without waking Talk', () async {
+    final fixture = await _createAccounts(<String>['account-a']);
+    final platform = _FakeAndroidWebPushPlatform()
+      ..phase = AndroidWebPushRegistrationPhase.active
+      ..generation = 1
+      ..events.add(
+        _messageEvent(
+          id: 'deck-message',
+          content: const <String, Object>{
+            'nid': 45,
+            'app': 'deck',
+            'subject': 'Board updated',
+          },
+        ),
+      );
+    final api = HttpNextcloudApi(
+      client: MockClient((_) async => http.Response('', 500)),
+    );
+    addTearDown(api.close);
+    var wakeUps = 0;
+    final coordinator = AndroidPushCoordinator(
+      accounts: fixture.accounts,
+      credentials: fixture.credentials,
+      api: api,
+      platform: platform,
+      onWakeUp: (_) async => wakeUps++,
+    );
+    addTearDown(coordinator.close);
+
+    await coordinator.drainAccount('account-a');
+
+    expect(wakeUps, 0);
+    expect(platform.acknowledgedEventIds, <String>['deck-message']);
+  });
+
   test('retains activation until its endpoint generation is active', () async {
     final database = openTestDatabase();
     addTearDown(database.close);

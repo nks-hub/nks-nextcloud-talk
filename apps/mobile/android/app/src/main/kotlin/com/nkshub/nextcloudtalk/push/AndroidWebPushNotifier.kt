@@ -642,6 +642,9 @@ internal object AndroidSystemNotifications {
         payload: AndroidWebPushPayload.Message,
     ): Boolean = payload.app == DEFAULT_TALK_APP
 
+    internal fun wakesTalk(payload: AndroidWebPushPayload): Boolean =
+        payload !is AndroidWebPushPayload.Message || surfacesAsTalkNotification(payload)
+
     private fun show(
         context: Context,
         manager: NotificationManager,
