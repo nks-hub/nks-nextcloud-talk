@@ -21,6 +21,7 @@ part 'call_media_session_state.dart';
 final class CallMediaSession {
   static const int _peerOpenConcurrency = 4;
   static const int _peerCloseConcurrency = 4;
+  static const int _peerMessageConcurrency = 4;
 
   CallMediaSession({
     required CallSignalingUpdate initial,

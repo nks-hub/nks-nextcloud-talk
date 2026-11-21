@@ -50,15 +50,18 @@ final class _MediaSessionTests {
     bool withControl = false,
     Duration renegotiationHold = const Duration(seconds: 45),
     void Function()? onSignalingRebuilt,
+    Future<bool> Function(SignalingPeerMessage message)? sendMessage,
   }) => CallMediaSession(
     initial: initial,
     renegotiationHold: renegotiationHold,
     onSignalingRebuilt: onSignalingRebuilt,
     updates: updates.stream,
-    sendMessage: (message) async {
-      sent.add(message);
-      return true;
-    },
+    sendMessage:
+        sendMessage ??
+        (message) async {
+          sent.add(message);
+          return true;
+        },
     sendControl: withControl
         ? (control) async {
             controls.add(control);

@@ -151,9 +151,7 @@ extension _CallMediaSessionControls on CallMediaSession {
         return;
       }
       _handRaised = raised;
-      for (final peerId in _peers.keys.toList(growable: false)) {
-        await _sendRaiseHand(peerId);
-      }
+      await _runPeerMessageTasks(_peers.keys, _sendRaiseHand);
       _publish();
     });
   }
@@ -237,9 +235,26 @@ extension _CallMediaSessionControls on CallMediaSession {
   }
 
   Future<void> _announceMediaToAll() async {
-    for (final peerId in _peers.keys.toList(growable: false)) {
-      await _announceMedia(peerId);
+    await _runPeerMessageTasks(_peers.keys, _announceMedia);
+  }
+
+  Future<void> _runPeerMessageTasks(
+    Iterable<String> peerIds,
+    Future<void> Function(String peerId) task,
+  ) async {
+    final pending = peerIds.toList(growable: false);
+    var nextPeer = 0;
+    Future<void> runNext() async {
+      while (nextPeer < pending.length) {
+        await task(pending[nextPeer++]);
+      }
     }
+
+    final workerCount =
+        pending.length < CallMediaSession._peerMessageConcurrency
+        ? pending.length
+        : CallMediaSession._peerMessageConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => runNext()));
   }
 
   Future<void> _sendRaiseHand(String peerId) async {
@@ -266,7 +281,7 @@ extension _CallMediaSessionControls on CallMediaSession {
       if (_disposed || emoji.isEmpty) {
         return;
       }
-      for (final peerId in _peers.keys.toList(growable: false)) {
+      await _runPeerMessageTasks(_peers.keys, (peerId) async {
         try {
           await _send(
             peerId: peerId,
@@ -276,7 +291,7 @@ extension _CallMediaSessionControls on CallMediaSession {
         } on CallMediaException {
           // A reaction that missed one peer is not a reason to end the call.
         }
-      }
+      });
     });
   }
 

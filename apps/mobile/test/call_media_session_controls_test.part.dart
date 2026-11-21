@@ -125,6 +125,62 @@ extension _ControlsMediaSessionTests on _MediaSessionTests {
       expect(sent.where((message) => message.type == 'offer'), hasLength(1));
     });
 
+    test('peer message fan-out keeps four sends in flight', () async {
+      final peers = List.generate(6, (index) => 'peer-$index');
+      final releases = <Completer<void>>[];
+      var active = 0;
+      var maximumActive = 0;
+      final media = session(
+        _update(
+          localPeerId: _local,
+          participants: [for (final peer in peers) _participant(peer)],
+        ),
+        sendMessage: (message) async {
+          sent.add(message);
+          if (message.type != 'reaction') {
+            return true;
+          }
+          active++;
+          maximumActive = active > maximumActive ? active : maximumActive;
+          final release = Completer<void>();
+          releases.add(release);
+          await release.future;
+          active--;
+          return true;
+        },
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      sent.clear();
+
+      final sending = media.sendReaction('👍');
+      await pumpEventQueue();
+      expect(releases, hasLength(4));
+      expect(active, 4);
+      expect(maximumActive, 4);
+
+      releases.first.complete();
+      await pumpEventQueue();
+      expect(
+        releases,
+        hasLength(5),
+        reason: 'the next peer starts when one worker becomes free',
+      );
+      for (var index = 1; index < 4; index++) {
+        releases[index].complete();
+      }
+      await pumpEventQueue();
+      expect(releases, hasLength(6));
+      for (var index = 4; index < releases.length; index++) {
+        releases[index].complete();
+      }
+      await sending;
+
+      expect(active, 0);
+      expect(maximumActive, 4);
+      expect(sent.where((message) => message.type == 'reaction'), hasLength(6));
+    });
+
     // The web client shows a peer as muted and camera-off until told otherwise,
     // so this side announces both on arrival and on every change.
     test('the media state is announced to peers as mute and unmute', () async {
