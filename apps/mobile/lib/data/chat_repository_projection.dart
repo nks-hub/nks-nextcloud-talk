@@ -627,6 +627,13 @@ extension _ChatRepositoryProjection on ChatRepository {
     }
 
     final messageList = messages.toList(growable: false);
+    final conversationPreviewTimestamps =
+        await _loadConversationPreviewTimestamps(
+          accountId: accountId,
+          messages: messageList,
+        );
+    final conversationPreviewUpdates =
+        <String, ({int timestamp, String? text})>{};
     final threadReplyAccumulators = await _loadThreadReplyAccumulators(
       account,
       messageList,
@@ -641,8 +648,18 @@ extension _ChatRepositoryProjection on ChatRepository {
       );
       await _applyReactionsFromNotice(account, message);
       await _applyMutationFromNotice(account, message);
-      await _persistMessage(account, message);
+      final displayText = await _persistMessage(account, message);
+      _trackConversationPreview(
+        timestamps: conversationPreviewTimestamps,
+        updates: conversationPreviewUpdates,
+        message: message,
+        displayText: displayText,
+      );
     }
+    await _persistConversationPreviews(
+      accountId: accountId,
+      updates: conversationPreviewUpdates,
+    );
   }
 
   /// Carries somebody else's reaction over to the message it is about.
@@ -770,7 +787,7 @@ extension _ChatRepositoryProjection on ChatRepository {
     return normalizeGiphyReferencePreview(displayText);
   }
 
-  Future<void> _persistMessage(
+  Future<String> _persistMessage(
     ChatAccountState account,
     ChatMessage message,
   ) async {
@@ -795,27 +812,7 @@ extension _ChatRepositoryProjection on ChatRepository {
             rawJson: jsonEncode(message.wire),
           ),
         );
-
-    final conversation = await getConversation(
-      accountId: account.accountId.value,
-      roomToken: message.roomToken.value,
-    );
-    if (conversation == null ||
-        (conversation.lastMessageTimestamp ?? -1) > message.timestamp) {
-      return;
-    }
-    await (_database.update(_database.cachedConversations)..where(
-          (row) =>
-              row.accountId.equals(account.accountId.value) &
-              row.token.equals(message.roomToken.value),
-        ))
-        .write(
-          CachedConversationsCompanion(
-            lastActivity: Value(message.timestamp),
-            lastMessageText: Value(displayText.isEmpty ? null : displayText),
-            lastMessageTimestamp: Value(message.timestamp),
-          ),
-        );
+    return displayText;
   }
 
   Future<StoredChatScope?> _rootScope({
