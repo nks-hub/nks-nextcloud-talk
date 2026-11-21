@@ -178,6 +178,92 @@ void _registerConversationTagsTests() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('a large tag list builds lazily and saves an off-screen tag', (
+    tester,
+  ) async {
+    final capableAccount = await withCapabilities({'conversation-tags'});
+    final participantRoom = await _insertConversation(
+      database,
+      capableAccount,
+      overrides: {'participantType': 3},
+    );
+    List<String>? postedTagIds;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess();
+      }
+      if (request.url.path.endsWith('/cloud/capabilities')) {
+        return _conversationTagsCapabilities();
+      }
+      if (request.method == 'GET' &&
+          request.url.path.endsWith('/api/v4/tags')) {
+        return _ocsSuccess(<Object?>[
+          for (var index = 1; index <= 100; index++)
+            _conversationTagDefinition(
+              '$index',
+              'Project $index',
+              sortOrder: index,
+            ),
+        ]);
+      }
+      if (request.method == 'POST' &&
+          request.url.path.endsWith('/api/v4/room/rooma123/tags')) {
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        postedTagIds = (body['tagIds']! as List<Object?>).cast<String>();
+        final room = _conversationRoomJson()
+          ..['participantType'] = 3
+          ..['tagIds'] = postedTagIds;
+        return _ocsSuccess(room);
+      }
+      return http.Response('', 404);
+    });
+
+    await openDetails(
+      tester,
+      forAccount: capableAccount,
+      forConversation: participantRoom,
+      client: client,
+    );
+    await tester.tap(find.byKey(const Key('room-details-conversation-tags')));
+    final listFinder = find.byKey(
+      const Key('room-details-conversation-tags-list'),
+    );
+    await _pumpUntil(tester, () => listFinder.evaluate().isNotEmpty);
+    final list = tester.widget<ListView>(listFinder);
+    expect(list.childrenDelegate, isA<SliverChildBuilderDelegate>());
+    expect(
+      find.byKey(const Key('room-details-conversation-tag-100')),
+      findsNothing,
+      reason: 'off-screen tag rows must not be built up front',
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('room-details-conversation-tag-100')),
+      500,
+      scrollable: find.descendant(
+        of: listFinder,
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.tap(
+      find.byKey(const Key('room-details-conversation-tag-100')),
+    );
+    await tester.tap(
+      find.byKey(const Key('room-details-conversation-tags-save')),
+    );
+    await _pumpUntil(
+      tester,
+      () =>
+          postedTagIds != null &&
+          _textByKey(tester, 'room-details-conversation-tags-subtitle') ==
+              'Selected: 1',
+    );
+
+    expect(postedTagIds, <String>['100']);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('malformed definitions fail closed without assignment', (
     tester,
   ) async {

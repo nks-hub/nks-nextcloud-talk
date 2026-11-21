@@ -83,17 +83,25 @@ extension _RoomDetailsConversationTagsState on _RoomDetailsScreenState {
               ? Text(strings.roomDetailsConversationTagsEmpty)
               : SizedBox(
                   width: 360,
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(
-                          strings.roomDetailsConversationTagsDialogHint,
-                        ),
-                      ),
-                      for (final tag in definitions)
-                        CheckboxListTile(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(context).height * 0.6,
+                    ),
+                    child: ListView.builder(
+                      key: const Key('room-details-conversation-tags-list'),
+                      shrinkWrap: true,
+                      itemCount: definitions.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              strings.roomDetailsConversationTagsDialogHint,
+                            ),
+                          );
+                        }
+                        final tag = definitions[index - 1];
+                        return CheckboxListTile(
                           key: Key('room-details-conversation-tag-${tag.id}'),
                           contentPadding: EdgeInsets.zero,
                           title: Text(tag.name),
@@ -107,8 +115,9 @@ extension _RoomDetailsConversationTagsState on _RoomDetailsScreenState {
                               }
                             });
                           },
-                        ),
-                    ],
+                        );
+                      },
+                    ),
                   ),
                 ),
           actions: [
