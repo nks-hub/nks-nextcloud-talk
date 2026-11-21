@@ -1,5 +1,7 @@
 part of 'call_media_session.dart';
 
+const int _screenShareConnectionConcurrency = 4;
+
 extension _CallMediaSessionScreen on CallMediaSession {
   Future<void> _receiveScreen({
     required String senderId,
@@ -71,12 +73,25 @@ extension _CallMediaSessionScreen on CallMediaSession {
           }
         }
       } else {
-        for (final peerId in _peers.keys.toList(growable: false)) {
-          await _openShare(peerId);
-        }
+        await _openShares(_peers.keys);
       }
       _publish();
     });
+  }
+
+  Future<void> _openShares(Iterable<String> peerIds) async {
+    final pending = peerIds.toList(growable: false);
+    var nextPeer = 0;
+    Future<void> openNext() async {
+      while (nextPeer < pending.length) {
+        await _openShare(pending[nextPeer++]);
+      }
+    }
+
+    final workerCount = pending.length < _screenShareConnectionConcurrency
+        ? pending.length
+        : _screenShareConnectionConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => openNext()));
   }
 
   /// One outgoing screen connection.

@@ -104,6 +104,51 @@ extension _ScreenMediaSessionTests on _MediaSessionTests {
       expect(engine.connections.first.closed, isFalse);
     });
 
+    test('mesh screen sharing opens at most four peers concurrently', () async {
+      final media = session(
+        _update(
+          localPeerId: _local,
+          participants: [
+            for (final peerId in const [
+              'peer-a',
+              'peer-b',
+              'peer-c',
+              'peer-d',
+              'peer-e',
+              'peer-f',
+            ])
+              _participant(peerId),
+          ],
+        ),
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      expect(engine.connections, hasLength(6));
+
+      final createGate = Completer<void>();
+      engine.connectionCreateStarts = 0;
+      engine.connectionCreateGate = createGate;
+      addTearDown(() {
+        if (!createGate.isCompleted) createGate.complete();
+      });
+      final sharing = media.setScreenSharing(true);
+      for (
+        var turn = 0;
+        turn < 50 && engine.connectionCreateStarts < 4;
+        turn++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(engine.connectionCreateStarts, 4);
+      expect(engine.connections, hasLength(6));
+
+      createGate.complete();
+      await sharing;
+      expect(engine.connectionCreateStarts, 6);
+      expect(engine.connections, hasLength(12));
+      expect(media.state.screenSharing, isTrue);
+    });
+
     test('a screen that will not open leaves the call alone', () async {
       engine.screenError = CallMediaError.screenSharePermissionDenied;
       final media = session(

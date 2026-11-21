@@ -76,6 +76,8 @@ final class _FakeEngine implements CallMediaEngine {
   CallMediaError? connectionError;
   CallMediaError? microphoneError;
   Completer<void>? microphoneStartup;
+  Completer<void>? connectionCreateGate;
+  int connectionCreateStarts = 0;
   Completer<void>? connectionCloseGate;
   int connectionCloseStarts = 0;
   final List<_FakeAudio> audio = <_FakeAudio>[];
@@ -144,6 +146,8 @@ final class _FakeEngine implements CallMediaEngine {
     required void Function(CallRemoteVideo? video) onRemoteVideo,
     void Function(String type, Object? payload)? onStatusMessage,
   }) async {
+    connectionCreateStarts++;
+    await connectionCreateGate?.future;
     if (connectionError case final error?) {
       throw CallMediaException(error);
     }
