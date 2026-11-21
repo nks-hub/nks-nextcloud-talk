@@ -367,6 +367,7 @@ final class CallMediaSession {
             MapEntry(participant.peerId.value, participant),
       ]);
     await _closePeers(_peers.keys.toSet().difference(expected));
+    if (_disposed) return;
     _retiredSubscriberSids.removeWhere(
       (peerId, _) => !expected.contains(peerId),
     );
@@ -394,6 +395,7 @@ final class CallMediaSession {
       );
     }
 
+    if (_disposed) return;
     if (rebuilt ||
         (bindingChanged &&
             update.transport == SignalingTransportKind.externalHpb)) {
@@ -417,7 +419,7 @@ final class CallMediaSession {
   }) async {
     var nextPeer = 0;
     Future<void> openNext() async {
-      while (nextPeer < peerIds.length) {
+      while (!_disposed && nextPeer < peerIds.length) {
         final peerId = peerIds[nextPeer++];
         await _openPeer(
           peerId: peerId,
@@ -441,7 +443,7 @@ final class CallMediaSession {
     List<CallIceServer> iceServers,
   ) async {
     final audio = _audio;
-    if (audio == null) {
+    if (_disposed || audio == null) {
       return null;
     }
     try {
@@ -470,12 +472,13 @@ final class CallMediaSession {
           }),
         ),
       );
-      if (_disposed || !identical(_peers[peer.peerId], peer)) {
+      if (!identical(_peers[peer.peerId], peer)) {
         await connection.close();
         return null;
       }
+      // A connection that completes during leave belongs to queued cleanup.
       peer.connection = connection;
-      return connection;
+      return _disposed ? null : connection;
     } on CallMediaException {
       await _closePeer(peer.peerId);
       return null;

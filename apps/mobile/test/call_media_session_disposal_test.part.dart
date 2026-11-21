@@ -2,6 +2,43 @@ part of 'call_media_session_test.dart';
 
 extension _MediaDisposalTests on _MediaSessionTests {
   void _registerDisposal() {
+    for (final sharing in [false, true]) {
+      test('leaving during ${sharing ? 'screen sharing' : 'mesh startup'} '
+          'closes pending connections without starting more', () async {
+        final gate = Completer<void>();
+        final media = session(
+          _update(
+            localPeerId: _local,
+            participants: [for (var i = 0; i < 6; i++) _participant('peer-$i')],
+          ),
+        );
+        addTearDown(media.dispose);
+        addTearDown(() {
+          if (!gate.isCompleted) gate.complete();
+        });
+        if (sharing) await media.start();
+        final alreadyOpened = engine.connectionCreateStarts;
+        engine.connectionCreateGate = gate;
+        final opening = sharing ? media.setScreenSharing(true) : media.start();
+        await pumpEventQueue();
+        expect(engine.connectionCreateStarts, alreadyOpened + 4);
+
+        final leaving = media.dispose();
+        gate.complete();
+        await Future.wait([opening, leaving]);
+
+        expect(engine.connectionCreateStarts, alreadyOpened + 4);
+        expect(engine.connectionCloseStarts, alreadyOpened + 4);
+        expect(
+          engine.connections.every((connection) => connection.closed),
+          isTrue,
+        );
+        expect(engine.audio.single.disposeCalls, 1);
+        if (sharing) expect(engine.screens.single.disposeCalls, 1);
+        expect(media.state.phase, CallMediaPhase.idle);
+      });
+    }
+
     test(
       'dispose releases the MCU publisher after a peer close fails',
       () async {

@@ -40,11 +40,12 @@ extension _CallMediaSessionSignaling on CallMediaSession {
         // _announceMedia below.
         onStatusMessage: (type, payload) {},
       );
-      if (_disposed || !identical(_publisher, publisher)) {
+      if (!identical(_publisher, publisher)) {
         await connection.close();
         return;
       }
       publisher.connection = connection;
+      if (_disposed) return;
       final video = _video;
       if (video != null) {
         try {
@@ -67,11 +68,12 @@ extension _CallMediaSessionSignaling on CallMediaSession {
   /// the way the web client does, because a participant who has not
   /// published yet is simply not there to be offered.
   Future<void> _subscribe(String peerId) async {
-    if (_peers.containsKey(peerId)) {
+    if (_disposed || _peers.containsKey(peerId)) {
       return;
     }
     _peers[peerId] = _MediaPeer(peerId);
     await _requestOffer(peerId);
+    if (_disposed) return;
     _offerRequests[peerId]?.cancel();
     _offerRequests[peerId] = Timer.periodic(const Duration(seconds: 10), (_) {
       unawaited(
@@ -152,11 +154,12 @@ extension _CallMediaSessionSignaling on CallMediaSession {
   /// the transport failed.
   Future<void> _offer(_MediaPeer peer, {bool iceRestart = false}) async {
     final connection = peer.connection;
-    if (connection == null) {
+    if (_disposed || connection == null) {
       return;
     }
     try {
       final offer = await connection.createOffer(iceRestart: iceRestart);
+      if (_disposed) return;
       await connection.setLocalDescription(offer);
       peer.localOfferPending = true;
       debugPrint(
@@ -183,7 +186,7 @@ extension _CallMediaSessionSignaling on CallMediaSession {
     required List<CallIceServer> iceServers,
   }) async {
     final sender = message.sender;
-    if (sender == null) {
+    if (_disposed || sender == null) {
       return;
     }
     if (sender.value == localPeerId) {

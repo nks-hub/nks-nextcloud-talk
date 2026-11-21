@@ -81,7 +81,7 @@ extension _CallMediaSessionScreen on CallMediaSession {
     final pending = peerIds.toList(growable: false);
     var nextPeer = 0;
     Future<void> openNext() async {
-      while (nextPeer < pending.length) {
+      while (!_disposed && nextPeer < pending.length) {
         await _openShare(pending[nextPeer++]);
       }
     }
@@ -99,7 +99,7 @@ extension _CallMediaSessionScreen on CallMediaSession {
   /// there is one per participant. [peerId] is the recipient either way.
   Future<void> _openShare(String peerId) async {
     final screen = _screen;
-    if (screen == null || _shares.containsKey(peerId)) {
+    if (_disposed || screen == null || _shares.containsKey(peerId)) {
       return;
     }
     final share = _MediaPeer(
@@ -124,11 +124,12 @@ extension _CallMediaSessionScreen on CallMediaSession {
         ),
         onRemoteVideo: (video) => unawaited(video?.dispose()),
       );
-      if (_disposed || !identical(_shares[peerId], share)) {
+      if (!identical(_shares[peerId], share)) {
         await connection.close();
         return;
       }
       share.connection = connection;
+      if (_disposed) return;
     } on CallMediaException {
       _shares.remove(peerId);
       return;
@@ -257,11 +258,12 @@ extension _CallMediaSessionScreen on CallMediaSession {
           onRemoteVideo: (video) =>
               unawaited(_enqueue(() => _recordScreenVideo(opened, video))),
         );
-        if (_disposed || !identical(_screens[senderId], opened)) {
+        if (!identical(_screens[senderId], opened)) {
           await connection.close();
           return;
         }
         opened.connection = connection;
+        if (_disposed) return;
       } on CallMediaException {
         await _closeScreen(senderId);
         return;
