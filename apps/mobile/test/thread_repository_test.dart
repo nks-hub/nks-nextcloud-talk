@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:drift/drift.dart' hide isNotNull;
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
@@ -443,6 +444,36 @@ void main() {
     );
     expect(await threads.listAccount('account-a'), isEmpty);
   });
+
+  test('subscription projection reads cached messages once per room', () async {
+    await database.close();
+    final counter = _CachedMessageSelectCounter();
+    database = AppDatabase.forTesting(
+      NativeDatabase.memory().interceptWith(counter),
+    );
+    accounts = AccountRepository(database);
+    threads = ThreadRepository(database);
+    await _insertAccount(accounts, 'account-a');
+    final values = <RichChatThread>[
+      for (var room = 0; room < 2; room++)
+        for (var thread = 0; thread < 20; thread++)
+          _thread(
+            roomToken: 'room${room}abc',
+            threadId: 1000 + (room * 1000) + thread,
+            title: 'Thread $room-$thread',
+          ),
+    ];
+    counter.enabled = true;
+
+    await threads.replaceSubscribed(
+      accountId: 'account-a',
+      server: _serverFor('account-a'),
+      values: values,
+    );
+
+    expect(counter.selects, 2);
+    expect(await threads.listAccount('account-a'), hasLength(40));
+  });
 }
 
 Future<void> _insertAccount(AccountRepository accounts, String accountId) {
@@ -582,4 +613,22 @@ Map<String, Object?> _messageWire({
     'threadReplies': 1,
     'parent': ?parent,
   };
+}
+
+final class _CachedMessageSelectCounter extends QueryInterceptor {
+  bool enabled = false;
+  int selects = 0;
+
+  @override
+  Future<List<Map<String, Object?>>> runSelect(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) {
+    if (enabled &&
+        statement.toLowerCase().contains('from "cached_chat_messages"')) {
+      selects++;
+    }
+    return super.runSelect(executor, statement, args);
+  }
 }

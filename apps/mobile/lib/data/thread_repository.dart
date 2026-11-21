@@ -112,11 +112,15 @@ final class ThreadRepository {
                 thread.roomToken.equals(roomToken),
           ))
           .write(const CachedThreadsCompanion(recent: Value(false)));
+      await _projectMessages(
+        accountId: accountId,
+        server: server,
+        values: values,
+      );
       for (final value in values) {
         final current = existing[value.threadId];
         await _upsert(
           accountId: accountId,
-          server: server,
           value: value,
           recent: true,
           subscribed: current?.subscribed ?? false,
@@ -240,11 +244,15 @@ final class ThreadRepository {
       await (_database.update(_database.cachedThreads)
             ..where((thread) => thread.accountId.equals(accountId)))
           .write(const CachedThreadsCompanion(subscribed: Value(false)));
+      await _projectMessages(
+        accountId: accountId,
+        server: server,
+        values: values,
+      );
       for (final value in values) {
         final current = existing[(value.roomToken.value, value.threadId)];
         await _upsert(
           accountId: accountId,
-          server: server,
           value: value,
           recent: current?.recent ?? false,
           subscribed: true,
@@ -266,9 +274,13 @@ final class ThreadRepository {
         roomToken: value.roomToken.value,
         threadId: value.threadId,
       );
-      await _upsert(
+      await _projectMessages(
         accountId: accountId,
         server: server,
+        values: [value],
+      );
+      await _upsert(
+        accountId: accountId,
         value: value,
         recent: current?.recent ?? false,
         subscribed: current?.subscribed ?? false,
@@ -304,13 +316,11 @@ final class ThreadRepository {
 
   Future<void> _upsert({
     required String accountId,
-    required ServerBase server,
     required RichChatThread value,
     required bool recent,
     required bool subscribed,
     required bool detailed,
   }) async {
-    await _projectMessages(accountId: accountId, server: server, value: value);
     await _database
         .into(_database.cachedThreads)
         .insertOnConflictUpdate(
@@ -334,24 +344,30 @@ final class ThreadRepository {
   Future<void> _projectMessages({
     required String accountId,
     required ServerBase server,
-    required RichChatThread value,
+    required List<RichChatThread> values,
   }) async {
-    final roomToken = value.roomToken.value;
-    final authoritative = <int, ChatMessage>{};
-    for (final message in <ChatMessage?>[
-      value.firstMessage,
-      value.lastMessage,
-    ]) {
-      if (message == null) {
-        continue;
-      }
-      authoritative[message.messageId] = message.projectThreadTitle(
-        roomToken: value.roomToken,
-        threadId: value.threadId,
-        threadTitle: value.title,
+    final valuesByRoom = <String, List<RichChatThread>>{};
+    for (final value in values) {
+      valuesByRoom
+          .putIfAbsent(value.roomToken.value, () => <RichChatThread>[])
+          .add(value);
+    }
+    for (final entry in valuesByRoom.entries) {
+      await _projectRoomMessages(
+        accountId: accountId,
+        server: server,
+        roomToken: entry.key,
+        values: entry.value,
       );
     }
+  }
 
+  Future<void> _projectRoomMessages({
+    required String accountId,
+    required ServerBase server,
+    required String roomToken,
+    required List<RichChatThread> values,
+  }) async {
     final rows =
         await (_database.select(_database.cachedChatMessages)..where(
               (message) =>
@@ -359,7 +375,8 @@ final class ThreadRepository {
                   message.roomToken.equals(roomToken),
             ))
             .get();
-    final persisted = <int>{};
+    final originals = <int, ChatMessage>{};
+    final projected = <int, ChatMessage>{};
     for (final row in rows) {
       final ChatMessage cached;
       try {
@@ -369,33 +386,53 @@ final class ThreadRepository {
       } on TalkProtocolException {
         continue;
       }
-      var updated =
-          authoritative[row.messageId] ??
-          cached.projectThreadTitle(
-            roomToken: value.roomToken,
-            threadId: value.threadId,
-            threadTitle: value.title,
-          );
-      for (final message in authoritative.values) {
-        updated = updated.replaceParentMessageIfMatching(message);
-      }
-      if (!identical(updated, cached)) {
-        await _persistMessage(
-          accountId: accountId,
-          server: server,
-          message: updated,
+      originals[row.messageId] = cached;
+      projected[row.messageId] = cached;
+    }
+
+    // Apply the server list in order, as the former per-thread calls did,
+    // while keeping the room rows decoded only once.
+    for (final value in values) {
+      final authoritative = <int, ChatMessage>{};
+      for (final message in <ChatMessage?>[
+        value.firstMessage,
+        value.lastMessage,
+      ]) {
+        if (message == null) {
+          continue;
+        }
+        authoritative[message.messageId] = message.projectThreadTitle(
+          roomToken: value.roomToken,
+          threadId: value.threadId,
+          threadTitle: value.title,
         );
       }
-      persisted.add(row.messageId);
+      for (final entry in projected.entries.toList(growable: false)) {
+        var updated =
+            authoritative[entry.key] ??
+            entry.value.projectThreadTitle(
+              roomToken: value.roomToken,
+              threadId: value.threadId,
+              threadTitle: value.title,
+            );
+        for (final message in authoritative.values) {
+          updated = updated.replaceParentMessageIfMatching(message);
+        }
+        projected[entry.key] = updated;
+      }
+      for (final message in authoritative.values) {
+        projected.putIfAbsent(message.messageId, () => message);
+      }
     }
-    for (final message in authoritative.values) {
-      if (persisted.contains(message.messageId)) {
+
+    for (final entry in projected.entries) {
+      if (identical(originals[entry.key], entry.value)) {
         continue;
       }
       await _persistMessage(
         accountId: accountId,
         server: server,
-        message: message,
+        message: entry.value,
       );
     }
   }
