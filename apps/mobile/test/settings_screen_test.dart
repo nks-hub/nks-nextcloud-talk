@@ -464,6 +464,70 @@ void main() {
     );
   });
 
+  testWidgets('a large account list builds lazily and switches the last row', (
+    tester,
+  ) async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    late List<StoredAccount> initial;
+    late String lastId;
+    await tester.runAsync(() async {
+      for (var index = 1; index <= 80; index++) {
+        final suffix = index.toString().padLeft(3, '0');
+        final stored = await accounts.upsertAccount(
+          accountId: 'account-$suffix',
+          serverUrl: 'https://cloud-$suffix.example.invalid',
+          loginName: 'user-$suffix',
+          serverProductName: 'Nextcloud',
+          createdAt: DateTime.utc(2026, 1, 1).add(Duration(days: index)),
+        );
+        if (index == 79) {
+          lastId = stored.id;
+        }
+      }
+      initial = await accounts.listAccounts();
+    });
+
+    await tester.pumpWidget(
+      _wrap(accountRepository: accounts, accountsStream: Stream.value(initial)),
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+    await tester.pump();
+    await tester.pump();
+
+    final accountList = tester.widget<SliverList>(
+      find.byKey(const Key('settings-account-list')),
+    );
+    expect(accountList.delegate, isA<SliverChildBuilderDelegate>());
+    expect(
+      find.byKey(Key('account-tile-$lastId')),
+      findsNothing,
+      reason: 'off-screen account rows must not be built up front',
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(Key('account-tile-$lastId')),
+      600,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.byKey(Key('account-tile-$lastId')));
+    await tester.pump();
+    await tester.tap(find.byKey(Key('account-tile-$lastId')));
+    await _flushRealAsync(tester);
+
+    late List<StoredAccount> updated;
+    await tester.runAsync(() async {
+      updated = await accounts.listAccounts();
+    });
+    expect(updated.where((account) => account.selected), hasLength(1));
+    expect(updated.singleWhere((account) => account.selected).id, lastId);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('single-account state shows exactly one entry, already active', (
     tester,
   ) async {

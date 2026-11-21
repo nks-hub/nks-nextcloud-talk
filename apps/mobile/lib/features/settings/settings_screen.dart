@@ -58,252 +58,272 @@ final class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: Text(strings.settingsTitle)),
       body: ContentColumn(
-        child: ListView(
-          children: [
-            _SectionHeader(strings.settingsAccountsSection),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: _SectionHeader(strings.settingsAccountsSection),
+            ),
             accounts.when(
-              data: (items) => Column(
-                children: [for (final account in items) _AccountTile(account)],
+              data: (items) => SliverList.builder(
+                key: const Key('settings-account-list'),
+                itemCount: items.length,
+                itemBuilder: (context, index) =>
+                    _AccountTile(items[index], key: ValueKey(items[index].id)),
               ),
               // Deliberately not an indeterminate spinner: an endless animation
               // keeps the frame scheduler busy forever, which makes any
               // pumpAndSettle hang. The account list resolves from local
               // storage, so a quiet placeholder is enough.
-              loading: () => const SizedBox(height: 24),
-              error: (error, stackTrace) => Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
+              loading: () =>
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              error: (error, stackTrace) => SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Text(strings.settingsAccountsLoadFailed),
                 ),
-                child: Text(strings.settingsAccountsLoadFailed),
               ),
             ),
-            ListTile(
-              key: const Key('settings-add-account'),
-              leading: const Icon(Icons.add_rounded),
-              title: Text(strings.settingsAddAccount),
-              onTap: () => _addAccount(context),
-            ),
-            const Divider(height: 1),
-            _SectionHeader(strings.settingsProfileSection),
-            accounts.when(
-              data: (items) {
-                final selected = _selectedAccount(items);
-                return ListTile(
-                  key: const Key('settings-open-profile'),
-                  leading: const Icon(Icons.account_circle_outlined),
-                  title: Text(strings.settingsOpenProfile),
-                  subtitle: Text(strings.settingsOpenProfileSubtitle),
-                  enabled: selected != null,
-                  onTap: selected == null
-                      ? null
-                      : () => _openProfile(context, selected.id),
-                );
-              },
-              loading: () => const SizedBox(height: 24),
-              error: (_, _) => const SizedBox.shrink(),
-            ),
-            const Divider(height: 1),
-            _SectionHeader(strings.settingsDiagnosticsSection),
-            accounts.when(
-              data: (items) {
-                final selected = _selectedAccount(items);
-                return ListTile(
-                  key: const Key('settings-open-diagnostics'),
-                  leading: const Icon(Icons.troubleshoot_rounded),
-                  title: Text(strings.settingsOpenDiagnostics),
-                  subtitle: Text(strings.settingsOpenDiagnosticsSubtitle),
-                  enabled: selected != null,
-                  onTap: selected == null
-                      ? null
-                      : () => _openDiagnostics(context, selected.id),
-                );
-              },
-              loading: () => const SizedBox(height: 24),
-              error: (_, _) => const SizedBox.shrink(),
-            ),
-            // Server-wide bot health, and therefore only where the server
-            // publishes the route at all. Whether this account may actually
-            // read it is a separate question the server answers with 403, and
-            // the screen says so; the capability cannot tell us that here.
-            if (botAdminAccount != null &&
-                ref
-                        .watch(botAdminSupportedProvider(botAdminAccount.id))
-                        .valueOrNull ==
-                    true) ...[
-              const Divider(height: 1),
-              _SectionHeader(strings.settingsBotsSection),
-              ListTile(
-                key: const Key('settings-open-bot-admin'),
-                leading: const Icon(Icons.smart_toy_outlined),
-                title: Text(strings.settingsOpenBotAdmin),
-                subtitle: Text(strings.settingsOpenBotAdminSubtitle),
-                onTap: () => _openBotAdmin(context, botAdminAccount.id),
-              ),
-            ],
-            // Android is the only platform with two push paths to choose
-            // between; the bridge is null everywhere else.
-            if (androidPushPlatform != null) ...[
-              const Divider(height: 1),
-              _SectionHeader(strings.settingsPushSection),
-              RadioGroup<AndroidPushTransport>(
-                groupValue: ref.watch(androidPushTransportProvider),
-                onChanged: (transport) =>
-                    _setPushTransport(context, ref, transport),
-                child: Column(
-                  children: [
-                    _PushTransportTile(
-                      tileKey: const Key('push-transport-proxy'),
-                      label: strings.settingsPushTransportProxy,
-                      subtitle: strings.settingsPushTransportProxySubtitle,
-                      transport: AndroidPushTransport.proxy,
-                      enabled: !ref.watch(
-                        androidPushTransportSwitchingProvider,
-                      ),
-                    ),
-                    _PushTransportTile(
-                      tileKey: const Key('push-transport-web-push'),
-                      label: strings.settingsPushTransportWebPush,
-                      subtitle: strings.settingsPushTransportWebPushSubtitle,
-                      transport: AndroidPushTransport.webPush,
-                      enabled: !ref.watch(
-                        androidPushTransportSwitchingProvider,
-                      ),
-                    ),
-                  ],
+            SliverList.list(
+              children: [
+                ListTile(
+                  key: const Key('settings-add-account'),
+                  leading: const Icon(Icons.add_rounded),
+                  title: Text(strings.settingsAddAccount),
+                  onTap: () => _addAccount(context),
                 ),
-              ),
-              if (ref.watch(androidPushTransportSwitchingProvider))
-                const LinearProgressIndicator(
-                  key: Key('push-transport-switch-progress'),
+                const Divider(height: 1),
+                _SectionHeader(strings.settingsProfileSection),
+                accounts.when(
+                  data: (items) {
+                    final selected = _selectedAccount(items);
+                    return ListTile(
+                      key: const Key('settings-open-profile'),
+                      leading: const Icon(Icons.account_circle_outlined),
+                      title: Text(strings.settingsOpenProfile),
+                      subtitle: Text(strings.settingsOpenProfileSubtitle),
+                      enabled: selected != null,
+                      onTap: selected == null
+                          ? null
+                          : () => _openProfile(context, selected.id),
+                    );
+                  },
+                  loading: () => const SizedBox(height: 24),
+                  error: (_, _) => const SizedBox.shrink(),
                 ),
-              ListTile(
-                key: const Key('settings-notification-permission'),
-                leading: const Icon(Icons.notifications_outlined),
-                title: Text(strings.settingsNotificationPermission),
-                subtitle: Text(
-                  _notificationPermissionLabel(
-                    strings,
-                    notificationPermission.valueOrNull,
-                  ),
+                const Divider(height: 1),
+                _SectionHeader(strings.settingsDiagnosticsSection),
+                accounts.when(
+                  data: (items) {
+                    final selected = _selectedAccount(items);
+                    return ListTile(
+                      key: const Key('settings-open-diagnostics'),
+                      leading: const Icon(Icons.troubleshoot_rounded),
+                      title: Text(strings.settingsOpenDiagnostics),
+                      subtitle: Text(strings.settingsOpenDiagnosticsSubtitle),
+                      enabled: selected != null,
+                      onTap: selected == null
+                          ? null
+                          : () => _openDiagnostics(context, selected.id),
+                    );
+                  },
+                  loading: () => const SizedBox(height: 24),
+                  error: (_, _) => const SizedBox.shrink(),
                 ),
-                trailing: switch (notificationPermission.valueOrNull) {
-                  AndroidNotificationPermission.notDetermined => TextButton(
-                    key: const Key('request-notification-permission'),
-                    onPressed: () => _requestNotificationPermission(
-                      context,
-                      ref,
-                      androidPushPlatform,
-                    ),
-                    child: Text(strings.settingsNotificationPermissionRequest),
-                  ),
-                  AndroidNotificationPermission.denied => TextButton(
-                    key: const Key('open-notification-settings'),
-                    onPressed: () => _openNotificationSettings(context, ref),
-                    child: Text(strings.openAppSettings),
-                  ),
-                  AndroidNotificationPermission.granted => const Icon(
-                    Icons.check_circle_outline_rounded,
-                  ),
-                  null => const SizedBox.square(
-                    dimension: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                },
-              ),
-            ],
-            if (desktopAutostart != null &&
-                desktopAutostart.supported != false) ...[
-              const Divider(height: 1),
-              _SectionHeader(strings.settingsDesktopSection),
-              _DesktopAutostartTile(
-                state: desktopAutostart,
-                onChanged: (enabled) =>
-                    _setDesktopAutostart(context, ref, enabled),
-                onRetry: () =>
-                    ref.read(desktopAutostartStateProvider.notifier).refresh(),
-              ),
-            ],
-            // Desktop only. A store build is updated by its store, and a
-            // self-updater inside one breaks both stores' rules.
-            if (ref.watch(updateCheckHostProvider)) ...[
-              const Divider(height: 1),
-              _SectionHeader(strings.settingsUpdatesSection),
-              const UpdateCheckSettingsTile(),
-            ],
-            if (appLock.supported) ...[
-              const Divider(height: 1),
-              _SectionHeader(strings.settingsSecuritySection),
-              const AppLockSettingsTile(),
-            ],
-            // Hidden where no server offers a relay: the policy would leave
-            // ICE without a usable candidate, so the switch could only break
-            // a call, never help one.
-            if (ref.watch(callRelayOfferedProvider).valueOrNull != false) ...[
-              const Divider(height: 1),
-              _SectionHeader(strings.settingsCallsSection),
-              SwitchListTile(
-                key: const Key('call-relay-only'),
-                title: Text(strings.settingsCallRelayOnly),
-                subtitle: Text(strings.settingsCallRelayOnlyDescription),
-                value: ref.watch(callRelayOnlyProvider),
-                onChanged: (relayOnly) => unawaited(
-                  ref
-                      .read(callRelayOnlyProvider.notifier)
-                      .setRelayOnly(relayOnly),
-                ),
-              ),
-            ],
-            const Divider(height: 1),
-            _SectionHeader(strings.settingsRepliesSection),
-            RadioGroup<ReplyLayout>(
-              groupValue: ref.watch(replyLayoutProvider),
-              onChanged: (layout) => _setReplyLayout(ref, layout),
-              child: Column(
-                children: [
-                  RadioListTile<ReplyLayout>(
-                    key: const Key('reply-layout-inline'),
-                    title: Text(strings.settingsReplyLayoutInline),
-                    subtitle: Text(
-                      strings.settingsReplyLayoutInlineDescription,
-                    ),
-                    value: ReplyLayout.inline,
-                  ),
-                  RadioListTile<ReplyLayout>(
-                    key: const Key('reply-layout-thread'),
-                    title: Text(strings.settingsReplyLayoutThread),
-                    subtitle: Text(
-                      strings.settingsReplyLayoutThreadDescription,
-                    ),
-                    value: ReplyLayout.thread,
+                // Server-wide bot health, and therefore only where the server
+                // publishes the route at all. Whether this account may actually
+                // read it is a separate question the server answers with 403, and
+                // the screen says so; the capability cannot tell us that here.
+                if (botAdminAccount != null &&
+                    ref
+                            .watch(
+                              botAdminSupportedProvider(botAdminAccount.id),
+                            )
+                            .valueOrNull ==
+                        true) ...[
+                  const Divider(height: 1),
+                  _SectionHeader(strings.settingsBotsSection),
+                  ListTile(
+                    key: const Key('settings-open-bot-admin'),
+                    leading: const Icon(Icons.smart_toy_outlined),
+                    title: Text(strings.settingsOpenBotAdmin),
+                    subtitle: Text(strings.settingsOpenBotAdminSubtitle),
+                    onTap: () => _openBotAdmin(context, botAdminAccount.id),
                   ),
                 ],
-              ),
-            ),
-            const Divider(height: 1),
-            _SectionHeader(strings.settingsThemeSection),
-            RadioGroup<ThemeMode>(
-              groupValue: themeMode,
-              onChanged: (mode) => _setTheme(ref, mode),
-              child: Column(
-                children: [
-                  _ThemeModeTile(
-                    tileKey: const Key('theme-mode-system'),
-                    label: strings.settingsThemeSystem,
-                    mode: ThemeMode.system,
+                // Android is the only platform with two push paths to choose
+                // between; the bridge is null everywhere else.
+                if (androidPushPlatform != null) ...[
+                  const Divider(height: 1),
+                  _SectionHeader(strings.settingsPushSection),
+                  RadioGroup<AndroidPushTransport>(
+                    groupValue: ref.watch(androidPushTransportProvider),
+                    onChanged: (transport) =>
+                        _setPushTransport(context, ref, transport),
+                    child: Column(
+                      children: [
+                        _PushTransportTile(
+                          tileKey: const Key('push-transport-proxy'),
+                          label: strings.settingsPushTransportProxy,
+                          subtitle: strings.settingsPushTransportProxySubtitle,
+                          transport: AndroidPushTransport.proxy,
+                          enabled: !ref.watch(
+                            androidPushTransportSwitchingProvider,
+                          ),
+                        ),
+                        _PushTransportTile(
+                          tileKey: const Key('push-transport-web-push'),
+                          label: strings.settingsPushTransportWebPush,
+                          subtitle:
+                              strings.settingsPushTransportWebPushSubtitle,
+                          transport: AndroidPushTransport.webPush,
+                          enabled: !ref.watch(
+                            androidPushTransportSwitchingProvider,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  _ThemeModeTile(
-                    tileKey: const Key('theme-mode-light'),
-                    label: strings.settingsThemeLight,
-                    mode: ThemeMode.light,
-                  ),
-                  _ThemeModeTile(
-                    tileKey: const Key('theme-mode-dark'),
-                    label: strings.settingsThemeDark,
-                    mode: ThemeMode.dark,
+                  if (ref.watch(androidPushTransportSwitchingProvider))
+                    const LinearProgressIndicator(
+                      key: Key('push-transport-switch-progress'),
+                    ),
+                  ListTile(
+                    key: const Key('settings-notification-permission'),
+                    leading: const Icon(Icons.notifications_outlined),
+                    title: Text(strings.settingsNotificationPermission),
+                    subtitle: Text(
+                      _notificationPermissionLabel(
+                        strings,
+                        notificationPermission.valueOrNull,
+                      ),
+                    ),
+                    trailing: switch (notificationPermission.valueOrNull) {
+                      AndroidNotificationPermission.notDetermined => TextButton(
+                        key: const Key('request-notification-permission'),
+                        onPressed: () => _requestNotificationPermission(
+                          context,
+                          ref,
+                          androidPushPlatform,
+                        ),
+                        child: Text(
+                          strings.settingsNotificationPermissionRequest,
+                        ),
+                      ),
+                      AndroidNotificationPermission.denied => TextButton(
+                        key: const Key('open-notification-settings'),
+                        onPressed: () =>
+                            _openNotificationSettings(context, ref),
+                        child: Text(strings.openAppSettings),
+                      ),
+                      AndroidNotificationPermission.granted => const Icon(
+                        Icons.check_circle_outline_rounded,
+                      ),
+                      null => const SizedBox.square(
+                        dimension: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    },
                   ),
                 ],
-              ),
+                if (desktopAutostart != null &&
+                    desktopAutostart.supported != false) ...[
+                  const Divider(height: 1),
+                  _SectionHeader(strings.settingsDesktopSection),
+                  _DesktopAutostartTile(
+                    state: desktopAutostart,
+                    onChanged: (enabled) =>
+                        _setDesktopAutostart(context, ref, enabled),
+                    onRetry: () => ref
+                        .read(desktopAutostartStateProvider.notifier)
+                        .refresh(),
+                  ),
+                ],
+                // Desktop only. A store build is updated by its store, and a
+                // self-updater inside one breaks both stores' rules.
+                if (ref.watch(updateCheckHostProvider)) ...[
+                  const Divider(height: 1),
+                  _SectionHeader(strings.settingsUpdatesSection),
+                  const UpdateCheckSettingsTile(),
+                ],
+                if (appLock.supported) ...[
+                  const Divider(height: 1),
+                  _SectionHeader(strings.settingsSecuritySection),
+                  const AppLockSettingsTile(),
+                ],
+                // Hidden where no server offers a relay: the policy would leave
+                // ICE without a usable candidate, so the switch could only break
+                // a call, never help one.
+                if (ref.watch(callRelayOfferedProvider).valueOrNull !=
+                    false) ...[
+                  const Divider(height: 1),
+                  _SectionHeader(strings.settingsCallsSection),
+                  SwitchListTile(
+                    key: const Key('call-relay-only'),
+                    title: Text(strings.settingsCallRelayOnly),
+                    subtitle: Text(strings.settingsCallRelayOnlyDescription),
+                    value: ref.watch(callRelayOnlyProvider),
+                    onChanged: (relayOnly) => unawaited(
+                      ref
+                          .read(callRelayOnlyProvider.notifier)
+                          .setRelayOnly(relayOnly),
+                    ),
+                  ),
+                ],
+                const Divider(height: 1),
+                _SectionHeader(strings.settingsRepliesSection),
+                RadioGroup<ReplyLayout>(
+                  groupValue: ref.watch(replyLayoutProvider),
+                  onChanged: (layout) => _setReplyLayout(ref, layout),
+                  child: Column(
+                    children: [
+                      RadioListTile<ReplyLayout>(
+                        key: const Key('reply-layout-inline'),
+                        title: Text(strings.settingsReplyLayoutInline),
+                        subtitle: Text(
+                          strings.settingsReplyLayoutInlineDescription,
+                        ),
+                        value: ReplyLayout.inline,
+                      ),
+                      RadioListTile<ReplyLayout>(
+                        key: const Key('reply-layout-thread'),
+                        title: Text(strings.settingsReplyLayoutThread),
+                        subtitle: Text(
+                          strings.settingsReplyLayoutThreadDescription,
+                        ),
+                        value: ReplyLayout.thread,
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                _SectionHeader(strings.settingsThemeSection),
+                RadioGroup<ThemeMode>(
+                  groupValue: themeMode,
+                  onChanged: (mode) => _setTheme(ref, mode),
+                  child: Column(
+                    children: [
+                      _ThemeModeTile(
+                        tileKey: const Key('theme-mode-system'),
+                        label: strings.settingsThemeSystem,
+                        mode: ThemeMode.system,
+                      ),
+                      _ThemeModeTile(
+                        tileKey: const Key('theme-mode-light'),
+                        label: strings.settingsThemeLight,
+                        mode: ThemeMode.light,
+                      ),
+                      _ThemeModeTile(
+                        tileKey: const Key('theme-mode-dark'),
+                        label: strings.settingsThemeDark,
+                        mode: ThemeMode.dark,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -483,7 +503,7 @@ StoredAccount? _selectedAccount(List<StoredAccount> accounts) {
 }
 
 final class _AccountTile extends ConsumerStatefulWidget {
-  const _AccountTile(this.account);
+  const _AccountTile(this.account, {super.key});
 
   final StoredAccount account;
 
