@@ -46,7 +46,7 @@ final class OwnTalkImageCache {
   final Directory _directory;
   final Future<DateTime> Function(File file) _lastModified;
   final Future<void> Function(File file) _deleteFile;
-  Future<void> _tail = Future<void>.value();
+  final Map<String, Future<void>> _tails = {};
 
   static Future<DateTime> _readLastModified(File file) => file.lastModified();
 
@@ -54,7 +54,7 @@ final class OwnTalkImageCache {
 
   Future<Uint8List?> read(String accountId, String sha256) {
     final file = _file(accountId, sha256);
-    return _serialize(() async {
+    return _serialize(accountId, () async {
       try {
         return await file.exists() ? await file.readAsBytes() : null;
       } on FileSystemException {
@@ -65,7 +65,7 @@ final class OwnTalkImageCache {
 
   Future<void> write(String accountId, String sha256, Uint8List bytes) {
     final target = _file(accountId, sha256);
-    return _serialize(() async {
+    return _serialize(accountId, () async {
       await _directory.create(recursive: true);
       final temporary = File('${target.path}.tmp');
       await temporary.writeAsBytes(bytes, flush: true);
@@ -77,7 +77,7 @@ final class OwnTalkImageCache {
   /// Drops every cached photo of an account.
   Future<void> removeAccount(String accountId) {
     final prefix = _prefix(accountId);
-    return _serialize(() async {
+    return _serialize(accountId, () async {
       await _deleteFiles(await _accountFiles(prefix));
     });
   }
@@ -151,15 +151,24 @@ final class OwnTalkImageCache {
     ];
   }
 
-  Future<T> _serialize<T>(Future<T> Function() operation) {
+  Future<T> _serialize<T>(String accountId, Future<T> Function() operation) {
+    final previous = _tails[accountId] ?? Future<void>.value();
     final completer = Completer<T>();
-    _tail = _tail.then((_) async {
-      try {
-        completer.complete(await operation());
-      } on Object catch (error, stackTrace) {
-        completer.completeError(error, stackTrace);
-      }
-    });
+    late final Future<void> next;
+    next = previous
+        .then((_) async {
+          try {
+            completer.complete(await operation());
+          } on Object catch (error, stackTrace) {
+            completer.completeError(error, stackTrace);
+          }
+        })
+        .whenComplete(() {
+          if (identical(_tails[accountId], next)) {
+            _tails.remove(accountId);
+          }
+        });
+    _tails[accountId] = next;
     return completer.future;
   }
 

@@ -99,6 +99,38 @@ void main() {
       await cache.removeAccount('account-c');
     });
 
+    test('one account cleanup does not block another account read', () async {
+      final deleteStarted = Completer<void>();
+      final releaseDelete = Completer<void>();
+      addTearDown(() {
+        if (!releaseDelete.isCompleted) releaseDelete.complete();
+      });
+      final cache = OwnTalkImageCache.forTesting(
+        directory,
+        deleteFile: (file) async {
+          deleteStarted.complete();
+          await releaseDelete.future;
+          await file.delete();
+        },
+      );
+      final bytes = ownTalkTestJpeg();
+      final sha = ownTalkTestSha(bytes);
+      await cache.write(_account, sha, bytes);
+      await cache.write('account-b', sha, bytes);
+
+      final removal = cache.removeAccount(_account);
+      await deleteStarted.future;
+
+      expect(
+        await cache
+            .read('account-b', sha)
+            .timeout(const Duration(milliseconds: 100)),
+        orderedEquals(bytes),
+      );
+      releaseDelete.complete();
+      await removal;
+    });
+
     test('removing an account deletes with bounded concurrency', () async {
       const fileCount = 6;
       final gates = <Completer<void>>[];
