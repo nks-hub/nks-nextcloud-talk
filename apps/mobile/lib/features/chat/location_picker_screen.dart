@@ -72,7 +72,8 @@ final class _LocationPickerScreenState
   var _tilesFailed = false;
   var _tiles = const <String, Uint8List>{};
   Timer? _tileDebounce;
-  var _tileGeneration = 0;
+  Future<void>? _tileLoad;
+  var _tileReloadRequested = false;
   http.Client? _client;
   var _locating = false;
   var _searching = false;
@@ -89,7 +90,7 @@ final class _LocationPickerScreenState
 
   @override
   void dispose() {
-    _tileGeneration++;
+    _tileReloadRequested = false;
     _tileDebounce?.cancel();
     _client?.close();
     _latitudeField.dispose();
@@ -170,8 +171,33 @@ final class _LocationPickerScreenState
     );
   }
 
-  Future<void> _loadTiles() async {
+  Future<void> _loadTiles() {
     if (!_mapEnabled) {
+      return Future<void>.value();
+    }
+    final running = _tileLoad;
+    if (running != null) {
+      _tileReloadRequested = true;
+      return running;
+    }
+    late final Future<void> load;
+    load = _runTileLoad().whenComplete(() {
+      if (!identical(_tileLoad, load)) {
+        return;
+      }
+      _tileLoad = null;
+      final reload = _tileReloadRequested;
+      _tileReloadRequested = false;
+      if (reload && mounted && _mapEnabled) {
+        unawaited(_loadTiles());
+      }
+    });
+    _tileLoad = load;
+    return load;
+  }
+
+  Future<void> _runTileLoad() async {
+    if (!_mapEnabled || !mounted) {
       return;
     }
     final zoom = _zoom;
@@ -179,21 +205,27 @@ final class _LocationPickerScreenState
         .where((tile) => !_tiles.containsKey(_tileKey(zoom, tile)))
         .toList(growable: false);
     if (missing.isEmpty) {
+      if (_loadingTiles) {
+        setState(() {
+          _loadingTiles = false;
+          _tilesFailed = false;
+        });
+      }
       return;
     }
-    final generation = ++_tileGeneration;
     setState(() {
       _loadingTiles = true;
       _tilesFailed = false;
     });
     final client = _client ??= widget.tileClient();
     final loaded = await LocationTileLoader(client).load(missing);
-    if (!mounted || generation != _tileGeneration) {
+    if (!mounted) {
       return;
     }
+    final reloadPending = _tileReloadRequested;
     setState(() {
-      _loadingTiles = false;
-      _tilesFailed = loaded.isEmpty;
+      _loadingTiles = reloadPending;
+      _tilesFailed = !reloadPending && loaded.isEmpty;
       _tiles = <String, Uint8List>{
         if (_tiles.length < _maximumCachedTiles) ..._tiles,
         for (final entry in loaded.entries) '$zoom/${entry.key}': entry.value,

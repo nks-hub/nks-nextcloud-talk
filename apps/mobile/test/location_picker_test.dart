@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/features/chat/location_picker_screen.dart';
 import 'package:nextcloudtalk/features/chat/location_share_service.dart';
@@ -151,6 +154,41 @@ void main() {
     expect(find.byType(Image), findsNothing);
   });
 
+  testWidgets('a viewport change keeps tile requests inside one bounded load', (
+    tester,
+  ) async {
+    final client = _HoldingTileClient();
+    await _openPicker(tester, tileClient: () => client);
+
+    await tester.tap(find.byKey(const Key('location-picker-load-map')));
+    await tester.pump();
+    expect(client.inFlight, 2);
+
+    await tester.tap(find.byKey(const Key('location-picker-zoom-in')));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump();
+
+    expect(
+      client.peak,
+      2,
+      reason: 'a new viewport waits for the bounded load already in progress',
+    );
+
+    client.release.complete();
+    await pumpUntilCondition(
+      tester,
+      () =>
+          client.requests > 2 &&
+          client.inFlight == 0 &&
+          find.byType(CircularProgressIndicator).evaluate().isEmpty,
+      timeout: const Duration(seconds: 2),
+      reason: 'the queued viewport load did not finish',
+    );
+    expect(client.inFlight, 0);
+    expect(client.requests, greaterThan(2));
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
   testWidgets('tapping the map picks the point under the finger', (
     tester,
   ) async {
@@ -179,6 +217,7 @@ final class _PickerHost {
 Future<_PickerHost> _openPicker(
   WidgetTester tester, {
   List<Override> overrides = const <Override>[],
+  http.Client Function()? tileClient,
 }) async {
   final host = _PickerHost();
   await tester.pumpWidget(
@@ -194,7 +233,9 @@ Future<_PickerHost> _openPicker(
                   host.result = await Navigator.of(context)
                       .push<LocationPickerResult>(
                         MaterialPageRoute<LocationPickerResult>(
-                          builder: (_) => const LocationPickerScreen(),
+                          builder: (_) => LocationPickerScreen(
+                            tileClient: tileClient ?? http.Client.new,
+                          ),
                         ),
                       );
                   host.closed = true;
@@ -261,4 +302,36 @@ final class _StubPlaceSearch implements PlaceSearchSource {
   Future<List<PlaceSuggestion>> search(String query) async => <PlaceSuggestion>[
     suggestion,
   ];
+}
+
+final class _HoldingTileClient extends http.BaseClient {
+  final release = Completer<void>();
+  var inFlight = 0;
+  var peak = 0;
+  var requests = 0;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    requests++;
+    inFlight++;
+    if (inFlight > peak) {
+      peak = inFlight;
+    }
+    await release.future;
+    inFlight--;
+    return http.StreamedResponse(
+      Stream<List<int>>.value(const <int>[
+        0x89,
+        0x50,
+        0x4e,
+        0x47,
+        0x0d,
+        0x0a,
+        0x1a,
+        0x0a,
+      ]),
+      200,
+      headers: const <String, String>{'content-type': 'image/png'},
+    );
+  }
 }
