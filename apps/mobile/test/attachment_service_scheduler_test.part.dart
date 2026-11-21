@@ -156,6 +156,34 @@ void _registerAttachmentServiceSchedulerTests() {
     expect(diagnostics, isEmpty);
   });
 
+  test(
+    'close stops a successful pending credential read before HTTP',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final vault = _BlockingSecondCredentialVault();
+      var requests = 0;
+      final service = fixture.service(
+        MockClient((request) async {
+          requests++;
+          return http.Response('', 503);
+        }),
+        credentialVault: vault,
+        identifierFactory: _SequentialIdentifierFactory(),
+      );
+
+      await service.enqueue(fixture.request(normalMaximum: 32));
+      await vault.secondReadStarted.future.timeout(const Duration(seconds: 2));
+      final closing = service.close();
+      await pumpEventQueue();
+      vault.releaseSecondRead.complete('fixture-app-password-never-use');
+      await closing.timeout(const Duration(seconds: 2));
+      await pumpEventQueue();
+
+      expect(requests, 0);
+    },
+  );
+
   test('later retry cannot replace an earlier room retry timer', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);

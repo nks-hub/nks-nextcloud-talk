@@ -382,6 +382,9 @@ mixin _AttachmentServiceRuntime {
         await _deferForCredential(selection.roomKey, key, job);
         return _AttachmentStepOutcome.stopped;
       }
+      if (_closed || _suspendedAccounts.contains(job.accountId)) {
+        return _AttachmentStepOutcome.stopped;
+      }
       if (password == null || password.isEmpty) {
         await _deferForCredential(selection.roomKey, key, job);
         return _AttachmentStepOutcome.stopped;
