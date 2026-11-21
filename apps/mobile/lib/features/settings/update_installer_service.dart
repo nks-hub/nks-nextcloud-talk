@@ -404,19 +404,18 @@ final class UpdateInstallerService {
     if (expectedHash == null) {
       return const UpdateInstallVerificationFailed();
     }
-    final file = await _downloadToTemp(
+    final download = await _downloadToTemp(
       client,
       installerUri,
       fileName: fileName,
       onProgress: onProgress,
       cancellation: cancellation,
     );
+    final file = download.file;
     var verified = false;
     try {
       cancellation._check();
-      final actualHash = sha256.convert(await file.readAsBytes()).toString();
-      cancellation._check();
-      if (actualHash != expectedHash) {
+      if (download.sha256 != expectedHash) {
         return const UpdateInstallVerificationFailed();
       }
       verified = true;
@@ -446,7 +445,7 @@ final class UpdateInstallerService {
     return null;
   }
 
-  Future<File> _downloadToTemp(
+  Future<({File file, String sha256})> _downloadToTemp(
     http.Client client,
     Uri installerUri, {
     required String fileName,
@@ -468,6 +467,8 @@ final class UpdateInstallerService {
       }
 
       final sink = file.openWrite();
+      final digestOutput = _DigestOutput();
+      final digestInput = sha256.startChunkedConversion(digestOutput);
       var received = 0;
       try {
         await for (final chunk in response.stream) {
@@ -476,13 +477,15 @@ final class UpdateInstallerService {
           if (received > maximumInstallerBytes) {
             throw const FormatException('Installer is larger than expected.');
           }
+          digestInput.add(chunk);
           sink.add(chunk);
           onProgress?.call(received, totalBytes);
         }
+        digestInput.close();
       } finally {
         await sink.close();
       }
-      return file;
+      return (file: file, sha256: digestOutput.value.toString());
     } on Object {
       await _deleteQuietlyWithParent(file);
       rethrow;
@@ -584,4 +587,27 @@ final class UpdateInstallerService {
     }
     return name;
   }
+}
+
+final class _DigestOutput implements Sink<Digest> {
+  Digest? _value;
+
+  Digest get value {
+    final digest = _value;
+    if (digest == null) {
+      throw StateError('SHA-256 conversion did not complete.');
+    }
+    return digest;
+  }
+
+  @override
+  void add(Digest data) {
+    if (_value != null) {
+      throw StateError('SHA-256 conversion emitted more than one digest.');
+    }
+    _value = data;
+  }
+
+  @override
+  void close() {}
 }
