@@ -55,6 +55,7 @@ final class CertificateTrustGate {
 
   Map<String, Set<String>> _stored = const {};
   final Map<String, String> _confirmed = {};
+  int _refreshGeneration = 0;
 
   /// The most recent certificate that did not pass, so a request that failed
   /// with a bare handshake error can still be explained to the user.
@@ -67,23 +68,33 @@ final class CertificateTrustGate {
     if (load == null) {
       return;
     }
+    final generation = ++_refreshGeneration;
+    Map<String, Set<String>> pins;
     try {
-      storedPins = await load();
+      pins = await load();
     } on Object {
       // Nothing stored means nothing extra is trusted, which is the safe
       // answer; the user is asked again instead of a request being let
       // through on a stale snapshot.
+      pins = const {};
     }
+    if (generation != _refreshGeneration) {
+      return;
+    }
+    storedPins = pins;
   }
 
-  /// Replaces what the accounts have trusted so far. Fingerprints the user
-  /// confirmed in this session survive, because the account that will own them
-  /// may not exist yet.
+  /// Replaces what the accounts have trusted so far. A matching persisted pin
+  /// consumes its one-shot session confirmation; unmatched confirmations
+  /// survive because the account that will own them may not exist yet.
   set storedPins(Map<String, Set<String>> pins) {
     _stored = {
       for (final entry in pins.entries)
         entry.key.toLowerCase(): Set.unmodifiable(entry.value),
     };
+    _confirmed.removeWhere(
+      (host, fingerprint) => _stored[host]?.contains(fingerprint) ?? false,
+    );
   }
 
   /// Records that the user accepted [fingerprint] for [host]. It only lasts
@@ -113,7 +124,9 @@ final class CertificateTrustGate {
     final key = host.toLowerCase();
     final outcome = decideCertificateTrust(
       requestedHost: host,
-      certificateHost: certificateMatchesHost(certificate.der, host) ? host : '',
+      certificateHost: certificateMatchesHost(certificate.der, host)
+          ? host
+          : '',
       presentedFingerprint: fingerprint,
       pinnedFingerprints: {...?_stored[key], ?_confirmed[key]},
     );

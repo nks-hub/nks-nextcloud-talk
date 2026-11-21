@@ -204,8 +204,9 @@ void main() {
   test(
     'a confirmed certificate is stored with the account it belongs to',
     () async {
-      final trust = CertificateTrustGate()
-        ..confirm(host: 'cloud.example.invalid', fingerprint: 'f' * 64);
+      final trust = CertificateTrustGate(
+        loadStoredPins: repository.readCertificatePins,
+      )..confirm(host: 'cloud.example.invalid', fingerprint: 'f' * 64);
       final api = _onboardingApi(withTalk: true);
       addTearDown(api.close);
       final coordinator = OnboardingCoordinator(
@@ -226,9 +227,11 @@ void main() {
       expect(await repository.readCertificatePins(), {
         'cloud.example.invalid': {'f' * 64},
       });
+      expect(trust.confirmedFor('cloud.example.invalid'), null);
 
       // Removing the account must take its trust with it.
       await repository.purgeAccount(account.id);
+      await trust.refresh();
       expect(await repository.readCertificatePins(), isEmpty);
     },
   );

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -84,7 +85,11 @@ void main() {
   group('certificateMatchesHost', () {
     test('matches any DNS SAN without treating an IP literal as DNS', () {
       final der = _certificateDer(
-        dnsNames: ['other.example.invalid', 'Cloud.Example.Invalid', '127.0.0.1'],
+        dnsNames: [
+          'other.example.invalid',
+          'Cloud.Example.Invalid',
+          '127.0.0.1',
+        ],
       );
       expect(certificateMatchesHost(der, 'cloud.example.invalid'), isTrue);
       expect(certificateMatchesHost(der, 'unknown.example.invalid'), isFalse);
@@ -157,6 +162,89 @@ void main() {
       expect(gate.accepts(certificate: certificate, host: host), isTrue);
       expect(seen, isEmpty);
     });
+
+    test(
+      'a persisted confirmation is consumed and removal revokes trust',
+      () async {
+        final fingerprint = certificateFingerprint(certificate.der);
+        var stored = <String, Set<String>>{};
+        final seen = <CertificateEncounter>[];
+        final gate = CertificateTrustGate(
+          loadStoredPins: () async => stored,
+          onEncounter: seen.add,
+        );
+        await gate.refresh();
+        gate.confirm(host: host, fingerprint: fingerprint);
+
+        stored = {
+          host: {fingerprint},
+        };
+        await gate.refresh();
+
+        expect(gate.confirmedFor(host), isNull);
+        expect(gate.accepts(certificate: certificate, host: host), isTrue);
+
+        stored = <String, Set<String>>{};
+        await gate.refresh();
+
+        expect(gate.accepts(certificate: certificate, host: host), isFalse);
+        expect(seen.single.outcome.decision, CertificateTrustDecision.ask);
+      },
+    );
+
+    test('a failed pin reload clears previously stored trust', () async {
+      final fingerprint = certificateFingerprint(certificate.der);
+      var fail = false;
+      final seen = <CertificateEncounter>[];
+      final gate = CertificateTrustGate(
+        loadStoredPins: () async {
+          if (fail) {
+            throw StateError('pin loader unavailable');
+          }
+          return {
+            host: {fingerprint},
+          };
+        },
+        onEncounter: seen.add,
+      );
+      await gate.refresh();
+      expect(gate.accepts(certificate: certificate, host: host), isTrue);
+
+      fail = true;
+      await gate.refresh();
+
+      expect(gate.accepts(certificate: certificate, host: host), isFalse);
+      expect(seen.single.outcome.decision, CertificateTrustDecision.ask);
+    });
+
+    test(
+      'an older refresh cannot restore trust after a newer removal',
+      () async {
+        final fingerprint = certificateFingerprint(certificate.der);
+        final oldLoad = Completer<Map<String, Set<String>>>();
+        var loadCount = 0;
+        final seen = <CertificateEncounter>[];
+        final gate = CertificateTrustGate(
+          loadStoredPins: () {
+            loadCount++;
+            if (loadCount == 1) {
+              return oldLoad.future;
+            }
+            return Future.value(<String, Set<String>>{});
+          },
+          onEncounter: seen.add,
+        );
+
+        await gate.refresh();
+        oldLoad.complete({
+          host: {fingerprint},
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        expect(gate.accepts(certificate: certificate, host: host), isFalse);
+        expect(seen.single.outcome.decision, CertificateTrustDecision.ask);
+      },
+    );
 
     test('a changed certificate is refused as a mismatch, not re-asked', () {
       final seen = <CertificateEncounter>[];

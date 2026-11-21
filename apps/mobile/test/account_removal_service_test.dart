@@ -82,6 +82,7 @@ void main() {
     HttpNextcloudApi api, {
     AccountRemovalStarted? onRemovalStarted,
     AccountRemovalAborted? onRemovalAborted,
+    AccountPurged? onAccountPurged,
     AccountPushRevocation? revokePush,
     AccountBackgroundCleanup? clearChatBackgrounds,
     CredentialVault? credentials,
@@ -106,6 +107,7 @@ void main() {
       attachmentSources: () async => sources,
       onRemovalStarted: onRemovalStarted,
       onRemovalAborted: onRemovalAborted,
+      onAccountPurged: onAccountPurged,
       revokePush: revokePush,
     );
   }
@@ -150,6 +152,11 @@ void main() {
           steps.add('DELETE proxy gateway $accountId');
           return true;
         },
+        onAccountPurged: (accountId) async {
+          expect(await accounts.getAccount(accountId), isNull);
+          expect(await vault.readAppPassword(accountId), isNull);
+          steps.add('refresh trust $accountId');
+        },
       ).removeAccount('account-a');
 
       expect(steps, <String>[
@@ -158,6 +165,7 @@ void main() {
         'DELETE proxy gateway account-a',
         'DELETE /ocs/v2.php/apps/notifications/api/v2/webpush',
         'DELETE /ocs/v2.php/core/apppassword',
+        'refresh trust account-a',
       ]);
       expect(outcome.pushRegistrationRevoked, isTrue);
       expect(outcome.appPasswordRevoked, isTrue);
@@ -184,6 +192,26 @@ void main() {
     expect(await accounts.getAccount('account-a'), isNull);
     expect(await vault.readAppPassword('account-a'), isNull);
   });
+
+  test(
+    'a failed post-purge callback cannot interrupt the local wipe',
+    () async {
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async => http.Response(_okOcs(), 200)),
+      );
+      addTearDown(api.close);
+      await _seedAccount(database, accounts, vault, 'account-a', _serverA);
+
+      final outcome = await buildService(
+        api,
+        onAccountPurged: (_) async => throw StateError('trust reload failed'),
+      ).removeAccount('account-a');
+
+      expect(outcome.accountExisted, isTrue);
+      expect(await accounts.getAccount('account-a'), isNull);
+      expect(await vault.readAppPassword('account-a'), isNull);
+    },
+  );
 
   test('a failed password delete keeps the account removable', () async {
     final requestedPaths = <String>[];

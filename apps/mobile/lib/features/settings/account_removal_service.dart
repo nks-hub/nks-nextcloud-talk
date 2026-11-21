@@ -16,6 +16,7 @@ import 'app_password_revocation_queue.dart';
 
 typedef AccountRemovalStarted = Future<void> Function(String accountId);
 typedef AccountRemovalAborted = Future<void> Function(String accountId);
+typedef AccountPurged = Future<void> Function(String accountId);
 typedef AccountPushRevocation = Future<bool> Function(String accountId);
 typedef AccountBackgroundCleanup = Future<void> Function(String accountId);
 
@@ -76,6 +77,7 @@ final class AccountRemovalService {
     required Future<DurableAttachmentSourceStore> Function() attachmentSources,
     AccountRemovalStarted? onRemovalStarted,
     AccountRemovalAborted? onRemovalAborted,
+    AccountPurged? onAccountPurged,
     AccountPushRevocation? revokePush,
     AppPasswordRevocationQueue? pendingRevocations,
   }) : _accounts = accounts,
@@ -90,6 +92,7 @@ final class AccountRemovalService {
        _attachmentSources = attachmentSources,
        _onRemovalStarted = onRemovalStarted,
        _onRemovalAborted = onRemovalAborted,
+       _onAccountPurged = onAccountPurged,
        _revokePush = revokePush,
        _pendingRevocations = pendingRevocations;
 
@@ -105,6 +108,7 @@ final class AccountRemovalService {
   final Future<DurableAttachmentSourceStore> Function() _attachmentSources;
   final AccountRemovalStarted? _onRemovalStarted;
   final AccountRemovalAborted? _onRemovalAborted;
+  final AccountPurged? _onAccountPurged;
   final AccountPushRevocation? _revokePush;
   final AppPasswordRevocationQueue? _pendingRevocations;
 
@@ -183,6 +187,10 @@ final class AccountRemovalService {
     // Only caches: a locked file must not keep the credentials on the device.
     await _bestEffort(() => _clearChatBackgrounds(accountId));
     final sourceHandles = await _accounts.purgeAccount(accountId);
+    final onAccountPurged = _onAccountPurged;
+    if (onAccountPurged != null) {
+      await _bestEffort(() => onAccountPurged(accountId));
+    }
     _mediaCache.evictAccount(accountId);
     await _bestEffort(() => _mediaDiskCache.evictAccount(accountId));
     await _bestEffort(

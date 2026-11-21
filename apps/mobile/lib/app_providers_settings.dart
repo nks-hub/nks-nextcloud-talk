@@ -103,6 +103,7 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
         ref.invalidate(nextcloudApiProvider);
       }
     },
+    onAccountPurged: (_) => ref.read(certificateTrustGateProvider).refresh(),
     revokePush: (accountId) async {
       // Both transports, because either one can hold a live registration for
       // the account being removed. The Web Push side is revoked only here:

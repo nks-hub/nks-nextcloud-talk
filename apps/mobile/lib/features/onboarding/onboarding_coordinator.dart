@@ -426,7 +426,7 @@ final class OnboardingCoordinator {
         loginCredentials.appPassword,
       );
       credentialWritten = true;
-      return await _accounts.upsertAccount(
+      final stored = await _accounts.upsertAccount(
         accountId: accountId,
         serverUrl: server.value,
         loginName: loginCredentials.loginName,
@@ -443,6 +443,16 @@ final class OnboardingCoordinator {
                 isUtc: true,
               ),
       );
+      // The account now owns the certificate accepted during login. Refresh
+      // the shared gate before returning so that one-shot confirmation cannot
+      // outlive a later account removal in this process.
+      try {
+        await _trust?.refresh();
+      } on Object {
+        // Account and credential persistence already succeeded. Trust refresh
+        // is fail-closed and must not roll either durable write back.
+      }
+      return stored;
     } on Object {
       if (credentialWritten) {
         try {
