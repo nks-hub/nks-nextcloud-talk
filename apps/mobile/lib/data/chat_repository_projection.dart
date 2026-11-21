@@ -742,31 +742,27 @@ extension _ChatRepositoryProjection on ChatRepository {
     }
     final accountId = account.accountId.value;
     final mutated = parent.message;
-    final updated =
-        await (_database.update(_database.cachedChatMessages)..where(
-              (row) =>
-                  row.accountId.equals(accountId) &
-                  row.roomToken.equals(message.roomToken.value) &
-                  row.messageId.equals(mutated.messageId),
-            ))
-            .write(
-              CachedChatMessagesCompanion(
-                actorType: Value(mutated.actorType),
-                actorId: Value(mutated.actorId),
-                actorDisplayName: Value(mutated.actorDisplayName),
-                systemMessage: Value(mutated.systemMessage),
-                messageType: Value(mutated.messageType),
-                referenceId: Value(mutated.referenceId),
-                displayText: Value(_displayText(account.server, mutated)),
-                deleted: Value(mutated.deleted),
-                rawJson: Value(jsonEncode(mutated.wire)),
-              ),
-            );
-    if (updated == 0) {
-      // Not cached here: the message lives outside the loaded blocks and
-      // will arrive in its new state when history reaches it.
-      return null;
-    }
+    await (_database.update(_database.cachedChatMessages)..where(
+          (row) =>
+              row.accountId.equals(accountId) &
+              row.roomToken.equals(message.roomToken.value) &
+              row.messageId.equals(mutated.messageId),
+        ))
+        .write(
+          CachedChatMessagesCompanion(
+            actorType: Value(mutated.actorType),
+            actorId: Value(mutated.actorId),
+            actorDisplayName: Value(mutated.actorDisplayName),
+            systemMessage: Value(mutated.systemMessage),
+            messageType: Value(mutated.messageType),
+            referenceId: Value(mutated.referenceId),
+            displayText: Value(_displayText(account.server, mutated)),
+            deleted: Value(mutated.deleted),
+            rawJson: Value(jsonEncode(mutated.wire)),
+          ),
+        );
+    // A quote can remain cached after its original message has fallen out of
+    // the loaded blocks, so its embedded parent still needs this mutation.
     return mutated;
   }
 

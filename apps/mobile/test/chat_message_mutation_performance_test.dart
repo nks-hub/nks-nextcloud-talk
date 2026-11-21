@@ -155,6 +155,44 @@ void main() {
     expect(parent, isA<ChatFullParent>());
     expect((parent! as ChatFullParent).message.message, 'Second edit');
   });
+
+  test('a mutation reaches a quote whose original is not cached', () async {
+    final original = _messageWire(id: 5000, message: 'Original');
+    final quote = _messageWire(id: 5001, message: 'Quote')
+      ..['parent'] = original;
+    await database
+        .into(database.cachedChatMessages)
+        .insert(_messageCompanion(quote));
+
+    expect(
+      await repository.applyChatGetResponse(
+        _futureResponse(
+          requestId: 'uncached-original-mutation',
+          lastGiven: 5002,
+          messages: <Map<String, Object?>>[
+            _messageWire(id: 5002, message: '{actor} edited a message')
+              ..['systemMessage'] = 'message_edited'
+              ..['messageType'] = 'system'
+              ..['parent'] = _messageWire(
+                id: 5000,
+                message: 'Edited without original',
+              ),
+          ],
+        ),
+      ),
+      ChatMergeOutcome.applied,
+    );
+
+    final row = await (database.select(
+      database.cachedChatMessages,
+    )..where((candidate) => candidate.messageId.equals(5001))).getSingle();
+    final parent = ChatMessage.fromJson(jsonDecode(row.rawJson)).parent;
+    expect(parent, isA<ChatFullParent>());
+    expect(
+      (parent! as ChatFullParent).message.message,
+      'Edited without original',
+    );
+  });
 }
 
 ChatGetResponse _mutationPageResponse(int count) {
