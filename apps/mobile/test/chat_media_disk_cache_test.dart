@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -19,10 +20,14 @@ void main() {
     }
   });
 
-  ChatMediaDiskCache open({int maximumBytes = 64 * 1024 * 1024}) {
+  ChatMediaDiskCache open({
+    int maximumBytes = 64 * 1024 * 1024,
+    Future<FileStat> Function(File file)? statFile,
+  }) {
     return ChatMediaDiskCache(
       rootDirectory: () async => Directory('${root.path}/previews'),
       maximumBytes: maximumBytes,
+      statFile: statFile,
     );
   }
 
@@ -186,6 +191,76 @@ void main() {
       );
     },
   );
+
+  test('a cold scan stats files with bounded concurrency', () async {
+    const fileCount = 12;
+    final previews = Directory('${root.path}/previews');
+    await previews.create(recursive: true);
+    for (var index = 0; index < fileCount; index++) {
+      await File(
+        p.join(previews.path, 'entry-$index'),
+      ).writeAsBytes(<int>[index]);
+    }
+
+    final gates = <Completer<void>>[];
+    final firstStatStarted = Completer<void>();
+    var inFlight = 0;
+    var peakInFlight = 0;
+    final cache = open(
+      statFile: (file) async {
+        final stat = file.statSync();
+        final gate = Completer<void>();
+        gates.add(gate);
+        if (!firstStatStarted.isCompleted) {
+          firstStatStarted.complete();
+        }
+        inFlight++;
+        if (inFlight > peakInFlight) {
+          peakInFlight = inFlight;
+        }
+        await gate.future;
+        inFlight--;
+        return stat;
+      },
+    );
+    final opening = cache.read(accountId: 'account-a', uri: uriFor(99));
+
+    Future<void> releaseAll() async {
+      while (gates.length < fileCount) {
+        for (final gate in gates) {
+          if (!gate.isCompleted) {
+            gate.complete();
+          }
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      for (final gate in gates) {
+        if (!gate.isCompleted) {
+          gate.complete();
+        }
+      }
+      await opening;
+    }
+
+    addTearDown(releaseAll);
+    await firstStatStarted.future;
+    for (var turn = 0; turn < 20 && gates.length < 8; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+
+    expect(gates, hasLength(8));
+    expect(peakInFlight, 8);
+
+    gates.first.complete();
+    for (var turn = 0; turn < 20 && gates.length < 9; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(gates, hasLength(9));
+    expect(peakInFlight, 8);
+
+    await releaseAll();
+    expect(cache.length, fileCount);
+  });
 
   test('evicting an account erases its bytes from disk only', () async {
     final cache = open();

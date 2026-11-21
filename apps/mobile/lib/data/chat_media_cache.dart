@@ -206,15 +206,18 @@ final class ChatMediaDiskCache {
   ChatMediaDiskCache({
     required this.rootDirectory,
     this.maximumBytes = 64 * 1024 * 1024,
-  });
+    Future<FileStat> Function(File file)? statFile,
+  }) : _statFile = statFile ?? _readStat;
 
   /// Longest accepted content type header, which bounds how much of a corrupt
   /// file is scanned before it is discarded.
   static const int _maximumHeaderBytes = 64;
+  static const int _scanConcurrency = 8;
 
   /// Resolved once, on first use, because it needs a platform channel.
   final Future<Directory> Function() rootDirectory;
   final int maximumBytes;
+  final Future<FileStat> Function(File file) _statFile;
   final Map<String, ({int bytes, DateTime touchedAt})> _index = {};
 
   Directory? _root;
@@ -224,6 +227,8 @@ final class ChatMediaDiskCache {
   int get byteLength => _bytes;
 
   int get length => _index.length;
+
+  static Future<FileStat> _readStat(File file) => file.stat();
 
   Future<void> evict({required String accountId, required Uri uri}) async {
     final Directory root;
@@ -357,14 +362,26 @@ final class ChatMediaDiskCache {
   Future<Directory> _scan() async {
     final root = await rootDirectory();
     await root.create(recursive: true);
+    final files = <File>[];
     await for (final entity in root.list(recursive: true, followLinks: false)) {
-      if (entity is! File) {
-        continue;
+      if (entity is File) {
+        files.add(entity);
       }
-      final stat = await entity.stat();
-      _index[entity.path] = (bytes: stat.size, touchedAt: stat.modified);
-      _bytes += stat.size;
     }
+    var nextFile = 0;
+    Future<void> indexFiles() async {
+      while (nextFile < files.length) {
+        final file = files[nextFile++];
+        final stat = await _statFile(file);
+        _index[file.path] = (bytes: stat.size, touchedAt: stat.modified);
+        _bytes += stat.size;
+      }
+    }
+
+    final workerCount = files.length < _scanConcurrency
+        ? files.length
+        : _scanConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => indexFiles()));
     _root = root;
     // A shrunken bound, or bytes written by an older build, are enforced here
     // rather than left to sit until the next write.
