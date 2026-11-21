@@ -29,6 +29,22 @@ void main() {
     appPassword: 'fixture-password',
   );
 
+  test('public Giphy media values keep their own byte storage', () {
+    final source = Uint8List.fromList(<int>[1, 2, 3]);
+    final thumbnail = GiphyThumbnail(body: source, contentType: 'image/gif');
+    final reference = GiphyReferenceMedia(
+      resourceUrl: Uri.parse('https://giphy.com/gifs/fixture'),
+      body: source,
+      contentType: 'image/gif',
+      aspectRatio: 1,
+    );
+
+    source[0] = 9;
+
+    expect(thumbnail.body, <int>[1, 2, 3]);
+    expect(reference.body, <int>[1, 2, 3]);
+  });
+
   _registerGiphyCapabilityTests();
   _registerGiphyRepositoryTests(server, authorization);
   _registerGiphyControllerTests();

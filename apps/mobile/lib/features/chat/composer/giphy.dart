@@ -86,6 +86,8 @@ final class GiphyThumbnail {
   GiphyThumbnail({required Uint8List body, required this.contentType})
     : body = Uint8List.fromList(body);
 
+  GiphyThumbnail._owned({required this.body, required this.contentType});
+
   final Uint8List body;
   final String contentType;
 }
@@ -97,6 +99,13 @@ final class GiphyReferenceMedia {
     required this.contentType,
     required this.aspectRatio,
   }) : body = Uint8List.fromList(body);
+
+  GiphyReferenceMedia._owned({
+    required this.resourceUrl,
+    required this.body,
+    required this.contentType,
+    required this.aspectRatio,
+  });
 
   final Uri resourceUrl;
   final Uint8List body;

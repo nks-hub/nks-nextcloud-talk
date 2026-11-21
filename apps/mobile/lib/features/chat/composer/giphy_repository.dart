@@ -201,7 +201,7 @@ final class HttpGiphyRepository implements GiphyRepository {
     if (image.contentType != 'image/gif') {
       throw const GiphyException(GiphyError.invalidResponse);
     }
-    return GiphyReferenceMedia(
+    return GiphyReferenceMedia._owned(
       resourceUrl: resourceUrl,
       body: image.body,
       contentType: image.contentType,
@@ -357,7 +357,7 @@ final class HttpGiphyRepository implements GiphyRepository {
           !_matchesThumbnailSignature(contentType, body)) {
         throw const GiphyException(GiphyError.invalidResponse);
       }
-      return GiphyThumbnail(body: body, contentType: contentType);
+      return GiphyThumbnail._owned(body: body, contentType: contentType);
     } on GiphyException {
       rethrow;
     } on http.RequestAbortedException {
