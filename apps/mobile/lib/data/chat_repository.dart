@@ -26,6 +26,9 @@ const String _networkRootScopeKey = 'network-root';
 /// timeline derives the same tick from the server once the row is gone.
 const Duration _completedTextSendRetention = Duration(days: 7);
 
+/// Completed sends only need periodic cleanup during a long-running process.
+const Duration _completedTextSendPruneInterval = Duration(days: 1);
+
 final class ClaimedTextSend {
   const ClaimedTextSend({required this.request, required this.operation});
 
@@ -46,10 +49,12 @@ final class StoredOutgoingTextMessage {
 }
 
 final class ChatRepository {
-  ChatRepository(this._database);
+  ChatRepository(this._database, {DateTime Function()? clock})
+    : _clock = clock ?? DateTime.now;
 
   final AppDatabase _database;
-  bool _completedTextSendsPruned = false;
+  final DateTime Function() _clock;
+  DateTime? _nextCompletedTextSendPruneAt;
 
   /// Messages of a room, or of one thread when [threadId] is given.
   ///
@@ -1004,18 +1009,23 @@ final class ChatRepository {
     int? now,
     int absenceGraceSeconds = textSendAbsenceGraceSeconds,
   }) async {
+    final pruneStartedAt = _clock().toUtc();
+    final nextPruneAt = _nextCompletedTextSendPruneAt;
+    final pruneDue =
+        nextPruneAt == null || !pruneStartedAt.isBefore(nextPruneAt);
     // Every sync asks, and almost none has anything to recover: one keyed
     // lookup answers that without loading the account's runtime.
-    if (_completedTextSendsPruned &&
-        !await _hasInterruptedTextSend(accountId, inFlight)) {
+    if (!pruneDue && !await _hasInterruptedTextSend(accountId, inFlight)) {
       return;
     }
-    return _database.transaction(() async {
+    final pruned = await _database.transaction(() async {
       // Before the snapshot is read, or a later persist would write the
       // pruned rows straight back.
-      await _pruneCompletedTextSendsOnce();
+      if (pruneDue) {
+        await _pruneCompletedTextSends(pruneStartedAt);
+      }
       if (!await _hasInterruptedTextSend(accountId, inFlight)) {
-        return;
+        return pruneDue;
       }
       var snapshot = await _loadRuntime(accountId);
       final typedAccountId = AccountId.parse(accountId);
@@ -1045,7 +1055,16 @@ final class ChatRepository {
       if (changed) {
         await _persistAccount(snapshot.accounts[typedAccountId]!);
       }
+      return pruneDue;
     });
+    if (pruned) {
+      final candidate = pruneStartedAt.add(_completedTextSendPruneInterval);
+      final scheduled = _nextCompletedTextSendPruneAt;
+      if (scheduled == null || candidate.isAfter(scheduled)) {
+        // Do not suppress the retry when the transaction rolled back.
+        _nextCompletedTextSendPruneAt = candidate;
+      }
+    }
   }
 
   Future<bool> _hasInterruptedTextSend(
@@ -1189,13 +1208,8 @@ final class ChatRepository {
         .write(const TextSendOperationsCompanion(nextAttemptAt: Value(null)));
   }
 
-  Future<void> _pruneCompletedTextSendsOnce() async {
-    if (_completedTextSendsPruned) {
-      return;
-    }
-    _completedTextSendsPruned = true;
-    final cutoff = DateTime.now()
-        .toUtc()
+  Future<void> _pruneCompletedTextSends(DateTime now) async {
+    final cutoff = now
         .subtract(_completedTextSendRetention)
         .millisecondsSinceEpoch;
     await (_database.delete(_database.textSendOperations)..where(

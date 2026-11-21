@@ -514,6 +514,60 @@ void main() {
     final rows = await database.select(database.textSendOperations).get();
     expect(rows.map((row) => row.enqueueSequence).toSet(), {2, 3, 4});
   });
+
+  test('completed text sends are pruned again after one day', () async {
+    var now = DateTime.utc(2026, 1, 10);
+    final pruningRepository = ChatRepository(database, clock: () => now);
+
+    await pruningRepository.recoverInterruptedTextSends('account-a');
+    await _insertOperation(
+      database,
+      id: 1,
+      updatedAtMillis: now
+          .subtract(const Duration(days: 8))
+          .millisecondsSinceEpoch,
+    );
+
+    await pruningRepository.recoverInterruptedTextSends('account-a');
+    expect(
+      await database.select(database.textSendOperations).get(),
+      hasLength(1),
+    );
+
+    now = now.add(const Duration(days: 1));
+    await pruningRepository.recoverInterruptedTextSends('account-a');
+    expect(await database.select(database.textSendOperations).get(), isEmpty);
+  });
+
+  test('failed completed text send pruning is retried', () async {
+    final now = DateTime.utc(2026, 1, 10);
+    final pruningRepository = ChatRepository(database, clock: () => now);
+    await _insertOperation(
+      database,
+      id: 1,
+      updatedAtMillis: now
+          .subtract(const Duration(days: 8))
+          .millisecondsSinceEpoch,
+    );
+    await database.customStatement('''
+      CREATE TRIGGER fail_completed_text_send_prune
+      BEFORE DELETE ON text_send_operations
+      BEGIN
+        SELECT RAISE(ABORT, 'forced completed text send prune rollback');
+      END
+    ''');
+
+    await expectLater(
+      pruningRepository.recoverInterruptedTextSends('account-a'),
+      throwsA(anything),
+    );
+    await database.customStatement(
+      'DROP TRIGGER fail_completed_text_send_prune',
+    );
+
+    await pruningRepository.recoverInterruptedTextSends('account-a');
+    expect(await database.select(database.textSendOperations).get(), isEmpty);
+  });
 }
 
 Future<void> _insertOperation(
