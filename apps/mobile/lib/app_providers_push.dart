@@ -179,10 +179,9 @@ AndroidPushCoordinator _buildAndroidPushCoordinator(
 ///
 /// Null off Android and while the Web Push fallback is selected.
 ///
-/// NOT YET DELIVERING: nothing calls `installToken`, because the app has no
-/// FCM integration to get a token from. Without a provider token the state
-/// machine plans no effect at all, so this registers nowhere until the
-/// Firebase project is wired in. Kept honest by a test.
+/// The FCM bridge below installs the current provider token and forwards token
+/// rotations. Without a token the state machine intentionally waits and plans
+/// no registration effect.
 final androidPushRegistrationCoordinatorProvider =
     Provider<PushRegistrationCoordinator?>((ref) {
       if (!Platform.isAndroid ||

@@ -3095,7 +3095,7 @@ abstract class AppLocalizations {
   /// No description provided for @diagnosticsPushSection.
   ///
   /// In en, this message translates to:
-  /// **'Push registration'**
+  /// **'Push'**
   String get diagnosticsPushSection;
 
   /// No description provided for @diagnosticsPushTransport.
@@ -3193,6 +3193,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Queued events'**
   String get diagnosticsPushPendingEvents;
+
+  /// No description provided for @diagnosticsPushLastReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport last received'**
+  String get diagnosticsPushLastReceived;
+
+  /// No description provided for @diagnosticsPushLastDecrypted.
+  ///
+  /// In en, this message translates to:
+  /// **'Account last decrypted'**
+  String get diagnosticsPushLastDecrypted;
+
+  /// No description provided for @diagnosticsPushDisplayResult.
+  ///
+  /// In en, this message translates to:
+  /// **'Account notification result'**
+  String get diagnosticsPushDisplayResult;
+
+  /// No description provided for @diagnosticsPushTransportError.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport delivery error'**
+  String get diagnosticsPushTransportError;
+
+  /// No description provided for @diagnosticsPushAccountError.
+  ///
+  /// In en, this message translates to:
+  /// **'Account delivery error'**
+  String get diagnosticsPushAccountError;
+
+  /// No description provided for @diagnosticsPushValueAt.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} at {time}'**
+  String diagnosticsPushValueAt(String value, String time);
 
   /// No description provided for @diagnosticsPushPlatformUnsupported.
   ///

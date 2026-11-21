@@ -5,6 +5,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../push/android_web_push_bridge.dart';
 import 'local_diagnostics.dart';
 
 /// Local state of one account, reachable from Settings.
@@ -346,6 +347,7 @@ List<Widget> _pushEntries(AppLocalizations strings, PushDiagnostics push) {
             push.failureCode ?? strings.diagnosticsValueNone,
           ),
         ),
+        ..._pushDeliveryEntries(strings, push),
       ];
     case PushDiagnosticsGap.proxyNotRunning:
       return [
@@ -354,6 +356,7 @@ List<Widget> _pushEntries(AppLocalizations strings, PushDiagnostics push) {
           label: strings.diagnosticsPushPhase,
           value: strings.diagnosticsPushProxyNotRunning,
         ),
+        ..._pushDeliveryEntries(strings, push),
       ];
     case null:
       final proxy = push.proxy;
@@ -405,6 +408,7 @@ List<Widget> _pushEntries(AppLocalizations strings, PushDiagnostics push) {
                 ? strings.diagnosticsPushEffectRunning
                 : strings.diagnosticsValueNone,
           ),
+          ..._pushDeliveryEntries(strings, push),
         ];
       }
       return [
@@ -435,8 +439,88 @@ List<Widget> _pushEntries(AppLocalizations strings, PushDiagnostics push) {
           label: strings.diagnosticsPushPendingEvents,
           value: '${push.pendingEventCount}',
         ),
+        ..._pushDeliveryEntries(strings, push),
       ];
   }
+}
+
+List<Widget> _pushDeliveryEntries(
+  AppLocalizations strings,
+  PushDiagnostics push,
+) {
+  final delivery = push.delivery;
+  final failure = push.deliveryFailureCode;
+  return [
+    _Entry(
+      entryKey: const Key('diagnostics-push-last-received'),
+      label: strings.diagnosticsPushLastReceived,
+      value: _diagnosticsInstant(delivery?.lastTransportReceivedAt, strings),
+    ),
+    _Entry(
+      entryKey: const Key('diagnostics-push-last-decrypted'),
+      label: strings.diagnosticsPushLastDecrypted,
+      value: _diagnosticsInstant(delivery?.lastDecryptedAt, strings),
+    ),
+    _Entry(
+      entryKey: const Key('diagnostics-push-display'),
+      label: strings.diagnosticsPushDisplayResult,
+      value: delivery?.displayOutcome == null || delivery?.lastDisplayAt == null
+          ? strings.diagnosticsValueNone
+          : strings.diagnosticsPushValueAt(
+              _displayOutcomeName(delivery!.displayOutcome!),
+              delivery.lastDisplayAt!.toUtc().toIso8601String(),
+            ),
+    ),
+    _Entry(
+      entryKey: const Key('diagnostics-push-transport-error'),
+      label: strings.diagnosticsPushTransportError,
+      value: failure != null
+          ? strings.diagnosticsPushReadFailed(failure)
+          : _diagnosticsFailure(
+              strings,
+              delivery?.transportFailureClass,
+              delivery?.lastTransportFailureAt,
+            ),
+    ),
+    _Entry(
+      entryKey: const Key('diagnostics-push-account-error'),
+      label: strings.diagnosticsPushAccountError,
+      value: _diagnosticsFailure(
+        strings,
+        delivery?.accountFailureClass,
+        delivery?.lastAccountFailureAt,
+      ),
+    ),
+  ];
+}
+
+String _diagnosticsInstant(DateTime? instant, AppLocalizations strings) {
+  return instant?.toUtc().toIso8601String() ?? strings.diagnosticsValueNone;
+}
+
+String _diagnosticsFailure(
+  AppLocalizations strings,
+  String? failureClass,
+  DateTime? instant,
+) {
+  if (failureClass == null || instant == null) {
+    return strings.diagnosticsValueNone;
+  }
+  return strings.diagnosticsPushValueAt(
+    failureClass,
+    instant.toUtc().toIso8601String(),
+  );
+}
+
+String _displayOutcomeName(AndroidPushDisplayOutcome outcome) {
+  return switch (outcome) {
+    AndroidPushDisplayOutcome.posted => 'posted',
+    AndroidPushDisplayOutcome.suppressedOpenRoom => 'suppressed-open-room',
+    AndroidPushDisplayOutcome.filteredOtherApp => 'filtered-other-app',
+    AndroidPushDisplayOutcome.notificationsDisabled => 'notifications-disabled',
+    AndroidPushDisplayOutcome.missingFields => 'missing-fields',
+    AndroidPushDisplayOutcome.invalidPayload => 'invalid-payload',
+  };
 }
 
 final class _OutboxEntries extends StatelessWidget {

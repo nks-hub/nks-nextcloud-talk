@@ -1684,7 +1684,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get diagnosticsSyncLastError => 'Poslední chyba';
 
   @override
-  String get diagnosticsPushSection => 'Registrace push';
+  String get diagnosticsPushSection => 'Push';
 
   @override
   String get diagnosticsPushTransport => 'Cesta oznámení';
@@ -1734,6 +1734,26 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get diagnosticsPushPendingEvents => 'Události ve frontě';
+
+  @override
+  String get diagnosticsPushLastReceived => 'Poslední příjem transportu';
+
+  @override
+  String get diagnosticsPushLastDecrypted => 'Poslední rozšifrování účtu';
+
+  @override
+  String get diagnosticsPushDisplayResult => 'Výsledek oznámení účtu';
+
+  @override
+  String get diagnosticsPushTransportError => 'Chyba doručení transportu';
+
+  @override
+  String get diagnosticsPushAccountError => 'Chyba doručení účtu';
+
+  @override
+  String diagnosticsPushValueAt(String value, String time) {
+    return '$value v $time';
+  }
 
   @override
   String get diagnosticsPushPlatformUnsupported =>

@@ -258,17 +258,22 @@ internal object AndroidSystemNotifications {
         open.first == accountId &&
         open.second == payload.objectId
 
-    fun apply(context: Context, accountId: String, payload: AndroidWebPushPayload) {
+    fun apply(
+        context: Context,
+        accountId: String,
+        payload: AndroidWebPushPayload,
+    ): PushDisplayOutcome? {
         val manager = context.getSystemService(NotificationManager::class.java)
         val store = AndroidWebPushStore(context)
         val groupKey = accountGroupKey(accountId)
-        when (payload) {
+        return when (payload) {
             is AndroidWebPushPayload.Message -> {
-                if (
-                    surfacesAsTalkNotification(payload) &&
-                    !isChatInOpenRoom(openRoom, accountId, payload)
-                ) {
-                    show(context, manager, store, accountId, groupKey, payload)
+                when {
+                    !surfacesAsTalkNotification(payload) ->
+                        PushDisplayOutcome.FILTERED_OTHER_APP
+                    isChatInOpenRoom(openRoom, accountId, payload) ->
+                        PushDisplayOutcome.SUPPRESSED_OPEN_ROOM
+                    else -> show(context, manager, store, accountId, groupKey, payload)
                 }
             }
             is AndroidWebPushPayload.Delete -> {
@@ -279,6 +284,7 @@ internal object AndroidSystemNotifications {
                     payload.notificationId,
                     released?.platformNotificationId,
                 )
+                null
             }
             is AndroidWebPushPayload.DeleteMultiple -> {
                 val released = store
@@ -292,15 +298,17 @@ internal object AndroidSystemNotifications {
                         released[it]?.platformNotificationId,
                     )
                 }
+                null
             }
             AndroidWebPushPayload.DeleteAll -> {
                 cancelEvictedRoutes(manager, store.revokeAllNotificationOpens(accountId))
                 manager.activeNotifications
                     .filter { it.tag?.startsWith("$groupKey:") == true }
                     .forEach { manager.cancel(it.tag, it.id) }
+                null
             }
-            is AndroidWebPushPayload.Activation,
-            AndroidWebPushPayload.Invalid -> Unit
+            is AndroidWebPushPayload.Activation -> null
+            AndroidWebPushPayload.Invalid -> PushDisplayOutcome.INVALID_PAYLOAD
         }
     }
 
@@ -641,11 +649,24 @@ internal object AndroidSystemNotifications {
         accountId: String,
         groupKey: String,
         payload: AndroidWebPushPayload.Message,
-    ) {
-        val notificationId = payload.notificationId ?: return
-        val subject = payload.subject ?: return
+    ): PushDisplayOutcome {
+        val notificationId = payload.notificationId ?: return PushDisplayOutcome.MISSING_FIELDS
+        val subject = payload.subject ?: return PushDisplayOutcome.MISSING_FIELDS
         val app = payload.app ?: DEFAULT_NOTIFICATION_APP
         ensureChannel(manager)
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+            !manager.areNotificationsEnabled()
+        ) {
+            return PushDisplayOutcome.NOTIFICATIONS_DISABLED
+        }
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            manager.getNotificationChannel(CHANNEL_ID)?.importance ==
+            NotificationManager.IMPORTANCE_NONE
+        ) {
+            return PushDisplayOutcome.NOTIFICATIONS_DISABLED
+        }
         val prepared = store.prepareSystemNotification(
             accountId = accountId,
             notificationId = notificationId,
@@ -684,6 +705,7 @@ internal object AndroidSystemNotifications {
         val tag = notificationTag(groupKey, notificationId)
         manager.cancel(tag, LEGACY_PLATFORM_NOTIFICATION_ID)
         manager.notify(tag, prepared.platformNotificationId, notification)
+        return PushDisplayOutcome.POSTED
     }
 
     private fun ensureChannel(manager: NotificationManager) {

@@ -28,6 +28,24 @@ enum AndroidNotificationActionKind { reply, markRead }
 
 enum AndroidNotificationActionOutcome { completed, failed }
 
+enum AndroidPushDeliveryTransport {
+  proxy('proxy'),
+  webPush('webPush');
+
+  const AndroidPushDeliveryTransport(this.wireName);
+
+  final String wireName;
+}
+
+enum AndroidPushDisplayOutcome {
+  posted,
+  suppressedOpenRoom,
+  filteredOtherApp,
+  notificationsDisabled,
+  missingFields,
+  invalidPayload,
+}
+
 abstract interface class AndroidWebPushPlatform {
   Stream<int> get eventsAvailable;
 
@@ -95,6 +113,16 @@ abstract interface class AndroidWebPushPlatform {
   });
 
   Future<void> dispose();
+}
+
+/// The small, content-free part of native delivery state that diagnostics may
+/// read. It is separate from [AndroidWebPushPlatform] so existing non-Android
+/// and test implementations do not have to pretend they can report it.
+abstract interface class AndroidPushDeliveryDiagnosticsPlatform {
+  Future<AndroidPushDeliveryDiagnostics> getDeliveryDiagnostics({
+    required String accountId,
+    required AndroidPushDeliveryTransport transport,
+  });
 }
 
 class AndroidNotificationAction {
@@ -214,6 +242,75 @@ class AndroidWebPushRegistrationState {
       pendingEventCount: pendingEventCount,
     );
   }
+}
+
+class AndroidPushDeliveryDiagnostics {
+  const AndroidPushDeliveryDiagnostics({
+    this.lastTransportReceivedAt,
+    this.lastDecryptedAt,
+    this.lastDisplayAt,
+    this.displayOutcome,
+    this.lastTransportFailureAt,
+    this.transportFailureClass,
+    this.lastAccountFailureAt,
+    this.accountFailureClass,
+  });
+
+  /// Transport-wide because the account is not known before decryption.
+  final DateTime? lastTransportReceivedAt;
+  final DateTime? lastDecryptedAt;
+  final DateTime? lastDisplayAt;
+  final AndroidPushDisplayOutcome? displayOutcome;
+  final DateTime? lastTransportFailureAt;
+  final String? transportFailureClass;
+  final DateTime? lastAccountFailureAt;
+  final String? accountFailureClass;
+
+  factory AndroidPushDeliveryDiagnostics.fromMap(Map<Object?, Object?> map) {
+    final transportReceivedAt = _optionalInstant(
+      map,
+      'lastTransportReceivedAtMillis',
+    );
+    final decryptedAt = _optionalInstant(map, 'lastDecryptedAtMillis');
+    final displayAt = _optionalInstant(map, 'lastDisplayAtMillis');
+    final rawDisplayOutcome = _optionalString(map, 'displayOutcome');
+    final transportFailureAt = _optionalInstant(
+      map,
+      'lastTransportFailureAtMillis',
+    );
+    final transportFailureClass = _optionalString(map, 'transportFailureClass');
+    final accountFailureAt = _optionalInstant(
+      map,
+      'lastAccountFailureAtMillis',
+    );
+    final accountFailureClass = _optionalString(map, 'accountFailureClass');
+    if ((displayAt == null) != (rawDisplayOutcome == null) ||
+        !_validFailure(transportFailureAt, transportFailureClass) ||
+        !_validFailure(accountFailureAt, accountFailureClass)) {
+      throw const FormatException(
+        'Native push delivery diagnostics are invalid.',
+      );
+    }
+    return AndroidPushDeliveryDiagnostics(
+      lastTransportReceivedAt: transportReceivedAt,
+      lastDecryptedAt: decryptedAt,
+      lastDisplayAt: displayAt,
+      displayOutcome: rawDisplayOutcome == null
+          ? null
+          : _displayOutcome(rawDisplayOutcome),
+      lastTransportFailureAt: transportFailureAt,
+      transportFailureClass: transportFailureClass,
+      lastAccountFailureAt: accountFailureAt,
+      accountFailureClass: accountFailureClass,
+    );
+  }
+}
+
+bool _validFailure(DateTime? at, String? failureClass) {
+  return (at == null) == (failureClass == null) &&
+      (failureClass == null ||
+          failureClass.length <= 64 &&
+              RegExp(r'^[a-z0-9-]+$').hasMatch(failureClass));
 }
 
 class AndroidNotificationOpen {
@@ -365,7 +462,8 @@ class AndroidWebPushEvent {
   }
 }
 
-class AndroidWebPushBridge implements AndroidWebPushPlatform {
+class AndroidWebPushBridge
+    implements AndroidWebPushPlatform, AndroidPushDeliveryDiagnosticsPlatform {
   AndroidWebPushBridge({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel(channelName) {
     _channel.setMethodCallHandler(_handleNativeCall);
@@ -400,6 +498,18 @@ class AndroidWebPushBridge implements AndroidWebPushPlatform {
       'accountId': accountId,
     });
     return AndroidWebPushRegistrationState.fromMap(response);
+  }
+
+  @override
+  Future<AndroidPushDeliveryDiagnostics> getDeliveryDiagnostics({
+    required String accountId,
+    required AndroidPushDeliveryTransport transport,
+  }) async {
+    final response = await _invokeMap(
+      'getDeliveryDiagnostics',
+      <String, Object>{'accountId': accountId, 'transport': transport.wireName},
+    );
+    return AndroidPushDeliveryDiagnostics.fromMap(response);
   }
 
   @override
@@ -615,6 +725,18 @@ AndroidWebPushRegistrationPhase _registrationPhase(String value) {
   };
 }
 
+AndroidPushDisplayOutcome _displayOutcome(String value) {
+  return switch (value) {
+    'POSTED' => AndroidPushDisplayOutcome.posted,
+    'SUPPRESSED_OPEN_ROOM' => AndroidPushDisplayOutcome.suppressedOpenRoom,
+    'FILTERED_OTHER_APP' => AndroidPushDisplayOutcome.filteredOtherApp,
+    'NOTIFICATIONS_DISABLED' => AndroidPushDisplayOutcome.notificationsDisabled,
+    'MISSING_FIELDS' => AndroidPushDisplayOutcome.missingFields,
+    'INVALID_PAYLOAD' => AndroidPushDisplayOutcome.invalidPayload,
+    _ => throw const FormatException('Native push display outcome is invalid.'),
+  };
+}
+
 Map<Object?, Object?> _requiredMap(Object? value) {
   if (value is Map<Object?, Object?>) {
     return value;
@@ -652,6 +774,17 @@ int? _optionalInt(Map<Object?, Object?> map, String key) {
     return value as int?;
   }
   throw FormatException('Native push response has an invalid $key.');
+}
+
+DateTime? _optionalInstant(Map<Object?, Object?> map, String key) {
+  final millis = _optionalInt(map, key);
+  if (millis == null) {
+    return null;
+  }
+  if (millis < 0) {
+    throw FormatException('Native push response has an invalid $key.');
+  }
+  return DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
 }
 
 bool _requiredBool(Map<Object?, Object?> map, String key) {

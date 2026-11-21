@@ -317,20 +317,51 @@ class NksFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
-        val subject = message.data[SUBJECT_KEY] ?: return
+        val diagnostics = AndroidPushDeliveryDiagnosticsStore(applicationContext)
+        diagnostics.recordReceived(PushDeliveryTransport.PROXY)
+        val subject = message.data[SUBJECT_KEY] ?: run {
+            diagnostics.recordFailure(PushDeliveryTransport.PROXY, "missing-subject")
+            return
+        }
         val ciphertext = runCatching {
             Base64.decode(subject, Base64.DEFAULT)
-        }.getOrNull() ?: return
+        }.getOrNull() ?: run {
+            diagnostics.recordFailure(PushDeliveryTransport.PROXY, "invalid-base64")
+            return
+        }
         val opened = AndroidPushDeviceKeyStore.decryptSubject(
             ciphertext,
             AndroidFcmChannel.accountIds(applicationContext),
-        ) ?: return
+        ) ?: run {
+            diagnostics.recordFailure(PushDeliveryTransport.PROXY, "decryption-failed")
+            return
+        }
         val (accountId, plaintext) = opened
+        diagnostics.recordDecrypted(PushDeliveryTransport.PROXY, accountId)
         // Same parser and same display path as Web Push, so the `app=spreed`
         // gate, the account-scoped platform id ledger and the tap route are
         // shared rather than reimplemented.
         val payload = AndroidWebPushPayloadParser.parse(plaintext, decrypted = true)
-        AndroidSystemNotifications.apply(applicationContext, accountId, payload)
+        val displayOutcome = try {
+            AndroidSystemNotifications.apply(applicationContext, accountId, payload)
+        } catch (error: Throwable) {
+            diagnostics.recordFailure(
+                PushDeliveryTransport.PROXY,
+                "display-failed",
+                accountId = accountId,
+            )
+            throw error
+        }
+        displayOutcome?.let {
+            diagnostics.recordDisplay(PushDeliveryTransport.PROXY, accountId, it)
+        }
+        if (payload == AndroidWebPushPayload.Invalid) {
+            diagnostics.recordFailure(
+                PushDeliveryTransport.PROXY,
+                "invalid-payload",
+                accountId = accountId,
+            )
+        }
         AndroidFcmChannel.messageReceived(accountId)
         if (AttachmentTransferService.unsentWaiting(applicationContext)) {
             BackgroundDrain.scheduleForPush(applicationContext)

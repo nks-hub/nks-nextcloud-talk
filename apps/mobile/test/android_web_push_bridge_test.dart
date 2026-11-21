@@ -68,6 +68,42 @@ void main() {
     expect(calls.single.arguments, <String, Object>{'accountId': 'account-a'});
   });
 
+  test('reads safe delivery stages for the selected transport', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return <String, Object?>{
+            'lastTransportReceivedAtMillis': 1763715600000,
+            'lastDecryptedAtMillis': 1763715601000,
+            'lastDisplayAtMillis': 1763715602000,
+            'displayOutcome': 'POSTED',
+            'lastTransportFailureAtMillis': 1763712000000,
+            'transportFailureClass': 'decryption-failed',
+            'lastAccountFailureAtMillis': 1763713800000,
+            'accountFailureClass': 'invalid-payload',
+          };
+        });
+
+    final diagnostics = await bridge.getDeliveryDiagnostics(
+      accountId: 'account-a',
+      transport: AndroidPushDeliveryTransport.proxy,
+    );
+
+    expect(diagnostics.lastTransportReceivedAt, DateTime.utc(2025, 11, 21, 9));
+    expect(diagnostics.lastDecryptedAt, DateTime.utc(2025, 11, 21, 9, 0, 1));
+    expect(diagnostics.lastDisplayAt, DateTime.utc(2025, 11, 21, 9, 0, 2));
+    expect(diagnostics.displayOutcome, AndroidPushDisplayOutcome.posted);
+    expect(diagnostics.lastTransportFailureAt, DateTime.utc(2025, 11, 21, 8));
+    expect(diagnostics.transportFailureClass, 'decryption-failed');
+    expect(diagnostics.lastAccountFailureAt, DateTime.utc(2025, 11, 21, 8, 30));
+    expect(diagnostics.accountFailureClass, 'invalid-payload');
+    expect(calls.single.method, 'getDeliveryDiagnostics');
+    expect(calls.single.arguments, <String, Object>{
+      'accountId': 'account-a',
+      'transport': 'proxy',
+    });
+  });
+
   test('requests notification permission through the activity', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {

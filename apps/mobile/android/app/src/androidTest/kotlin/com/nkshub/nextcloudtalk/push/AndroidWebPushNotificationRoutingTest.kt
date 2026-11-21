@@ -29,7 +29,10 @@ class AndroidWebPushNotificationRoutingTest {
         val secondId = 920002L
         cleanup(context, manager, accountA, accountB)
 
-        post(context, accountA, firstId, "routing a first")
+        assertEquals(
+            PushDisplayOutcome.POSTED,
+            post(context, accountA, firstId, "routing a first"),
+        )
         post(context, accountB, firstId, "routing b first")
         val firstA = awaitNotificationWithText(manager, "routing a first")
         val firstB = awaitNotificationWithText(manager, "routing b first")
@@ -143,8 +146,8 @@ class AndroidWebPushNotificationRoutingTest {
         notificationId: Long,
         subject: String,
         roomToken: String = "instrumentation-routing-room",
-    ) {
-        AndroidSystemNotifications.apply(
+    ): PushDisplayOutcome? {
+        return AndroidSystemNotifications.apply(
             context,
             accountId,
             AndroidWebPushPayload.Message(

@@ -135,24 +135,33 @@ final class PushDiagnostics {
     required this.generation,
     required this.nextGeneration,
     required this.pendingEventCount,
+    this.delivery,
+    this.deliveryFailureCode,
   }) : gap = null,
        failureCode = null,
        proxy = null;
 
-  const PushDiagnostics.proxyRegistration(this.proxy)
-    : gap = null,
-      failureCode = null,
-      phase = null,
-      generation = null,
-      nextGeneration = null,
-      pendingEventCount = null;
+  const PushDiagnostics.proxyRegistration(
+    this.proxy, {
+    this.delivery,
+    this.deliveryFailureCode,
+  }) : gap = null,
+       failureCode = null,
+       phase = null,
+       generation = null,
+       nextGeneration = null,
+       pendingEventCount = null;
 
-  const PushDiagnostics.unavailable(this.gap, {this.failureCode})
-    : phase = null,
-      generation = null,
-      nextGeneration = null,
-      pendingEventCount = null,
-      proxy = null;
+  const PushDiagnostics.unavailable(
+    this.gap, {
+    this.failureCode,
+    this.delivery,
+    this.deliveryFailureCode,
+  }) : phase = null,
+       generation = null,
+       nextGeneration = null,
+       pendingEventCount = null,
+       proxy = null;
 
   final AndroidWebPushRegistrationPhase? phase;
   final int? generation;
@@ -161,6 +170,12 @@ final class PushDiagnostics {
 
   /// Set when the device registers through the proxy.
   final PushProxyRegistrationDiagnostics? proxy;
+
+  /// Native stage timestamps and fixed outcome names. No payload or route data.
+  final AndroidPushDeliveryDiagnostics? delivery;
+
+  /// Why native delivery state could not be read, without exception text.
+  final String? deliveryFailureCode;
   final PushDiagnosticsGap? gap;
 
   /// Platform error code or exception type behind a [PushDiagnosticsGap
@@ -470,11 +485,21 @@ final class LocalDiagnosticsLoader {
   Future<PushDiagnostics> _pushDiagnostics(String accountId) async {
     if (proxySelected) {
       final registration = proxyPush?.call(accountId);
+      final delivery = await _deliveryDiagnostics(
+        accountId,
+        AndroidPushDeliveryTransport.proxy,
+      );
       return registration == null
-          ? const PushDiagnostics.unavailable(
+          ? PushDiagnostics.unavailable(
               PushDiagnosticsGap.proxyNotRunning,
+              delivery: delivery.value,
+              deliveryFailureCode: delivery.failureCode,
             )
-          : PushDiagnostics.proxyRegistration(registration);
+          : PushDiagnostics.proxyRegistration(
+              registration,
+              delivery: delivery.value,
+              deliveryFailureCode: delivery.failureCode,
+            );
     }
     final platform = push;
     if (platform == null) {
@@ -482,24 +507,63 @@ final class LocalDiagnosticsLoader {
         PushDiagnosticsGap.platformUnsupported,
       );
     }
+    final deliveryFuture = _deliveryDiagnostics(
+      accountId,
+      AndroidPushDeliveryTransport.webPush,
+    );
     try {
       final state = await platform.getRegistrationState(accountId: accountId);
+      final delivery = await deliveryFuture;
       return PushDiagnostics.registered(
         phase: state.phase,
         generation: state.generation,
         nextGeneration: state.nextGeneration,
         pendingEventCount: state.pendingEventCount,
+        delivery: delivery.value,
+        deliveryFailureCode: delivery.failureCode,
       );
     } on PlatformException catch (error) {
+      final delivery = await deliveryFuture;
       return PushDiagnostics.unavailable(
         PushDiagnosticsGap.readFailed,
         failureCode: error.code,
+        delivery: delivery.value,
+        deliveryFailureCode: delivery.failureCode,
       );
     } on Object catch (error) {
+      final delivery = await deliveryFuture;
       return PushDiagnostics.unavailable(
         PushDiagnosticsGap.readFailed,
         failureCode: error.runtimeType.toString(),
+        delivery: delivery.value,
+        deliveryFailureCode: delivery.failureCode,
       );
+    }
+  }
+
+  Future<({AndroidPushDeliveryDiagnostics? value, String? failureCode})>
+  _deliveryDiagnostics(
+    String accountId,
+    AndroidPushDeliveryTransport transport,
+  ) async {
+    final platform = push;
+    if (platform is! AndroidPushDeliveryDiagnosticsPlatform) {
+      return (value: null, failureCode: null);
+    }
+    final diagnosticsPlatform =
+        platform as AndroidPushDeliveryDiagnosticsPlatform;
+    try {
+      return (
+        value: await diagnosticsPlatform.getDeliveryDiagnostics(
+          accountId: accountId,
+          transport: transport,
+        ),
+        failureCode: null,
+      );
+    } on PlatformException catch (error) {
+      return (value: null, failureCode: error.code);
+    } on Object catch (error) {
+      return (value: null, failureCode: error.runtimeType.toString());
     }
   }
 

@@ -1683,7 +1683,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsSyncLastError => 'Last error';
 
   @override
-  String get diagnosticsPushSection => 'Push registration';
+  String get diagnosticsPushSection => 'Push';
 
   @override
   String get diagnosticsPushTransport => 'Push path';
@@ -1733,6 +1733,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diagnosticsPushPendingEvents => 'Queued events';
+
+  @override
+  String get diagnosticsPushLastReceived => 'Transport last received';
+
+  @override
+  String get diagnosticsPushLastDecrypted => 'Account last decrypted';
+
+  @override
+  String get diagnosticsPushDisplayResult => 'Account notification result';
+
+  @override
+  String get diagnosticsPushTransportError => 'Transport delivery error';
+
+  @override
+  String get diagnosticsPushAccountError => 'Account delivery error';
+
+  @override
+  String diagnosticsPushValueAt(String value, String time) {
+    return '$value at $time';
+  }
 
   @override
   String get diagnosticsPushPlatformUnsupported =>

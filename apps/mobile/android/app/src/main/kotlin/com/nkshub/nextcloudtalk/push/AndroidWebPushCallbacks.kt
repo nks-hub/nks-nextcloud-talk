@@ -23,6 +23,8 @@ internal object AndroidWebPushEventSink {
 
     fun message(context: Context, message: PushMessage, instance: String) {
         val store = AndroidWebPushStore(context)
+        val diagnostics = AndroidPushDeliveryDiagnosticsStore(context)
+        diagnostics.recordReceived(PushDeliveryTransport.WEB_PUSH)
         val payload = AndroidWebPushPayloadParser.parse(message.content, message.decrypted)
         val result = when (payload) {
             is AndroidWebPushPayload.Activation -> store.storeActivation(
@@ -37,9 +39,40 @@ internal object AndroidWebPushEventSink {
                 decrypted = message.decrypted,
             )
         }
+        val accountId = store.accountIdForInstance(instance)
+        if (accountId != null) {
+            if (message.decrypted) {
+                diagnostics.recordDecrypted(PushDeliveryTransport.WEB_PUSH, accountId)
+            } else {
+                diagnostics.recordFailure(
+                    PushDeliveryTransport.WEB_PUSH,
+                    "not-decrypted",
+                    accountId = accountId,
+                )
+            }
+        }
         if (result.stored) {
-            store.accountIdForInstance(instance)?.let { accountId ->
-                AndroidSystemNotifications.apply(context, accountId, payload)
+            accountId?.let {
+                val displayOutcome = try {
+                    AndroidSystemNotifications.apply(context, it, payload)
+                } catch (error: Throwable) {
+                    diagnostics.recordFailure(
+                        PushDeliveryTransport.WEB_PUSH,
+                        "display-failed",
+                        accountId = it,
+                    )
+                    throw error
+                }
+                displayOutcome?.let { outcome ->
+                    diagnostics.recordDisplay(PushDeliveryTransport.WEB_PUSH, it, outcome)
+                }
+                if (payload == AndroidWebPushPayload.Invalid) {
+                    diagnostics.recordFailure(
+                        PushDeliveryTransport.WEB_PUSH,
+                        "invalid-payload",
+                        accountId = it,
+                    )
+                }
             }
         }
         if (AttachmentTransferService.unsentWaiting(context)) {

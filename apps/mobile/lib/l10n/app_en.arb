@@ -596,7 +596,7 @@
   "diagnosticsSyncSection": "Synchronisation",
   "diagnosticsSyncLastSuccess": "Last successful sync",
   "diagnosticsSyncLastError": "Last error",
-  "diagnosticsPushSection": "Push registration",
+  "diagnosticsPushSection": "Push",
   "diagnosticsPushTransport": "Push path",
   "diagnosticsPushTransportProxy": "Proxy",
   "diagnosticsPushTransportWebPush": "Web Push",
@@ -613,6 +613,18 @@
   "diagnosticsPushGeneration": "Generation",
   "diagnosticsPushNextGeneration": "Next generation",
   "diagnosticsPushPendingEvents": "Queued events",
+  "diagnosticsPushLastReceived": "Transport last received",
+  "diagnosticsPushLastDecrypted": "Account last decrypted",
+  "diagnosticsPushDisplayResult": "Account notification result",
+  "diagnosticsPushTransportError": "Transport delivery error",
+  "diagnosticsPushAccountError": "Account delivery error",
+  "diagnosticsPushValueAt": "{value} at {time}",
+  "@diagnosticsPushValueAt": {
+    "placeholders": {
+      "value": {"type": "String"},
+      "time": {"type": "String"}
+    }
+  },
   "diagnosticsPushPlatformUnsupported": "Not available on this platform.",
   "diagnosticsPushReadFailed": "Could not be read ({code}).",
   "@diagnosticsPushReadFailed": {

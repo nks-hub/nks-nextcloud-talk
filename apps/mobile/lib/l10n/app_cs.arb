@@ -579,7 +579,7 @@
   "diagnosticsSyncSection": "Synchronizace",
   "diagnosticsSyncLastSuccess": "Poslední úspěšná synchronizace",
   "diagnosticsSyncLastError": "Poslední chyba",
-  "diagnosticsPushSection": "Registrace push",
+  "diagnosticsPushSection": "Push",
   "diagnosticsPushTransport": "Cesta oznámení",
   "diagnosticsPushTransportProxy": "Proxy",
   "diagnosticsPushTransportWebPush": "Web Push",
@@ -596,6 +596,18 @@
   "diagnosticsPushGeneration": "Generace",
   "diagnosticsPushNextGeneration": "Příští generace",
   "diagnosticsPushPendingEvents": "Události ve frontě",
+  "diagnosticsPushLastReceived": "Poslední příjem transportu",
+  "diagnosticsPushLastDecrypted": "Poslední rozšifrování účtu",
+  "diagnosticsPushDisplayResult": "Výsledek oznámení účtu",
+  "diagnosticsPushTransportError": "Chyba doručení transportu",
+  "diagnosticsPushAccountError": "Chyba doručení účtu",
+  "diagnosticsPushValueAt": "{value} v {time}",
+  "@diagnosticsPushValueAt": {
+    "placeholders": {
+      "value": {"type": "String"},
+      "time": {"type": "String"}
+    }
+  },
   "diagnosticsPushPlatformUnsupported": "Na této platformě není k dispozici.",
   "diagnosticsPushReadFailed": "Nepodařilo se načíst ({code}).",
   "@diagnosticsPushReadFailed": {

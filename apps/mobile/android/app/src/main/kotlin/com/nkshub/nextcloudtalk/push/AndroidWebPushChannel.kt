@@ -11,6 +11,7 @@ internal class AndroidWebPushChannel(
 ) : MethodChannel.MethodCallHandler {
     private val applicationContext = context.applicationContext
     private val store = AndroidWebPushStore(applicationContext)
+    private val deliveryDiagnostics = AndroidPushDeliveryDiagnosticsStore(applicationContext)
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
@@ -21,6 +22,9 @@ internal class AndroidWebPushChannel(
                 "getAvailability" -> result.success(getAvailability())
                 "getRegistrationState" -> {
                     result.success(getRegistrationState(requireArguments(call)))
+                }
+                "getDeliveryDiagnostics" -> {
+                    result.success(getDeliveryDiagnostics(requireArguments(call)))
                 }
                 "getNotificationPermission" -> {
                     result.success(activity.registrationPermissionStatus())
@@ -91,6 +95,15 @@ internal class AndroidWebPushChannel(
 
     private fun getRegistrationState(arguments: Map<*, *>): Map<String, Any?> {
         return store.registrationState(arguments.requiredAccountId())
+    }
+
+    private fun getDeliveryDiagnostics(arguments: Map<*, *>): Map<String, Any?> {
+        val transport = PushDeliveryTransport.fromWireName(
+            arguments.requiredString("transport", MAX_TRANSPORT_LENGTH),
+        ) ?: throw PushBridgeException("invalid_transport")
+        return deliveryDiagnostics
+            .read(transport, arguments.requiredAccountId())
+            .toChannelMap()
     }
 
     private fun register(arguments: Map<*, *>): Map<String, Any> {
@@ -257,9 +270,11 @@ internal class AndroidWebPushChannel(
         private const val MAX_ACK_EVENTS = 100
         private const val MAX_ACTION_ID_LENGTH = 64
         private const val MAX_OUTCOME_LENGTH = 16
+        private const val MAX_TRANSPORT_LENGTH = 16
         private val ACTION_OUTCOMES = setOf("completed", "failed")
         private val NON_STORE_METHODS = setOf(
             "getAvailability",
+            "getDeliveryDiagnostics",
             "getNotificationPermission",
             "requestNotificationPermission",
             "getLaunchNotification",

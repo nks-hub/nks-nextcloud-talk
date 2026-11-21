@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:drift/drift.dart' show Value;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
@@ -42,18 +43,39 @@ Future<void> _settleRealAsync(WidgetTester tester, {int rounds = 12}) async {
   }
 }
 
-final class _FakePushPlatform implements AndroidWebPushPlatform {
-  _FakePushPlatform(this.state);
+final class _FakePushPlatform
+    implements AndroidWebPushPlatform, AndroidPushDeliveryDiagnosticsPlatform {
+  _FakePushPlatform(
+    this.state, {
+    this.delivery = const AndroidPushDeliveryDiagnostics(),
+    this.registrationError,
+  });
 
   final AndroidWebPushRegistrationState state;
+  final AndroidPushDeliveryDiagnostics delivery;
+  final Object? registrationError;
   final requestedAccountIds = <String>[];
+  final requestedDelivery = <(String, AndroidPushDeliveryTransport)>[];
 
   @override
   Future<AndroidWebPushRegistrationState> getRegistrationState({
     required String accountId,
   }) async {
     requestedAccountIds.add(accountId);
+    final error = registrationError;
+    if (error != null) {
+      throw error;
+    }
     return state;
+  }
+
+  @override
+  Future<AndroidPushDeliveryDiagnostics> getDeliveryDiagnostics({
+    required String accountId,
+    required AndroidPushDeliveryTransport transport,
+  }) async {
+    requestedDelivery.add((accountId, transport));
+    return delivery;
   }
 
   Never _unused() => throw UnsupportedError('Not used by diagnostics');
@@ -546,9 +568,24 @@ void main() {
         effectPending: false,
       );
       final asked = <String>[];
+      final platform = _FakePushPlatform(
+        const AndroidWebPushRegistrationState(
+          generation: null,
+          nextGeneration: 1,
+          phase: null,
+          pendingEventCount: 0,
+        ),
+        delivery: AndroidPushDeliveryDiagnostics(
+          lastTransportReceivedAt: DateTime.utc(2026, 11, 21, 9),
+          lastDecryptedAt: DateTime.utc(2026, 11, 21, 9, 0, 1),
+          lastDisplayAt: DateTime.utc(2026, 11, 21, 9, 0, 2),
+          displayOutcome: AndroidPushDisplayOutcome.posted,
+        ),
+      );
       final diagnostics = await LocalDiagnosticsLoader(
         database: database,
         accounts: AccountRepository(database),
+        push: platform,
         proxySelected: true,
         proxyPush: (accountId) {
           asked.add(accountId);
@@ -559,6 +596,13 @@ void main() {
       expect(asked, ['account-a']);
       expect(diagnostics.push.gap, isNull);
       expect(diagnostics.push.proxy, same(registration));
+      expect(platform.requestedDelivery, [
+        ('account-a', AndroidPushDeliveryTransport.proxy),
+      ]);
+      expect(
+        diagnostics.push.delivery?.displayOutcome,
+        AndroidPushDisplayOutcome.posted,
+      );
       // The Web Push half stays empty: it is not the path in use, and filling
       // it in is exactly the misreport this exists to stop.
       expect(diagnostics.push.phase, isNull);
@@ -571,14 +615,33 @@ void main() {
     addTearDown(database.close);
     await _seedFixture(database);
 
+    final platform = _FakePushPlatform(
+      const AndroidWebPushRegistrationState(
+        generation: null,
+        nextGeneration: 1,
+        phase: null,
+        pendingEventCount: 0,
+      ),
+      delivery: AndroidPushDeliveryDiagnostics(
+        lastTransportReceivedAt: DateTime.utc(2026, 11, 21, 10),
+      ),
+    );
     final diagnostics = await LocalDiagnosticsLoader(
       database: database,
       accounts: AccountRepository(database),
+      push: platform,
       proxySelected: true,
     ).load('account-a');
 
     expect(diagnostics.push.gap, PushDiagnosticsGap.proxyNotRunning);
     expect(diagnostics.push.proxy, isNull);
+    expect(
+      diagnostics.push.delivery?.lastTransportReceivedAt,
+      DateTime.utc(2026, 11, 21, 10),
+    );
+    expect(platform.requestedDelivery, [
+      ('account-a', AndroidPushDeliveryTransport.proxy),
+    ]);
   });
 
   test('an account the coordinator does not know is not invented', () async {
@@ -596,6 +659,40 @@ void main() {
     expect(diagnostics.push.gap, PushDiagnosticsGap.proxyNotRunning);
   });
 
+  test(
+    'a registration read failure keeps independent delivery state',
+    () async {
+      final database = openTestDatabase();
+      addTearDown(database.close);
+      await _seedFixture(database);
+      final platform = _FakePushPlatform(
+        const AndroidWebPushRegistrationState(
+          generation: null,
+          nextGeneration: 1,
+          phase: null,
+          pendingEventCount: 0,
+        ),
+        registrationError: PlatformException(code: 'registration-read-failed'),
+        delivery: AndroidPushDeliveryDiagnostics(
+          lastTransportReceivedAt: DateTime.utc(2026, 11, 21, 11),
+        ),
+      );
+
+      final diagnostics = await LocalDiagnosticsLoader(
+        database: database,
+        accounts: AccountRepository(database),
+        push: platform,
+      ).load('account-a');
+
+      expect(diagnostics.push.gap, PushDiagnosticsGap.readFailed);
+      expect(diagnostics.push.failureCode, 'registration-read-failed');
+      expect(
+        diagnostics.push.delivery?.lastTransportReceivedAt,
+        DateTime.utc(2026, 11, 21, 11),
+      );
+    },
+  );
+
   testWidgets('the proxy registration is shown without any secret', (
     tester,
   ) async {
@@ -609,8 +706,8 @@ void main() {
         overrides: [
           localDiagnosticsProvider.overrideWith(
             (ref, accountId) async => _diagnosticsWith(
-              const PushDiagnostics.proxyRegistration(
-                PushProxyRegistrationDiagnostics(
+              PushDiagnostics.proxyRegistration(
+                const PushProxyRegistrationDiagnostics(
                   phase: PushAccountPhase.retryable,
                   retryPhase: PushAccountPhase.gatewayRegistering,
                   errorClass: 'network',
@@ -618,6 +715,16 @@ void main() {
                   registeredProviderGeneration: 2,
                   providerTokenInstalled: false,
                   effectPending: true,
+                ),
+                delivery: AndroidPushDeliveryDiagnostics(
+                  lastTransportReceivedAt: DateTime.utc(2026, 11, 21, 9),
+                  lastDecryptedAt: DateTime.utc(2026, 11, 21, 9, 0, 1),
+                  lastDisplayAt: DateTime.utc(2026, 11, 21, 9, 0, 2),
+                  displayOutcome: AndroidPushDisplayOutcome.posted,
+                  lastTransportFailureAt: DateTime.utc(2026, 11, 20, 8),
+                  transportFailureClass: 'decryption-failed',
+                  lastAccountFailureAt: DateTime.utc(2026, 11, 20, 8, 30),
+                  accountFailureClass: 'invalid-payload',
                 ),
               ),
             ),
@@ -637,6 +744,27 @@ void main() {
     expect(find.text('Not received'), findsOneWidget);
     expect(find.text('3'), findsWidgets);
     expect(
+      _valueOf(tester, 'diagnostics-push-last-received'),
+      '2026-11-21T09:00:00.000Z',
+    );
+    expect(
+      _valueOf(tester, 'diagnostics-push-last-decrypted'),
+      '2026-11-21T09:00:01.000Z',
+    );
+    expect(
+      _valueOf(tester, 'diagnostics-push-display'),
+      'posted at 2026-11-21T09:00:02.000Z',
+    );
+    expect(
+      _valueOf(tester, 'diagnostics-push-transport-error'),
+      'decryption-failed at 2026-11-20T08:00:00.000Z',
+    );
+    expect(
+      _valueOf(tester, 'diagnostics-push-account-error'),
+      'invalid-payload at 2026-11-20T08:30:00.000Z',
+    );
+    expect(find.text(_messageText), findsNothing);
+    expect(
       find.byKey(const Key('diagnostics-push-next-generation')),
       findsNothing,
     );
@@ -655,8 +783,11 @@ void main() {
         overrides: [
           localDiagnosticsProvider.overrideWith(
             (ref, accountId) async => _diagnosticsWith(
-              const PushDiagnostics.unavailable(
+              PushDiagnostics.unavailable(
                 PushDiagnosticsGap.proxyNotRunning,
+                delivery: AndroidPushDeliveryDiagnostics(
+                  lastTransportReceivedAt: DateTime.utc(2026, 11, 21, 10),
+                ),
               ),
             ),
           ),
@@ -671,6 +802,46 @@ void main() {
     expect(
       find.text('Proxy selected, but nothing is registering on this build'),
       findsOneWidget,
+    );
+    expect(
+      _valueOf(tester, 'diagnostics-push-last-received'),
+      '2026-11-21T10:00:00.000Z',
+    );
+  });
+
+  testWidgets('a registration read failure still shows delivery state', (
+    tester,
+  ) async {
+    _useTallSurface(tester);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          localDiagnosticsProvider.overrideWith(
+            (ref, accountId) async => _diagnosticsWith(
+              PushDiagnostics.unavailable(
+                PushDiagnosticsGap.readFailed,
+                failureCode: 'registration-read-failed',
+                delivery: AndroidPushDeliveryDiagnostics(
+                  lastTransportReceivedAt: DateTime.utc(2026, 11, 21, 11),
+                ),
+              ),
+            ),
+          ),
+        ],
+        child: localizedTestApp(
+          home: const DiagnosticsScreen(accountId: 'account-a'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Could not be read (registration-read-failed).'),
+      findsOneWidget,
+    );
+    expect(
+      _valueOf(tester, 'diagnostics-push-last-received'),
+      '2026-11-21T11:00:00.000Z',
     );
   });
 
