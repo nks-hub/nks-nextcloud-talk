@@ -90,3 +90,27 @@ Future<void> _runParallelAttachmentRoom(
     Error.throwWithStackTrace(error, stack);
   }
 }
+
+Future<void> _releaseVerifiedAttachmentSources(
+  _AttachmentServiceRuntime service,
+) async {
+  final sources = service._verifiedSources.values.toList(growable: false);
+  var nextSource = 0;
+
+  Future<void> releaseNext() async {
+    while (nextSource < sources.length) {
+      final source = sources[nextSource++];
+      try {
+        await service._transport.releaseSource(source);
+      } on AttachmentTransportException {
+        // The durable source itself remains owned by the persisted job.
+      }
+    }
+  }
+
+  final workerCount = sources.length < _sourceReleaseConcurrency
+      ? sources.length
+      : _sourceReleaseConcurrency;
+  await Future.wait(List.generate(workerCount, (_) => releaseNext()));
+  service._verifiedSources.clear();
+}

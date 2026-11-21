@@ -994,14 +994,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
     _confirmationRetryCounts.clear();
     _deferredConfirmations.clear();
     _confirmationResumeRequests.clear();
-    for (final entry in _verifiedSources.entries.toList(growable: false)) {
-      try {
-        await _transport.releaseSource(entry.value);
-      } on AttachmentTransportException {
-        // The durable source itself remains owned by the persisted job.
-      }
-    }
-    _verifiedSources.clear();
+    await _releaseVerifiedAttachmentSources(this);
     await _transport.close();
   }
 }

@@ -1,6 +1,62 @@
 part of 'attachment_service_test.dart';
 
 void _registerAttachmentServiceParallelTests() {
+  test('close releases verified sources with bounded concurrency', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final closeGate = Completer<void>();
+    final sourceProvider = _GatedCloseSourceProvider(closeGate.future);
+    final threeUploadsStarted = Completer<void>();
+    var uploadsStarted = 0;
+    final service = fixture.service(
+      MockClient.streaming((request, body) async {
+        await body.drain<void>();
+        if (request.url.path.endsWith('/folder')) {
+          return http.StreamedResponse(Stream.value(_probeSuccess()), 200);
+        }
+        if (request.method == 'PUT') {
+          uploadsStarted++;
+          if (uploadsStarted == 3) threeUploadsStarted.complete();
+          await (request as http.Abortable).abortTrigger!;
+          throw http.RequestAbortedException(request.url);
+        }
+        fail('Unexpected request: ${request.method}');
+      }),
+      sourceProvider: sourceProvider,
+      identifierFactory: const UuidAttachmentIdentifierFactory(),
+    );
+    Future<void>? closing;
+    addTearDown(() async {
+      if (!closeGate.isCompleted) closeGate.complete();
+      await (closing ??= service.close());
+    });
+
+    for (var index = 0; index < 6; index++) {
+      final source = await _createDistinctAttachmentSource(
+        fixture,
+        name: 'pending-$index.png',
+      );
+      await service.enqueue(
+        fixture.request(normalMaximum: 32, source: source.source),
+      );
+    }
+    await threeUploadsStarted.future.timeout(const Duration(seconds: 2));
+    expect(sourceProvider.closeStarts, 0);
+
+    sourceProvider.gateCloses = true;
+    closing = service.close();
+    for (var turn = 0; turn < 50 && sourceProvider.closeStarts < 4; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(sourceProvider.closeStarts, 4);
+    expect(sourceProvider.closeFinishes, 0);
+
+    closeGate.complete();
+    await closing;
+    expect(sourceProvider.closeStarts, 6);
+    expect(sourceProvider.closeFinishes, 6);
+  });
+
   test('a running retry does not arm another immediate retry timer', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);
@@ -287,4 +343,45 @@ void _registerAttachmentServiceParallelTests() {
       );
     expect(finalized, jobs.map((job) => job.draft.referenceId.value));
   });
+}
+
+final class _GatedCloseSourceProvider implements AttachmentSourceProvider {
+  _GatedCloseSourceProvider(this.closeGate);
+
+  final Future<void> closeGate;
+  bool gateCloses = false;
+  int closeStarts = 0;
+  int closeFinishes = 0;
+
+  @override
+  Future<AttachmentSourceLease> open(
+    AttachmentSourceHandle handle, {
+    AttachmentCancellationSignal? cancellationSignal,
+  }) async {
+    if (cancellationSignal?.isCancelled ?? false) {
+      throw StateError('Synthetic source open cancelled');
+    }
+    return _GatedCloseSourceLease(
+      file: File.fromUri(Uri.parse(handle.value)),
+      owner: this,
+    );
+  }
+}
+
+final class _GatedCloseSourceLease implements AttachmentSourceLease {
+  const _GatedCloseSourceLease({required this.file, required this.owner});
+
+  final File file;
+  final _GatedCloseSourceProvider owner;
+
+  @override
+  Stream<List<int>> openRead({int offset = 0, int? length}) =>
+      file.openRead(offset, length == null ? null : offset + length);
+
+  @override
+  Future<void> close() async {
+    owner.closeStarts++;
+    if (owner.gateCloses) await owner.closeGate;
+    owner.closeFinishes++;
+  }
 }
