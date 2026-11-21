@@ -59,6 +59,16 @@ final class _ChatLocationPreviewState extends State<_ChatLocationPreview> {
   var _failed = false;
 
   @override
+  void didUpdateWidget(covariant _ChatLocationPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.location.latitude == widget.location.latitude &&
+        oldWidget.location.longitude == widget.location.longitude) {
+      return;
+    }
+    _resetOnlineMap();
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final scope = _LocationTileScope.maybeOf(context);
@@ -66,14 +76,18 @@ final class _ChatLocationPreviewState extends State<_ChatLocationPreview> {
         identical(_clientFactory, scope?.clientFactory)) {
       return;
     }
+    _resetOnlineMap();
+    _accountId = scope?.accountId;
+    _clientFactory = scope?.clientFactory;
+  }
+
+  void _resetOnlineMap() {
     _generation++;
     _client?.close();
     _client = null;
     _tiles = const <String, Uint8List>{};
     _loading = false;
     _failed = false;
-    _accountId = scope?.accountId;
-    _clientFactory = scope?.clientFactory;
   }
 
   @override

@@ -312,6 +312,52 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('changed location resets consent and discards old tile results', (
+    tester,
+  ) async {
+    final oldClient = _RecordingTileClient.delayed();
+    final newClient = _RecordingTileClient.success();
+    var clientLoads = 0;
+    http.Client clientFactory(String accountId) =>
+        clientLoads++ == 0 ? oldClient : newClient;
+    await tester.pumpWidget(
+      _app(
+        TextScaler.noScaling,
+        message: _locationMessage,
+        tileClientFactory: clientFactory,
+      ),
+    );
+    await tester.tap(find.byKey(const Key('chat-location-online-opt-in')));
+    await tester.pump();
+    expect(oldClient.requests, isNotEmpty);
+
+    await tester.pumpWidget(
+      _app(
+        TextScaler.noScaling,
+        message: _movedLocationMessage,
+        tileClientFactory: clientFactory,
+      ),
+    );
+
+    expect(oldClient.closed, isTrue);
+    expect(find.byType(Image), findsNothing);
+    expect(
+      find.byKey(const Key('chat-location-online-opt-in')),
+      findsOneWidget,
+    );
+    expect(newClient.requests, isEmpty);
+
+    oldClient.completePendingSuccessfully();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+
+    expect(find.byType(Image), findsNothing);
+    expect(newClient.requests, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('disposing location preview closes and invalidates its loader', (
     tester,
   ) async {
@@ -846,6 +892,19 @@ final _locationMessage = ChatMessage.fromJson(<String, Object?>{
       'latitude': '48.85837',
       'longitude': '2.29448',
       'link': 'https://attacker.example.invalid/forged-map.png',
+    },
+  },
+});
+
+final _movedLocationMessage = ChatMessage.fromJson(<String, Object?>{
+  ..._locationMessage.wire,
+  'messageParameters': <String, Object?>{
+    'object': <String, Object?>{
+      'type': 'geo-location',
+      'id': 'geo:50.0875,14.42076',
+      'name': 'Prague Castle',
+      'latitude': '50.0875',
+      'longitude': '14.42076',
     },
   },
 });
