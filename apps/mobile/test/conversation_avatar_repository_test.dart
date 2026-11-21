@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -132,6 +134,91 @@ void main() {
       expect(second?.isCustomAvatar, isFalse);
     },
   );
+
+  test('concurrent loads share one network request', () async {
+    var requests = 0;
+    final release = Completer<void>();
+    final api = HttpNextcloudApi(
+      client: MockClient((_) async {
+        requests++;
+        await release.future;
+        return _imageResponse(body: [10, 11, 12]);
+      }),
+    );
+    addTearDown(api.close);
+    final repository = ConversationAvatarRepository(
+      database: database,
+      credentials: vault,
+      api: api,
+      clock: () => now,
+    );
+    final uri = Uri.parse(
+      'https://cloud.example.invalid/'
+      'ocs/v2.php/apps/spreed/api/v1/room/room-a/avatar?avatarVersion=9',
+    );
+
+    final first = repository.load(account: accountA, uri: uri, versioned: true);
+    final second = repository.load(
+      account: accountA,
+      uri: uri,
+      versioned: true,
+    );
+    await pumpEventQueue();
+
+    expect(requests, 1);
+    release.complete();
+    final results = await Future.wait([first, second]);
+    expect(results[0]?.body, [10, 11, 12]);
+    expect(results[1]?.body, [10, 11, 12]);
+    expect(
+      await database.select(database.conversationAvatars).get(),
+      hasLength(1),
+    );
+  });
+
+  test('a failed shared load does not block a retry', () async {
+    var requests = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((_) async {
+        requests++;
+        if (requests == 1) {
+          return http.Response('', 500);
+        }
+        return _imageResponse(body: [13, 14, 15]);
+      }),
+    );
+    addTearDown(api.close);
+    final repository = ConversationAvatarRepository(
+      database: database,
+      credentials: vault,
+      api: api,
+      clock: () => now,
+    );
+    final uri = Uri.parse(
+      'https://cloud.example.invalid/'
+      'ocs/v2.php/apps/spreed/api/v1/room/room-a/avatar?avatarVersion=10',
+    );
+
+    final first = repository.load(account: accountA, uri: uri, versioned: true);
+    final second = repository.load(
+      account: accountA,
+      uri: uri,
+      versioned: true,
+    );
+    await expectLater(
+      Future.wait([first, second]),
+      throwsA(isA<NextcloudApiException>()),
+    );
+    expect(requests, 1);
+    final retried = await repository.load(
+      account: accountA,
+      uri: uri,
+      versioned: true,
+    );
+
+    expect(requests, 2);
+    expect(retried?.body, [13, 14, 15]);
+  });
 
   test('an expired unversioned avatar is conditionally revalidated', () async {
     final requests = <http.Request>[];

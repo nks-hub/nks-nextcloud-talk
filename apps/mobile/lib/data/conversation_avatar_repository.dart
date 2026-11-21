@@ -52,8 +52,38 @@ final class ConversationAvatarRepository {
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
   final DateTime Function() _clock;
+  final Map<
+    ({String accountId, String cacheKey, bool versioned}),
+    Future<ConversationAvatarImage?>
+  >
+  _inFlightLoads = {};
 
   Future<ConversationAvatarImage?> load({
+    required StoredAccount account,
+    required Uri uri,
+    required bool versioned,
+  }) {
+    final key = (
+      accountId: account.id,
+      cacheKey: uri.toString(),
+      versioned: versioned,
+    );
+    final inFlight = _inFlightLoads[key];
+    if (inFlight != null) {
+      return inFlight;
+    }
+    late final Future<ConversationAvatarImage?> shared;
+    shared = _load(account: account, uri: uri, versioned: versioned)
+        .whenComplete(() {
+          if (identical(_inFlightLoads[key], shared)) {
+            _inFlightLoads.remove(key);
+          }
+        });
+    _inFlightLoads[key] = shared;
+    return shared;
+  }
+
+  Future<ConversationAvatarImage?> _load({
     required StoredAccount account,
     required Uri uri,
     required bool versioned,
