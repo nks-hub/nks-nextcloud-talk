@@ -203,7 +203,7 @@ extension _ControlsMediaSessionTests on _MediaSessionTests {
           localPeerId: _local,
           participants: [for (final peer in peers) _participant(peer)],
         ),
-        sendMessage: (message) async {
+        sendMessage: (message, {required expectedRoomEpoch}) async {
           sent.add(message);
           if (message.type != 'reaction') {
             return true;

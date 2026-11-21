@@ -179,8 +179,13 @@ final class CallSignalingSession {
 
   Stream<CallSignalingUpdate> get updates => _lane.updates;
 
-  Future<bool> sendPeerMessage(SignalingPeerMessage message) {
-    return _lane.sendPeerMessage(message);
+  Future<bool> sendPeerMessage(
+    SignalingPeerMessage message, {
+    int? expectedRoomEpoch,
+  }) {
+    return _lane.sendPeerMessages([
+      message,
+    ], expectedRoomEpoch: expectedRoomEpoch);
   }
 
   /// Queues one transient peer message per recipient. Internal signaling sends

@@ -16,6 +16,12 @@ part 'call_media_session_screen.dart';
 part 'call_media_session_controls.dart';
 part 'call_media_session_state.dart';
 
+typedef CallPeerMessageSender =
+    Future<bool> Function(
+      SignalingPeerMessage message, {
+      required int expectedRoomEpoch,
+    });
+
 /// Owns a room's media and serializes changes against its signalling epoch.
 /// Mesh calls connect directly to peers; MCU calls use a publisher and
 /// separate subscriptions. Both reuse the room's existing signalling transport.
@@ -27,7 +33,7 @@ final class CallMediaSession {
   CallMediaSession({
     required CallSignalingUpdate initial,
     required Stream<CallSignalingUpdate> updates,
-    required Future<bool> Function(SignalingPeerMessage message) sendMessage,
+    required CallPeerMessageSender sendMessage,
     required CallMediaEngine engine,
 
     /// Control messages to the signalling server itself — `requestoffer` to
@@ -89,7 +95,7 @@ final class CallMediaSession {
 
   final CallSignalingUpdate _initial;
   final Stream<CallSignalingUpdate> _updates;
-  final Future<bool> Function(SignalingPeerMessage message) _sendMessage;
+  final CallPeerMessageSender _sendMessage;
   final Future<bool> Function(HpbControlMessage control)? _sendControl;
 
   /// With an MCU every stream goes through the media server: this side
@@ -665,6 +671,7 @@ const _maximumPendingCandidates = 128;
 final class _MediaPeer {
   _MediaPeer(
     this.peerId, {
+    required this.roomEpoch,
     this.roomType = CallMediaSession._roomType,
     this.ownScreen = false,
     this.publisher = false,
@@ -674,6 +681,7 @@ final class _MediaPeer {
   final bool publisher;
 
   final String peerId;
+  final int roomEpoch;
 
   /// `video` for the call itself, `screen` for a shared screen.
   final String roomType;

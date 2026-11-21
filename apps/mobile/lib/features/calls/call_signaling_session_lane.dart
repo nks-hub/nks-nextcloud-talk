@@ -38,7 +38,8 @@ final class _CallSignalingLane {
   final StreamController<CallSignalingUpdate> _updates =
       StreamController<CallSignalingUpdate>.broadcast(sync: true);
   final Map<String, Completer<void>> _httpAborts = {};
-  final List<SignalingPeerMessage> _peerMessageQueue = [];
+  final List<({SignalingPeerMessage message, int? roomEpoch})>
+  _peerMessageQueue = [];
   final List<HpbControlMessage> _controlQueue = <HpbControlMessage>[];
 
   late final CallSignalingSession handle;
@@ -79,11 +80,10 @@ final class _CallSignalingLane {
     unawaited(_enqueue(_fetchSettings));
   }
 
-  Future<bool> sendPeerMessage(SignalingPeerMessage message) {
-    return sendPeerMessages(<SignalingPeerMessage>[message]);
-  }
-
-  Future<bool> sendPeerMessages(Iterable<SignalingPeerMessage> messages) {
+  Future<bool> sendPeerMessages(
+    Iterable<SignalingPeerMessage> messages, {
+    int? expectedRoomEpoch,
+  }) {
     final queued = messages.toList(growable: false);
     return _enqueue(() async {
       final renegotiationBlocksBatch =
@@ -91,6 +91,8 @@ final class _CallSignalingLane {
       if (_disposed ||
           _failed ||
           !_state.signalingReady ||
+          (expectedRoomEpoch != null &&
+              expectedRoomEpoch != _state.roomEpoch) ||
           queued.isEmpty ||
           queued.any((message) => message.recipient == null) ||
           renegotiationBlocksBatch ||
@@ -106,15 +108,23 @@ final class _CallSignalingLane {
         );
         return false;
       }
-      _peerMessageQueue.addAll(queued);
+      _peerMessageQueue.addAll(
+        queued.map(
+          (message) => (message: message, roomEpoch: expectedRoomEpoch),
+        ),
+      );
       return _flushPeerMessages();
     });
   }
 
   Future<bool> _flushPeerMessages() async {
+    final roomEpoch = _state.roomEpoch;
+    _peerMessageQueue.removeWhere(
+      (entry) => entry.roomEpoch != null && entry.roomEpoch != roomEpoch,
+    );
+    final messages = _peerMessageQueue.map((entry) => entry.message);
     final renegotiationBlocksQueue =
-        _state.renegotiationRequired &&
-        !_canSendDuringRenegotiation(_peerMessageQueue);
+        _state.renegotiationRequired && !_canSendDuringRenegotiation(messages);
     if (_disposed ||
         _failed ||
         _peerMessageQueue.isEmpty ||
@@ -142,7 +152,7 @@ final class _CallSignalingLane {
           accountId: authority.accountId,
           authority: authority,
           requestId: _requestId(),
-          messages: _peerMessageQueue.take(messageCount),
+          messages: messages.take(messageCount),
         );
       case SignalingTransportKind.externalHpb:
         if (_state.pendingHpbFrame != null ||
@@ -156,7 +166,7 @@ final class _CallSignalingLane {
           authority: authority,
           requestId: _requestId(),
           effectId: _effectId(),
-          message: _peerMessageQueue.first,
+          message: _peerMessageQueue.first.message,
         );
       case null:
         return true;

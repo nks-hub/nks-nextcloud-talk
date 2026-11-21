@@ -655,7 +655,7 @@ extension _ScreenMediaSessionTests on _MediaSessionTests {
           topology: SignalingTopology.externalMcu,
         ),
         withControl: true,
-        sendMessage: (message) async {
+        sendMessage: (message, {required expectedRoomEpoch}) async {
           sent.add(message);
           if (message.type != gatedType ||
               !peerSet.contains(message.recipient?.value)) {

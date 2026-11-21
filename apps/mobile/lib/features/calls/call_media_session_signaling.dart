@@ -14,7 +14,11 @@ extension _CallMediaSessionSignaling on CallMediaSession {
     if (_publisher != null || _audio == null) {
       return;
     }
-    final publisher = _MediaPeer(localPeerId, publisher: true);
+    final publisher = _MediaPeer(
+      localPeerId,
+      roomEpoch: _boundRoomEpoch!,
+      publisher: true,
+    );
     _publisher = publisher;
     try {
       final connection = await _engine.createPeerConnection(
@@ -71,7 +75,7 @@ extension _CallMediaSessionSignaling on CallMediaSession {
     if (_disposed || _peers.containsKey(peerId)) {
       return;
     }
-    _peers[peerId] = _MediaPeer(peerId);
+    _peers[peerId] = _MediaPeer(peerId, roomEpoch: _boundRoomEpoch!);
     await _requestOffer(peerId);
     if (_disposed) return;
     _offerRequests[peerId]?.cancel();
@@ -122,7 +126,7 @@ extension _CallMediaSessionSignaling on CallMediaSession {
     required String localPeerId,
     required List<CallIceServer> iceServers,
   }) async {
-    final peer = _MediaPeer(peerId);
+    final peer = _MediaPeer(peerId, roomEpoch: _boundRoomEpoch!);
     _peers[peerId] = peer;
     final connection = await _createConnection(peer, iceServers);
     if (connection == null) {
@@ -311,7 +315,7 @@ extension _CallMediaSessionSignaling on CallMediaSession {
       // The server relays a peer message only from a current participant, so a
       // sender we have not listed yet is one whose participant event has not
       // arrived; building the connection now is what avoids losing the offer.
-      peer = _MediaPeer(senderId);
+      peer = _MediaPeer(senderId, roomEpoch: _boundRoomEpoch!);
       if (sid != null && sid.isNotEmpty) {
         peer.sid = sid;
       }
@@ -509,10 +513,11 @@ extension _CallMediaSessionSignaling on CallMediaSession {
     _MediaPeer? via,
     String? roomType,
   }) async {
-    if (_disposed) {
+    final target = roomType == null ? via ?? _peers[peerId] : null;
+    final roomEpoch = target?.roomEpoch ?? _boundRoomEpoch;
+    if (_disposed || roomEpoch == null) {
       return;
     }
-    final target = roomType == null ? via ?? _peers[peerId] : null;
     final SignalingPeerMessage message;
     try {
       message = SignalingPeerMessage(
@@ -533,7 +538,7 @@ extension _CallMediaSessionSignaling on CallMediaSession {
     } on TalkProtocolException {
       throw const CallMediaException(CallMediaError.engineFailure);
     }
-    if (!await _sendMessage(message)) {
+    if (!await _sendMessage(message, expectedRoomEpoch: roomEpoch)) {
       debugPrint('[call] send refused: $type → $peerId (${message.roomType})');
     }
   }

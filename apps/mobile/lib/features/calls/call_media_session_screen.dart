@@ -104,6 +104,7 @@ extension _CallMediaSessionScreen on CallMediaSession {
     }
     final share = _MediaPeer(
       peerId,
+      roomEpoch: _boundRoomEpoch!,
       roomType: CallMediaSession._screenRoomType,
       ownScreen: true,
     );
@@ -249,7 +250,11 @@ extension _CallMediaSessionScreen on CallMediaSession {
       'lines=${_mediaLines(sdp.sdp)}',
     );
     if (screen == null) {
-      screen = _MediaPeer(senderId, roomType: CallMediaSession._screenRoomType);
+      screen = _MediaPeer(
+        senderId,
+        roomEpoch: _boundRoomEpoch!,
+        roomType: CallMediaSession._screenRoomType,
+      );
       _screens[senderId] = screen;
       final opened = screen;
       try {

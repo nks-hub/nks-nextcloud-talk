@@ -14,6 +14,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 part 'call_signaling_session_disposal_test.part.dart';
+part 'call_signaling_session_internal_fixture.part.dart';
 
 void main() {
   late AppDatabase database;
@@ -155,10 +156,14 @@ void main() {
   }
 
   test(
-    'internal settings poll publishes participants and ambiguous batch state',
+    'internal signaling drops queued and late offers from the previous epoch',
     () async {
       await _insertAccount(accounts, credentials, accountId: 'account-a');
-      final client = _InternalSignalingClient(failBatch: true);
+      final batchGate = Completer<void>();
+      final client = _InternalSignalingClient(
+        failBatch: true,
+        batchGate: batchGate.future,
+      );
       final api = HttpNextcloudApi(client: client);
       final coordinator = CallSignalingCoordinator(
         accounts: accounts,
@@ -170,6 +175,7 @@ void main() {
             ConversationSessionId.parse('refreshed-session'),
       );
       addTearDown(() async {
+        if (!batchGate.isCompleted) batchGate.complete();
         await coordinator.dispose();
         api.close();
       });
@@ -190,14 +196,38 @@ void main() {
       expect(populated.phase, SignalingAccountPhase.internalPolling);
       expect(populated.participants.single.peerId.value, 'peer-session-a');
       expect(populated.signalingReady, isTrue);
-      expect(await session.sendPeerMessage(_peerMessage()), isTrue);
+      expect(
+        await session.sendPeerMessage(
+          _peerMessage(),
+          expectedRoomEpoch: populated.roomEpoch,
+        ),
+        isTrue,
+      );
+      expect(
+        await session.sendPeerMessage(
+          _peerMessage(),
+          expectedRoomEpoch: populated.roomEpoch,
+        ),
+        isTrue,
+        reason: 'the previous POST is still awaiting a response',
+      );
+      expect(client.batchAttempts, 1);
 
       // An ambiguous batch is answered with a new room epoch — the thing
       // that makes the media session rebuild its peers — and not with the
       // sticky flag, which used to keep every later call from negotiating.
+      batchGate.complete();
       final ambiguous = await _waitFor(
         session,
         (update) => update.roomEpoch > populated.roomEpoch,
+      );
+      final lateOfferAccepted = await session.sendPeerMessage(
+        _peerMessage(),
+        expectedRoomEpoch: populated.roomEpoch,
+      );
+      expect(
+        (accepted: lateOfferAccepted, posts: client.batchAttempts),
+        (accepted: false, posts: 1),
       );
       final stored = await database.select(database.callSessions).getSingle();
       expect(ambiguous.failure, isNull);
@@ -207,7 +237,10 @@ void main() {
       expect(stored.roomEpoch, ambiguous.roomEpoch);
       expect(stored.renegotiationRequired, isFalse);
       expect(
-        await session.sendPeerMessage(_peerMessage()),
+        await session.sendPeerMessage(
+          _peerMessage(),
+          expectedRoomEpoch: ambiguous.roomEpoch,
+        ),
         isTrue,
         reason: 'the new epoch carries SDP again; no flag blocks it',
       );
@@ -756,51 +789,6 @@ Map<String, Object?> _settingsData(String mode) => <String, Object?>{
       '2.0': <String, Object?>{'token': 'synthetic-token'},
     },
 };
-
-final class _InternalSignalingClient extends http.BaseClient {
-  _InternalSignalingClient({required this.failBatch});
-
-  final bool failBatch;
-  int pullAttempts = 0;
-  int batchAttempts = 0;
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    if (request.url.path.endsWith('/settings')) {
-      return _ocsResponse(200, _settingsData('internal'));
-    }
-    if (request.method == 'POST') {
-      batchAttempts++;
-      if (failBatch) {
-        throw http.ClientException('synthetic ambiguous batch failure');
-      }
-      return _ocsResponse(200, const <Object?>[]);
-    }
-    pullAttempts++;
-    if (pullAttempts == 1) {
-      return _ocsResponse(200, <Object?>[
-        <String, Object?>{
-          'type': 'usersInRoom',
-          'data': <Object?>[
-            <String, Object?>{
-              'sessionId': 'peer-session-a',
-              'roomId': 42,
-              'lastPing': 1,
-              'userId': 'user-a',
-              'inCall': 1,
-              'participantPermissions': 7,
-              'actorType': 'users',
-              'actorId': 'user-a',
-            },
-          ],
-        },
-      ]);
-    }
-    final abortable = request as http.Abortable;
-    await abortable.abortTrigger;
-    throw http.RequestAbortedException(request.url);
-  }
-}
 
 final class _ExternalSettingsClient extends http.BaseClient {
   @override

@@ -59,7 +59,7 @@ extension _MediaMembershipTests on _MediaSessionTests {
           topology: SignalingTopology.externalMcu,
         ),
         withControl: true,
-        sendMessage: (message) async {
+        sendMessage: (message, {required expectedRoomEpoch}) async {
           sent.add(message);
           if (message.type != 'requestoffer') {
             return true;

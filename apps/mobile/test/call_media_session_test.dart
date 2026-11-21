@@ -50,7 +50,7 @@ final class _MediaSessionTests {
     bool withControl = false,
     Duration renegotiationHold = const Duration(seconds: 45),
     void Function()? onSignalingRebuilt,
-    Future<bool> Function(SignalingPeerMessage message)? sendMessage,
+    CallPeerMessageSender? sendMessage,
   }) => CallMediaSession(
     initial: initial,
     renegotiationHold: renegotiationHold,
@@ -58,7 +58,7 @@ final class _MediaSessionTests {
     updates: updates.stream,
     sendMessage:
         sendMessage ??
-        (message) async {
+        (message, {required expectedRoomEpoch}) async {
           sent.add(message);
           return true;
         },
@@ -325,7 +325,7 @@ final class _MediaSessionTests {
           participants: [_participant(_remote)],
         ),
         updates: updates.stream,
-        sendMessage: (message) async {
+        sendMessage: (message, {required expectedRoomEpoch}) async {
           sent.add(message);
           return true;
         },
@@ -422,7 +422,7 @@ final class _MediaSessionTests {
             participants: [_participant(_remote)],
           ),
           updates: updates.stream,
-          sendMessage: (message) async {
+          sendMessage: (message, {required expectedRoomEpoch}) async {
             sent.add(message);
             return true;
           },
@@ -609,7 +609,7 @@ final class _MediaSessionTests {
             participants: [_participant(_remote)],
           ),
           updates: updates.stream,
-          sendMessage: (message) async {
+          sendMessage: (message, {required expectedRoomEpoch}) async {
             sent.add(message);
             return true;
           },
@@ -643,7 +643,7 @@ final class _MediaSessionTests {
             participants: [_participant(_remote)],
           ),
           updates: updates.stream,
-          sendMessage: (message) async {
+          sendMessage: (message, {required expectedRoomEpoch}) async {
             sent.add(message);
             return true;
           },
@@ -687,7 +687,7 @@ final class _MediaSessionTests {
             participants: [_participant(_remote)],
           ),
           updates: updates.stream,
-          sendMessage: (message) async {
+          sendMessage: (message, {required expectedRoomEpoch}) async {
             sent.add(message);
             return true;
           },
@@ -768,6 +768,57 @@ final class _MediaSessionTests {
         expect(media.state.error, isNull);
       },
     );
+
+    test('an offer delayed by SDP creation keeps its original epoch', () async {
+      final firstOffer = Completer<void>();
+      final releaseOffer = Completer<void>();
+      final offerEpochs = <int>[];
+      var signalingEpoch = 1;
+      engine.beforeCreateOffer = (connection) async {
+        if (connection.index == 1) {
+          firstOffer.complete();
+          await releaseOffer.future;
+        }
+      };
+      final media = session(
+        _update(localPeerId: _local, participants: [_participant(_remote)]),
+        sendMessage: (message, {required expectedRoomEpoch}) async {
+          if (message.type == 'offer') offerEpochs.add(expectedRoomEpoch);
+          if (expectedRoomEpoch != signalingEpoch) return false;
+          sent.add(message);
+          return true;
+        },
+      );
+      addTearDown(media.dispose);
+      addTearDown(() {
+        if (!releaseOffer.isCompleted) releaseOffer.complete();
+      });
+      final starting = media.start();
+      await firstOffer.future;
+
+      signalingEpoch = 2;
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+          roomEpoch: signalingEpoch,
+        ),
+      );
+      releaseOffer.complete();
+      await starting;
+      await pumpEventQueue();
+
+      expect(offerEpochs, [1, 2]);
+      expect(
+        sent
+            .where((message) => message.type == 'offer')
+            .single
+            .payload
+            ?.wire['sdp'],
+        'sdp-offer-2',
+      );
+      expect(engine.connections.first.closed, isTrue);
+    });
 
     test('a socket that resumes keeps the peers it already had', () async {
       // A resumable HPB drop reports "not ready" and comes back with the SAME
