@@ -27,6 +27,7 @@ final class _OpenConversationsSheetState
     extends ConsumerState<OpenConversationsSheet> {
   List<ListedRoom>? _rooms;
   NewConversationError? _error;
+  bool _loadInProgress = false;
   bool _joinInProgress = false;
   bool _joining = false;
 
@@ -37,6 +38,10 @@ final class _OpenConversationsSheetState
   }
 
   Future<void> _load() async {
+    if (_loadInProgress) {
+      return;
+    }
+    _loadInProgress = true;
     setState(() {
       _rooms = null;
       _error = null;
@@ -52,6 +57,8 @@ final class _OpenConversationsSheetState
       if (mounted) {
         setState(() => _error = failure.code);
       }
+    } finally {
+      _loadInProgress = false;
     }
   }
 

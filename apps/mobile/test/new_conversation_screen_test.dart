@@ -363,6 +363,52 @@ void main() {
     expect(find.byKey(const Key('open-conversations-list')), findsNothing);
   });
 
+  testWidgets('double tapping open-room retry loads once', (tester) async {
+    service.openRoomsError = const NewConversationException(
+      NewConversationError.network,
+    );
+    await tester.pumpWidget(app(onCreated: (_) {}));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('browse-open-conversations')));
+    await tester.pumpAndSettle();
+
+    expect(service.openRoomsCalls, 1);
+    final loadGate = Completer<void>();
+    service
+      ..openRoomsError = null
+      ..openRoomsGate = loadGate
+      ..openRooms = [
+        ListedRoom(
+          token: ConversationToken.parse('open3456', path: r'$.token'),
+          displayName: 'Open room',
+          description: '',
+          lastActivity: null,
+          hasPassword: false,
+        ),
+      ];
+    addTearDown(() {
+      if (!loadGate.isCompleted) {
+        loadGate.complete();
+      }
+    });
+
+    final retry = find.descendant(
+      of: find.byKey(const Key('open-conversations-error')),
+      matching: find.text('Try again'),
+    );
+    await tester.tap(retry);
+    await tester.tap(retry);
+    await tester.pump();
+
+    expect(service.openRoomsCalls, 2);
+    expect(find.byKey(const Key('open-conversations-loading')), findsOneWidget);
+
+    loadGate.complete();
+    await tester.pumpAndSettle();
+    expect(service.openRoomsCalls, 2);
+    expect(find.byKey(const Key('open-conversation-open3456')), findsOneWidget);
+  });
+
   for (final locale in const [Locale('cs'), Locale('en')]) {
     testWidgets(
       'the new conversation screen fits at 200 % text — ${locale.languageCode}',
@@ -489,6 +535,8 @@ final class _FakeNewConversationService implements NewConversationService {
 
   List<ListedRoom> openRooms = const [];
   NewConversationException? openRoomsError;
+  int openRoomsCalls = 0;
+  Completer<void>? openRoomsGate;
   ConversationToken? joinResult;
   NewConversationException? joinError;
   int joinCalls = 0;
@@ -501,6 +549,8 @@ final class _FakeNewConversationService implements NewConversationService {
     required String accountId,
     String searchTerm = '',
   }) async {
+    openRoomsCalls++;
+    await openRoomsGate?.future;
     final error = openRoomsError;
     if (error != null) {
       throw error;
