@@ -202,10 +202,10 @@ final class _BreakoutAssignDialogState extends State<_BreakoutAssignDialog> {
             final participant = widget.participants[index];
             final id = participant.attendeeId;
             return ListTile(
-              key: Key('room-details-breakout-assign-\$id'),
+              key: Key('room-details-breakout-assign-$id'),
               title: Text(participant.displayName),
               trailing: DropdownButton<int?>(
-                key: Key('room-details-breakout-assign-room-\$id'),
+                key: Key('room-details-breakout-assign-room-$id'),
                 value: _assignment[id],
                 onChanged: (room) => setState(() {
                   if (room == null) {
