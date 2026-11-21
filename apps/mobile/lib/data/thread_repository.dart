@@ -188,6 +188,7 @@ final class ThreadRepository {
       }
     }
     final listed = await _rowsForRoom(accountId, roomToken);
+    final derivedThreads = <CachedThreadsCompanion>[];
     for (final entry in roots.entries) {
       // Every message on the reference server carries `threadId` equal to its
       // own id, so a root alone means nothing - measured, and without this the
@@ -199,33 +200,32 @@ final class ThreadRepository {
           current != null && !isLocallyDerived(current)) {
         continue;
       }
-      await _database
-          .into(_database.cachedThreads)
-          .insertOnConflictUpdate(
-            CachedThreadsCompanion.insert(
-              accountId: accountId,
-              roomToken: roomToken,
-              threadId: entry.key,
-              // The server has no name for this thread, so the root message
-              // stands in for one. Without it every derived row read just
-              // "Vlákno" and two threads in the same room were impossible to
-              // tell apart. A rename dialog opened on such a row starts from
-              // this text, which is the label the reader already sees.
-              title: _derivedThreadTitle(entry.value.displayText),
-              lastMessageId: lastMessage[entry.key] ?? entry.key,
-              lastActivity: lastActivity[entry.key] ?? entry.value.timestamp,
-              numReplies: replies[entry.key] ?? 0,
-              notificationLevel: current?.notificationLevel ?? 0,
-              recent: const Value(true),
-              subscribed: Value(current?.subscribed ?? false),
-              detailed: Value(current?.detailed ?? false),
-              // No server payload to keep: this row was derived from the
-              // messages, and an empty object says so honestly instead of
-              // pretending a thread object arrived.
-              rawJson: '{}',
-            ),
-          );
+      derivedThreads.add(
+        CachedThreadsCompanion.insert(
+          accountId: accountId,
+          roomToken: roomToken,
+          threadId: entry.key,
+          // The server has no name for this thread, so the root message
+          // stands in for one. Without it every derived row read just
+          // "Vlákno" and two threads in the same room were impossible to
+          // tell apart. A rename dialog opened on such a row starts from
+          // this text, which is the label the reader already sees.
+          title: _derivedThreadTitle(entry.value.displayText),
+          lastMessageId: lastMessage[entry.key] ?? entry.key,
+          lastActivity: lastActivity[entry.key] ?? entry.value.timestamp,
+          numReplies: replies[entry.key] ?? 0,
+          notificationLevel: current?.notificationLevel ?? 0,
+          recent: const Value(true),
+          subscribed: Value(current?.subscribed ?? false),
+          detailed: Value(current?.detailed ?? false),
+          // No server payload to keep: this row was derived from the
+          // messages, and an empty object says so honestly instead of
+          // pretending a thread object arrived.
+          rawJson: '{}',
+        ),
+      );
     }
+    await _upsertAll(derivedThreads);
   }
 
   static bool _isNamedCachedRoot(CachedChatMessage root) {

@@ -92,6 +92,61 @@ void main() {
     },
   );
 
+  test('derived reply threads are persisted as one batch', () async {
+    await database.close();
+    final counter = _CachedMessageSelectCounter();
+    database = AppDatabase.forTesting(
+      NativeDatabase.memory().interceptWith(counter),
+    );
+    accounts = AccountRepository(database);
+    threads = ThreadRepository(database);
+    await _insertAccount(accounts, 'account-a');
+    const threadCount = 40;
+    await database.batch((batch) {
+      for (var index = 0; index < threadCount; index++) {
+        final rootId = 1000 + (index * 10);
+        for (final message in <({int id, String text})>[
+          (id: rootId, text: 'Root $index'),
+          (id: rootId + 1, text: 'Reply $index'),
+        ]) {
+          batch.insert(
+            database.cachedChatMessages,
+            CachedChatMessagesCompanion.insert(
+              accountId: 'account-a',
+              roomToken: 'rooma123',
+              messageId: message.id,
+              actorType: 'users',
+              actorId: 'someone',
+              actorDisplayName: 'Someone',
+              timestamp: 1724300000 + message.id,
+              systemMessage: '',
+              messageType: 'comment',
+              referenceId: 'reference-${message.id}',
+              displayText: message.text,
+              deleted: false,
+              threadId: Value(rootId),
+              rawJson: '{}',
+            ),
+          );
+        }
+      }
+    });
+    counter.enabled = true;
+
+    await threads.replaceRecent(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      server: _serverFor('account-a'),
+      values: const <RichChatThread>[],
+    );
+
+    expect(counter.directThreadInserts, 0);
+    expect(counter.threadBatchExecutions, 1);
+    final rows = await threads.listAccount('account-a');
+    expect(rows, hasLength(threadCount));
+    expect(rows.every(ThreadRepository.isLocallyDerived), isTrue);
+  });
+
   test(
     'a derived title collapses whitespace and stays one short line',
     () async {
