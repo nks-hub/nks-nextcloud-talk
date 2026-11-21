@@ -24,12 +24,14 @@ void main() {
     int maximumBytes = 64 * 1024 * 1024,
     Future<FileStat> Function(File file)? statFile,
     Future<void> Function(File file)? deleteFile,
+    Future<void> Function(File file, DateTime touchedAt)? touchFile,
   }) {
     return ChatMediaDiskCache(
       rootDirectory: () async => Directory('${root.path}/previews'),
       maximumBytes: maximumBytes,
       statFile: statFile,
       deleteFile: deleteFile,
+      touchFile: touchFile,
     );
   }
 
@@ -110,6 +112,28 @@ void main() {
       expect(restarted.byteLength, 0);
     },
   );
+
+  test('reading a preview does not wait for its recency stamp', () async {
+    final gate = Completer<void>();
+    final touching = Completer<void>();
+    addTearDown(() {
+      if (!gate.isCompleted) gate.complete();
+    });
+    final uri = uriFor(42);
+    final cache = open(
+      touchFile: (file, touchedAt) async {
+        touching.complete();
+        await gate.future;
+      },
+    );
+    await cache.write(accountId: 'account-a', uri: uri, image: image(64));
+
+    final reading = cache.read(accountId: 'account-a', uri: uri);
+    await touching.future;
+
+    expect(await reading.timeout(const Duration(milliseconds: 100)), isNotNull);
+    gate.complete();
+  });
 
   test('accounts never read each other cached bytes', () async {
     final uri = uriFor(42);

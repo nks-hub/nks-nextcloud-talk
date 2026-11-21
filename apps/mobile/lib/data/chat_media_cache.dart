@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -260,8 +261,10 @@ final class ChatMediaDiskCache {
     this.maximumBytes = 64 * 1024 * 1024,
     Future<FileStat> Function(File file)? statFile,
     Future<void> Function(File file)? deleteFile,
+    Future<void> Function(File file, DateTime touchedAt)? touchFile,
   }) : _statFile = statFile ?? _readStat,
-       _deleteFile = deleteFile ?? _deleteDirect;
+       _deleteFile = deleteFile ?? _deleteDirect,
+       _touchFile = touchFile ?? _touchDirect;
 
   /// Longest accepted content type header, which bounds how much of a corrupt
   /// file is scanned before it is discarded.
@@ -275,6 +278,7 @@ final class ChatMediaDiskCache {
   final int maximumBytes;
   final Future<FileStat> Function(File file) _statFile;
   final Future<void> Function(File file) _deleteFile;
+  final Future<void> Function(File file, DateTime touchedAt) _touchFile;
   final Map<String, ({int bytes, DateTime touchedAt})> _index = {};
 
   Directory? _root;
@@ -289,6 +293,10 @@ final class ChatMediaDiskCache {
   static Future<FileStat> _readStat(File file) => file.stat();
 
   static Future<void> _deleteDirect(File file) => file.delete();
+
+  static Future<void> _touchDirect(File file, DateTime touchedAt) async {
+    await file.setLastModified(touchedAt);
+  }
 
   Future<void> evict({required String accountId, required Uri uri}) async {
     final Directory root;
@@ -332,7 +340,11 @@ final class ChatMediaDiskCache {
     final touchedAt = DateTime.now();
     _index[path] = (bytes: entry.bytes, touchedAt: touchedAt);
     try {
-      await File(path).setLastModified(touchedAt);
+      unawaited(
+        _touchFile(File(path), touchedAt).onError((_, _) {
+          // Losing the recency stamp only costs this entry an earlier eviction.
+        }),
+      );
     } on FileSystemException {
       // Losing the recency stamp only costs this entry an earlier eviction.
     }
