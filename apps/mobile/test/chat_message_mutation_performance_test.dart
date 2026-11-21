@@ -24,8 +24,31 @@ void main() {
       serverUrl: 'https://cloud.example.invalid',
       loginName: 'fixture-user',
       serverProductName: 'Nextcloud',
+      talkFeatures: const {},
       createdAt: DateTime.utc(2026, 1, 1),
     );
+    await repository.recordCapabilities(
+      accountId: 'account-a',
+      talkFeatures: const {'chat-v2'},
+      observedAt: DateTime.utc(2026, 1, 1),
+    );
+    await database
+        .into(database.chatScopes)
+        .insert(
+          ChatScopesCompanion.insert(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            scopeKey: 'network-root',
+            historyCursor: '0',
+            futureCursor: '0',
+            lastCommonRead: '0',
+            lastReadMessage: 0,
+            unreadMessages: 0,
+            hasHistory: true,
+            futureConverged: true,
+            blocksJson: '[["0","0"]]',
+          ),
+        );
   });
 
   tearDown(() => database.close());
@@ -68,6 +91,148 @@ void main() {
       isTrue,
     );
   });
+
+  test('a page of mutations reads quoted parents together', () async {
+    const mutationCount = 40;
+    await database.batch((batch) {
+      for (var index = 0; index < mutationCount; index++) {
+        final original = _messageWire(
+          id: 1000 + index,
+          message: 'Original $index',
+        );
+        final quote = _messageWire(id: 2000 + index, message: 'Quote $index')
+          ..['parent'] = original;
+        batch
+          ..insert(database.cachedChatMessages, _messageCompanion(original))
+          ..insert(database.cachedChatMessages, _messageCompanion(quote));
+      }
+    });
+    writes.enabled = true;
+
+    expect(
+      await repository.applyChatGetResponse(
+        _mutationPageResponse(mutationCount),
+      ),
+      ChatMergeOutcome.applied,
+    );
+
+    expect(writes.mutationProjectionSelects, 1);
+    final quotes = await (database.select(
+      database.cachedChatMessages,
+    )..where((row) => row.messageId.isBetweenValues(2000, 2039))).get();
+    expect(quotes, hasLength(mutationCount));
+    expect(
+      quotes.every((row) {
+        final message = ChatMessage.fromJson(jsonDecode(row.rawJson));
+        final parent = message.parent;
+        return parent is ChatFullParent &&
+            parent.message.message.startsWith('Edited ');
+      }),
+      isTrue,
+    );
+  });
+
+  test('repeated mutations project the last server state', () async {
+    final original = _messageWire(id: 4000, message: 'Original');
+    final quote = _messageWire(id: 4001, message: 'Quote')
+      ..['parent'] = original;
+    await database.batch((batch) {
+      batch
+        ..insert(database.cachedChatMessages, _messageCompanion(original))
+        ..insert(database.cachedChatMessages, _messageCompanion(quote));
+    });
+
+    expect(
+      await repository.applyChatGetResponse(_repeatedMutationResponse()),
+      ChatMergeOutcome.applied,
+    );
+
+    final row = await (database.select(
+      database.cachedChatMessages,
+    )..where((candidate) => candidate.messageId.equals(4001))).getSingle();
+    final stored = ChatMessage.fromJson(jsonDecode(row.rawJson));
+    final parent = stored.parent;
+    expect(parent, isA<ChatFullParent>());
+    expect((parent! as ChatFullParent).message.message, 'Second edit');
+  });
+}
+
+ChatGetResponse _mutationPageResponse(int count) {
+  final notices = <Map<String, Object?>>[];
+  for (var index = 0; index < count; index++) {
+    final edited = _messageWire(id: 1000 + index, message: 'Edited $index');
+    notices.add(
+      _messageWire(id: 3000 + index, message: '{actor} edited a message')
+        ..['systemMessage'] = 'message_edited'
+        ..['messageType'] = 'system'
+        ..['parent'] = edited,
+    );
+  }
+  return _futureResponse(
+    requestId: 'mutation-projection-batch',
+    lastGiven: 2999 + count,
+    messages: notices,
+  );
+}
+
+ChatGetResponse _repeatedMutationResponse() {
+  final firstEdit = _messageWire(id: 4000, message: 'First edit');
+  final secondEdit = _messageWire(id: 4000, message: 'Second edit');
+  return _futureResponse(
+    requestId: 'repeated-mutation-order',
+    lastGiven: 4003,
+    messages: <Map<String, Object?>>[
+      _messageWire(id: 4002, message: '{actor} edited a message')
+        ..['systemMessage'] = 'message_edited'
+        ..['messageType'] = 'system'
+        ..['parent'] = firstEdit,
+      _messageWire(id: 4003, message: '{actor} edited a message')
+        ..['systemMessage'] = 'message_edited'
+        ..['messageType'] = 'system'
+        ..['parent'] = secondEdit,
+    ],
+  );
+}
+
+ChatGetResponse _futureResponse({
+  required String requestId,
+  required int lastGiven,
+  required List<Map<String, Object?>> messages,
+}) {
+  final request = ChatFetchRequest(
+    accountId: AccountId.parse('account-a'),
+    requestId: ChatRequestId.parse(requestId),
+    server: ServerBase.parse('https://cloud.example.invalid'),
+    roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+    profile: ChatCapabilityProfile.fromTalkFeatures(const <Object?>[
+      'chat-v2',
+    ], federated: false),
+    direction: ChatFetchDirection.future,
+    cursor: ChatCursor.parse('0'),
+    lastCommonRead: ChatCursor.parse('0'),
+    limit: 200,
+    includeLastKnown: false,
+    timeoutSeconds: 0,
+    interactive: true,
+  );
+  return decodeChatGetResponse(
+    request: request,
+    statusCode: 200,
+    body: Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'ocs': {
+            'meta': {'status': 'ok', 'statuscode': 200, 'message': 'OK'},
+            'data': messages,
+          },
+        }),
+      ),
+    ),
+    headers: ChatResponseHeaders.fromMap({
+      'X-Chat-Last-Given': '$lastGiven',
+      'X-Chat-Last-Common-Read': '0',
+    }),
+  );
 }
 
 CachedChatMessagesCompanion _messageCompanion(Map<String, Object?> wire) {
@@ -113,6 +278,22 @@ final class _ParentUpdateCounter extends QueryInterceptor {
   bool enabled = false;
   int parentBatchExecutions = 0;
   int directParentUpdates = 0;
+  int mutationProjectionSelects = 0;
+
+  @override
+  Future<List<Map<String, Object?>>> runSelect(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) {
+    final sql = statement.toLowerCase();
+    if (enabled &&
+        sql.contains('from "cached_chat_messages"') &&
+        sql.contains('"raw_json" like ?')) {
+      mutationProjectionSelects++;
+    }
+    return super.runSelect(executor, statement, args);
+  }
 
   @override
   Future<void> runBatched(

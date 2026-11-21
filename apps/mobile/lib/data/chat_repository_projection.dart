@@ -646,6 +646,7 @@ extension _ChatRepositoryProjection on ChatRepository {
     final pendingMessageKeys = <_ChatMessageKey>{};
     final pendingThreadRootUpdates =
         <_ChatMessageKey, CachedChatMessagesCompanion>{};
+    final pendingMutations = <_ChatMessageKey, ChatMessage>{};
     for (final message in messageList) {
       final messageKey = (
         roomToken: message.roomToken.value,
@@ -687,7 +688,14 @@ extension _ChatRepositoryProjection on ChatRepository {
             threadRootUpdate.companion;
       }
       await _applyReactionsFromNotice(account, message, reactionMessages);
-      await _applyMutationFromNotice(account, message);
+      final mutation = await _applyMutationFromNotice(account, message);
+      if (mutation != null) {
+        pendingMutations[(
+              roomToken: mutation.roomToken.value,
+              messageId: mutation.messageId,
+            )] =
+            mutation;
+      }
       _forgetChangedReactionTargets(reactionMessages, message);
       final prepared = _prepareMessage(account, message);
       pendingMessages.add(prepared.companion);
@@ -704,6 +712,10 @@ extension _ChatRepositoryProjection on ChatRepository {
       updates: pendingThreadRootUpdates,
     );
     await _flushPendingMessages(pendingMessages);
+    await _projectMutationsIntoCachedParents(
+      accountId: accountId,
+      messages: pendingMutations.values,
+    );
     await _persistConversationPreviews(
       accountId: accountId,
       updates: conversationPreviewUpdates,
@@ -716,17 +728,17 @@ extension _ChatRepositoryProjection on ChatRepository {
   /// this the bubble kept its old text (or the deleted file) for as long as
   /// the row lived in the cache — reproduced live 2026-09-03 with three
   /// deleted messages still rendered next to their "deleted a message" lines.
-  Future<void> _applyMutationFromNotice(
+  Future<ChatMessage?> _applyMutationFromNotice(
     ChatAccountState account,
     ChatMessage message,
   ) async {
     const notices = <String>{'message_edited', 'message_deleted'};
     if (!notices.contains(message.systemMessage)) {
-      return;
+      return null;
     }
     final parent = message.parent;
     if (parent is! ChatFullParent || parent.roomToken != message.roomToken) {
-      return;
+      return null;
     }
     final accountId = account.accountId.value;
     final mutated = parent.message;
@@ -753,12 +765,9 @@ extension _ChatRepositoryProjection on ChatRepository {
     if (updated == 0) {
       // Not cached here: the message lives outside the loaded blocks and
       // will arrive in its new state when history reaches it.
-      return;
+      return null;
     }
-    await _projectMutationIntoCachedParents(
-      accountId: accountId,
-      message: mutated,
-    );
+    return mutated;
   }
 
   String _displayText(ServerBase server, ChatMessage message) {

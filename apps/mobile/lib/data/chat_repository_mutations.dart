@@ -43,42 +43,91 @@ extension _ChatRepositoryMutations on ChatRepository {
   Future<void> _projectMutationIntoCachedParents({
     required String accountId,
     required ChatMessage message,
+  }) => _projectMutationsIntoCachedParents(
+    accountId: accountId,
+    messages: <ChatMessage>[message],
+  );
+
+  Future<void> _projectMutationsIntoCachedParents({
+    required String accountId,
+    required Iterable<ChatMessage> messages,
   }) async {
-    // Only a later message of the room can quote this one, and its stored
-    // JSON then holds a parent with this id. The filter may let a few rows
-    // through that do not (a longer id with the same digits); they are
-    // decoded and left alone below, where a whole room no longer is.
-    final rows =
-        await (_database.select(_database.cachedChatMessages)..where(
-              (row) =>
-                  row.accountId.equals(accountId) &
-                  row.roomToken.equals(message.roomToken.value) &
-                  row.messageId.isBiggerThanValue(message.messageId) &
-                  row.rawJson.like('%"parent":%') &
-                  row.rawJson.like('%"id":${message.messageId}%'),
-            ))
-            .get();
-    final parentUpdates = <({int messageId, String rawJson})>[];
-    for (final row in rows) {
-      if (row.messageId == message.messageId) {
-        continue;
+    final mutationsByRoom = <String, Map<int, ChatMessage>>{};
+    for (final message in messages) {
+      (mutationsByRoom[message.roomToken.value] ??=
+              <int, ChatMessage>{})[message.messageId] =
+          message;
+    }
+    if (mutationsByRoom.isEmpty) {
+      return;
+    }
+    final parentUpdates =
+        <({String roomToken, int messageId, String rawJson})>[];
+    const targetChunkSize = 100;
+    for (final MapEntry(key: roomToken, value: mutations)
+        in mutationsByRoom.entries) {
+      final targetIds = mutations.keys.toList(growable: false);
+      for (
+        var offset = 0;
+        offset < targetIds.length;
+        offset += targetChunkSize
+      ) {
+        final end = offset + targetChunkSize < targetIds.length
+            ? offset + targetChunkSize
+            : targetIds.length;
+        final chunk = targetIds.sublist(offset, end);
+        final chunkMutations = <int, ChatMessage>{
+          for (final targetId in chunk) targetId: mutations[targetId]!,
+        };
+        final minimumTargetId = chunk.reduce(
+          (minimum, value) => value < minimum ? value : minimum,
+        );
+        // The JSON predicates keep the read bounded. Exact parent ids are
+        // still checked after decoding because a longer id can share digits.
+        final rows =
+            await (_database.select(_database.cachedChatMessages)..where((row) {
+                  Expression<bool> targetFilter = row.rawJson.like(
+                    '%"id":${chunk.first}%',
+                  );
+                  for (final targetId in chunk.skip(1)) {
+                    targetFilter =
+                        targetFilter | row.rawJson.like('%"id":$targetId%');
+                  }
+                  return row.accountId.equals(accountId) &
+                      row.roomToken.equals(roomToken) &
+                      row.messageId.isBiggerThanValue(minimumTargetId) &
+                      row.rawJson.like('%"parent":%') &
+                      targetFilter;
+                }))
+                .get();
+        for (final row in rows) {
+          final ChatMessage cached;
+          try {
+            cached = ChatMessage.fromJson(jsonDecode(row.rawJson));
+          } on FormatException {
+            continue;
+          } on TalkProtocolException {
+            continue;
+          }
+          final parent = cached.parent;
+          if (parent is! ChatFullParent) {
+            continue;
+          }
+          final mutation = chunkMutations[parent.messageId];
+          if (mutation == null) {
+            continue;
+          }
+          final updated = cached.replaceParentMessageIfMatching(mutation);
+          if (identical(updated, cached)) {
+            continue;
+          }
+          parentUpdates.add((
+            roomToken: roomToken,
+            messageId: row.messageId,
+            rawJson: jsonEncode(updated.wire),
+          ));
+        }
       }
-      final ChatMessage cached;
-      try {
-        cached = ChatMessage.fromJson(jsonDecode(row.rawJson));
-      } on FormatException {
-        continue;
-      } on TalkProtocolException {
-        continue;
-      }
-      final updated = cached.replaceParentMessageIfMatching(message);
-      if (identical(updated, cached)) {
-        continue;
-      }
-      parentUpdates.add((
-        messageId: row.messageId,
-        rawJson: jsonEncode(updated.wire),
-      ));
     }
     if (parentUpdates.isNotEmpty) {
       await _database.batch((batch) {
@@ -88,7 +137,7 @@ extension _ChatRepositoryMutations on ChatRepository {
             CachedChatMessagesCompanion(rawJson: Value(update.rawJson)),
             where: (candidate) =>
                 candidate.accountId.equals(accountId) &
-                candidate.roomToken.equals(message.roomToken.value) &
+                candidate.roomToken.equals(update.roomToken) &
                 candidate.messageId.equals(update.messageId),
           );
         }
