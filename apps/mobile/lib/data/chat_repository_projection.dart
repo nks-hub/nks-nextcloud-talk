@@ -18,11 +18,15 @@ extension _ChatRepositoryProjection on ChatRepository {
       accountId: accountId,
       roomToken: roomToken,
     );
-    await _writeNetworkBackedViewScope(
+    final changedScopes = <ChatScopesCompanion>[];
+    final changedRoot = _networkBackedViewScopeCompanion(
       networkScope: networkScope,
       viewThreadId: null,
       viewScope: rootView,
     );
+    if (changedRoot != null) {
+      changedScopes.add(changedRoot);
+    }
     final viewScopes =
         await (_database.select(_database.chatScopes)..where(
               (scope) =>
@@ -47,10 +51,21 @@ extension _ChatRepositoryProjection on ChatRepository {
           !ordinaryUnpreservedRoots.contains(viewThreadId)) {
         continue;
       }
-      await _writeNetworkBackedViewScope(
+      final changedView = _networkBackedViewScopeCompanion(
         networkScope: networkScope,
         viewThreadId: viewThreadId,
         viewScope: viewScope,
+      );
+      if (changedView != null) {
+        changedScopes.add(changedView);
+      }
+    }
+    if (changedScopes.isNotEmpty) {
+      await _database.batch(
+        (batch) => batch.insertAllOnConflictUpdate(
+          _database.chatScopes,
+          changedScopes,
+        ),
       );
     }
   }
@@ -190,6 +205,26 @@ extension _ChatRepositoryProjection on ChatRepository {
     required StoredChatScope? viewScope,
     Iterable<ChatBlock> extraBlocks = const <ChatBlock>[],
   }) async {
+    final companion = _networkBackedViewScopeCompanion(
+      networkScope: networkScope,
+      viewThreadId: viewThreadId,
+      viewScope: viewScope,
+      extraBlocks: extraBlocks,
+    );
+    if (companion == null) {
+      return;
+    }
+    await _database
+        .into(_database.chatScopes)
+        .insertOnConflictUpdate(companion);
+  }
+
+  ChatScopesCompanion? _networkBackedViewScopeCompanion({
+    required StoredChatScope networkScope,
+    required int? viewThreadId,
+    required StoredChatScope? viewScope,
+    Iterable<ChatBlock> extraBlocks = const <ChatBlock>[],
+  }) {
     final blocks = mergeChatBlocks(<ChatBlock>[
       ..._decodeBlocks(networkScope.blocksJson),
       if (viewScope != null) ..._decodeBlocks(viewScope.blocksJson),
@@ -213,11 +248,9 @@ extension _ChatRepositoryProjection on ChatRepository {
     );
     // An identical upsert would still wake every watcher of the table.
     if (viewScope?.toCompanion(false) == companion) {
-      return;
+      return null;
     }
-    await _database
-        .into(_database.chatScopes)
-        .insertOnConflictUpdate(companion);
+    return companion;
   }
 
   Future<Map<int, bool>> _cachedRootKinds({

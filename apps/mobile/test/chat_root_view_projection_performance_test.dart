@@ -113,6 +113,8 @@ void main() {
     );
 
     expect(queryCounter.singleRootSelects, 0);
+    expect(queryCounter.directScopeInserts, 0);
+    expect(queryCounter.scopeBatchExecutions, 2);
     final scopes =
         await (database.select(database.chatScopes)..where(
               (row) =>
@@ -198,6 +200,8 @@ Map<String, Object?> _messageJson({
 final class _SingleRootSelectCounter extends QueryInterceptor {
   bool enabled = false;
   int singleRootSelects = 0;
+  int directScopeInserts = 0;
+  int scopeBatchExecutions = 0;
 
   @override
   Future<List<Map<String, Object?>>> runSelect(
@@ -212,5 +216,31 @@ final class _SingleRootSelectCounter extends QueryInterceptor {
       singleRootSelects++;
     }
     return super.runSelect(executor, statement, args);
+  }
+
+  @override
+  Future<void> runBatched(
+    QueryExecutor executor,
+    BatchedStatements statements,
+  ) {
+    if (enabled &&
+        statements.statements.any(
+          (statement) => statement.toLowerCase().contains('into "chat_scopes"'),
+        )) {
+      scopeBatchExecutions++;
+    }
+    return super.runBatched(executor, statements);
+  }
+
+  @override
+  Future<int> runInsert(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) {
+    if (enabled && statement.toLowerCase().contains('into "chat_scopes"')) {
+      directScopeInserts++;
+    }
+    return super.runInsert(executor, statement, args);
   }
 }
