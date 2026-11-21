@@ -99,6 +99,70 @@ void main() {
       await cache.removeAccount('account-c');
     });
 
+    test('removing an account deletes with bounded concurrency', () async {
+      const fileCount = 6;
+      final gates = <Completer<void>>[];
+      final firstDeleteStarted = Completer<void>();
+      var inFlight = 0;
+      var peakInFlight = 0;
+      final cache = OwnTalkImageCache.forTesting(
+        directory,
+        deleteFile: (file) async {
+          final gate = Completer<void>();
+          gates.add(gate);
+          if (!firstDeleteStarted.isCompleted) {
+            firstDeleteStarted.complete();
+          }
+          inFlight++;
+          peakInFlight = max(peakInFlight, inFlight);
+          await gate.future;
+          inFlight--;
+          await file.delete();
+        },
+      );
+      for (var index = 0; index < fileCount; index++) {
+        final bytes = ownTalkTestJpeg(index);
+        await cache.write(_account, ownTalkTestSha(bytes), bytes);
+      }
+      final removal = cache.removeAccount(_account);
+
+      Future<void> releaseAll() async {
+        while (gates.length < fileCount) {
+          for (final gate in gates) {
+            if (!gate.isCompleted) {
+              gate.complete();
+            }
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+        }
+        for (final gate in gates) {
+          if (!gate.isCompleted) {
+            gate.complete();
+          }
+        }
+        await removal;
+      }
+
+      addTearDown(releaseAll);
+      await firstDeleteStarted.future;
+      for (var turn = 0; turn < 20 && gates.length < 4; turn++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(gates, hasLength(4));
+      expect(peakInFlight, 4);
+
+      gates.first.complete();
+      for (var turn = 0; turn < 20 && gates.length < 5; turn++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(gates, hasLength(5));
+      expect(peakInFlight, 4);
+
+      await releaseAll();
+      expect(gates, hasLength(fileCount));
+      expect(directory.listSync().whereType<File>(), isEmpty);
+    });
+
     test('keeps only the newest photos of an account', () async {
       final cache = OwnTalkImageCache.forTesting(directory);
       final shas = <String>[];

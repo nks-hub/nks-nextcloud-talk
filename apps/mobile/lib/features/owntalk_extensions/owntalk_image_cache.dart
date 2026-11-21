@@ -19,10 +19,12 @@ final class OwnTalkImageCache {
   OwnTalkImageCache._(
     this._directory, {
     Future<DateTime> Function(File file)? lastModified,
-  }) : _lastModified = lastModified ?? _readLastModified;
+    Future<void> Function(File file)? deleteFile,
+  }) : _lastModified = lastModified ?? _readLastModified,
+       _deleteFile = deleteFile ?? _deleteFileDirect;
 
   static const int _maximumFilesPerAccount = 24;
-  static const int _metadataConcurrency = 4;
+  static const int _fileOperationConcurrency = 4;
 
   static Future<OwnTalkImageCache> openApplicationSupport() async {
     final support = await getApplicationSupportDirectory();
@@ -34,13 +36,21 @@ final class OwnTalkImageCache {
   static OwnTalkImageCache forTesting(
     Directory directory, {
     Future<DateTime> Function(File file)? lastModified,
-  }) => OwnTalkImageCache._(directory, lastModified: lastModified);
+    Future<void> Function(File file)? deleteFile,
+  }) => OwnTalkImageCache._(
+    directory,
+    lastModified: lastModified,
+    deleteFile: deleteFile,
+  );
 
   final Directory _directory;
   final Future<DateTime> Function(File file) _lastModified;
+  final Future<void> Function(File file) _deleteFile;
   Future<void> _tail = Future<void>.value();
 
   static Future<DateTime> _readLastModified(File file) => file.lastModified();
+
+  static Future<void> _deleteFileDirect(File file) => file.delete();
 
   Future<Uint8List?> read(String accountId, String sha256) {
     final file = _file(accountId, sha256);
@@ -68,9 +78,7 @@ final class OwnTalkImageCache {
   Future<void> removeAccount(String accountId) {
     final prefix = _prefix(accountId);
     return _serialize(() async {
-      for (final file in await _accountFiles(prefix)) {
-        await file.delete();
-      }
+      await _deleteFiles(await _accountFiles(prefix));
     });
   }
 
@@ -92,13 +100,43 @@ final class OwnTalkImageCache {
       }
     }
 
-    final workerCount = candidates.length < _metadataConcurrency
+    final workerCount = candidates.length < _fileOperationConcurrency
         ? candidates.length
-        : _metadataConcurrency;
+        : _fileOperationConcurrency;
     await Future.wait(List.generate(workerCount, (_) => readAges()));
     dated.sort((a, b) => a.modified.compareTo(b.modified));
-    for (final entry in dated.take(files.length - _maximumFilesPerAccount)) {
-      await entry.file.delete();
+    await _deleteFiles(
+      dated
+          .take(files.length - _maximumFilesPerAccount)
+          .map((entry) => entry.file),
+    );
+  }
+
+  Future<void> _deleteFiles(Iterable<File> files) async {
+    final pending = files.toList(growable: false);
+    Object? firstError;
+    StackTrace? firstStackTrace;
+    var nextFile = 0;
+
+    Future<void> deleteNext() async {
+      while (nextFile < pending.length) {
+        final file = pending[nextFile++];
+        try {
+          await _deleteFile(file);
+        } on Object catch (error, stackTrace) {
+          firstError ??= error;
+          firstStackTrace ??= stackTrace;
+        }
+      }
+    }
+
+    final workerCount = pending.length < _fileOperationConcurrency
+        ? pending.length
+        : _fileOperationConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => deleteNext()));
+    final error = firstError;
+    if (error != null) {
+      Error.throwWithStackTrace(error, firstStackTrace!);
     }
   }
 
