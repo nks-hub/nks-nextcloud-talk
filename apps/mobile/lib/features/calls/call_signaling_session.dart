@@ -201,6 +201,8 @@ final class CallSignalingSession {
 /// serialized inside that account lane and checked again by the pure runtime's
 /// authority, connection-epoch and room-epoch guards before publication.
 final class CallSignalingCoordinator {
+  static const int _laneShutdownConcurrency = 4;
+
   CallSignalingCoordinator({
     required AccountRepository accounts,
     required CallSessionRepository sessions,
@@ -412,10 +414,22 @@ final class CallSignalingCoordinator {
       _disposed = true;
       final lanes = _lanes.values.toList(growable: false);
       _lanes.clear();
-      for (final lane in lanes) {
-        await lane.shutdown(deleteDurableState: false);
-      }
+      await _shutdownLanes(lanes);
     });
+  }
+
+  Future<void> _shutdownLanes(List<_CallSignalingLane> lanes) async {
+    var nextLane = 0;
+    Future<void> shutdownNext() async {
+      while (nextLane < lanes.length) {
+        await lanes[nextLane++].shutdown(deleteDurableState: false);
+      }
+    }
+
+    final workerCount = lanes.length < _laneShutdownConcurrency
+        ? lanes.length
+        : _laneShutdownConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => shutdownNext()));
   }
 
   Future<void> shutdownAccount(String accountId) {

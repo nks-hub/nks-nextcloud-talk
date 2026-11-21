@@ -13,6 +13,8 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
+part 'call_signaling_session_disposal_test.part.dart';
+
 void main() {
   late AppDatabase database;
   late AccountRepository accounts;
@@ -27,6 +29,12 @@ void main() {
   });
 
   tearDown(() => database.close());
+
+  _registerCallSignalingDisposalTests(
+    accounts: () => accounts,
+    sessions: () => sessions,
+    credentials: () => credentials,
+  );
 
   test(
     'same-room admission replaces a terminal runtime even before lane disposal',
