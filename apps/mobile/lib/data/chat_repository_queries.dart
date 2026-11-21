@@ -312,6 +312,23 @@ Future<bool?> _validatedCachedRootIsNamedThreadQuery(
   if (root == null) {
     return null;
   }
+  return _classifyCachedRootAsNamedThread(
+    root,
+    accountId: accountId,
+    roomToken: roomToken,
+    threadId: threadId,
+  );
+}
+
+bool _classifyCachedRootAsNamedThread(
+  CachedChatMessage root, {
+  required String accountId,
+  required String roomToken,
+  required int threadId,
+}) {
+  if (threadId < 1) {
+    throw ArgumentError.value(threadId, 'threadId');
+  }
   if (root.accountId != accountId ||
       root.roomToken != roomToken ||
       root.messageId != threadId ||

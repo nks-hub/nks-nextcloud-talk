@@ -31,17 +31,20 @@ extension _ChatRepositoryProjection on ChatRepository {
                   scope.threadId.isNotNull(),
             ))
             .get();
-    for (final viewScope in viewScopes) {
+    final validViewScopes = viewScopes
+        .where((scope) => scope.scopeKey == _scopeKey(scope.threadId!))
+        .toList(growable: false);
+    final ordinaryUnpreservedRoots = await _cachedOrdinaryRootIds(
+      accountId: accountId,
+      roomToken: roomToken,
+      messageIds: validViewScopes
+          .map((scope) => scope.threadId!)
+          .where((threadId) => !preservedViewThreadIds.contains(threadId)),
+    );
+    for (final viewScope in validViewScopes) {
       final viewThreadId = viewScope.threadId!;
-      if (viewScope.scopeKey != _scopeKey(viewThreadId)) {
-        continue;
-      }
       if (!preservedViewThreadIds.contains(viewThreadId) &&
-          !await _cachedRootIsOrdinary(
-            accountId: accountId,
-            roomToken: roomToken,
-            messageId: viewThreadId,
-          )) {
+          !ordinaryUnpreservedRoots.contains(viewThreadId)) {
         continue;
       }
       await _writeNetworkBackedViewScope(
@@ -64,22 +67,18 @@ extension _ChatRepositoryProjection on ChatRepository {
                   scope.threadId.isNotNull(),
             ))
             .get();
-    final result = <int>{};
-    for (final viewScope in viewScopes) {
-      final threadId = viewScope.threadId!;
-      if (viewScope.scopeKey != _scopeKey(threadId)) {
-        continue;
-      }
-      final named = await cachedRootIsNamedThread(
-        accountId: accountId,
-        roomToken: roomToken,
-        threadId: threadId,
-      );
-      if (named != true) {
-        result.add(threadId);
-      }
-    }
-    return result;
+    final validThreadIds = viewScopes
+        .where((scope) => scope.scopeKey == _scopeKey(scope.threadId!))
+        .map((scope) => scope.threadId!)
+        .toList(growable: false);
+    final rootKinds = await _cachedRootKinds(
+      accountId: accountId,
+      roomToken: roomToken,
+      messageIds: validThreadIds,
+    );
+    return validThreadIds
+        .where((threadId) => rootKinds[threadId] != true)
+        .toSet();
   }
 
   Future<void> _projectNamedNetworkStateToViewInCurrentTransaction({
@@ -221,30 +220,83 @@ extension _ChatRepositoryProjection on ChatRepository {
         .insertOnConflictUpdate(companion);
   }
 
-  Future<bool> _cachedRootIsOrdinary({
+  Future<Map<int, bool>> _cachedRootKinds({
     required String accountId,
     required String roomToken,
-    required int messageId,
+    required Iterable<int> messageIds,
   }) async {
-    final row =
-        await (_database.select(_database.cachedChatMessages)..where(
-              (message) =>
-                  message.accountId.equals(accountId) &
-                  message.roomToken.equals(roomToken) &
-                  message.messageId.equals(messageId),
-            ))
-            .getSingleOrNull();
-    if (row == null) {
-      return false;
+    final ids = messageIds.toSet().toList(growable: false);
+    for (final id in ids) {
+      if (id < 1) {
+        throw ArgumentError.value(id, 'threadId');
+      }
     }
-    try {
-      final message = ChatMessage.fromJson(jsonDecode(row.rawJson));
-      return message.messageId == messageId &&
-          message.roomToken.value == roomToken &&
-          message.isThread != true;
-    } on Object {
-      return false;
+    final result = <int, bool>{};
+    const chunkSize = 500;
+    for (var offset = 0; offset < ids.length; offset += chunkSize) {
+      final end = offset + chunkSize < ids.length
+          ? offset + chunkSize
+          : ids.length;
+      final chunk = ids.sublist(offset, end);
+      final rows =
+          await (_database.select(_database.cachedChatMessages)..where(
+                (message) =>
+                    message.accountId.equals(accountId) &
+                    message.roomToken.equals(roomToken) &
+                    message.messageId.isIn(chunk),
+              ))
+              .get();
+      for (final row in rows) {
+        try {
+          result[row.messageId] = _classifyCachedRootAsNamedThread(
+            row,
+            accountId: accountId,
+            roomToken: roomToken,
+            threadId: row.messageId,
+          );
+        } on InvalidCachedThreadRootException {
+          continue;
+        }
+      }
     }
+    return result;
+  }
+
+  Future<Set<int>> _cachedOrdinaryRootIds({
+    required String accountId,
+    required String roomToken,
+    required Iterable<int> messageIds,
+  }) async {
+    final ids = messageIds.toSet().toList(growable: false);
+    final result = <int>{};
+    const chunkSize = 500;
+    for (var offset = 0; offset < ids.length; offset += chunkSize) {
+      final end = offset + chunkSize < ids.length
+          ? offset + chunkSize
+          : ids.length;
+      final chunk = ids.sublist(offset, end);
+      final rows =
+          await (_database.select(_database.cachedChatMessages)..where(
+                (message) =>
+                    message.accountId.equals(accountId) &
+                    message.roomToken.equals(roomToken) &
+                    message.messageId.isIn(chunk),
+              ))
+              .get();
+      for (final row in rows) {
+        try {
+          final message = ChatMessage.fromJson(jsonDecode(row.rawJson));
+          if (message.messageId == row.messageId &&
+              message.roomToken.value == roomToken &&
+              message.isThread != true) {
+            result.add(row.messageId);
+          }
+        } on Object {
+          continue;
+        }
+      }
+    }
+    return result;
   }
 
   Future<ChatRuntimeSnapshot> _loadRuntime(String accountId) async {
