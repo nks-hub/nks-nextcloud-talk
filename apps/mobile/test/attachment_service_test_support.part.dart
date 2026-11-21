@@ -358,6 +358,33 @@ final class _Fixture {
     return jobId;
   }
 
+  Future<AttachmentJobId> seedAwaitingConfirmation({int seed = 0}) async {
+    final jobId = await seedInFlight(
+      AttachmentRequestStep.finalize,
+      seed: seed,
+    );
+    final accountId = AccountId.parse('account-a');
+    final key = (accountId: accountId.value, jobId: jobId.value);
+    final loaded = await repository.loadRuntime();
+    final recovered = recoverAttachmentAfterRestart(
+      loaded.snapshot,
+      accountId: accountId,
+      jobId: jobId,
+    );
+    if (!recovered.canCommit) {
+      throw StateError('Synthetic awaiting-confirmation recovery failed');
+    }
+    final snapshot = recovered.plan!.commit(loaded.snapshot);
+    final account = snapshot.accounts[accountId]!;
+    await repository.persistTransition(
+      account: account,
+      job: account.jobs[jobId]!,
+      metadata: loaded.metadata[key]!,
+      updatedAt: DateTime.utc(2026, 8, 24),
+    );
+    return jobId;
+  }
+
   AttachmentMessageConfirmation confirmation(
     AttachmentJobId _, {
     required int messageId,

@@ -954,8 +954,8 @@ final class AttachmentService with _AttachmentServiceRuntime {
     });
     for (final key in completed) {
       _clearConfirmationCatchUp(key);
-      await _releaseTerminalSource(key);
     }
+    await _releaseTerminalSources(completed);
     for (final room in rooms) {
       unawaited(_scheduleRoom(room));
     }

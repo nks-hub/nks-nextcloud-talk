@@ -1,6 +1,6 @@
 part of 'attachment_service.dart';
 
-const int _startupSourceReleaseConcurrency = 4;
+const int _sourceReleaseConcurrency = 4;
 
 mixin _AttachmentServiceRuntime {
   AttachmentRepository get _repository;
@@ -131,7 +131,7 @@ mixin _AttachmentServiceRuntime {
         }
       }
     }
-    await _releaseStartupTerminalSources(terminal);
+    await _releaseTerminalSources(terminal);
     for (final key in awaitingConfirmation) {
       _queueConfirmationCatchUp(key);
     }
@@ -140,7 +140,7 @@ mixin _AttachmentServiceRuntime {
     }
   }
 
-  Future<void> _releaseStartupTerminalSources(
+  Future<void> _releaseTerminalSources(
     List<AttachmentPersistenceKey> terminal,
   ) async {
     Object? firstError;
@@ -159,9 +159,9 @@ mixin _AttachmentServiceRuntime {
       }
     }
 
-    final workerCount = terminal.length < _startupSourceReleaseConcurrency
+    final workerCount = terminal.length < _sourceReleaseConcurrency
         ? terminal.length
-        : _startupSourceReleaseConcurrency;
+        : _sourceReleaseConcurrency;
     await Future.wait(List.generate(workerCount, (_) => releaseNext()));
     final error = firstError;
     if (error != null) {

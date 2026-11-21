@@ -23,6 +23,7 @@ import 'test_support.dart';
 part 'attachment_service_lifecycle_test.part.dart';
 part 'attachment_service_scheduler_test.part.dart';
 part 'attachment_service_parallel_test.part.dart';
+part 'attachment_service_reconciliation_test.part.dart';
 part 'attachment_service_recovery_test.part.dart';
 part 'attachment_service_retry_resume_test.part.dart';
 part 'attachment_service_test_support.part.dart';
@@ -33,6 +34,7 @@ void main() {
   _registerAttachmentServiceLifecycleTests();
   _registerAttachmentServiceSchedulerTests();
   _registerAttachmentServiceParallelTests();
+  _registerAttachmentServiceReconciliationTests();
   _registerAttachmentServiceRecoveryTests();
   _registerAttachmentServiceRetryResumeTests();
   _registerAttachmentServiceAccountSuspendTests();
