@@ -1,0 +1,130 @@
+part of 'attachment_service_test.dart';
+
+void _registerAttachmentOwnershipTests() {
+  test(
+    'headless drain reports completion after attachment close settles',
+    () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final closing = Completer<void>();
+      final allowClose = Completer<void>();
+      final events = StreamController<AttachmentConfirmationSnapshot>(
+        onCancel: () {
+          closing.complete();
+          return allowClose.future;
+        },
+      );
+      final attachments = fixture.service(
+        _unexpectedClient(),
+        watchConfirmationCandidates: () => events.stream,
+      );
+      final api = HttpNextcloudApi(client: _unexpectedClient());
+      addTearDown(api.close);
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(fixture.database),
+          credentialVaultProvider.overrideWithValue(fixture.credentials),
+          attachmentServiceProvider.overrideWith((_) async => attachments),
+          nextcloudApiProvider.overrideWithValue(api),
+        ],
+      );
+      addTearDown(container.dispose);
+      addTearDown(() async {
+        if (!allowClose.isCompleted) allowClose.complete();
+        await attachments.close();
+        await events.close();
+      });
+      const channel = MethodChannel('test/attachment_runtime/background');
+      final messages = <MethodCall>[];
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        messages.add(call);
+        return null;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+      final drain = runBackgroundDrainIsolate(
+        drain: () => drainForBackground(container),
+        channel: channel,
+      );
+      await closing.future;
+      expect(messages, isEmpty);
+
+      allowClose.complete();
+      await drain;
+      expect(messages.single.method, 'finished');
+      expect(messages.single.arguments, {'retry': false});
+    },
+  );
+
+  test('a replacement waits for the prior admission to commit', () async {
+    final fixture = await _Fixture.create(fileBacked: true);
+    addTearDown(fixture.close);
+    final gate = _HeldAttachmentAdmission();
+    final database = AppDatabase.forTesting(
+      NativeDatabase(fixture.databaseFile!).interceptWith(gate),
+    );
+    addTearDown(database.close);
+    final queue = AttachmentRuntimeQueue();
+    final priorOwner = AttachmentRuntimeOwner(queue.reserve());
+    final prior = await priorOwner.open(
+      () => fixture.service(
+        _unexpectedClient(),
+        attachmentRepository: AttachmentRepository(database),
+      ),
+    );
+    final nextOwner = AttachmentRuntimeOwner(queue.reserve());
+    addTearDown(() async {
+      if (!gate.allow.isCompleted) gate.allow.complete();
+      await priorOwner.close();
+      await nextOwner.close();
+    });
+
+    final admission = prior.enqueue(fixture.request(normalMaximum: 32));
+    await gate.started.future;
+    final closing = prior.close();
+    expect(prior.close(), same(closing));
+    final releasing = priorOwner.close();
+    var replacementStarted = false;
+    final replacement = nextOwner.open(() {
+      replacementStarted = true;
+      return fixture.service(
+        MockClient((_) async => throw const SocketException('offline')),
+        retryDelays: const [],
+      );
+    });
+    await pumpEventQueue();
+    expect(replacementStarted, isFalse);
+
+    gate.allow.complete();
+    final admitted = await admission;
+    await releasing;
+    final next = await replacement;
+    await next.ready;
+    final stored = await fixture.repository.getStoredJob(
+      accountId: admitted.accountId.value,
+      jobId: admitted.jobId.value,
+    );
+    expect(stored, isNotNull);
+  });
+}
+
+final class _HeldAttachmentAdmission extends QueryInterceptor {
+  final started = Completer<void>();
+  final allow = Completer<void>();
+
+  @override
+  Future<int> runInsert(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) async {
+    if (statement.toLowerCase().startsWith('insert into "attachment_jobs"')) {
+      if (!started.isCompleted) started.complete();
+      await allow.future;
+    }
+    return super.runInsert(executor, statement, args);
+  }
+}

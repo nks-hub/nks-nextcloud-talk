@@ -95,6 +95,7 @@ final class _Fixture {
 
   AttachmentService service(
     http.Client client, {
+    AttachmentRepository? attachmentRepository,
     List<Duration> retryDelays = const [Duration(milliseconds: 1)],
     AttachmentSourceProvider? sourceProvider,
     WatchAttachmentConfirmationCandidates? watchConfirmationCandidates,
@@ -116,7 +117,7 @@ final class _Fixture {
   }) {
     final sources = sourceProvider ?? _FileSourceProvider();
     return AttachmentService(
-      repository: repository,
+      repository: attachmentRepository ?? repository,
       credentials: credentialVault ?? credentials,
       releaseSource:
           releaseSource ??

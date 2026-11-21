@@ -4,6 +4,7 @@ import android.app.job.JobParameters
 import android.app.job.JobService
 import android.os.Handler
 import android.os.Looper
+import com.nkshub.nextcloudtalk.attachments.AttachmentRuntimeChannel
 import io.flutter.FlutterInjector
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
@@ -44,6 +45,7 @@ class BackgroundDrainJobService : JobService() {
         }
         val created = FlutterEngine(applicationContext)
         resources.engine = created
+        AttachmentRuntimeChannel.attach(created)
         MethodChannel(created.dartExecutor.binaryMessenger, BackgroundDrain.CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {

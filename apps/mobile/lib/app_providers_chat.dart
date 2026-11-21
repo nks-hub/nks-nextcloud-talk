@@ -70,14 +70,16 @@ final chatServiceProvider = Provider<ChatService>((ref) {
 /// revocations owed to servers that were unreachable, and uploads whose
 /// automatic retries ran out while the device had no network.
 ///
-/// Shared by the foreground hints and by the headless isolate the platform's
-/// background scheduler starts, so both do exactly the same work.
+/// The platform can tear down the headless engine as soon as this returns.
 Future<void> drainForBackground(ProviderContainer container) async {
   await container.read(chatServiceProvider).drainPendingSends();
   await container.read(appPasswordRevocationQueueProvider).drain();
-  await (await container.read(
-    attachmentServiceProvider.future,
-  )).resumeRetries();
+  final attachments = await container.read(attachmentServiceProvider.future);
+  try {
+    await attachments.resumeRetries();
+  } finally {
+    await attachments.close();
+  }
 }
 
 /// Replays queued text sends for rooms that are not open, on start and on
@@ -291,60 +293,77 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
   final source = await ref.watch(attachmentSourceProvider.future);
   final chat = ref.watch(chatServiceProvider);
   final keepAlive = ref.watch(transferKeepAliveProvider);
-  final service = AttachmentService(
-    repository: ref.watch(attachmentRepositoryProvider),
-    credentials: ref.watch(credentialVaultProvider),
-    releaseSource: (attachment) => source.discard(attachment.handle),
-    transport: HttpAttachmentTransport(
-      client: ref.watch(certificateTrustGateProvider).createClient(),
-      sourceProvider: source,
-    ),
-    catchUpConfirmation:
-        ({required accountId, required roomToken, required threadId}) =>
-            chat.catchUpRoom(
-              accountId: accountId.value,
-              roomToken: roomToken.value,
-              threadId: threadId,
-            ),
-    reportTransferActivity: keepAlive?.holder(),
-    inFlightBytes: ref.watch(attachmentInFlightBytesProvider),
-  );
-  // A network hint or a resumed app is worth one more attempt for uploads
-  // whose automatic retries ran out while the device was offline.
-  final wakes = <StreamSubscription<void>>[
-    for (final events in [
-      ref.watch(connectivityWakeEventsProvider),
-      ref.watch(appLifecycleResumeEventsProvider),
-    ])
-      events.listen((_) => unawaited(service.resumeRetries())),
-  ];
-  final readers = chat.readerWakeEvents.listen(
-    (room) => unawaited(
-      service.resumeDeferredConfirmations(
-        accountId: room.accountId,
-        roomToken: room.roomToken,
-      ),
-    ),
-  );
+  final owner = AttachmentRuntimeOwner(reserveAttachmentRuntime());
+  var disposed = false;
+  Future<int>? sourceSweep;
   ref.onDispose(() {
-    unawaited(readers.cancel());
-    for (final wake in wakes) {
-      unawaited(wake.cancel());
-    }
-    unawaited(service.close());
+    disposed = true;
+    unawaited(owner.close(maintenance: sourceSweep));
   });
-  await service.ready;
-  // Jobs are loaded, so anything the store holds without a job is an orphan:
-  // a pick the user never sent before the process died, or a job removed
-  // without its source. Best effort; the next start tries again.
-  unawaited(
-    ref
+  try {
+    final service = await owner.open(
+      () => AttachmentService(
+        repository: ref.watch(attachmentRepositoryProvider),
+        credentials: ref.watch(credentialVaultProvider),
+        releaseSource: (attachment) => source.discard(attachment.handle),
+        transport: HttpAttachmentTransport(
+          client: ref.watch(certificateTrustGateProvider).createClient(),
+          sourceProvider: source,
+        ),
+        catchUpConfirmation:
+            ({required accountId, required roomToken, required threadId}) =>
+                chat.catchUpRoom(
+                  accountId: accountId.value,
+                  roomToken: roomToken.value,
+                  threadId: threadId,
+                ),
+        reportTransferActivity: keepAlive?.holder(),
+        inFlightBytes: ref.watch(attachmentInFlightBytesProvider),
+      ),
+    );
+    if (disposed) throw StateError('Attachment provider has been disposed');
+    // A network hint or a resumed app is worth one more attempt for uploads
+    // whose automatic retries ran out while the device was offline.
+    final wakes = <StreamSubscription<void>>[
+      for (final events in [
+        ref.watch(connectivityWakeEventsProvider),
+        ref.watch(appLifecycleResumeEventsProvider),
+      ])
+        events.listen((_) => unawaited(service.resumeRetries())),
+    ];
+    final readers = chat.readerWakeEvents.listen(
+      (room) => unawaited(
+        service.resumeDeferredConfirmations(
+          accountId: room.accountId,
+          roomToken: room.roomToken,
+        ),
+      ),
+    );
+    ref.onDispose(() {
+      unawaited(readers.cancel());
+      for (final wake in wakes) {
+        unawaited(wake.cancel());
+      }
+    });
+    await service.ready;
+    if (disposed) throw StateError('Attachment provider has been disposed');
+    // Jobs are loaded, so anything the store holds without a job is an orphan:
+    // a pick the user never sent before the process died, or a job removed
+    // without its source. Best effort; the next start tries again.
+    sourceSweep = ref
         .read(attachmentRepositoryProvider)
         .referencedSourceHandles()
         .then(
           (referenced) => source.discardUnreferenced(referenced: referenced),
         )
-        .catchError((Object _) => 0),
-  );
-  return service;
+        .catchError((Object _) => 0);
+    unawaited(sourceSweep);
+    return service;
+  } on Object catch (error, stack) {
+    try {
+      await owner.close();
+    } finally {
+      Error.throwWithStackTrace(error, stack);
+    }
+  }
 });

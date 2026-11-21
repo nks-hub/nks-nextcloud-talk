@@ -252,6 +252,7 @@ void _registerAttachmentServiceSchedulerTests() {
     final jobId = await fixture.seedTerminal(messageId: 412);
     final persistenceStarted = Completer<void>();
     final releasePersistence = Completer<void>();
+    final failure = StateError('Synthetic startup maintenance failure');
     final client = _CloseRecordingClient(_unexpectedClient());
     final service = fixture.service(
       client,
@@ -267,7 +268,7 @@ void _registerAttachmentServiceSchedulerTests() {
                 persistenceStarted.complete();
                 await releasePersistence.future;
               }
-              throw StateError('Synthetic startup maintenance failure');
+              throw failure;
             }
             await fixture.repository.persistTransition(
               account: account,
@@ -277,22 +278,20 @@ void _registerAttachmentServiceSchedulerTests() {
             );
           },
     );
-    addTearDown(service.close);
+    addTearDown(() async {
+      if (!releasePersistence.isCompleted) releasePersistence.complete();
+      await expectLater(service.close(), throwsA(same(failure)));
+    });
 
     await persistenceStarted.future.timeout(const Duration(seconds: 2));
     final closing = service.close();
+    expect(service.close(), same(closing));
     await pumpEventQueue();
     releasePersistence.complete();
 
     await expectLater(
       closing.timeout(const Duration(seconds: 5)),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          'Synthetic startup maintenance failure',
-        ),
-      ),
+      throwsA(same(failure)),
     );
     expect(client.closed, isTrue);
   });

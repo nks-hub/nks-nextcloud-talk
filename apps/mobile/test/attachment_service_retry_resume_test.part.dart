@@ -1,6 +1,138 @@
 part of 'attachment_service_test.dart';
 
 void _registerAttachmentServiceRetryResumeTests() {
+  for (final reopenDuringUpload in [false, true]) {
+    test(
+      'a second attachment service cannot replace a live PUT '
+      '(${reopenDuringUpload ? 'start while claimed' : 'start before claim'})',
+      () async {
+        final fixture = await _Fixture.create(fileBacked: true);
+        addTearDown(fixture.close);
+        final jobId = await fixture.seedInFlight(
+          AttachmentRequestStep.normalPut,
+        );
+        final accountId = AccountId.parse('account-a');
+        final key = (accountId: accountId.value, jobId: jobId.value);
+        final loaded = await fixture.repository.loadRuntime();
+        final recovered = recoverAttachmentAfterRestart(
+          loaded.snapshot,
+          accountId: accountId,
+          jobId: jobId,
+        );
+        final account = recovered.plan!
+            .commit(loaded.snapshot)
+            .accounts[accountId]!;
+        await fixture.repository.persistTransition(
+          account: account,
+          job: account.jobs[jobId]!,
+          metadata: loaded.metadata[key]!.copyWith(automaticRetryCount: 1),
+          updatedAt: DateTime.utc(2026, 8, 24),
+        );
+
+        final peerDatabase = AppDatabase.forTesting(
+          NativeDatabase(fixture.databaseFile!),
+        );
+        addTearDown(peerDatabase.close);
+        final peerRepository = AttachmentRepository(peerDatabase);
+        final primaryStarted = Completer<void>();
+        final releasePrimary = Completer<void>();
+        final primarySettling = Completer<void>();
+        final releaseSettling = Completer<void>();
+        final execution = AttachmentRuntimeQueue();
+        final primaryOwner = AttachmentRuntimeOwner(execution.reserve());
+        final primary = await primaryOwner.open(
+          () => fixture.service(
+            MockClient((request) async {
+              if (request.method == 'PUT') {
+                primaryStarted.complete();
+                await releasePrimary.future;
+                return http.Response('', 201);
+              }
+              if (request.url.path.endsWith('/attachment')) {
+                return http.Response.bytes(_finalizeSuccess(), 200);
+              }
+              fail('Unexpected request: ${request.method}');
+            }),
+            identifierFactory: const UuidAttachmentIdentifierFactory(),
+            retryDelays: const [],
+            beforeRoomIdle: () async {
+              if (!primaryStarted.isCompleted) return;
+              if (!primarySettling.isCompleted) primarySettling.complete();
+              await releaseSettling.future;
+            },
+          ),
+        );
+        final peerRequests = <String>[];
+        var peerOpened = false;
+        AttachmentRuntimeOwner? peerOwner;
+        Future<AttachmentService> openPeer() {
+          peerOwner = AttachmentRuntimeOwner(execution.reserve());
+          return peerOwner!.open(() {
+            peerOpened = true;
+            return AttachmentService(
+              repository: peerRepository,
+              credentials: fixture.credentials,
+              releaseSource: (_) async {},
+              transport: HttpAttachmentTransport(
+                client: MockClient((request) async {
+                  peerRequests.add(request.method);
+                  throw const SocketException('second transport was reached');
+                }),
+                sourceProvider: _FileSourceProvider(),
+              ),
+              retryDelays: const [],
+            );
+          });
+        }
+
+        addTearDown(() async {
+          if (!releasePrimary.isCompleted) releasePrimary.complete();
+          if (!releaseSettling.isCompleted) releaseSettling.complete();
+          await primaryOwner.close();
+          await peerOwner?.close();
+        });
+        await primary.ready;
+        final earlyPeer = reopenDuringUpload ? null : openPeer();
+
+        final primaryRun = primary.resumeRetries();
+        await primaryStarted.future;
+        Future<AttachmentJob> persistedJob() async =>
+            (await fixture.repository.loadRuntime())
+                .snapshot
+                .accounts[accountId]!
+                .jobs[jobId]!;
+        final requestId =
+            (await persistedJob()).inFlightRequest!.context.requestId;
+
+        final nextOwner = earlyPeer ?? openPeer();
+        await pumpEventQueue();
+        expect(peerOpened, isFalse);
+
+        final after = (await persistedJob()).inFlightRequest;
+        expect(
+          (peerRequests.length, after?.context.requestId),
+          (0, requestId),
+          reason: 'Second service sent $peerRequests',
+        );
+        releasePrimary.complete();
+        await primarySettling.future;
+        final closing = primaryOwner.close();
+        await pumpEventQueue();
+        expect(peerOpened, isFalse);
+        releaseSettling.complete();
+        await primaryRun;
+        await closing;
+        final peer = await nextOwner;
+        await peer.resumeRetries();
+        expect(peerRequests, isEmpty);
+        expect(
+          (await persistedJob()).phase,
+          AttachmentJobPhase.awaitingConfirmation,
+        );
+      },
+    );
+  }
+
   test('a network hint resumes different rooms concurrently', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);

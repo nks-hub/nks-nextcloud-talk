@@ -16,6 +16,7 @@ part 'attachment_service_runtime.part.dart';
 part 'attachment_service_parallel.part.dart';
 part 'attachment_service_confirmation.part.dart';
 part 'attachment_service_support.part.dart';
+part 'attachment_service_lifecycle.part.dart';
 
 typedef ReleaseDurableAttachmentSource =
     Future<void> Function(PreparedAttachmentSource source);
@@ -416,19 +417,22 @@ final class AttachmentService with _AttachmentServiceRuntime {
   Map<AttachmentPersistenceKey, AttachmentExecutionMetadata> _metadata = {};
   @override
   bool _closed = false;
+  Future<void>? _closing;
+  final _activeOperations = <Future<void>>{};
 
   Future<void> get ready => _ready;
 
   /// Persists an account-wide stop before its credential is revoked, aborts
   /// active requests, and waits a bounded time for their cleanup paths.
   Future<void> suspendAccount(AccountId accountId) {
+    if (_closed) return Future<void>.value();
     final existing = _accountSuspensions[accountId];
     if (existing != null) {
       return existing;
     }
     _suspendedAccounts.add(accountId);
     _steps.cancelWaiters(accountId);
-    final operation = _suspendAccount(accountId);
+    final operation = _trackOperation(() => _suspendAccount(accountId));
     _accountSuspensions[accountId] = operation;
     return operation;
   }
@@ -493,7 +497,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
 
   Future<DurableAttachmentSession> enqueue(
     AttachmentEnqueueRequest request,
-  ) async {
+  ) => _trackOperation(() async {
     await _ready;
     _ensureOpen();
     _ensureAccountActive(request.accountId);
@@ -659,7 +663,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
       cancel: () => cancel(accountId: request.accountId, jobId: jobId),
       retry: () => retry(accountId: request.accountId, jobId: jobId),
     );
-  }
+  });
 
   Stream<AttachmentJobProgress> watchJob({
     required AccountId accountId,
@@ -673,7 +677,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
   Future<void> cancel({
     required AccountId accountId,
     required AttachmentJobId jobId,
-  }) async {
+  }) => _trackOperation(() async {
     await _ready;
     _ensureOpen();
     final key = _jobKey(accountId, jobId);
@@ -707,7 +711,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
       await _releaseTerminalSource(key);
     }
     unawaited(_scheduleRoom(roomKey));
-  }
+  });
 
   Future<void> discardFailed({
     required AccountId accountId,
@@ -728,7 +732,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
   Future<void> retry({
     required AccountId accountId,
     required AttachmentJobId jobId,
-  }) async {
+  }) => _trackOperation(() async {
     await _ready;
     _ensureOpen();
     _ensureAccountActive(accountId);
@@ -790,7 +794,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
     _retryTimers.remove(retryRoom)?.cancel();
     _retryDeadlines.remove(retryRoom);
     await _scheduleRoom(retryRoom);
-  }
+  });
 
   /// Gives every upload that ran out of automatic retries, or is still
   /// waiting for its next one, a fresh attempt now.
@@ -801,7 +805,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
   /// until the sender found the retry button. A connectivity hint or a
   /// resumed app is the moment to try again; the probe still has to succeed,
   /// so a false hint costs one more failed attempt and nothing else.
-  Future<void> resumeRetries() async {
+  Future<void> resumeRetries() => _trackOperation(() async {
     await _ready;
     if (_closed) {
       return;
@@ -837,12 +841,12 @@ final class AttachmentService with _AttachmentServiceRuntime {
       _retryDeadlines.remove(room);
     }
     await Future.wait<void>([for (final room in rooms) _scheduleRoom(room)]);
-  }
+  });
 
   Future<void> resumeDeferredConfirmations({
     required String accountId,
     required String roomToken,
-  }) async {
+  }) => _trackOperation(() async {
     await _ready;
     if (_closed || _suspendedAccounts.contains(AccountId.parse(accountId))) {
       return;
@@ -862,13 +866,13 @@ final class AttachmentService with _AttachmentServiceRuntime {
         _queueConfirmationCatchUp(key);
       }
     }
-  }
+  });
 
   Future<void> completeReauthentication({
     required AccountId accountId,
     required int credentialGeneration,
     required int capabilityGeneration,
-  }) async {
+  }) => _trackOperation(() async {
     await _ready;
     _ensureOpen();
     _ensureAccountActive(accountId);
@@ -904,7 +908,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
     for (final room in rooms) {
       unawaited(_scheduleRoom(room));
     }
-  }
+  });
 
   void _ensureAccountActive(AccountId accountId) {
     if (_suspendedAccounts.contains(accountId)) {
@@ -915,7 +919,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
   Future<void> reconcileConfirmations({
     required AccountId accountId,
     required Iterable<AttachmentMessageConfirmation> confirmations,
-  }) async {
+  }) => _trackOperation(() async {
     await _ready;
     _ensureOpen();
     _ensureAccountActive(accountId);
@@ -958,87 +962,10 @@ final class AttachmentService with _AttachmentServiceRuntime {
     for (final room in rooms) {
       unawaited(_scheduleRoom(room));
     }
-  }
+  });
 
-  Future<void> close() async {
-    if (_closed) {
-      return;
-    }
+  Future<void> close() {
     _closed = true;
-    _steps.cancelWaiters();
-    Object? activeFailure;
-    StackTrace? activeFailureStack;
-    Object? cleanupFailure;
-    StackTrace? cleanupFailureStack;
-
-    Future<void> captureActiveFailure(
-      FutureOr<void> Function() operation,
-    ) async {
-      try {
-        await operation();
-      } on Object catch (error, stackTrace) {
-        activeFailure ??= error;
-        activeFailureStack ??= stackTrace;
-      }
-    }
-
-    Future<void> captureCleanupFailure(
-      FutureOr<void> Function() operation,
-    ) async {
-      try {
-        await operation();
-      } on Object catch (error, stackTrace) {
-        cleanupFailure ??= error;
-        cleanupFailureStack ??= stackTrace;
-      }
-    }
-
-    try {
-      await captureActiveFailure(() => _ready);
-      final confirmationSubscription = _confirmationSubscription;
-      _confirmationSubscription = null;
-      await captureActiveFailure(() => confirmationSubscription?.cancel());
-      await captureActiveFailure(() => _confirmationTail);
-      await captureActiveFailure(() => _startupMaintenance);
-      for (final timer in _retryTimers.values) {
-        timer.cancel();
-      }
-      _retryTimers.clear();
-      _retryDeadlines.clear();
-      _syncTransferActivity();
-      _credentialRetryCounts.clear();
-      for (final timer in _confirmationRetryTimers.values) {
-        timer.cancel();
-      }
-      _confirmationRetryTimers.clear();
-      _roomRerunRequests.clear();
-      for (final cancellation in _cancellations.values) {
-        cancellation.cancel();
-      }
-      await captureActiveFailure(
-        () => Future.wait<void>(_roomRuns.values.toList(growable: false)),
-      );
-      await captureActiveFailure(
-        () => Future.wait<void>(
-          _confirmationCatchUps.values.toList(growable: false),
-        ),
-      );
-    } finally {
-      _confirmationRetryCounts.clear();
-      _deferredConfirmations.clear();
-      _confirmationResumeRequests.clear();
-      await captureCleanupFailure(
-        () => _releaseVerifiedAttachmentSources(this),
-      );
-      await captureCleanupFailure(_transport.close);
-    }
-    final firstActiveFailure = activeFailure;
-    if (firstActiveFailure != null) {
-      Error.throwWithStackTrace(firstActiveFailure, activeFailureStack!);
-    }
-    final firstCleanupFailure = cleanupFailure;
-    if (firstCleanupFailure != null) {
-      Error.throwWithStackTrace(firstCleanupFailure, cleanupFailureStack!);
-    }
+    return _closing ??= _closeRuntime();
   }
 }

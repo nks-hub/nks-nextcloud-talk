@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import com.nkshub.nextcloudtalk.attachments.AttachmentSaverActivityLifecycle
+import com.nkshub.nextcloudtalk.attachments.AttachmentRuntimeChannel
 import com.nkshub.nextcloudtalk.attachments.AttachmentTransferChannel
 import com.nkshub.nextcloudtalk.attachments.AttachmentTransferService
 import com.nkshub.nextcloudtalk.background.BackgroundDrain
@@ -113,6 +114,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        AttachmentRuntimeChannel.attach(flutterEngine)
         val channel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL_NAME,
