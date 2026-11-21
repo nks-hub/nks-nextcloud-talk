@@ -27,6 +27,7 @@ final class _OpenConversationsSheetState
     extends ConsumerState<OpenConversationsSheet> {
   List<ListedRoom>? _rooms;
   NewConversationError? _error;
+  bool _joinInProgress = false;
   bool _joining = false;
 
   @override
@@ -55,17 +56,21 @@ final class _OpenConversationsSheetState
   }
 
   Future<void> _join(ListedRoom room) async {
-    final strings = AppLocalizations.of(context);
-    var password = '';
-    if (room.hasPassword) {
-      final entered = await _askPassword(strings);
-      if (entered == null || !mounted) {
-        return;
-      }
-      password = entered;
+    if (_joinInProgress) {
+      return;
     }
-    setState(() => _joining = true);
+    _joinInProgress = true;
     try {
+      final strings = AppLocalizations.of(context);
+      var password = '';
+      if (room.hasPassword) {
+        final entered = await _askPassword(strings);
+        if (entered == null || !mounted) {
+          return;
+        }
+        password = entered;
+      }
+      setState(() => _joining = true);
       final token = await ref
           .read(newConversationServiceProvider)
           .joinOpenConversation(
@@ -84,6 +89,8 @@ final class _OpenConversationsSheetState
         _joining = false;
         _error = failure.code;
       });
+    } finally {
+      _joinInProgress = false;
     }
   }
 

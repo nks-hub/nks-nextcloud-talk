@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -252,6 +254,14 @@ void main() {
       findsOneWidget,
     );
     expect(service.lastJoinToken, isNull);
+    expect(service.joinCalls, 0);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('open-conversations-list')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('open-conversation-open1234')));
+    await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).last, 'open sesame');
     await tester.tap(
@@ -260,7 +270,83 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(service.lastJoinPassword, 'open sesame');
+    expect(service.joinCalls, 1);
     expect(opened?.value, 'open1234');
+  });
+
+  testWidgets('double tapping an open conversation joins it once', (
+    tester,
+  ) async {
+    service.openRooms = [
+      ListedRoom(
+        token: ConversationToken.parse('open5678', path: r'$.token'),
+        displayName: 'Open room',
+        description: '',
+        lastActivity: null,
+        hasPassword: false,
+      ),
+    ];
+    final joinGate = Completer<void>();
+    service.joinGate = joinGate;
+    addTearDown(() {
+      if (!joinGate.isCompleted) {
+        joinGate.complete();
+      }
+    });
+    ConversationToken? opened;
+    await tester.pumpWidget(app(onCreated: (token) => opened = token));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('browse-open-conversations')));
+    await tester.pumpAndSettle();
+
+    final room = find.byKey(const Key('open-conversation-open5678'));
+    await tester.tap(room);
+    await tester.tap(room);
+    await tester.pump();
+
+    expect(service.joinCalls, 1);
+    expect(find.byKey(const Key('open-conversations-loading')), findsOneWidget);
+
+    joinGate.complete();
+    await tester.pumpAndSettle();
+    expect(service.joinCalls, 1);
+    expect(opened?.value, 'open5678');
+  });
+
+  testWidgets('a failed open-conversation join can be retried', (tester) async {
+    service.openRooms = [
+      ListedRoom(
+        token: ConversationToken.parse('open9012', path: r'$.token'),
+        displayName: 'Open room',
+        description: '',
+        lastActivity: null,
+        hasPassword: false,
+      ),
+    ];
+    service.joinError = const NewConversationException(
+      NewConversationError.network,
+    );
+    ConversationToken? opened;
+    await tester.pumpWidget(app(onCreated: (token) => opened = token));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('browse-open-conversations')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('open-conversation-open9012')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('open-conversations-error')), findsOneWidget);
+    expect(service.joinCalls, 1);
+    expect(opened, isNull);
+
+    service.joinError = null;
+    await tester.tap(find.text('Try again'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-conversation-open9012')));
+    await tester.pumpAndSettle();
+
+    expect(service.joinCalls, 2);
+    expect(opened?.value, 'open9012');
   });
 
   testWidgets('a server without open conversations says so', (tester) async {
@@ -405,6 +491,8 @@ final class _FakeNewConversationService implements NewConversationService {
   NewConversationException? openRoomsError;
   ConversationToken? joinResult;
   NewConversationException? joinError;
+  int joinCalls = 0;
+  Completer<void>? joinGate;
   ConversationToken? lastJoinToken;
   String? lastJoinPassword;
 
@@ -426,8 +514,10 @@ final class _FakeNewConversationService implements NewConversationService {
     required ConversationToken roomToken,
     String password = '',
   }) async {
+    joinCalls++;
     lastJoinToken = roomToken;
     lastJoinPassword = password;
+    await joinGate?.future;
     final error = joinError;
     if (error != null) {
       throw error;
