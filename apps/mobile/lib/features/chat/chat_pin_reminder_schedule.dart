@@ -485,6 +485,9 @@ final class _ScheduledMessagesSheetState
     extends ConsumerState<ScheduledMessagesSheet> {
   List<RichChatScheduledMessage>? _messages;
   final Set<String> _deletingScheduleIds = <String>{};
+  final Set<String> _deletedScheduleIdsAwaitingRefresh = <String>{};
+  int _activeDeleteRequests = 0;
+  int _loadGeneration = 0;
   bool _failed = false;
 
   @override
@@ -494,6 +497,7 @@ final class _ScheduledMessagesSheetState
   }
 
   Future<void> _load() async {
+    final generation = ++_loadGeneration;
     try {
       final messages = await ref
           .read(chatMessageActionsServiceProvider)
@@ -501,14 +505,14 @@ final class _ScheduledMessagesSheetState
             accountId: widget.accountId,
             roomToken: widget.roomToken,
           );
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
         setState(() {
           _messages = messages;
           _failed = false;
         });
       }
     } on Object {
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
         setState(() => _failed = true);
       }
     }
@@ -519,9 +523,11 @@ final class _ScheduledMessagesSheetState
     if (!_deletingScheduleIds.add(scheduleId)) {
       return;
     }
+    _activeDeleteRequests += 1;
     setState(() {});
     final strings = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
+    var deleted = false;
     try {
       await ref
           .read(chatMessageActionsServiceProvider)
@@ -530,6 +536,7 @@ final class _ScheduledMessagesSheetState
             roomToken: widget.roomToken,
             scheduleId: scheduleId,
           );
+      deleted = true;
       if (!mounted) {
         return;
       }
@@ -541,16 +548,27 @@ final class _ScheduledMessagesSheetState
             content: Text(strings.scheduledMessageDeleted),
           ),
         );
-      await _load();
     } on Object {
       if (mounted) {
         setState(() => _failed = true);
       }
     } finally {
-      if (mounted) {
-        setState(() => _deletingScheduleIds.remove(scheduleId));
+      _activeDeleteRequests -= 1;
+      if (deleted) {
+        _deletedScheduleIdsAwaitingRefresh.add(scheduleId);
       } else {
         _deletingScheduleIds.remove(scheduleId);
+      }
+      if (mounted &&
+          _activeDeleteRequests == 0 &&
+          _deletedScheduleIdsAwaitingRefresh.isNotEmpty) {
+        final refreshedIds = Set<String>.of(_deletedScheduleIdsAwaitingRefresh);
+        _deletedScheduleIdsAwaitingRefresh.removeAll(refreshedIds);
+        await _load();
+        _deletingScheduleIds.removeAll(refreshedIds);
+      }
+      if (mounted) {
+        setState(() {});
       }
     }
   }

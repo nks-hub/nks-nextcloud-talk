@@ -860,6 +860,98 @@ void main() {
       await teardownTree(tester);
     });
 
+    testWidgets('concurrent scheduled deletes share one final refresh', (
+      tester,
+    ) async {
+      final conversation = await insertRoom(hasScheduledMessages: 1);
+      final deleteGates = <String, Completer<void>>{
+        '77': Completer<void>(),
+        '78': Completer<void>(),
+      };
+      final deletedIds = <String>{};
+      var getRequests = 0;
+      var deleteRequests = 0;
+      addTearDown(() {
+        for (final gate in deleteGates.values) {
+          if (!gate.isCompleted) {
+            gate.complete();
+          }
+        }
+      });
+      await tester.pumpWidget(
+        wrap(
+          api: buildApi(
+            localFeatures: const <String>['scheduled-messages'],
+            onRichChat: (request) async {
+              if (request.method == 'GET') {
+                getRequests += 1;
+                final messages = <Object?>[
+                  if (!deletedIds.contains('77'))
+                    _scheduledMessageJson(4102444800),
+                  if (!deletedIds.contains('78'))
+                    <String, Object?>{
+                      ..._scheduledMessageJson(4102448400),
+                      'id': '78',
+                      'message': 'Second scheduled message',
+                    },
+                ];
+                return http.Response(jsonEncode(_ocs(200, messages)), 200);
+              }
+              deleteRequests += 1;
+              final scheduleId = request.url.pathSegments.last;
+              await deleteGates[scheduleId]!.future;
+              deletedIds.add(scheduleId);
+              return http.Response(
+                jsonEncode(_ocs(200, <String, Object?>{})),
+                200,
+              );
+            },
+          ),
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+          ),
+        ),
+      );
+      await settle(tester);
+
+      await tester.tap(find.byKey(const Key('open-scheduled-messages')));
+      await flush(tester);
+      expect(getRequests, 1);
+      expect(find.byKey(const Key('scheduled-message-77')), findsOneWidget);
+      expect(find.byKey(const Key('scheduled-message-78')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('delete-scheduled-77')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('delete-scheduled-78')));
+      await tester.pump();
+      expect(deleteRequests, 2);
+
+      deleteGates['77']!.complete();
+      await pumpUntil(
+        tester,
+        () => find
+            .byKey(const Key('scheduled-message-deleted'))
+            .evaluate()
+            .isNotEmpty,
+      );
+
+      expect(getRequests, 1);
+      expect(
+        find.byKey(const Key('delete-scheduled-progress-78')),
+        findsOneWidget,
+      );
+
+      deleteGates['78']!.complete();
+      await flush(tester);
+
+      expect(getRequests, 2);
+      expect(deleteRequests, 2);
+      expect(find.byKey(const Key('scheduled-messages-empty')), findsOneWidget);
+
+      await teardownTree(tester);
+    });
+
     testWidgets('the scheduled list entry point stays hidden when empty', (
       tester,
     ) async {
