@@ -413,6 +413,38 @@ void main() {
     },
   );
 
+  test('detail projection batches cached message writes', () async {
+    await database.close();
+    final counter = _CachedMessageSelectCounter();
+    database = AppDatabase.forTesting(
+      NativeDatabase.memory().interceptWith(counter),
+    );
+    accounts = AccountRepository(database);
+    threads = ThreadRepository(database);
+    await _insertAccount(accounts, 'account-a');
+    await _insertThreadMessages(database, title: 'Before', replyCount: 39);
+    counter.enabled = true;
+
+    await threads.upsertDetail(
+      accountId: 'account-a',
+      server: _serverFor('account-a'),
+      value: _threadWithMessages(title: 'After'),
+    );
+
+    expect(counter.directMessageInserts, 0);
+    expect(counter.messageBatchExecutions, 1);
+    final rows = await database.select(database.cachedChatMessages).get();
+    expect(rows, hasLength(40));
+    expect(
+      rows.every(
+        (row) =>
+            ChatMessage.fromJson(jsonDecode(row.rawJson)).threadTitle ==
+            'After',
+      ),
+      isTrue,
+    );
+  });
+
   test('metadata write failure rolls back chat title projection', () async {
     await _insertThreadMessages(database, title: 'Before');
     await database.customStatement('''
@@ -551,6 +583,7 @@ Future<void> _insertThreadMessages(
   AppDatabase database, {
   required String title,
   bool named = true,
+  int replyCount = 1,
 }) async {
   final root = _messageWire(
     id: 100,
@@ -558,35 +591,40 @@ Future<void> _insertThreadMessages(
     isRoot: named,
     message: 'Root message',
   );
-  final reply = _messageWire(
-    id: 101,
-    title: title,
-    message: 'Reply message',
-    parent: root,
-  );
-  for (final wire in <Map<String, Object?>>[root, reply]) {
-    final id = wire['id']! as int;
-    await database
-        .into(database.cachedChatMessages)
-        .insert(
-          CachedChatMessagesCompanion.insert(
-            accountId: 'account-a',
-            roomToken: 'rooma123',
-            messageId: id,
-            actorType: 'users',
-            actorId: 'account-a-user',
-            actorDisplayName: 'Account A',
-            timestamp: 1724300000 + id,
-            systemMessage: '',
-            messageType: 'comment',
-            referenceId: 'reference-$id',
-            displayText: wire['message']! as String,
-            deleted: false,
-            threadId: const Value(100),
-            rawJson: jsonEncode(wire),
-          ),
-        );
-  }
+  final wires = <Map<String, Object?>>[
+    root,
+    for (var index = 0; index < replyCount; index++)
+      _messageWire(
+        id: 101 + index,
+        title: title,
+        message: 'Reply message $index',
+        parent: root,
+      ),
+  ];
+  await database.batch((batch) {
+    for (final wire in wires) {
+      final id = wire['id']! as int;
+      batch.insert(
+        database.cachedChatMessages,
+        CachedChatMessagesCompanion.insert(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          messageId: id,
+          actorType: 'users',
+          actorId: 'account-a-user',
+          actorDisplayName: 'Account A',
+          timestamp: 1724300000 + id,
+          systemMessage: '',
+          messageType: 'comment',
+          referenceId: 'reference-$id',
+          displayText: wire['message']! as String,
+          deleted: false,
+          threadId: const Value(100),
+          rawJson: jsonEncode(wire),
+        ),
+      );
+    }
+  });
 }
 
 Map<String, Object?> _messageWire({
@@ -625,6 +663,8 @@ final class _CachedMessageSelectCounter extends QueryInterceptor {
   int selects = 0;
   int threadBatchExecutions = 0;
   int directThreadInserts = 0;
+  int messageBatchExecutions = 0;
+  int directMessageInserts = 0;
 
   @override
   Future<List<Map<String, Object?>>> runSelect(
@@ -651,6 +691,13 @@ final class _CachedMessageSelectCounter extends QueryInterceptor {
         )) {
       threadBatchExecutions++;
     }
+    if (enabled &&
+        statements.statements.any(
+          (statement) =>
+              statement.toLowerCase().contains('into "cached_chat_messages"'),
+        )) {
+      messageBatchExecutions++;
+    }
     return super.runBatched(executor, statements);
   }
 
@@ -662,6 +709,10 @@ final class _CachedMessageSelectCounter extends QueryInterceptor {
   ) {
     if (enabled && statement.toLowerCase().contains('into "cached_threads"')) {
       directThreadInserts++;
+    }
+    if (enabled &&
+        statement.toLowerCase().contains('into "cached_chat_messages"')) {
+      directMessageInserts++;
     }
     return super.runInsert(executor, statement, args);
   }

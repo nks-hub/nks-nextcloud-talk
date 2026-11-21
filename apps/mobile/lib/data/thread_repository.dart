@@ -455,19 +455,30 @@ final class ThreadRepository {
       }
     }
 
+    final changedMessages = <CachedChatMessagesCompanion>[];
     for (final entry in projected.entries) {
       if (identical(originals[entry.key], entry.value)) {
         continue;
       }
-      await _persistMessage(
-        accountId: accountId,
-        server: server,
-        message: entry.value,
+      changedMessages.add(
+        _messageCompanion(
+          accountId: accountId,
+          server: server,
+          message: entry.value,
+        ),
+      );
+    }
+    if (changedMessages.isNotEmpty) {
+      await _database.batch(
+        (batch) => batch.insertAllOnConflictUpdate(
+          _database.cachedChatMessages,
+          changedMessages,
+        ),
       );
     }
   }
 
-  Future<void> _persistMessage({
+  CachedChatMessagesCompanion _messageCompanion({
     required String accountId,
     required ServerBase server,
     required ChatMessage message,
@@ -482,26 +493,22 @@ final class ThreadRepository {
               server: server,
             ).root.plainText.trim(),
           );
-    return _database
-        .into(_database.cachedChatMessages)
-        .insertOnConflictUpdate(
-          CachedChatMessagesCompanion.insert(
-            accountId: accountId,
-            roomToken: message.roomToken.value,
-            messageId: message.messageId,
-            actorType: message.actorType,
-            actorId: message.actorId,
-            actorDisplayName: message.actorDisplayName,
-            timestamp: message.timestamp,
-            systemMessage: message.systemMessage,
-            messageType: message.messageType,
-            referenceId: message.referenceId,
-            displayText: displayText,
-            deleted: message.deleted,
-            threadId: Value(message.threadId),
-            rawJson: jsonEncode(message.wire),
-          ),
-        );
+    return CachedChatMessagesCompanion.insert(
+      accountId: accountId,
+      roomToken: message.roomToken.value,
+      messageId: message.messageId,
+      actorType: message.actorType,
+      actorId: message.actorId,
+      actorDisplayName: message.actorDisplayName,
+      timestamp: message.timestamp,
+      systemMessage: message.systemMessage,
+      messageType: message.messageType,
+      referenceId: message.referenceId,
+      displayText: displayText,
+      deleted: message.deleted,
+      threadId: Value(message.threadId),
+      rawJson: jsonEncode(message.wire),
+    );
   }
 
   /// Collapses a root message into a one-line label for a derived thread.
