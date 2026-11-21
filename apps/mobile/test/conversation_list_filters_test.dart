@@ -189,6 +189,56 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('switching account resets the conversation list scroll offset', (
+    tester,
+  ) async {
+    final account = ValueNotifier<StoredAccount>(_account());
+    addTearDown(account.dispose);
+    final roomsByAccount = <String, List<CachedConversation>>{
+      'account-a': List.generate(
+        20,
+        (index) =>
+            _conversation(token: 'aroom${index.toString().padLeft(2, '0')}'),
+      ),
+      'account-b': List.generate(
+        20,
+        (index) => _conversation(
+          token: 'broom${index.toString().padLeft(2, '0')}',
+          accountId: 'account-b',
+        ),
+      ),
+    };
+
+    await tester.pumpWidget(
+      _switchableApp(account: account, roomsByAccount: roomsByAccount),
+    );
+
+    Finder verticalScrollable() => find.descendant(
+      of: find.byType(ConversationListView),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable && widget.axisDirection == AxisDirection.down,
+      ),
+    );
+
+    expect(verticalScrollable(), findsOneWidget);
+    await tester.drag(verticalScrollable(), const Offset(0, -1000));
+    await tester.pump();
+    expect(
+      tester.state<ScrollableState>(verticalScrollable()).position.pixels,
+      greaterThan(0),
+    );
+
+    account.value = _account(id: 'account-b');
+    await tester.pump();
+
+    expect(
+      tester.state<ScrollableState>(verticalScrollable()).position.pixels,
+      0,
+    );
+    expect(_tile('broom00'), findsOneWidget);
+  });
+
   testWidgets('corrupt room payload fails closed for mention filtering', (
     tester,
   ) async {
