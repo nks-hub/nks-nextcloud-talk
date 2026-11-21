@@ -173,6 +173,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// thread of the message it answers, so the room's own outbox stream leaves
   /// its row out and the row is read from that thread's stream instead.
   final Set<int> _replyTargets = <int>{};
+
+  /// Pin changes and reminder dialogs stay owned by the message that started
+  /// them. The room key keeps an old request from blocking the same message id
+  /// after this pane switches rooms.
+  final Set<(ChatRoomProviderKey, int)> _pendingPinActions =
+      <(ChatRoomProviderKey, int)>{};
+  final Set<(ChatRoomProviderKey, int)> _pendingReminderActions =
+      <(ChatRoomProviderKey, int)>{};
   int _giphyGeneration = 0;
   bool _syncing = false;
   bool _loadingOlder = false;

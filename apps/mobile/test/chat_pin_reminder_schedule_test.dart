@@ -198,6 +198,57 @@ void main() {
 
       await teardownTree(tester);
     });
+
+    testWidgets('repeated hide sends once and a failed attempt can retry', (
+      tester,
+    ) async {
+      final firstResponse = Completer<http.Response>();
+      addTearDown(() {
+        if (!firstResponse.isCompleted) {
+          firstResponse.complete(
+            http.Response(jsonEncode(_failureOcs(503)), 503),
+          );
+        }
+      });
+      var attempts = 0;
+      final conversation = await insertRoom(lastPinnedId: 10);
+      await insertMessage();
+      await tester.pumpWidget(
+        wrap(
+          api: buildApi(
+            onRichChat: (request) {
+              attempts++;
+              if (attempts == 1) {
+                return firstResponse.future;
+              }
+              return http.Response(jsonEncode(_emptyOcs(200)), 200);
+            },
+          ),
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+          ),
+        ),
+      );
+      await settle(tester);
+
+      final hide = find.byKey(const Key('chat-pinned-banner-hide'));
+      await tester.tap(hide);
+      await tester.pump();
+      await tester.tap(hide);
+      await tester.pump();
+
+      expect(attempts, 1);
+
+      firstResponse.complete(http.Response(jsonEncode(_failureOcs(503)), 503));
+      await flush(tester);
+      await tester.tap(hide);
+      await flush(tester);
+
+      expect(attempts, 2);
+
+      await teardownTree(tester);
+    });
   });
 
   group('pin action', () {
@@ -247,6 +298,57 @@ void main() {
       );
       expect(find.byKey(const Key('chat-pin-success')), findsOneWidget);
 
+      await teardownTree(tester);
+    });
+
+    testWidgets('a pending pin cannot open a second expiry sheet', (
+      tester,
+    ) async {
+      final response = Completer<http.Response>();
+      addTearDown(() {
+        if (!response.isCompleted) {
+          response.complete(http.Response(jsonEncode(_pinResponse()), 200));
+        }
+      });
+      final conversation = await insertRoom(participantType: 2);
+      await insertMessage();
+      await tester.pumpWidget(
+        wrap(
+          api: buildApi(onRichChat: (_) => response.future),
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+          ),
+        ),
+      );
+      await settle(tester);
+
+      final message = find.byKey(const Key('chat-message-target-10'));
+      await tester.longPress(message);
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('message-action-pin')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('message-pin-until-0')));
+      await tester.pump();
+
+      expect(
+        requestLog.where((entry) => entry.startsWith('POST ')),
+        hasLength(1),
+      );
+
+      await tester.longPress(message);
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('message-action-pin')));
+      await tester.pump();
+
+      expect(find.byKey(const Key('message-pin-until-0')), findsNothing);
+      expect(
+        requestLog.where((entry) => entry.startsWith('POST ')),
+        hasLength(1),
+      );
+
+      response.complete(http.Response(jsonEncode(_pinResponse()), 200));
+      await flush(tester);
       await teardownTree(tester);
     });
 
@@ -363,6 +465,49 @@ void main() {
       await teardownTree(tester);
     });
 
+    testWidgets('reopening a pending unpin sends one request', (tester) async {
+      final response = Completer<http.Response>();
+      addTearDown(() {
+        if (!response.isCompleted) {
+          response.complete(http.Response(jsonEncode(_emptyOcs(200)), 200));
+        }
+      });
+      final conversation = await insertRoom(
+        participantType: 2,
+        lastPinnedId: 10,
+      );
+      await insertMessage();
+      await tester.pumpWidget(
+        wrap(
+          api: buildApi(onRichChat: (_) => response.future),
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+          ),
+        ),
+      );
+      await settle(tester);
+
+      final message = find.byKey(const Key('chat-message-target-10'));
+      await tester.longPress(message);
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('message-action-unpin')));
+      await tester.pump();
+      await tester.longPress(message);
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('message-action-unpin')));
+      await tester.pump();
+
+      expect(
+        requestLog.where((entry) => entry.startsWith('DELETE ')),
+        hasLength(1),
+      );
+
+      response.complete(http.Response(jsonEncode(_emptyOcs(200)), 200));
+      await flush(tester);
+      await teardownTree(tester);
+    });
+
     // `#[RequireModeratorParticipant]` guards both pin routes, so an ordinary
     // participant must never be offered the action.
     testWidgets('an ordinary participant is not offered pinning', (
@@ -423,6 +568,65 @@ void main() {
   });
 
   group('reminder action', () {
+    testWidgets('reopening reminder while loading sends one request', (
+      tester,
+    ) async {
+      final firstResponse = Completer<http.Response>();
+      addTearDown(() {
+        if (!firstResponse.isCompleted) {
+          firstResponse.complete(
+            http.Response(jsonEncode(_failureOcs(404)), 404),
+          );
+        }
+      });
+      var getAttempts = 0;
+      final conversation = await insertRoom();
+      await insertMessage();
+      await tester.pumpWidget(
+        wrap(
+          api: buildApi(
+            onRichChat: (request) {
+              if (request.method == 'GET') {
+                getAttempts++;
+                if (getAttempts == 1) {
+                  return firstResponse.future;
+                }
+                return http.Response(jsonEncode(_failureOcs(404)), 404);
+              }
+              return http.Response(jsonEncode(_emptyOcs(200)), 200);
+            },
+          ),
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+          ),
+        ),
+      );
+      await settle(tester);
+
+      final message = find.byKey(const Key('chat-message-target-10'));
+      await tester.longPress(message);
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('message-action-remind')));
+      await tester.pump();
+      await tester.longPress(message);
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('message-action-remind')));
+      await tester.pump();
+
+      expect(getAttempts, 1);
+
+      firstResponse.complete(http.Response(jsonEncode(_failureOcs(404)), 404));
+      await flush(tester);
+      expect(find.byKey(const Key('reminder-sheet-title')), findsOneWidget);
+      Navigator.of(
+        tester.element(find.byKey(const Key('reminder-sheet-title'))),
+      ).pop();
+      await settle(tester);
+
+      await teardownTree(tester);
+    });
+
     testWidgets('setting a reminder posts the chosen timestamp', (
       tester,
     ) async {

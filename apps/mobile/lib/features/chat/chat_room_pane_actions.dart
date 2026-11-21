@@ -468,7 +468,17 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
   /// not a local reminder. Dismissing the sheet pins nothing: a pin replaces
   /// whatever the conversation had pinned before, which is not something to
   /// do by accident.
-  Future<void> _pinMessageWithExpiry(CachedChatMessage message) async {
+  Future<void> _pinMessageWithExpiry(CachedChatMessage message) =>
+      _runGuardedMessageAction(
+        pending: _pendingPinActions,
+        messageId: message.messageId,
+        action: (targetKey) => _choosePinExpiry(message, targetKey),
+      );
+
+  Future<void> _choosePinExpiry(
+    CachedChatMessage message,
+    ChatRoomProviderKey targetKey,
+  ) async {
     final strings = AppLocalizations.of(context);
     final now = DateTime.now();
     final choices = <(String, DateTime?)>[
@@ -503,14 +513,17 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
         ),
       ),
     );
-    if (chosen == null || !mounted) {
+    if (chosen == null || !mounted || targetKey != _key) {
       return;
     }
-    await _pinMessage(message, until: chosen.$2);
+    await _pinMessage(message, targetKey: targetKey, until: chosen.$2);
   }
 
-  Future<void> _pinMessage(CachedChatMessage message, {DateTime? until}) async {
-    final targetKey = _key;
+  Future<void> _pinMessage(
+    CachedChatMessage message, {
+    required ChatRoomProviderKey targetKey,
+    DateTime? until,
+  }) async {
     try {
       await ref
           .read(chatMessageActionsServiceProvider)
@@ -521,14 +534,14 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
             until: until,
           );
     } on ChatMessageActionException catch (error) {
-      _showActionError(error.code);
+      _showScopedActionError(targetKey, error.code);
       return;
     } on Object {
-      _showActionError(ChatMessageActionError.invalidResponse);
+      _showScopedActionError(targetKey, ChatMessageActionError.invalidResponse);
       return;
     }
-    await _refreshConversations();
-    if (!mounted) {
+    await _refreshConversations(accountId: targetKey.accountId);
+    if (!mounted || targetKey != _key) {
       return;
     }
     _showActionNotice(
@@ -537,8 +550,17 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
     );
   }
 
-  Future<void> _unpinMessage(CachedChatMessage message) async {
-    final targetKey = _key;
+  Future<void> _unpinMessage(CachedChatMessage message) =>
+      _runGuardedMessageAction(
+        pending: _pendingPinActions,
+        messageId: message.messageId,
+        action: (targetKey) => _unpinMessageGuarded(message, targetKey),
+      );
+
+  Future<void> _unpinMessageGuarded(
+    CachedChatMessage message,
+    ChatRoomProviderKey targetKey,
+  ) async {
     try {
       await ref
           .read(chatMessageActionsServiceProvider)
@@ -548,14 +570,14 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
             messageId: message.messageId,
           );
     } on ChatMessageActionException catch (error) {
-      _showActionError(error.code);
+      _showScopedActionError(targetKey, error.code);
       return;
     } on Object {
-      _showActionError(ChatMessageActionError.invalidResponse);
+      _showScopedActionError(targetKey, ChatMessageActionError.invalidResponse);
       return;
     }
-    await _refreshConversations();
-    if (!mounted) {
+    await _refreshConversations(accountId: targetKey.accountId);
+    if (!mounted || targetKey != _key) {
       return;
     }
     _showActionNotice(
@@ -565,8 +587,16 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
   }
 
   /// Hides the conversation pin for this account only.
-  Future<void> _hidePinnedMessage(int messageId) async {
-    final targetKey = _key;
+  Future<void> _hidePinnedMessage(int messageId) => _runGuardedMessageAction(
+    pending: _pendingPinActions,
+    messageId: messageId,
+    action: (targetKey) => _hidePinnedMessageGuarded(messageId, targetKey),
+  );
+
+  Future<void> _hidePinnedMessageGuarded(
+    int messageId,
+    ChatRoomProviderKey targetKey,
+  ) async {
     try {
       await ref
           .read(chatMessageActionsServiceProvider)
@@ -576,13 +606,13 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
             messageId: messageId,
           );
     } on ChatMessageActionException catch (error) {
-      _showActionError(error.code);
+      _showScopedActionError(targetKey, error.code);
       return;
     } on Object {
-      _showActionError(ChatMessageActionError.invalidResponse);
+      _showScopedActionError(targetKey, ChatMessageActionError.invalidResponse);
       return;
     }
-    await _refreshConversations();
+    await _refreshConversations(accountId: targetKey.accountId);
   }
 
   /// Opens the reminder options for [message] and applies the choice.
@@ -590,8 +620,17 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
   /// The existing reminder is read first so the sheet can offer to remove it;
   /// Talk answers "no reminder here" with a `404`, which the service reports
   /// as `null` rather than as a failure.
-  Future<void> _openReminder(CachedChatMessage message) async {
-    final targetKey = _key;
+  Future<void> _openReminder(CachedChatMessage message) =>
+      _runGuardedMessageAction(
+        pending: _pendingReminderActions,
+        messageId: message.messageId,
+        action: (targetKey) => _openReminderGuarded(message, targetKey),
+      );
+
+  Future<void> _openReminderGuarded(
+    CachedChatMessage message,
+    ChatRoomProviderKey targetKey,
+  ) async {
     final service = ref.read(chatMessageActionsServiceProvider);
     RichChatReminder? existing;
     try {
@@ -601,10 +640,10 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
         messageId: message.messageId,
       );
     } on ChatMessageActionException catch (error) {
-      _showActionError(error.code);
+      _showScopedActionError(targetKey, error.code);
       return;
     } on Object {
-      _showActionError(ChatMessageActionError.invalidResponse);
+      _showScopedActionError(targetKey, ChatMessageActionError.invalidResponse);
       return;
     }
     if (!mounted || targetKey != _key) {
@@ -633,7 +672,7 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
             roomToken: targetKey.roomToken,
             messageId: message.messageId,
           );
-          if (mounted) {
+          if (mounted && targetKey == _key) {
             _showActionNotice(
               strings.reminderRemoved,
               const Key('chat-reminder-removed'),
@@ -654,7 +693,7 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
             messageId: message.messageId,
             timestamp: at.toUtc().millisecondsSinceEpoch ~/ 1000,
           );
-          if (mounted) {
+          if (mounted && targetKey == _key) {
             _showActionNotice(
               strings.reminderSet(formatMoment(context, at)),
               const Key('chat-reminder-set'),
@@ -662,9 +701,36 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
           }
       }
     } on ChatMessageActionException catch (error) {
-      _showActionError(error.code);
+      _showScopedActionError(targetKey, error.code);
     } on Object {
-      _showActionError(ChatMessageActionError.invalidResponse);
+      _showScopedActionError(targetKey, ChatMessageActionError.invalidResponse);
+    }
+  }
+
+  void _showScopedActionError(
+    ChatRoomProviderKey targetKey,
+    ChatMessageActionError code,
+  ) {
+    if (!mounted || targetKey != _key) {
+      return;
+    }
+    _showActionError(code);
+  }
+
+  Future<void> _runGuardedMessageAction({
+    required Set<(ChatRoomProviderKey, int)> pending,
+    required int messageId,
+    required Future<void> Function(ChatRoomProviderKey targetKey) action,
+  }) async {
+    final targetKey = _key;
+    final actionKey = (targetKey, messageId);
+    if (!pending.add(actionKey)) {
+      return;
+    }
+    try {
+      await action(targetKey);
+    } finally {
+      pending.remove(actionKey);
     }
   }
 
@@ -745,11 +811,11 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
   /// message: both live on the conversation, so only a conversation sync can
   /// observe them. A full sync is asked for because a delta may legitimately
   /// skip a room whose `lastActivity` a pin did not move.
-  Future<void> _refreshConversations() async {
+  Future<void> _refreshConversations({String? accountId}) async {
     try {
       await ref
           .read(conversationSyncServiceProvider)
-          .sync(widget.account.id, forceFull: true);
+          .sync(accountId ?? widget.account.id, forceFull: true);
     } on Object {
       // The mutation itself already succeeded; a stale banner until the next
       // scheduled sync is not worth a second error channel on top of the
