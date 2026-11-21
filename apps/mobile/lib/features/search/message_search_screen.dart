@@ -58,20 +58,19 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
 
   void _onQueryChanged(String value) {
     _debounce?.cancel();
+    final generation = ++_generation;
     final term = value.trim();
     if (term.isEmpty) {
-      _generation++;
       setState(() {
         _viewState = _MessageSearchViewState.idle;
         _results = const [];
       });
       return;
     }
-    _debounce = Timer(_searchDebounce, () => _runSearch(term));
+    _debounce = Timer(_searchDebounce, () => _runSearch(term, generation));
   }
 
-  Future<void> _runSearch(String term) async {
-    final generation = ++_generation;
+  Future<void> _runSearch(String term, int generation) async {
     setState(() {
       _error = null;
       _viewState = _MessageSearchViewState.searching;

@@ -151,6 +151,38 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('does not show an old result after the query changes', (
+    tester,
+  ) async {
+    final firstSearch = Completer<List<MessageSearchResult>>();
+    final service = _FakeMessageSearchService((term) {
+      if (term == 'first') {
+        return firstSearch.future;
+      }
+      return const <MessageSearchResult>[];
+    });
+    await pumpScreen(tester, service);
+
+    await tester.enterText(
+      find.byKey(const Key('message-search-field')),
+      'first',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+
+    await tester.enterText(
+      find.byKey(const Key('message-search-field')),
+      'second',
+    );
+    firstSearch.complete([_result(excerpt: 'Old result')]);
+    await tester.pump();
+
+    expect(find.text('Old result'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
+    expect(service.searchedTerms, ['first', 'second']);
+  });
+
   testWidgets('shows results with author, excerpt and tap callback', (
     tester,
   ) async {
