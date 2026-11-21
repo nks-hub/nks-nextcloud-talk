@@ -141,6 +141,7 @@ final class _Fixture {
 
   AttachmentEnqueueRequest request({
     required int normalMaximum,
+    String roomToken = 'rooma123',
     AttachmentMessageKind kind = AttachmentMessageKind.file,
     String mimeType = 'image/png',
     String displayName = 'source.png',
@@ -151,7 +152,7 @@ final class _Fixture {
     accountId: AccountId.parse('account-a'),
     server: ServerBase.parse('https://cloud.example.invalid'),
     roomToken: ConversationToken.parse(
-      'rooma123',
+      roomToken,
       path: r'$.roomToken',
       code: TalkProtocolErrorCode.invalidAttachmentModel,
     ),

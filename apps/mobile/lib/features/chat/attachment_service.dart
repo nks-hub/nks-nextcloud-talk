@@ -836,8 +836,8 @@ final class AttachmentService with _AttachmentServiceRuntime {
     for (final room in rooms) {
       _retryTimers.remove(room)?.cancel();
       _retryDeadlines.remove(room);
-      await _scheduleRoom(room);
     }
+    await Future.wait<void>([for (final room in rooms) _scheduleRoom(room)]);
   }
 
   Future<void> resumeDeferredConfirmations({
