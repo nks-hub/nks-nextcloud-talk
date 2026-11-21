@@ -268,6 +268,7 @@ final class ChatMediaDiskCache {
   static const int _maximumHeaderBytes = 64;
   static const int _scanConcurrency = 8;
   static const int _deleteConcurrency = 4;
+  static final RegExp _partialFileSuffix = RegExp(r'\.part-\d+$');
 
   /// Resolved once, on first use, because it needs a platform channel.
   final Future<Directory> Function() rootDirectory;
@@ -279,6 +280,7 @@ final class ChatMediaDiskCache {
   Directory? _root;
   Future<Directory>? _opening;
   int _bytes = 0;
+  int _temporaryFileNonce = 0;
 
   int get byteLength => _bytes;
 
@@ -365,15 +367,36 @@ final class ChatMediaDiskCache {
       return;
     }
     final file = File(_pathFor(root, accountId: accountId, uri: uri));
-    final payload = Uint8List(total)
-      ..setRange(0, header.length, header)
-      ..[header.length] = 0x0a
-      ..setRange(header.length + 1, total, image.body);
+    final temporary = File('${file.path}.part-${_temporaryFileNonce++}');
+    RandomAccessFile? output;
     try {
       await file.parent.create(recursive: true);
-      await file.writeAsBytes(payload, flush: true);
+      output = await temporary.open(mode: FileMode.write);
+      await output.writeFrom(header);
+      await output.writeByte(0x0a);
+      await output.writeFrom(image.body);
+      await output.flush();
+      await output.close();
+      output = null;
+      if (await file.exists()) {
+        await file.delete();
+      }
+      await temporary.rename(file.path);
     } on FileSystemException {
       return;
+    } finally {
+      try {
+        await output?.close();
+      } on FileSystemException {
+        // The partial entry is removed below once the platform releases it.
+      }
+      try {
+        if (await temporary.exists()) {
+          await temporary.delete();
+        }
+      } on FileSystemException {
+        // A later scan removes any incomplete file left by a stopped process.
+      }
     }
     _drop(file.path);
     _index[file.path] = (bytes: total, touchedAt: DateTime.now());
@@ -423,6 +446,14 @@ final class ChatMediaDiskCache {
     final files = <File>[];
     await for (final entity in root.list(recursive: true, followLinks: false)) {
       if (entity is File) {
+        if (_partialFileSuffix.hasMatch(p.basename(entity.path))) {
+          try {
+            await _deleteFile(entity);
+          } on FileSystemException {
+            // It remains an ignored cache miss and a later scan can retry.
+          }
+          continue;
+        }
         files.add(entity);
       }
     }

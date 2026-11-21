@@ -94,6 +94,23 @@ void main() {
     expect(restarted.length, 1);
   });
 
+  test(
+    'a cold scan removes a partial write left by a stopped process',
+    () async {
+      final previews = Directory('${root.path}/previews');
+      await previews.create(recursive: true);
+      final partial = File('${previews.path}/entry.part-7');
+      await partial.writeAsBytes(const <int>[1, 2, 3]);
+
+      final restarted = open();
+      await restarted.read(accountId: 'account-a', uri: uriFor(42));
+
+      expect(partial.existsSync(), isFalse);
+      expect(restarted.length, 0);
+      expect(restarted.byteLength, 0);
+    },
+  );
+
   test('accounts never read each other cached bytes', () async {
     final uri = uriFor(42);
     final cache = open();
