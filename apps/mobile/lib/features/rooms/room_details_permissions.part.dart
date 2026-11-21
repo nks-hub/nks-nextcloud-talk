@@ -20,6 +20,7 @@ mixin _RoomPermissionStateLogic
       const {1, 2}.contains(_room?.participantType) &&
       _talkFeatures.contains(_mentionPermissionsCapability);
 
+  @override
   bool _canEditParticipantPermissions(Participant participant) =>
       _permissionRoomEligible &&
       const {1, 2, 6}.contains(_room?.participantType) &&
@@ -63,6 +64,7 @@ mixin _RoomPermissionStateLogic
   Future<void> _editMentionPermissions() =>
       _editPermissions(PermissionEditKind.mentions);
 
+  @override
   Future<void> _editParticipantPermissions(Participant participant) =>
       _editPermissions(PermissionEditKind.attendee, participant: participant);
 
@@ -76,11 +78,11 @@ mixin _RoomPermissionStateLogic
     final epoch = _permissionEpoch;
     final abort = Completer<void>();
     _permissionAbort = abort;
-    bool current() =>
-        mounted &&
+    bool sameEdit() =>
         epoch == _permissionEpoch &&
         widget.account.id == accountId &&
         widget.conversation.token == roomToken;
+    bool current() => mounted && sameEdit();
 
     try {
       await _runAction(() async {
@@ -93,7 +95,7 @@ mixin _RoomPermissionStateLogic
           abortTrigger: abort.future,
           isCurrent: current,
         );
-        if (!current()) return;
+        if (!mounted || !sameEdit()) return;
         final value = await showDialog<int>(
           context: context,
           builder: (_) => _PermissionEditorDialog(edit: edit),
