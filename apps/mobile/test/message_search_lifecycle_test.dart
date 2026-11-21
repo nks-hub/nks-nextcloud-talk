@@ -487,6 +487,7 @@ final class _FixedSearchService implements MessageSearchService {
     required String term,
     String? roomToken,
     int limit = messageSearchDefaultLimit,
+    Future<void>? abortTrigger,
   }) async => <MessageSearchResult>[result];
 }
 

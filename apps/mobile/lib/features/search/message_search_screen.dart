@@ -44,6 +44,7 @@ final class MessageSearchScreen extends StatefulWidget {
 class _MessageSearchScreenState extends State<MessageSearchScreen> {
   final _controller = TextEditingController();
   Timer? _debounce;
+  Completer<void>? _activeSearchCancellation;
   int _generation = 0;
   _MessageSearchViewState _viewState = _MessageSearchViewState.idle;
   MessageSearchError? _error;
@@ -52,12 +53,14 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
   @override
   void dispose() {
     _debounce?.cancel();
+    _cancelActiveSearch();
     _controller.dispose();
     super.dispose();
   }
 
   void _onQueryChanged(String value) {
     _debounce?.cancel();
+    _cancelActiveSearch();
     final generation = ++_generation;
     final term = value.trim();
     if (term.isEmpty) {
@@ -71,6 +74,8 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
   }
 
   Future<void> _runSearch(String term, int generation) async {
+    final cancellation = Completer<void>();
+    _activeSearchCancellation = cancellation;
     setState(() {
       _error = null;
       _viewState = _MessageSearchViewState.searching;
@@ -80,6 +85,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
         accountId: widget.accountId,
         term: term,
         roomToken: widget.roomToken,
+        abortTrigger: cancellation.future,
       );
       if (!mounted || generation != _generation) {
         return;
@@ -96,6 +102,18 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
         _error = failure.code;
         _viewState = _MessageSearchViewState.error;
       });
+    } finally {
+      if (identical(_activeSearchCancellation, cancellation)) {
+        _activeSearchCancellation = null;
+      }
+    }
+  }
+
+  void _cancelActiveSearch() {
+    final cancellation = _activeSearchCancellation;
+    _activeSearchCancellation = null;
+    if (cancellation != null && !cancellation.isCompleted) {
+      cancellation.complete();
     }
   }
 

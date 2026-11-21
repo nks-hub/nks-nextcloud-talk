@@ -33,6 +33,7 @@ final class _FakeMessageSearchService implements MessageSearchService {
   final FutureOr<List<MessageSearchResult>> Function(String term) _handler;
   final List<String> searchedTerms = [];
   final List<String?> searchedScopes = [];
+  final List<Future<void>?> abortTriggers = [];
 
   @override
   Future<List<MessageSearchResult>> search({
@@ -40,9 +41,11 @@ final class _FakeMessageSearchService implements MessageSearchService {
     required String term,
     String? roomToken,
     int limit = messageSearchDefaultLimit,
+    Future<void>? abortTrigger,
   }) async {
     searchedTerms.add(term);
     searchedScopes.add(roomToken);
+    abortTriggers.add(abortTrigger);
     return _handler(term);
   }
 }
@@ -181,6 +184,87 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump();
     expect(service.searchedTerms, ['first', 'second']);
+  });
+
+  testWidgets('a new query aborts the in-flight request before it starts', (
+    tester,
+  ) async {
+    var active = 0;
+    var maximumActive = 0;
+    late final _FakeMessageSearchService service;
+    service = _FakeMessageSearchService((term) {
+      active++;
+      if (active > maximumActive) {
+        maximumActive = active;
+      }
+      final cancellation = service.abortTriggers.last!;
+      if (term == 'first') {
+        final result = Completer<List<MessageSearchResult>>();
+        unawaited(
+          cancellation.then((_) {
+            active--;
+            result.completeError(
+              const MessageSearchException(MessageSearchError.network),
+            );
+          }),
+        );
+        return result.future;
+      }
+      active--;
+      return const <MessageSearchResult>[];
+    });
+    await pumpScreen(tester, service);
+
+    await tester.enterText(
+      find.byKey(const Key('message-search-field')),
+      'first',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(active, 1);
+
+    await tester.enterText(
+      find.byKey(const Key('message-search-field')),
+      'second',
+    );
+    await tester.pump();
+    expect(active, 0);
+
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
+    expect(service.searchedTerms, ['first', 'second']);
+    expect(maximumActive, 1);
+  });
+
+  testWidgets('closing the screen aborts its in-flight request', (
+    tester,
+  ) async {
+    var active = 0;
+    late final _FakeMessageSearchService service;
+    service = _FakeMessageSearchService((_) {
+      active++;
+      final result = Completer<List<MessageSearchResult>>();
+      unawaited(
+        service.abortTriggers.last!.then((_) {
+          active--;
+          result.completeError(
+            const MessageSearchException(MessageSearchError.network),
+          );
+        }),
+      );
+      return result.future;
+    });
+    await pumpScreen(tester, service);
+    await tester.enterText(
+      find.byKey(const Key('message-search-field')),
+      'first',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(active, 1);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    expect(active, 0);
   });
 
   testWidgets('shows results with author, excerpt and tap callback', (

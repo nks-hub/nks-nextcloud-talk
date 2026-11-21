@@ -42,6 +42,7 @@ abstract interface class MessageSearchService {
     required String term,
     String? roomToken,
     int limit = messageSearchDefaultLimit,
+    Future<void>? abortTrigger,
   });
 }
 
@@ -67,6 +68,7 @@ final class HttpMessageSearchService implements MessageSearchService {
     required String term,
     String? roomToken,
     int limit = messageSearchDefaultLimit,
+    Future<void>? abortTrigger,
   }) async {
     final trimmed = term.trim();
     if (trimmed.isEmpty) {
@@ -99,6 +101,7 @@ final class HttpMessageSearchService implements MessageSearchService {
         searchRequest: request,
         loginName: credentials.loginName,
         appPassword: credentials.appPassword,
+        abortTrigger: abortTrigger,
       );
     } on NextcloudApiException {
       throw const MessageSearchException(MessageSearchError.network);
@@ -127,7 +130,12 @@ final class HttpMessageSearchService implements MessageSearchService {
     if (account == null) {
       throw const MessageSearchException(MessageSearchError.accountMissing);
     }
-    final appPassword = await _credentials.readAppPassword(accountId);
+    final String? appPassword;
+    try {
+      appPassword = await _credentials.readAppPassword(accountId);
+    } on CredentialVaultTemporarilyUnavailable {
+      throw const MessageSearchException(MessageSearchError.transientError);
+    }
     if (appPassword == null) {
       throw const MessageSearchException(MessageSearchError.credentialMissing);
     }

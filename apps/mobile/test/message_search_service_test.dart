@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
+import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/search/message_search_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 
@@ -59,11 +60,12 @@ void main() {
   });
 
   HttpMessageSearchService buildService(
-    Future<http.Response> Function(http.Request request) handler,
-  ) {
+    Future<http.Response> Function(http.Request request) handler, {
+    CredentialVault? credentials,
+  }) {
     return HttpMessageSearchService(
       accounts: repository,
-      credentials: vault,
+      credentials: credentials ?? vault,
       api: HttpNextcloudApi(client: MockClient(handler)),
     );
   }
@@ -196,6 +198,28 @@ void main() {
     );
   });
 
+  test(
+    'maps a temporarily unavailable credential vault to transient',
+    () async {
+      final service = buildService(
+        (request) async =>
+            http.Response(jsonEncode(_successBody(const [])), 200),
+        credentials: const _TemporarilyUnavailableCredentialVault(),
+      );
+
+      await expectLater(
+        service.search(accountId: 'account-a', term: 'hello'),
+        throwsA(
+          isA<MessageSearchException>().having(
+            (error) => error.code,
+            'code',
+            MessageSearchError.transientError,
+          ),
+        ),
+      );
+    },
+  );
+
   final statusCases = <int, MessageSearchError>{
     401: MessageSearchError.reauthenticationRequired,
     404: MessageSearchError.providerNotFound,
@@ -245,4 +269,19 @@ void main() {
       ),
     );
   });
+}
+
+final class _TemporarilyUnavailableCredentialVault implements CredentialVault {
+  const _TemporarilyUnavailableCredentialVault();
+
+  @override
+  Future<void> deleteAppPassword(String accountId) async {}
+
+  @override
+  Future<String?> readAppPassword(String accountId) {
+    throw const CredentialVaultTemporarilyUnavailable();
+  }
+
+  @override
+  Future<void> writeAppPassword(String accountId, String appPassword) async {}
 }
