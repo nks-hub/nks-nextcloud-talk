@@ -155,17 +155,26 @@ mixin _RoomBotsStateLogic
                 ),
               );
             }
-            return Column(
-              children: [
-                for (final bot in bots)
-                  _BotTile(
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.6,
+              ),
+              child: ListView.builder(
+                key: const Key('room-details-bots-list'),
+                primary: false,
+                shrinkWrap: true,
+                itemCount: bots.length,
+                itemBuilder: (context, index) {
+                  final bot = bots[index];
+                  return _BotTile(
                     bot: bot,
                     pending: _pendingBotIds.contains(bot.id),
                     onChanged: bot.state == BotState.noSetup
                         ? null
                         : (enabled) => _changeBotState(bot, bots, enabled),
-                  ),
-              ],
+                  );
+                },
+              ),
             );
           },
         ),

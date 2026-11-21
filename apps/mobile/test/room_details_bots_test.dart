@@ -334,6 +334,80 @@ void main() {
     );
   });
 
+  testWidgets('large room bot list builds lazily and toggles the last bot', (
+    tester,
+  ) async {
+    final bots = <Map<String, Object?>>[
+      for (var id = 1; id <= 80; id++)
+        {'id': id, 'name': 'Bot $id', 'description': null, 'state': 0},
+    ];
+    var enabledBotId = -1;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocs(const <Object?>[]);
+      }
+      if (request.method == 'GET' && request.url.path.contains('/bot/')) {
+        return _ocs(bots);
+      }
+      if (request.method == 'POST' && request.url.path.endsWith('/80')) {
+        enabledBotId = 80;
+        return _ocs({
+          'id': 80,
+          'name': 'Bot 80',
+          'description': null,
+          'state': 1,
+        }, statusCode: 201);
+      }
+      return _ocs(null, statusCode: 404, status: 'failure');
+    });
+
+    await _openBotDetails(
+      tester,
+      client: client,
+      database: database,
+      vault: vault,
+      account: account,
+      conversation: conversation,
+    );
+    await tester.tap(find.byKey(const Key('room-details-bots')));
+    final listFinder = find.byKey(const Key('room-details-bots-list'));
+    await _pumpUntil(tester, () => listFinder.evaluate().isNotEmpty);
+    await tester.pumpAndSettle();
+
+    final list = tester.widget<ListView>(listFinder);
+    expect(list.childrenDelegate, isA<SliverChildBuilderDelegate>());
+    expect(
+      find.byKey(const Key('room-details-bot-80')),
+      findsNothing,
+      reason: 'off-screen bot rows must not be built up front',
+    );
+
+    final lastBot = find.byKey(const Key('room-details-bot-80'));
+    await tester.scrollUntilVisible(
+      lastBot,
+      600,
+      scrollable: find.descendant(
+        of: listFinder,
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.tap(lastBot);
+    await _pumpUntil(tester, () => enabledBotId == 80);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      lastBot,
+      600,
+      scrollable: find.descendant(
+        of: listFinder,
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(lastBot, findsOneWidget);
+    expect(tester.widget<SwitchListTile>(lastBot).value, isTrue);
+
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('bot content remains usable at 200 percent text scale', (
     tester,
   ) async {
@@ -663,11 +737,13 @@ Future<void> _openBotDetails(
         ),
       ],
       child: localizedTestApp(
-        home: MediaQuery(
-          data: MediaQueryData(textScaler: textScaler),
-          child: RoomDetailsScreen(
-            account: account,
-            conversation: conversation,
+        home: Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+            child: RoomDetailsScreen(
+              account: account,
+              conversation: conversation,
+            ),
           ),
         ),
       ),
