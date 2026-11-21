@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart'
+    show ApplyInterceptor, QueryExecutor, QueryInterceptor, Value, Variable;
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -411,6 +413,107 @@ void main() {
     expect(tokens, isNot(contains('rooma123')));
     expect(modifiedSinceValues, [null, '1724300001', null]);
   });
+
+  test(
+    'an empty incremental sync does not query or decode the cached room list',
+    () async {
+      final cacheReads = _ConversationCacheReadCounter();
+      await database.close();
+      database = AppDatabase.forTesting(
+        NativeDatabase.memory().interceptWith(cacheReads),
+      );
+      await database.customSelect('SELECT 1').get();
+      repository = AccountRepository(database);
+      await repository.upsertAccount(
+        accountId: 'account-a',
+        serverUrl: 'https://cloud.example.invalid',
+        loginName: 'fixture-user',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      final fullResponse =
+          readFixtureJson(
+                'conversation-list/fixtures/conversations-full.response.json',
+              )
+              as Map<String, Object?>;
+      final emptyResponse =
+          readFixtureJson(
+                'conversation-list/fixtures/conversations-empty.response.json',
+              )
+              as Map<String, Object?>;
+      final modifiedSinceValues = <String?>[];
+      var conversationRequests = 0;
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(jsonEncode(capabilitiesJson()), 200);
+          }
+          conversationRequests++;
+          modifiedSinceValues.add(request.url.queryParameters['modifiedSince']);
+          return http.Response(
+            jsonEncode(
+              conversationRequests == 1 ? fullResponse : emptyResponse,
+            ),
+            200,
+            headers: <String, String>{
+              'X-Nextcloud-Talk-Hash': 'fixture-hash-a',
+              'X-Nextcloud-Talk-Modified-Before':
+                  '${1724300000 + conversationRequests}',
+              'X-Nextcloud-Talk-Federation-Invites': '0',
+            },
+          );
+        }),
+      );
+      addTearDown(api.close);
+      final service = ConversationSyncService(
+        accounts: repository,
+        credentials: vault,
+        api: api,
+      );
+
+      await service.sync('account-a');
+      await database.batch((batch) {
+        batch.insertAll(database.cachedConversations, <
+          CachedConversationsCompanion
+        >[
+          for (var index = 0; index < 1000; index++)
+            CachedConversationsCompanion.insert(
+              accountId: 'account-a',
+              token: 'cached-only-$index',
+              displayName: 'Cached room $index',
+              description: '',
+              lastActivity: index,
+              unreadMessages: 0,
+              favorite: false,
+              // A full state load treats this as corrupt and deletes it. Keeping
+              // the rows proves the empty incremental path never decoded them.
+              rawJson: '{not-json-$index',
+            ),
+        ]);
+      });
+
+      cacheReads.enabled = true;
+      await service.sync('account-a');
+      expect(cacheReads.conversationSelects, 0);
+      expect(cacheReads.payloadSelects, 0);
+      cacheReads.enabled = false;
+
+      final cachedOnlyCount = await database
+          .customSelect(
+            'SELECT COUNT(*) AS row_count FROM cached_conversations '
+            "WHERE account_id = ? AND token LIKE 'cached-only-%'",
+            variables: <Variable<Object>>[Variable.withString('account-a')],
+          )
+          .getSingle();
+      expect(cachedOnlyCount.read<int>('row_count'), 1000);
+      expect(conversationRequests, 2);
+      expect(modifiedSinceValues, [null, '1724300001']);
+      expect(
+        (await repository.getAccount('account-a'))?.conversationCursor,
+        '1724300002',
+      );
+    },
+  );
 
   test(
     'status survives an absent delta and clears on an authoritative full',
@@ -1243,6 +1346,28 @@ void main() {
         ? 'Live Nextcloud credentials are not configured.'
         : false,
   );
+}
+
+final class _ConversationCacheReadCounter extends QueryInterceptor {
+  bool enabled = false;
+  int conversationSelects = 0;
+  int payloadSelects = 0;
+
+  @override
+  Future<List<Map<String, Object?>>> runSelect(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) {
+    final sql = statement.toLowerCase();
+    if (enabled && sql.contains('from "cached_conversations"')) {
+      conversationSelects++;
+      if (sql.contains('raw_json')) {
+        payloadSelects++;
+      }
+    }
+    return super.runSelect(executor, statement, args);
+  }
 }
 
 const _giphyResourceUrl = 'https://giphy.com/gifs/waving-cat-fixture123';

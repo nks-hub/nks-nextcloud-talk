@@ -291,13 +291,15 @@ final class ConversationSyncService {
 
       var currentAccount = account;
       for (var attempt = 0; attempt < 2; attempt++) {
-        final state = await _accounts.loadConversationState(currentAccount);
+        final metadata = await _accounts.loadConversationSyncMetadata(
+          currentAccount,
+        );
         final typedAccountId = AccountId.parse(accountId);
         final lastFull = _lastFullFetch[accountId];
         final now = _clock();
         final mode =
             forceFull ||
-                state.cursor == null ||
+                metadata.cursor == null ||
                 lastFull == null ||
                 now.difference(lastFull) >= fullRefreshInterval
             ? ConversationFetchMode.full
@@ -310,7 +312,7 @@ final class ConversationSyncService {
           includeLastMessage: true,
           includeStatus: true,
           cursor: mode == ConversationFetchMode.incremental
-              ? state.cursor
+              ? metadata.cursor
               : null,
         );
         final response = await _api.getConversations(
@@ -321,6 +323,15 @@ final class ConversationSyncService {
         );
         if (response case ConversationListSuccess()) {
           _recordFederationInvites(accountId, response.federationInvites);
+          final state = mode == ConversationFetchMode.full
+              ? await _accounts.loadConversationState(currentAccount)
+              : response.rooms.isEmpty
+              ? metadata
+              : await _accounts.loadConversationStateForTokens(
+                  currentAccount,
+                  response.rooms.map((room) => room.token.value),
+                  metadata: metadata,
+                );
           final snapshot = ConversationSnapshot(
             accounts: {typedAccountId: state},
           );

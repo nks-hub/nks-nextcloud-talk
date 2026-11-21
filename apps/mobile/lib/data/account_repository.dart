@@ -441,6 +441,54 @@ final class AccountRepository {
               (conversation) => conversation.accountId.equals(account.id),
             ))
             .get();
+    return _conversationStateFromRows(account, cached);
+  }
+
+  /// Conversation sync metadata without reading or decoding cached rooms.
+  ///
+  /// Incremental responses can be empty, in which case the merge only moves
+  /// the cursor and hash. Loading every room before that response made each
+  /// foreground poll scale with the account's lifetime room count.
+  Future<ConversationAccountState> loadConversationSyncMetadata(
+    StoredAccount account,
+  ) => _conversationStateFromRows(account, const <CachedConversation>[]);
+
+  /// Sync state containing only the cached rooms named by [tokens].
+  ///
+  /// A non-empty incremental response needs prior values only for the rooms it
+  /// updates (notably to preserve user status omitted by a delta). Full syncs
+  /// continue to use [loadConversationState] for authoritative deletion and
+  /// suspicious-empty protection.
+  Future<ConversationAccountState> loadConversationStateForTokens(
+    StoredAccount account,
+    Iterable<String> tokens, {
+    ConversationAccountState? metadata,
+  }) async {
+    const maximumTokensPerStatement = 500;
+    final remaining = tokens.toSet();
+    final cached = <CachedConversation>[];
+    while (remaining.isNotEmpty) {
+      final chunk = remaining
+          .take(maximumTokensPerStatement)
+          .toList(growable: false);
+      remaining.removeAll(chunk);
+      cached.addAll(
+        await (_database.select(_database.cachedConversations)..where(
+              (conversation) =>
+                  conversation.accountId.equals(account.id) &
+                  conversation.token.isIn(chunk),
+            ))
+            .get(),
+      );
+    }
+    return _conversationStateFromRows(account, cached, metadata: metadata);
+  }
+
+  Future<ConversationAccountState> _conversationStateFromRows(
+    StoredAccount account,
+    List<CachedConversation> cached, {
+    ConversationAccountState? metadata,
+  }) async {
     final rooms = <ConversationRoom>[];
     final invalidTokens = <String>[];
     Object? firstFailure;
@@ -468,6 +516,16 @@ final class AccountRepository {
       );
     }
 
+    if (metadata != null) {
+      return ConversationAccountState(
+        server: metadata.server,
+        rooms: rooms,
+        cursor: metadata.cursor,
+        configurationHash: metadata.configurationHash,
+        emptyConfirmation: metadata.emptyConfirmation,
+        capabilityRefreshRequired: metadata.capabilityRefreshRequired,
+      );
+    }
     try {
       return ConversationAccountState(
         server: ServerBase.parse(account.serverUrl),
