@@ -448,6 +448,7 @@ extension _ChatRepositoryProjection on ChatRepository {
         (row.roomToken, row.scopeKey): row,
     };
     final syncedAt = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final changedScopes = <ChatScopesCompanion>[];
     for (final entry in account.scopes.entries) {
       final key = entry.key;
       final scope = entry.value;
@@ -484,9 +485,7 @@ extension _ChatRepositoryProjection on ChatRepository {
               )) {
         continue;
       }
-      await _database
-          .into(_database.chatScopes)
-          .insertOnConflictUpdate(companion);
+      changedScopes.add(companion);
     }
 
     final storedOperations = {
@@ -496,6 +495,7 @@ extension _ChatRepositoryProjection on ChatRepository {
         row.operationId: row,
     };
     final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final changedOperations = <TextSendOperationsCompanion>[];
     for (final operation in account.operations.values) {
       final existing = storedOperations[operation.operationId.value];
       final companion = TextSendOperationsCompanion.insert(
@@ -525,9 +525,20 @@ extension _ChatRepositoryProjection on ChatRepository {
           companion) {
         continue;
       }
-      await _database
-          .into(_database.textSendOperations)
-          .insertOnConflictUpdate(companion);
+      changedOperations.add(companion);
+    }
+    if (changedScopes.isNotEmpty || changedOperations.isNotEmpty) {
+      await _database.batch((batch) {
+        if (changedScopes.isNotEmpty) {
+          batch.insertAllOnConflictUpdate(_database.chatScopes, changedScopes);
+        }
+        if (changedOperations.isNotEmpty) {
+          batch.insertAllOnConflictUpdate(
+            _database.textSendOperations,
+            changedOperations,
+          );
+        }
+      });
     }
 
     final messageList = messages.toList(growable: false);
