@@ -363,14 +363,18 @@ void _registerCallForegroundLifecycleTests() {
     'media disposal failure still stops its foreground owner and REST seat',
     () async {
       final foreground = _ForegroundCalls();
+      final disposalFailure = StateError('synthetic audio disposal failure');
       final fixture = await _ForegroundJoinFixture.create(
         foreground,
-        _DisposalFailureEngine(),
+        _DisposalFailureEngine(disposalFailure),
         holdSettings: true,
       );
       addTearDown(fixture.close);
       await fixture.controller.join();
-      await expectLater(fixture.controller.leave(), throwsA(isA<StateError>()));
+      await expectLater(
+        fixture.controller.leave(),
+        throwsA(same(disposalFailure)),
+      );
       expect(foreground.active, isEmpty);
       expect(foreground.stopped, [foreground.started.single]);
       expect(fixture.rest.server.callMethods.where((m) => m != 'GET'), [
@@ -770,13 +774,20 @@ final class _RecordingScreenShare implements CallScreenShareService {
 }
 
 final class _DisposalFailureEngine implements CallMediaEngine {
+  _DisposalFailureEngine(this.failure);
+  final StateError failure;
+
   @override
-  Future<CallLocalAudio> openMicrophone() async => _DisposalFailureAudio();
+  Future<CallLocalAudio> openMicrophone() async =>
+      _DisposalFailureAudio(failure);
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 final class _DisposalFailureAudio implements CallLocalAudio {
+  _DisposalFailureAudio(this.failure);
+  final StateError failure;
+
   @override
   Stream<void> get routeChanges => const Stream.empty();
   @override
@@ -788,6 +799,5 @@ final class _DisposalFailureAudio implements CallLocalAudio {
   @override
   Future<void> setSpeakerphone(bool on) async {}
   @override
-  Future<void> dispose() async =>
-      throw StateError('synthetic audio disposal failure');
+  Future<void> dispose() async => throw failure;
 }

@@ -8,6 +8,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import 'call_audio_interruptions.dart';
 import 'call_media_engine.dart';
+import 'call_resource_cleanup.dart';
 import 'call_signaling_session.dart';
 
 part 'call_media_session_signaling.dart';
@@ -237,24 +238,23 @@ final class CallMediaSession {
     // Pending capture must see Leave before its queued cleanup can run.
     _disposed = true;
     return _disposal = _enqueue(() async {
+      final cleanup = CallResourceCleanup();
       final routeChanges = _routeChanges;
       _routeChanges = null;
-      await _releaseCallResource(
-        'audio route subscription',
+      await cleanup.run(
         routeChanges?.cancel,
+        label: 'audio route subscription',
       );
       _reactionTimer?.cancel();
       _renegotiationHold?.cancel();
       _renegotiationHold = null;
       final subscription = _subscription;
       _subscription = null;
-      await _releaseCallResource(
-        'signaling subscription',
-        subscription?.cancel,
-      );
-      await _stopMedia();
+      await cleanup.run(subscription?.cancel, label: 'signaling subscription');
+      await _stopMedia(cleanup);
       _emit(CallMediaState.idle);
-      await _states.close();
+      await cleanup.run(_states.close, label: 'state stream');
+      cleanup.rethrowFailure();
     });
   }
 
@@ -487,37 +487,43 @@ final class CallMediaSession {
     _emit(CallMediaState(phase: CallMediaPhase.failed, error: error));
   }
 
-  Future<void> _stopMedia() async {
+  Future<void> _stopMedia([CallResourceCleanup? cleanup]) async {
+    final resources = cleanup ?? CallResourceCleanup();
     final interruptions = _interruptionEvents;
     _interruptionEvents = null;
-    await _releaseCallResource(
-      'interruption subscription',
+    await resources.run(
       interruptions?.cancel,
+      label: 'interruption subscription',
     );
-    await _closeAllPeers();
+    await _closeAllPeers(resources);
     final video = _video;
     _video = null;
-    await _releaseCallResource('camera', video?.dispose);
+    await resources.run(video?.dispose, label: 'camera');
     final audio = _audio;
     _audio = null;
-    await _releaseCallResource('microphone', audio?.dispose);
+    await resources.run(audio?.dispose, label: 'microphone');
   }
 
-  Future<void> _closeAllPeers() async {
+  Future<void> _closeAllPeers([CallResourceCleanup? cleanup]) async {
+    final resources = cleanup ?? CallResourceCleanup();
     _retiredSubscriberSids.clear();
-    await _stopSharing();
-    await _closePeers(_peers.keys.toList(growable: false));
+    await _stopSharing(resources);
+    await _closePeers({..._peers.keys, ..._screens.keys}, resources);
     final publisher = _publisher;
     _publisher = null;
-    await _releaseCallResource('MCU publisher', publisher?.connection?.close);
+    await resources.run(publisher?.connection?.close, label: 'MCU publisher');
   }
 
-  Future<void> _closePeers(Iterable<String> peerIds) async {
+  Future<void> _closePeers(
+    Iterable<String> peerIds, [
+    CallResourceCleanup? cleanup,
+  ]) async {
+    final resources = cleanup ?? CallResourceCleanup();
     final pending = peerIds.toList(growable: false);
     var nextPeer = 0;
     Future<void> closeNext() async {
       while (nextPeer < pending.length) {
-        await _closePeer(pending[nextPeer++]);
+        await _closePeer(pending[nextPeer++], resources);
       }
     }
 
@@ -527,26 +533,31 @@ final class CallMediaSession {
     await Future.wait(List.generate(workerCount, (_) => closeNext()));
   }
 
-  Future<void> _closePeer(String peerId) async {
+  Future<void> _closePeer(String peerId, [CallResourceCleanup? cleanup]) async {
+    final resources = cleanup ?? CallResourceCleanup();
     _offerRequests.remove(peerId)?.cancel();
-    await _closeScreen(peerId);
+    await _closeScreen(peerId, resources);
     final share = _shares.remove(peerId);
-    await _releaseCallResource(
-      'outgoing screen peer',
+    await resources.run(
       share?.connection?.close,
+      label: 'outgoing screen peer',
     );
     final peer = _peers.remove(peerId);
     _raisedHands.remove(peerId);
     _peerAudioMuted.remove(peerId);
     _speakingPeers.remove(peerId);
-    await _closeMediaPeer('call peer', peer);
+    await _closeMediaPeer('call peer', peer, resources);
   }
 
-  Future<void> _closeMediaPeer(String resource, _MediaPeer? peer) async {
+  Future<void> _closeMediaPeer(
+    String resource,
+    _MediaPeer? peer,
+    CallResourceCleanup cleanup,
+  ) async {
     final video = peer?.video;
     peer?.video = null;
-    await _releaseCallResource('$resource renderer', video?.dispose);
-    await _releaseCallResource('$resource connection', peer?.connection?.close);
+    await cleanup.run(video?.dispose, label: '$resource renderer');
+    await cleanup.run(peer?.connection?.close, label: '$resource connection');
   }
 
   /// A renderer that arrives for a peer already gone is disposed on the
@@ -645,22 +656,6 @@ final class CallMediaSession {
       }
     });
     return completer.future;
-  }
-}
-
-Future<void> _releaseCallResource(
-  String resource,
-  Future<void> Function()? release,
-) async {
-  try {
-    await release?.call();
-  } on Object catch (error, stackTrace) {
-    // A native cleanup failure cannot abort another release or the call exit.
-    final reason = error is CallMediaException
-        ? error.code.name
-        : error.runtimeType;
-    debugPrint('[call] $resource cleanup failed: $reason');
-    if (kDebugMode) debugPrintStack(stackTrace: stackTrace, maxFrames: 5);
   }
 }
 

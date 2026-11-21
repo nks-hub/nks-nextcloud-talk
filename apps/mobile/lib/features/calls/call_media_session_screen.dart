@@ -162,42 +162,52 @@ extension _CallMediaSessionScreen on CallMediaSession {
   }
 
   /// A peer that misses the stop notification still sees the track end.
-  Future<void> _stopSharing() async {
+  Future<void> _stopSharing([CallResourceCleanup? cleanup]) async {
+    final resources = cleanup ?? CallResourceCleanup();
     // Through an MCU the only share is the publish to this side's own
     // session, which tells the SERVER to drop the publisher; the other
     // participants hear nothing from it, so they are told separately.
     if (_mcu) {
-      await _runPeerTasks(_peers.keys, _notifyUnshare);
+      await _runPeerTasks(
+        _peers.keys,
+        (peerId) => _notifyUnshare(peerId, resources),
+      );
     }
     final shares = _shares.values.toList(growable: false);
     _shares.clear();
     final screen = _screen;
     _screen = null;
-    await _closeShares(shares);
-    await _releaseCallResource('screen capture', screen?.dispose);
+    await _closeShares(shares, resources);
+    await resources.run(screen?.dispose, label: 'screen capture');
   }
 
-  Future<void> _notifyUnshare(String peerId, {_MediaPeer? share}) =>
-      _releaseCallResource(
-        'screen share notification',
-        () => _send(
-          peerId: peerId,
-          type: 'unshareScreen',
-          payload: null,
-          via: share,
-          roomType: share == null ? CallMediaSession._screenRoomType : null,
-        ),
-      );
+  Future<void> _notifyUnshare(
+    String peerId,
+    CallResourceCleanup cleanup, {
+    _MediaPeer? share,
+  }) => cleanup.run(
+    () => _send(
+      peerId: peerId,
+      type: 'unshareScreen',
+      payload: null,
+      via: share,
+      roomType: share == null ? CallMediaSession._screenRoomType : null,
+    ),
+    label: 'screen share notification',
+  );
 
-  Future<void> _closeShares(List<_MediaPeer> shares) async {
+  Future<void> _closeShares(
+    List<_MediaPeer> shares,
+    CallResourceCleanup cleanup,
+  ) async {
     var nextShare = 0;
     Future<void> closeNext() async {
       while (nextShare < shares.length) {
         final share = shares[nextShare++];
-        await _notifyUnshare(share.peerId, share: share);
-        await _releaseCallResource(
-          'outgoing screen peer',
+        await _notifyUnshare(share.peerId, cleanup, share: share);
+        await cleanup.run(
           share.connection?.close,
+          label: 'outgoing screen peer',
         );
       }
     }
@@ -299,12 +309,19 @@ extension _CallMediaSessionScreen on CallMediaSession {
     _publish();
   }
 
-  Future<void> _closeScreen(String senderId) async {
+  Future<void> _closeScreen(
+    String senderId, [
+    CallResourceCleanup? cleanup,
+  ]) async {
     final screen = _screens.remove(senderId);
     if (screen == null) {
       return;
     }
-    await _closeMediaPeer('incoming screen peer', screen);
+    await _closeMediaPeer(
+      'incoming screen peer',
+      screen,
+      cleanup ?? CallResourceCleanup(),
+    );
     if (!_disposed) {
       _publish();
     }

@@ -32,13 +32,21 @@ extension _MediaDisposalTests on _MediaSessionTests {
         await media.setCameraEnabled(true);
         await media.setScreenSharing(true);
         final screenPublisher = engine.connections.last;
-        failingPeer.closeFailure = StateError('native peer close failed');
+        final closeFailure = StateError('native peer close failed');
+        failingPeer.closeFailure = closeFailure;
+        engine.cameras.single.disposeFailure = StateError(
+          'native camera release failed later',
+        );
 
         final disposing = media.dispose();
         expect(media.dispose(), same(disposing));
+        StackTrace? originalStack;
         final failure = await disposing.then<Object?>(
           (_) => null,
-          onError: (Object error) => error,
+          onError: (Object error, StackTrace stackTrace) {
+            originalStack = stackTrace;
+            return error;
+          },
         );
 
         expect(otherPeer.closed, isTrue);
@@ -50,8 +58,9 @@ extension _MediaDisposalTests on _MediaSessionTests {
         expect(engine.connectionCloseStarts, 4);
         expect(media.state.phase, CallMediaPhase.idle);
         expect(statesClosed.isCompleted, isTrue);
-        expect(failure, isNull);
-        await media.dispose();
+        expect(failure, same(closeFailure));
+        expect(originalStack.toString(), contains('_FakeConnection.close'));
+        await expectLater(media.dispose(), throwsA(same(closeFailure)));
         expect(engine.connectionCloseStarts, 4);
       },
     );
@@ -94,6 +103,40 @@ extension _MediaDisposalTests on _MediaSessionTests {
         expect(engine.connectionCloseStarts, 2);
       },
     );
+
+    test('dispose closes an incoming screen without a call peer', () async {
+      engine.audioConnectionError = CallMediaError.engineFailure;
+      final media = session(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+          messages: [
+            _message(
+              _remote,
+              'offer',
+              {'type': 'offer', 'sdp': 'remote-screen'},
+              roomType: 'screen',
+              sid: 'incoming-screen',
+            ),
+          ],
+        ),
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      final screen = engine.connections.single;
+      final renderer = _FakeRemoteVideo();
+      screen.onRemoteVideo(renderer);
+      await pumpEventQueue();
+      expect(media.state.peers, 0);
+      expect(screen.remoteDescriptions.single.sdp, 'remote-screen');
+      expect(renderer.disposed, isFalse);
+
+      await media.dispose();
+
+      expect(renderer.disposed, isTrue);
+      expect(screen.closed, isTrue);
+      expect(engine.connectionCloseStarts, 1);
+    });
 
     test('dispose closes peer connections with bounded concurrency', () async {
       final closeGate = Completer<void>();

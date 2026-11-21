@@ -74,6 +74,7 @@ final class _FakeInterruptions implements CallAudioInterruptions {
 final class _FakeEngine implements CallMediaEngine {
   int microphoneOpens = 0;
   CallMediaError? connectionError;
+  CallMediaError? audioConnectionError;
   CallMediaError? microphoneError;
   Completer<void>? microphoneStartup;
   Completer<void>? connectionCreateGate;
@@ -149,7 +150,9 @@ final class _FakeEngine implements CallMediaEngine {
   }) async {
     connectionCreateStarts++;
     await connectionCreateGate?.future;
-    if (connectionError case final error?) {
+    final failure =
+        connectionError ?? (audio != null ? audioConnectionError : null);
+    if (failure case final error?) {
       throw CallMediaException(error);
     }
     final connection = _FakeConnection(
@@ -176,13 +179,17 @@ final class _FakeEngine implements CallMediaEngine {
 final class _FakeVideo implements CallLocalVideo {
   int disposeCalls = 0;
   bool get disposed => disposeCalls != 0;
+  StateError? disposeFailure;
 
   @override
   Widget buildPreview(BuildContext context, {bool contain = false}) =>
       const SizedBox.shrink();
 
   @override
-  Future<void> dispose() async => disposeCalls++;
+  Future<void> dispose() async {
+    disposeCalls++;
+    if (disposeFailure case final failure?) throw failure;
+  }
 }
 
 final class _FakeRemoteVideo implements CallRemoteVideo {

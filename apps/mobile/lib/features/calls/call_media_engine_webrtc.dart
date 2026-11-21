@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 
 import 'call_media_engine.dart';
+import 'call_resource_cleanup.dart';
 
 part 'call_media_engine_webrtc_screen.dart';
 
@@ -307,13 +308,24 @@ final class _WebRtcLocalVideo implements CallLocalVideo {
       return;
     }
     _disposed = true;
-    _renderer.srcObject = null;
-    await _renderer.dispose();
-    for (final track in stream.getTracks()) {
-      await track.stop();
-    }
-    await stream.dispose();
+    final cleanup = CallResourceCleanup();
+    await cleanup.run(() {
+      _renderer.srcObject = null;
+    });
+    await cleanup.run(_renderer.dispose);
+    await _releaseLocalStream(stream, cleanup);
+    cleanup.rethrowFailure();
   }
+}
+
+Future<void> _releaseLocalStream(
+  rtc.MediaStream stream,
+  CallResourceCleanup cleanup,
+) async {
+  for (final track in stream.getTracks()) {
+    await cleanup.run(track.stop);
+  }
+  await cleanup.run(stream.dispose);
 }
 
 /// Both the Android and the Apple side of the plugin report a refused
@@ -492,16 +504,17 @@ final class _WebRtcLocalAudio implements CallLocalAudio {
 
   @override
   Future<void> dispose() async {
-    rtc.navigator.mediaDevices.ondevicechange = null;
-    await _routeChanges.close();
     if (_disposed) {
       return;
     }
     _disposed = true;
-    for (final track in stream.getTracks()) {
-      await track.stop();
-    }
-    await stream.dispose();
+    final cleanup = CallResourceCleanup();
+    await cleanup.run(() {
+      rtc.navigator.mediaDevices.ondevicechange = null;
+    });
+    await cleanup.run(_routeChanges.close);
+    await _releaseLocalStream(stream, cleanup);
+    cleanup.rethrowFailure();
   }
 }
 
