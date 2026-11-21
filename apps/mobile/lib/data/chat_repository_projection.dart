@@ -261,22 +261,42 @@ extension _ChatRepositoryProjection on ChatRepository {
       _database.chatScopes,
     )..where((row) => row.accountId.equals(accountId))).get();
     final cached = _database.cachedChatMessages;
-    final messageRows = [
-      for (final row
-          in await (_database.selectOnly(cached)
+    final messageIdsByScope =
+        <({String roomToken, int? threadId}), List<int>>{};
+    void addMessage(String roomToken, int? threadId, int messageId) {
+      messageIdsByScope
+          .putIfAbsent((
+            roomToken: roomToken,
+            threadId: threadId,
+          ), () => <int>[])
+          .add(messageId);
+    }
+
+    {
+      final storedMessages =
+          await (_database.selectOnly(cached)
                 ..addColumns([
                   cached.roomToken,
                   cached.threadId,
                   cached.messageId,
                 ])
                 ..where(cached.accountId.equals(accountId)))
-              .get())
-        (
-          roomToken: row.read(cached.roomToken)!,
-          threadId: row.read(cached.threadId),
-          messageId: row.read(cached.messageId)!,
-        ),
-    ];
+              .get();
+      for (final row in storedMessages) {
+        final roomToken = row.read(cached.roomToken)!;
+        final threadId = row.read(cached.threadId);
+        final messageId = row.read(cached.messageId)!;
+        if (threadId == null || threadId == messageId) {
+          addMessage(roomToken, null, messageId);
+        }
+        if (threadId != null) {
+          addMessage(roomToken, threadId, messageId);
+        }
+      }
+    }
+    for (final messageIds in messageIdsByScope.values) {
+      messageIds.sort();
+    }
     final operationRows = await (_database.select(
       _database.textSendOperations,
     )..where((row) => row.accountId.equals(accountId))).get();
@@ -313,21 +333,16 @@ extension _ChatRepositoryProjection on ChatRepository {
       );
       final blocks = _decodeBlocks(row.blocksJson);
       final messageIds =
-          messageRows
-              .where((message) => message.roomToken == row.roomToken)
-              .where(
-                (message) => networkThreadId == null
-                    ? message.threadId == null ||
-                          message.threadId == message.messageId
-                    : message.threadId == networkThreadId,
-              )
-              .where((message) {
-                final cursor = ChatCursor.parse(message.messageId.toString());
+          (messageIdsByScope[(
+                    roomToken: row.roomToken,
+                    threadId: networkThreadId,
+                  )] ??
+                  const <int>[])
+              .where((messageId) {
+                final cursor = ChatCursor.parse(messageId.toString());
                 return blocks.any((block) => block.contains(cursor));
               })
-              .map((message) => message.messageId)
-              .toList()
-            ..sort();
+              .toList(growable: false);
       scopes[key] = ChatScopeState(
         messageIds: messageIds,
         historyCursor: ChatCursor.parse(row.historyCursor),
