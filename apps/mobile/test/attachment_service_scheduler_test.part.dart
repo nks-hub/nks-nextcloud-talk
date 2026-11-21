@@ -246,6 +246,57 @@ void _registerAttachmentServiceSchedulerTests() {
     expect(sourceProvider.closeFinishes, 1);
   });
 
+  test('close closes transport after startup maintenance fails', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final jobId = await fixture.seedTerminal(messageId: 412);
+    final persistenceStarted = Completer<void>();
+    final releasePersistence = Completer<void>();
+    final client = _CloseRecordingClient(_unexpectedClient());
+    final service = fixture.service(
+      client,
+      persistTransition:
+          ({
+            required account,
+            required job,
+            required metadata,
+            required updatedAt,
+          }) async {
+            if (job.jobId == jobId && metadata.sourceReleased) {
+              if (!persistenceStarted.isCompleted) {
+                persistenceStarted.complete();
+                await releasePersistence.future;
+              }
+              throw StateError('Synthetic startup maintenance failure');
+            }
+            await fixture.repository.persistTransition(
+              account: account,
+              job: job,
+              metadata: metadata,
+              updatedAt: updatedAt,
+            );
+          },
+    );
+    addTearDown(service.close);
+
+    await persistenceStarted.future.timeout(const Duration(seconds: 2));
+    final closing = service.close();
+    await pumpEventQueue();
+    releasePersistence.complete();
+
+    await expectLater(
+      closing.timeout(const Duration(seconds: 5)),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'Synthetic startup maintenance failure',
+        ),
+      ),
+    );
+    expect(client.closed, isTrue);
+  });
+
   test('later retry cannot replace an earlier room retry timer', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);
