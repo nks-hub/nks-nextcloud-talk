@@ -68,9 +68,7 @@ extension _CallMediaSessionScreen on CallMediaSession {
         final localPeerId = _localPeerId;
         if (localPeerId != null) {
           await _openShare(localPeerId);
-          for (final peerId in _peers.keys.toList(growable: false)) {
-            await _announceShare(peerId);
-          }
+          await _runPeerTasks(_peers.keys, _announceShare);
         }
       } else {
         await _openShares(_peers.keys);
@@ -171,7 +169,7 @@ extension _CallMediaSessionScreen on CallMediaSession {
     // session, which tells the SERVER to drop the publisher; the other
     // participants hear nothing from it, so they are told separately.
     if (_mcu) {
-      for (final peerId in _peers.keys.toList(growable: false)) {
+      await _runPeerTasks(_peers.keys, (peerId) async {
         try {
           await _send(
             peerId: peerId,
@@ -182,7 +180,7 @@ extension _CallMediaSessionScreen on CallMediaSession {
         } on CallMediaException {
           // Nothing to do: their subscription ends with the track.
         }
-      }
+      });
     }
     await _closeShares(_shares.values.toList(growable: false));
     _shares.clear();

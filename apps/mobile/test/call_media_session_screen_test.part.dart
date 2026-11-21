@@ -587,6 +587,117 @@ extension _ScreenMediaSessionTests on _MediaSessionTests {
       },
     );
 
+    test('MCU screen messages keep four peer sends in flight', () async {
+      final peers = List.generate(6, (index) => 'peer-$index');
+      final peerSet = peers.toSet();
+      final releases = <Completer<void>>[];
+      String? gatedType;
+      var active = 0;
+      var maximumActive = 0;
+      final media = session(
+        _update(
+          localPeerId: _local,
+          participants: [for (final peer in peers) _participant(peer)],
+          topology: SignalingTopology.externalMcu,
+        ),
+        withControl: true,
+        sendMessage: (message) async {
+          sent.add(message);
+          if (message.type != gatedType ||
+              !peerSet.contains(message.recipient?.value)) {
+            return true;
+          }
+          active++;
+          maximumActive = active > maximumActive ? active : maximumActive;
+          final release = Completer<void>();
+          releases.add(release);
+          await release.future;
+          active--;
+          return true;
+        },
+      );
+      addTearDown(media.dispose);
+      addTearDown(() {
+        for (final release in releases) {
+          if (!release.isCompleted) release.complete();
+        }
+      });
+      await media.start();
+
+      Future<void> expectBoundedFanOut(
+        String type,
+        Future<void> Function() operation,
+      ) async {
+        releases.clear();
+        active = 0;
+        maximumActive = 0;
+        gatedType = type;
+        final pending = operation();
+        for (var turn = 0; turn < 50 && releases.length < 4; turn++) {
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+        }
+        expect(releases, hasLength(4));
+        expect(active, 4);
+        expect(maximumActive, 4);
+
+        releases.first.complete();
+        for (var turn = 0; turn < 50 && releases.length < 5; turn++) {
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+        }
+        expect(
+          releases,
+          hasLength(5),
+          reason: 'the next peer starts when one worker becomes free',
+        );
+        for (var index = 1; index < 4; index++) {
+          releases[index].complete();
+        }
+        for (var turn = 0; turn < 50 && releases.length < 6; turn++) {
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+        }
+        expect(releases, hasLength(6));
+        for (var index = 4; index < releases.length; index++) {
+          releases[index].complete();
+        }
+        await pending;
+        gatedType = null;
+        expect(active, 0);
+        expect(maximumActive, 4);
+      }
+
+      sent.clear();
+      await expectBoundedFanOut(
+        'sendoffer',
+        () => media.setScreenSharing(true),
+      );
+      expect(media.state.screenSharing, isTrue);
+      expect(
+        sent.where(
+          (message) =>
+              message.type == 'sendoffer' &&
+              peerSet.contains(message.recipient?.value),
+        ),
+        hasLength(6),
+      );
+
+      sent.clear();
+      await expectBoundedFanOut(
+        'unshareScreen',
+        () => media.setScreenSharing(false),
+      );
+      expect(media.state.screenSharing, isFalse);
+      expect(engine.screens.single.disposed, isTrue);
+      expect(
+        sent.where(
+          (message) =>
+              message.type == 'unshareScreen' &&
+              peerSet.contains(message.recipient?.value),
+        ),
+        hasLength(6),
+      );
+      expect(engine.connections.first.closed, isFalse);
+    });
+
     test('through an MCU the answer to the screen publish is accepted', () async {
       // The answer comes back from this side's OWN session id, exactly like the
       // audio/video publisher's, and is told apart by its sid and room type.
