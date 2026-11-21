@@ -297,6 +297,41 @@ void _registerAttachmentServiceSchedulerTests() {
     expect(client.closed, isTrue);
   });
 
+  test('close closes transport after initialization fails', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    await fixture.seedInFlight(AttachmentRequestStep.normalPut);
+    final expectedError = StateError('Synthetic initialization failure');
+    final expectedStack = StackTrace.current;
+    final client = _CloseRecordingClient(_unexpectedClient());
+    final service = fixture.service(
+      client,
+      persistTransition:
+          ({
+            required account,
+            required job,
+            required metadata,
+            required updatedAt,
+          }) async {
+            Error.throwWithStackTrace(expectedError, expectedStack);
+          },
+    );
+
+    Object? closeError;
+    StackTrace? closeStack;
+    try {
+      await service.close().timeout(const Duration(seconds: 5));
+      fail('Initialization failure must escape close');
+    } on Object catch (error, stackTrace) {
+      closeError = error;
+      closeStack = stackTrace;
+    }
+
+    expect(closeError, same(expectedError));
+    expect(closeStack.toString(), expectedStack.toString());
+    expect(client.closed, isTrue);
+  });
+
   test('later retry cannot replace an earlier room retry timer', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);

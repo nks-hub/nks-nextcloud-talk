@@ -965,10 +965,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
     if (_closed) {
       return;
     }
-    await _ready;
     _closed = true;
-    final confirmationSubscription = _confirmationSubscription;
-    _confirmationSubscription = null;
     Object? activeFailure;
     StackTrace? activeFailureStack;
     Object? cleanupFailure;
@@ -997,6 +994,9 @@ final class AttachmentService with _AttachmentServiceRuntime {
     }
 
     try {
+      await captureActiveFailure(() => _ready);
+      final confirmationSubscription = _confirmationSubscription;
+      _confirmationSubscription = null;
       await captureActiveFailure(() => confirmationSubscription?.cancel());
       await captureActiveFailure(() => _confirmationTail);
       await captureActiveFailure(() => _startupMaintenance);
