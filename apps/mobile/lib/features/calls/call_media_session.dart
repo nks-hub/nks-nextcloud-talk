@@ -19,6 +19,7 @@ part 'call_media_session_state.dart';
 /// Mesh calls connect directly to peers; MCU calls use a publisher and
 /// separate subscriptions. Both reuse the room's existing signalling transport.
 final class CallMediaSession {
+  static const int _peerOpenConcurrency = 4;
   static const int _peerCloseConcurrency = 4;
 
   CallMediaSession({
@@ -363,11 +364,11 @@ final class CallMediaSession {
     if (_mcu) {
       await _ensurePublisher(localPeerId.value, iceServers);
     }
-    for (final peerId in expected) {
-      if (_peers.containsKey(peerId)) {
-        continue;
-      }
-      if (_mcu) {
+    final missingPeers = expected
+        .where((peerId) => !_peers.containsKey(peerId))
+        .toList(growable: false);
+    if (_mcu) {
+      for (final peerId in missingPeers) {
         await _subscribe(peerId);
         // Someone who joins while the screen is up has to be told about it:
         // the one publisher already carries the picture, but the server does
@@ -375,16 +376,13 @@ final class CallMediaSession {
         if (_screen != null) {
           await _announceShare(peerId);
         }
-        continue;
       }
-      await _openPeer(
-        peerId: peerId,
+    } else {
+      await _openMeshPeers(
+        missingPeers,
         localPeerId: localPeerId.value,
         iceServers: iceServers,
       );
-      // Someone who joins while the screen is up gets it too. In the mesh
-      // that means one more screen connection.
-      await _openShare(peerId);
     }
 
     if (rebuilt ||
@@ -401,6 +399,32 @@ final class CallMediaSession {
       );
     }
     _publish();
+  }
+
+  Future<void> _openMeshPeers(
+    List<String> peerIds, {
+    required String localPeerId,
+    required List<CallIceServer> iceServers,
+  }) async {
+    var nextPeer = 0;
+    Future<void> openNext() async {
+      while (nextPeer < peerIds.length) {
+        final peerId = peerIds[nextPeer++];
+        await _openPeer(
+          peerId: peerId,
+          localPeerId: localPeerId,
+          iceServers: iceServers,
+        );
+        // Someone who joins while the screen is up gets it too. In the mesh
+        // that means one more screen connection.
+        await _openShare(peerId);
+      }
+    }
+
+    final workerCount = peerIds.length < _peerOpenConcurrency
+        ? peerIds.length
+        : _peerOpenConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => openNext()));
   }
 
   Future<CallPeerConnection?> _createConnection(

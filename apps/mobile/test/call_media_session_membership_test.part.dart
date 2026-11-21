@@ -2,6 +2,51 @@ part of 'call_media_session_test.dart';
 
 extension _MediaMembershipTests on _MediaSessionTests {
   void _registerMembership() {
+    test(
+      'mesh call opens at most four peer connections concurrently',
+      () async {
+        final createGate = Completer<void>();
+        engine.connectionCreateGate = createGate;
+        final media = session(
+          _update(
+            localPeerId: _local,
+            participants: [
+              for (final peerId in const [
+                'peer-a',
+                'peer-b',
+                'peer-c',
+                'peer-d',
+                'peer-e',
+                'peer-f',
+              ])
+                _participant(peerId),
+            ],
+          ),
+        );
+        addTearDown(media.dispose);
+        addTearDown(() {
+          if (!createGate.isCompleted) createGate.complete();
+        });
+
+        final starting = media.start();
+        for (
+          var turn = 0;
+          turn < 50 && engine.connectionCreateStarts < 4;
+          turn++
+        ) {
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+        }
+        expect(engine.connectionCreateStarts, 4);
+        expect(engine.connections, isEmpty);
+
+        createGate.complete();
+        await starting;
+        expect(engine.connectionCreateStarts, 6);
+        expect(engine.connections, hasLength(6));
+      expect(media.state.phase, CallMediaPhase.negotiating);
+      },
+    );
+
     for (final phase in [
       SignalingAccountPhase.terminated,
       SignalingAccountPhase.unsupported,
