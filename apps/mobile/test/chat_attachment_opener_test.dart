@@ -562,18 +562,16 @@ void main() {
   test('concurrent prune requests are serialized per account', () async {
     final root = await Directory.systemTemp.createTemp('attachment-serial-');
     addTearDown(() => root.delete(recursive: true));
-    final repository = _repository(
-      (_) async => http.StreamedResponse(
-        Stream<List<int>>.value(utf8.encode('data')),
-        200,
-        headers: const {'content-type': 'text/plain'},
-      ),
+    http.StreamedResponse response() => http.StreamedResponse(
+      Stream<List<int>>.value(utf8.encode('data')),
+      200,
+      headers: const {'content-type': 'text/plain'},
     );
     final seedLeases = _ManualLeaseScheduler();
     addTearDown(seedLeases.expireAll);
     final seedLauncher = _RecordingLauncher();
     final seed = ChatAttachmentOpener(
-      repository: repository,
+      repository: _repository((_) async => response()),
       cacheDirectory: () async => root,
       launcher: seedLauncher,
       maximumCacheBytes: 1024,
@@ -598,12 +596,21 @@ void main() {
       await seedLeases.expireNext();
     }
 
-    final firstLauncher = _BlockingLauncher();
-    final secondLauncher = _BlockingLauncher();
+    final bothDownloading = Completer<void>();
+    final allowDownloads = Completer<void>();
+    var downloads = 0;
+    final repository = _repository((_) async {
+      if (++downloads == 2) {
+        bothDownloading.complete();
+      }
+      await allowDownloads.future;
+      return response();
+    });
+    final launcher = _RecordingLauncher();
     final first = ChatAttachmentOpener(
       repository: repository,
       cacheDirectory: () async => root,
-      launcher: firstLauncher,
+      launcher: launcher,
       maximumCacheBytes: 1024,
       maximumCacheEntries: 1,
       leaseScheduler: seedLeases.schedule,
@@ -612,7 +619,7 @@ void main() {
     final second = ChatAttachmentOpener(
       repository: repository,
       cacheDirectory: () async => root,
-      launcher: secondLauncher,
+      launcher: launcher,
       maximumCacheBytes: 1024,
       maximumCacheEntries: 1,
       leaseScheduler: seedLeases.schedule,
@@ -621,19 +628,20 @@ void main() {
     final firstOpen = _open(first);
     final secondOpen = _open(second);
     addTearDown(() async {
-      firstLauncher.release();
-      secondLauncher.release();
+      if (!allowDownloads.isCompleted) {
+        allowDownloads.complete();
+      }
       await Future.wait([firstOpen, secondOpen]);
     });
 
-    await Future.wait([firstLauncher.started, secondLauncher.started]);
+    // A completed concurrent download counts towards the pruning limit.
+    await bothDownloading.future;
     final oldFilesStillPresent = await Future.wait(
       seedLauncher.paths.map((path) => File(path).exists()),
     );
     expect(oldFilesStillPresent.where((exists) => exists), hasLength(1));
 
-    firstLauncher.release();
-    secondLauncher.release();
+    allowDownloads.complete();
     expect(
       await Future.wait([firstOpen, secondOpen]),
       everyElement(ChatAttachmentOpenResult.opened),
