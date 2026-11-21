@@ -355,48 +355,64 @@ final class AccountRepository {
 
       final wasSelected = (await getAccount(accountId))?.selected ?? false;
 
-      await (_database.delete(
-        _database.accountThemes,
-      )..where((theme) => theme.accountId.equals(accountId))).go();
-      await (_database.delete(
-        _database.callLifecycleSessions,
-      )..where((session) => session.accountId.equals(accountId))).go();
-      await (_database.delete(
-        _database.callSessions,
-      )..where((session) => session.accountId.equals(accountId))).go();
-      await (_database.delete(
-        _database.attachmentJobs,
-      )..where((job) => job.accountId.equals(accountId))).go();
-      await (_database.delete(
-        _database.attachmentRuntimeAccounts,
-      )..where((runtime) => runtime.accountId.equals(accountId))).go();
-      await (_database.delete(
-        _database.chatDrafts,
-      )..where((draft) => draft.accountId.equals(accountId))).go();
-      await (_database.delete(
-        _database.textSendOperations,
-      )..where((operation) => operation.accountId.equals(accountId))).go();
-      await (_database.delete(
-        _database.cachedChatMessages,
-      )..where((message) => message.accountId.equals(accountId))).go();
-      await (_database.delete(
-        _database.cachedThreads,
-      )..where((thread) => thread.accountId.equals(accountId))).go();
-      await (_database.delete(
-        _database.chatScopes,
-      )..where((scope) => scope.accountId.equals(accountId))).go();
-      await (_database.delete(
-        _database.chatCapabilities,
-      )..where((capability) => capability.accountId.equals(accountId))).go();
-      await (_database.delete(
-        _database.conversationAvatars,
-      )..where((avatar) => avatar.accountId.equals(accountId))).go();
-      await (_database.delete(_database.cachedConversations)
-            ..where((conversation) => conversation.accountId.equals(accountId)))
-          .go();
-      await (_database.delete(
-        _database.accounts,
-      )..where((account) => account.id.equals(accountId))).go();
+      await _database.batch((batch) {
+        batch.deleteWhere(
+          _database.accountThemes,
+          (theme) => theme.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
+          _database.callLifecycleSessions,
+          (session) => session.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
+          _database.callSessions,
+          (session) => session.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
+          _database.attachmentJobs,
+          (job) => job.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
+          _database.attachmentRuntimeAccounts,
+          (runtime) => runtime.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
+          _database.chatDrafts,
+          (draft) => draft.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
+          _database.textSendOperations,
+          (operation) => operation.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
+          _database.cachedChatMessages,
+          (message) => message.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
+          _database.cachedThreads,
+          (thread) => thread.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
+          _database.chatScopes,
+          (scope) => scope.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
+          _database.chatCapabilities,
+          (capability) => capability.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
+          _database.conversationAvatars,
+          (avatar) => avatar.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
+          _database.cachedConversations,
+          (conversation) => conversation.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
+          _database.accounts,
+          (account) => account.id.equals(accountId),
+        );
+      });
 
       if (wasSelected) {
         final successor =
