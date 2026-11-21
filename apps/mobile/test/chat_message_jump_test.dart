@@ -519,32 +519,13 @@ Border? _highlightBorder(WidgetTester tester, int messageId) {
   return (container.decoration! as BoxDecoration).border as Border?;
 }
 
-Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
-  for (var attempt = 0; attempt < 200; attempt++) {
-    await tester.pump(const Duration(milliseconds: 10));
-    // The real-clock wait is the ONLY unbounded thing in this file, and this
-    // file is the one that once sat for ten silent minutes in CI. `pump` is
-    // bounded by its own frame, and a `pumpAndSettle` would have said
-    // "pumpAndSettle timed out"; `runAsync` takes no timeout at all, so a
-    // stalled real operation behind it - drift's isolate, the mocked HTTP
-    // handler - stops everything and says nothing. A bound here cannot fix
-    // that stall, but it turns it into a failure that names the attempt it
-    // died on instead of a run that has to be killed from outside.
-    await tester
-        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 1)))
-        .timeout(
-          const Duration(seconds: 30),
-          onTimeout: () => fail(
-            'Real-clock work behind runAsync stalled on attempt $attempt; '
-            'the widget tree is not what is stuck.',
-          ),
-        );
-    if (condition()) {
-      return;
-    }
-  }
-  fail('Condition was not reached');
-}
+Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) =>
+    pumpUntilCondition(
+      tester,
+      condition,
+      reason: 'the jump target or unavailable state did not appear',
+      step: const Duration(milliseconds: 1),
+    );
 
 Map<String, Object?> _conversationRoomJson() {
   final root =

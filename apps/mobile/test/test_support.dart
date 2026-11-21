@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -250,9 +251,24 @@ Future<void> pumpUntilCondition(
     if (condition()) {
       return;
     }
-    if (DateTime.now().isAfter(deadline)) {
+    final remaining = deadline.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
       fail('Timed out after ${timeout.inSeconds}s: $reason');
     }
-    await tester.runAsync(() => Future<void>.delayed(step));
+    // This timeout has to be created inside runAsync. Chaining it to the
+    // returned future would use the widget test's fake clock, which does not
+    // advance while real-clock work is stalled.
+    final completed = await tester.runAsync<bool>(() async {
+      try {
+        await Future<void>.delayed(step).timeout(remaining);
+        return true;
+      } on TimeoutException {
+        return false;
+      }
+    });
+    if (completed == true) {
+      continue;
+    }
+    fail('Timed out after ${timeout.inSeconds}s: $reason');
   }
 }
