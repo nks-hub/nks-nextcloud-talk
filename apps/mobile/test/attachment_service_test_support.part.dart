@@ -186,16 +186,24 @@ final class _Fixture {
     ),
   );
 
-  Future<AttachmentJobId> seedInFlight(AttachmentRequestStep step) async {
+  Future<AttachmentJobId> seedInFlight(
+    AttachmentRequestStep step, {
+    int seed = 0,
+  }) async {
     if (step != AttachmentRequestStep.normalPut &&
         step != AttachmentRequestStep.finalize &&
         step != AttachmentRequestStep.cleanupDraftFile) {
       throw ArgumentError.value(step, 'step');
     }
     final enqueue = request(normalMaximum: 32);
-    final jobId = AttachmentJobId.parse('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    final suffix = seed == 0
+        ? 'aaaaaaaaaaaa'
+        : seed.toRadixString(16).padLeft(12, '0');
+    final jobId = AttachmentJobId.parse('aaaaaaaa-aaaa-4aaa-8aaa-$suffix');
     final referenceId = ChatReferenceId.parse(
-      '11111111-1111-4111-8111-111111111111',
+      seed == 0
+          ? '11111111-1111-4111-8111-111111111111'
+          : '11111111-1111-4111-8111-$suffix',
     );
     final authority = AttachmentAuthority(
       accountId: enqueue.accountId,
@@ -228,7 +236,7 @@ final class _Fixture {
         referenceId: referenceId,
         source: enqueue.source,
         metadata: enqueue.metadata,
-        enqueueSequence: 1,
+        enqueueSequence: seed + 1,
         policy: enqueue.policy,
         uploadSessionId: null,
       ),
@@ -262,7 +270,7 @@ final class _Fixture {
       accountId: enqueue.accountId,
       jobId: jobId,
       authority: authority,
-      requestId: AttachmentRequestId.parse('persisted-request-1'),
+      requestId: AttachmentRequestId.parse('persisted-request-${seed + 1}'),
       sourceObservation: step == AttachmentRequestStep.normalPut
           ? AttachmentSourceObservation(
               handle: enqueue.source.handle,
@@ -294,8 +302,14 @@ final class _Fixture {
     return jobId;
   }
 
-  Future<AttachmentJobId> seedTerminal({required int messageId}) async {
-    final jobId = await seedInFlight(AttachmentRequestStep.finalize);
+  Future<AttachmentJobId> seedTerminal({
+    required int messageId,
+    int seed = 0,
+  }) async {
+    final jobId = await seedInFlight(
+      AttachmentRequestStep.finalize,
+      seed: seed,
+    );
     final accountId = AccountId.parse('account-a');
     final key = (accountId: accountId.value, jobId: jobId.value);
     final loaded = await repository.loadRuntime();
@@ -322,7 +336,11 @@ final class _Fixture {
       accountId: accountId,
       jobId: jobId,
       confirmations: <AttachmentMessageConfirmation>[
-        confirmation(jobId, messageId: messageId),
+        confirmation(
+          jobId,
+          messageId: messageId,
+          referenceId: account.jobs[jobId]!.draft.referenceId.value,
+        ),
       ],
     );
     if (!completed.canCommit) {
@@ -342,6 +360,7 @@ final class _Fixture {
   AttachmentMessageConfirmation confirmation(
     AttachmentJobId _, {
     required int messageId,
+    String referenceId = '11111111-1111-4111-8111-111111111111',
     int? parentMessageId,
     ConversationToken? parentRoomToken,
     int? parentThreadId,
@@ -357,7 +376,7 @@ final class _Fixture {
       path: r'$.roomToken',
       code: TalkProtocolErrorCode.invalidAttachmentModel,
     ),
-    referenceId: '11111111-1111-4111-8111-111111111111',
+    referenceId: referenceId,
     systemMessage: '',
     messageType: 'comment',
     hasFileRichObject: true,

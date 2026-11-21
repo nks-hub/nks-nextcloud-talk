@@ -1,5 +1,7 @@
 part of 'attachment_service.dart';
 
+const int _startupSourceReleaseConcurrency = 4;
+
 mixin _AttachmentServiceRuntime {
   AttachmentRepository get _repository;
   CredentialVault get _credentials;
@@ -129,14 +131,41 @@ mixin _AttachmentServiceRuntime {
         }
       }
     }
-    for (final key in terminal) {
-      await _releaseTerminalSource(key);
-    }
+    await _releaseStartupTerminalSources(terminal);
     for (final key in awaitingConfirmation) {
       _queueConfirmationCatchUp(key);
     }
     for (final room in rooms) {
       unawaited(_scheduleRoom(room));
+    }
+  }
+
+  Future<void> _releaseStartupTerminalSources(
+    List<AttachmentPersistenceKey> terminal,
+  ) async {
+    Object? firstError;
+    StackTrace? firstStackTrace;
+    var nextKey = 0;
+
+    Future<void> releaseNext() async {
+      while (nextKey < terminal.length) {
+        final key = terminal[nextKey++];
+        try {
+          await _releaseTerminalSource(key);
+        } on Object catch (error, stackTrace) {
+          firstError ??= error;
+          firstStackTrace ??= stackTrace;
+        }
+      }
+    }
+
+    final workerCount = terminal.length < _startupSourceReleaseConcurrency
+        ? terminal.length
+        : _startupSourceReleaseConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => releaseNext()));
+    final error = firstError;
+    if (error != null) {
+      Error.throwWithStackTrace(error, firstStackTrace!);
     }
   }
 

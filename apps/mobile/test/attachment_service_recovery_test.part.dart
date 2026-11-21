@@ -111,6 +111,86 @@ void _registerAttachmentServiceRecoveryTests() {
     expect(stored?.sourceReleased, isTrue);
   });
 
+  test('startup releases at most four terminal sources concurrently', () async {
+    const jobCount = 6;
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final jobIds = <AttachmentJobId>[];
+    for (var index = 0; index < jobCount; index++) {
+      jobIds.add(
+        await fixture.seedTerminal(messageId: 200 + index, seed: index),
+      );
+    }
+    final gates = <Completer<void>>[];
+    final firstReleaseStarted = Completer<void>();
+    var inFlight = 0;
+    var peakInFlight = 0;
+    final service = fixture.service(
+      _unexpectedClient(),
+      releaseSource: (source) async {
+        final gate = Completer<void>();
+        gates.add(gate);
+        if (!firstReleaseStarted.isCompleted) {
+          firstReleaseStarted.complete();
+        }
+        inFlight++;
+        peakInFlight = max(peakInFlight, inFlight);
+        await gate.future;
+        inFlight--;
+      },
+    );
+    var closed = false;
+
+    Future<void> releaseAll() async {
+      while (gates.length < jobCount) {
+        for (final gate in gates) {
+          if (!gate.isCompleted) {
+            gate.complete();
+          }
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      for (final gate in gates) {
+        if (!gate.isCompleted) {
+          gate.complete();
+        }
+      }
+    }
+
+    addTearDown(() async {
+      await releaseAll();
+      if (!closed) {
+        await service.close();
+      }
+    });
+    await service.ready;
+    await firstReleaseStarted.future.timeout(const Duration(seconds: 1));
+    for (var turn = 0; turn < 50 && gates.length < 4; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(gates, hasLength(4));
+    expect(peakInFlight, 4);
+
+    gates.first.complete();
+    for (var turn = 0; turn < 50 && gates.length < 5; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(gates, hasLength(5));
+    expect(peakInFlight, 4);
+
+    await releaseAll();
+    await service.close();
+    closed = true;
+    expect(gates, hasLength(jobCount));
+    for (final jobId in jobIds) {
+      final stored = await fixture.repository.getStoredJob(
+        accountId: 'account-a',
+        jobId: jobId.value,
+      );
+      expect(stored?.sourceReleased, isTrue);
+    }
+  });
+
   test(
     'multiple cached matches stay ambiguous without an observer loop',
     () async {
