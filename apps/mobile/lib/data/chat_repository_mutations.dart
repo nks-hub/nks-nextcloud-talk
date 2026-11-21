@@ -58,6 +58,7 @@ extension _ChatRepositoryMutations on ChatRepository {
                   row.rawJson.like('%"id":${message.messageId}%'),
             ))
             .get();
+    final parentUpdates = <({int messageId, String rawJson})>[];
     for (final row in rows) {
       if (row.messageId == message.messageId) {
         continue;
@@ -74,17 +75,24 @@ extension _ChatRepositoryMutations on ChatRepository {
       if (identical(updated, cached)) {
         continue;
       }
-      await (_database.update(_database.cachedChatMessages)..where(
-            (candidate) =>
+      parentUpdates.add((
+        messageId: row.messageId,
+        rawJson: jsonEncode(updated.wire),
+      ));
+    }
+    if (parentUpdates.isNotEmpty) {
+      await _database.batch((batch) {
+        for (final update in parentUpdates) {
+          batch.update(
+            _database.cachedChatMessages,
+            CachedChatMessagesCompanion(rawJson: Value(update.rawJson)),
+            where: (candidate) =>
                 candidate.accountId.equals(accountId) &
                 candidate.roomToken.equals(message.roomToken.value) &
-                candidate.messageId.equals(row.messageId),
-          ))
-          .write(
-            CachedChatMessagesCompanion(
-              rawJson: Value(jsonEncode(updated.wire)),
-            ),
+                candidate.messageId.equals(update.messageId),
           );
+        }
+      });
     }
   }
 
