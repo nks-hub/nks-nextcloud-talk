@@ -962,9 +962,9 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     );
   }
 
-  /// Empties the message field once its text has left as a caption.
-  void _clearConsumedCaption() {
-    if (!mounted) {
+  /// Empties the same room's field once its current text leaves as a caption.
+  void _clearConsumedCaption(ChatRoomProviderKey owner, String caption) {
+    if (!mounted || owner != _key || _composer.text.trim() != caption) {
       return;
     }
     _composer.clear();
@@ -991,6 +991,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
         },
       ),
       data: (value) {
+        final captionOwner = _key;
         try {
           final accountId = AccountId.parse(widget.account.id);
           final server = ServerBase.parse(widget.account.serverUrl);
@@ -1051,7 +1052,8 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             showAttachmentButton: false,
             silent: _silentSend,
             captionSource: () => _composer.text,
-            onCaptionConsumed: _clearConsumedCaption,
+            onCaptionConsumed: (caption) =>
+                _clearConsumedCaption(captionOwner, caption),
             openAppSettings: () => ref.read(appSettingsOpenerProvider).open(),
           );
         } on TalkProtocolException {

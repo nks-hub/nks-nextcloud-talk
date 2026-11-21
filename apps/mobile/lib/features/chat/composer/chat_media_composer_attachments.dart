@@ -27,8 +27,9 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
     try {
       final session = await bridge.startImageUpload(request);
       durablyAccepted = true;
-      if (request.metadata.caption != null) {
-        widget.onCaptionConsumed?.call();
+      final caption = request.metadata.caption;
+      if (!_disposed && !image.disposed && caption != null) {
+        widget.onCaptionConsumed?.call(caption);
       }
       if (_sameSource(image.source, request.source)) {
         image.source = null;

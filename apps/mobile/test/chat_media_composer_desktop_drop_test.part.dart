@@ -249,7 +249,7 @@ void _registerChatMediaComposerDesktopDropTests(
             controller: media,
             profile: profile,
             captionSource: () => "Caption",
-            onCaptionConsumed: () => captionsConsumed++,
+            onCaptionConsumed: (_) => captionsConsumed++,
             replyTarget: _replyTarget(),
           ),
         ),

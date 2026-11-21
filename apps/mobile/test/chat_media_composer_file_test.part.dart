@@ -105,6 +105,7 @@ void _registerChatMediaComposerFileTests(
     addTearDown(voiceBackends.close);
     var field = '  Tohle je popisek  ';
     var cleared = 0;
+    final consumed = <String>[];
 
     await tester.pumpWidget(
       _composerApp(
@@ -114,7 +115,8 @@ void _registerChatMediaComposerFileTests(
         profile: _profile(caption: true),
         voiceBackends: voiceBackends,
         captionSource: () => field,
-        onCaptionConsumed: () {
+        onCaptionConsumed: (caption) {
+          consumed.add(caption);
           cleared++;
           field = '';
         },
@@ -124,8 +126,50 @@ void _registerChatMediaComposerFileTests(
     await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
 
     expect(bridge.metadata.single.caption, 'Tohle je popisek');
+    expect(consumed, ['Tohle je popisek']);
     expect(cleared, 1, reason: 'the field it came from is emptied once');
     expect(field, isEmpty);
+  });
+
+  testWidgets('a late upload cannot clear a replacement composer', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final profile = _profile(caption: true);
+    final bridge = _RecordingBridge(profile: profile, enqueueGate: gate.future);
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+    var field = 'Caption A';
+    var captionsConsumed = 0;
+
+    Widget app(Key key) => _composerApp(
+      composerKey: key,
+      sourceStore: sourceStore(),
+      bridge: bridge.bridge,
+      threadId: null,
+      profile: profile,
+      voiceBackends: voiceBackends,
+      captionSource: () => field,
+      onCaptionConsumed: (_) {
+        captionsConsumed++;
+        field = '';
+      },
+    );
+
+    await tester.pumpWidget(app(const ValueKey('room-a')));
+    await _pickAttachmentSource(tester);
+    await _pumpUntil(tester, () => bridge.metadata.isNotEmpty);
+    expect(bridge.sessions, isEmpty);
+
+    field = 'Draft B';
+    await tester.pumpWidget(app(const ValueKey('room-b')));
+    gate.complete();
+    await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
+
+    expect(bridge.metadata.single.caption, 'Caption A');
+    expect(field, 'Draft B');
+    expect(captionsConsumed, 0);
   });
 
   testWidgets('an empty field sends no caption and clears nothing', (
@@ -145,7 +189,7 @@ void _registerChatMediaComposerFileTests(
         profile: _profile(caption: true),
         voiceBackends: voiceBackends,
         captionSource: () => '   ',
-        onCaptionConsumed: () => cleared++,
+        onCaptionConsumed: (_) => cleared++,
       ),
     );
     await _pickAttachmentSource(tester);
@@ -174,7 +218,7 @@ void _registerChatMediaComposerFileTests(
         threadId: null,
         voiceBackends: voiceBackends,
         captionSource: () => 'Tohle musí zůstat',
-        onCaptionConsumed: () => cleared++,
+        onCaptionConsumed: (_) => cleared++,
       ),
     );
     await _pickAttachmentSource(tester);

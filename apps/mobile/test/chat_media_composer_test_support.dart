@@ -19,7 +19,7 @@ Widget _composerApp({
   ValueChanged<int>? onReplyDurablyAccepted,
   bool silent = false,
   String Function()? captionSource,
-  VoidCallback? onCaptionConsumed,
+  ValueChanged<String>? onCaptionConsumed,
   Future<bool> Function()? openAppSettings,
   Locale locale = const Locale('en'),
   double textScale = 1,
@@ -160,7 +160,7 @@ Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) =>
     );
 
 final class _RecordingBridge {
-  _RecordingBridge({AttachmentCapabilityProfile? profile})
+  _RecordingBridge({AttachmentCapabilityProfile? profile, this.enqueueGate})
     : profile = profile ?? _profile() {
     bridge = AttachmentSubmissionBridge(
       accountId: _account,
@@ -182,6 +182,10 @@ final class _RecordingBridge {
             );
           },
       enqueue: (_) async {
+        final gate = enqueueGate;
+        if (gate != null) {
+          await gate;
+        }
         final session = _DurableSession();
         sessions.add(session);
         return session;
@@ -190,6 +194,7 @@ final class _RecordingBridge {
   }
 
   final AttachmentCapabilityProfile profile;
+  final Future<void>? enqueueGate;
   final List<PreparedAttachmentSource> sources = <PreparedAttachmentSource>[];
   final List<AttachmentMetadata> metadata = <AttachmentMetadata>[];
   final List<_DurableSession> sessions = <_DurableSession>[];

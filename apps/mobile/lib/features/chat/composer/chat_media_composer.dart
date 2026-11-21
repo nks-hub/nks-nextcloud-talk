@@ -273,7 +273,7 @@ final class ChatMediaComposer extends StatefulWidget {
 
   /// Fires once a caption has actually gone out with an attachment, so the
   /// host can clear the field it came from.
-  final VoidCallback? onCaptionConsumed;
+  final ValueChanged<String>? onCaptionConsumed;
   final Future<bool> Function()? openAppSettings;
   final ChatMediaComposerController? controller;
   final Widget? leadingAction;
