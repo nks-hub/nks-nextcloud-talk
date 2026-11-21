@@ -350,6 +350,48 @@ void main() {
 
       expect(find.byKey(const Key('bot-admin-empty')), findsOneWidget);
     });
+
+    testWidgets('a large bot list builds lazily and keeps its limit notice', (
+      tester,
+    ) async {
+      final bots = <Map<String, Object?>>[
+        for (var index = 1; index <= maximumAdminBots + 1; index++)
+          <String, Object?>{
+            ..._echoBot,
+            'id': index,
+            'name': 'Bot $index',
+            'url': 'https://bots.example.invalid/bot-$index',
+          },
+      ];
+      await pumpScreen(
+        tester,
+        botRoute: (_) async => http.Response(_ocs(bots), 200),
+      );
+
+      final listFinder = find.byKey(const Key('bot-admin-list'));
+      final list = tester.widget<ListView>(listFinder);
+      expect(list.childrenDelegate, isA<SliverChildBuilderDelegate>());
+      expect(
+        find.byKey(const Key('bot-admin-row-200')),
+        findsNothing,
+        reason: 'off-screen bot rows must not be built up front',
+      );
+      expect(find.byKey(const Key('bot-admin-truncated')), findsNothing);
+
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('bot-admin-truncated')),
+        1000,
+        scrollable: find.descendant(
+          of: listFinder,
+          matching: find.byType(Scrollable),
+        ),
+      );
+
+      expect(find.byKey(const Key('bot-admin-row-200')), findsOneWidget);
+      expect(find.text('Bot 200'), findsOneWidget);
+      expect(find.byKey(const Key('bot-admin-row-201')), findsNothing);
+      expect(find.byKey(const Key('bot-admin-truncated')), findsOneWidget);
+    });
   });
 
   group('settings entry point', () {

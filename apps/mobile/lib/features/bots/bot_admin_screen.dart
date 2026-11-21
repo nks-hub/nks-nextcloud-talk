@@ -60,18 +60,22 @@ final class _BotList extends StatelessWidget {
         child: Text(key: const Key('bot-admin-empty'), strings.botAdminEmpty),
       );
     }
-    return ListView(
-      children: [
-        for (final bot in listing.bots) _BotTile(bot),
-        if (listing.truncated)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              key: const Key('bot-admin-truncated'),
-              strings.botAdminTruncated(listing.bots.length),
-            ),
+    final botCount = listing.bots.length;
+    return ListView.builder(
+      key: const Key('bot-admin-list'),
+      itemCount: botCount + (listing.truncated ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index < botCount) {
+          return _BotTile(listing.bots[index]);
+        }
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            key: const Key('bot-admin-truncated'),
+            strings.botAdminTruncated(botCount),
           ),
-      ],
+        );
+      },
     );
   }
 }
