@@ -178,14 +178,14 @@ final class AccountRepository {
   Future<void> removeConversation({
     required String accountId,
     required String token,
-  }) {
-    return (_database.delete(_database.cachedConversations)..where(
-          (conversation) =>
-              conversation.accountId.equals(accountId) &
-              conversation.token.equals(token),
-        ))
-        .go();
-  }
+  }) => removeConversations(accountId: accountId, tokens: [token]);
+
+  /// Drops several conversations with bounded statements instead of one
+  /// database round trip per room.
+  Future<void> removeConversations({
+    required String accountId,
+    required Iterable<String> tokens,
+  }) => _deleteConversations(accountId, tokens.toSet());
 
   Future<StoredAccount?> getAccount(String accountId) {
     final query = _database.select(_database.accounts)

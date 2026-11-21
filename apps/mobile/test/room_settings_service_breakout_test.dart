@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -55,9 +57,13 @@ void main() {
   late AppDatabase database;
   late AccountRepository accounts;
   late MemoryCredentialVault vault;
+  late _ConversationDeleteCounter deleteCounter;
 
   setUp(() async {
-    database = openTestDatabase();
+    deleteCounter = _ConversationDeleteCounter();
+    database = AppDatabase.forTesting(
+      NativeDatabase.memory().interceptWith(deleteCounter),
+    );
     accounts = AccountRepository(database);
     vault = MemoryCredentialVault()..values['account-a'] = 'password-a';
     await accounts.upsertAccount(
@@ -74,6 +80,7 @@ void main() {
         ConversationRoom.fromJson(_room(token)),
       );
     }
+    deleteCounter.enabled = true;
   });
 
   tearDown(() => database.close());
@@ -116,6 +123,7 @@ void main() {
     );
 
     expect(deletes, 1);
+    expect(deleteCounter.conversationDeletes, 1);
     expect(await cachedTokens(), <String>{'parent01'});
   });
 
@@ -135,4 +143,22 @@ void main() {
 
     expect(await cachedTokens(), <String>{'parent01', 'child001', 'child002'});
   });
+}
+
+final class _ConversationDeleteCounter extends QueryInterceptor {
+  bool enabled = false;
+  int conversationDeletes = 0;
+
+  @override
+  Future<int> runDelete(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) {
+    if (enabled &&
+        statement.toLowerCase().contains('from "cached_conversations"')) {
+      conversationDeletes++;
+    }
+    return super.runDelete(executor, statement, args);
+  }
 }

@@ -93,9 +93,10 @@ extension RoomSettingsBreakouts on RoomSettingsService {
         roomToken: ids.roomToken,
       ),
     );
-    for (final token in childTokens) {
-      await _accounts.removeConversation(accountId: accountId, token: token);
-    }
+    await _accounts.removeConversations(
+      accountId: accountId,
+      tokens: childTokens,
+    );
     return room;
   }
 
