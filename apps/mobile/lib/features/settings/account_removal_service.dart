@@ -53,9 +53,10 @@ final class AccountRemovalOutcome {
 ///
 /// Ordering follows `docs/architecture/system-design.md` ("Odhlášení"): the
 /// push cleanup runs while the app password is still valid. Server revocation
-/// is attempted next. If the server is unreachable, the same credential is
-/// durably queued before its account slot is deleted. A full, corrupt or
-/// unavailable queue stops removal so no live password loses its local owner.
+/// is reserved durably, the local password is deleted, and only then is the
+/// server password revoked. If the server is unreachable, the reservation is
+/// turned into a pending revocation. A full, corrupt or unavailable queue
+/// stops removal so no live password loses its local owner.
 ///
 /// Deleting the local password is the one blocking local step. The account
 /// row stays in place until that succeeds, so a temporarily unavailable vault
@@ -157,17 +158,44 @@ final class AccountRemovalService {
       }
     }
 
+    AppPasswordRevocationReservation? removalReservation;
     try {
       if (server != null) {
-        appPasswordRevoked = await _revokeOrRemember(
+        final queue = _pendingRevocations;
+        if (queue == null) {
+          throw StateError('Pending revocation store is unavailable');
+        }
+        removalReservation = await queue.reserveCredentialForRemoval(
           server: server,
           loginName: account.loginName,
           appPassword: appPassword!,
+          accountId: accountId,
         );
       }
-      // The queue write above is durable before the local owner disappears.
       await _credentials.deleteAppPassword(accountId);
     } on Object catch (error, stackTrace) {
+      if (removalReservation != null) {
+        final queue = _pendingRevocations!;
+        try {
+          final retainedPassword = await _credentials.readAppPassword(
+            accountId,
+          );
+          if (retainedPassword == appPassword) {
+            await queue.releaseHeldCredential(removalReservation);
+          } else {
+            await queue.queueCredential(
+              reservation: removalReservation,
+              server: server!,
+              loginName: account.loginName,
+              appPassword: appPassword!,
+            );
+          }
+        } on Object {
+          // The durable held entry remains. Recovery will inspect the vault
+          // before deciding whether it is safe to revoke or release it.
+          queue.abandonHeldCredential(removalReservation);
+        }
+      }
       try {
         await _onRemovalAborted?.call(accountId);
       } on Object {
@@ -175,6 +203,24 @@ final class AccountRemovalService {
         // must not replace it with a less useful error.
       }
       Error.throwWithStackTrace(error, stackTrace);
+    }
+    if (server != null && removalReservation != null) {
+      try {
+        appPasswordRevoked = await _revokeReservedCredential(
+          reservation: removalReservation,
+          server: server,
+          loginName: account.loginName,
+          appPassword: appPassword!,
+        );
+      } on Object catch (error, stackTrace) {
+        _pendingRevocations!.abandonHeldCredential(removalReservation);
+        try {
+          await _onRemovalAborted?.call(accountId);
+        } on Object {
+          // Preserve the queue failure that stopped account removal.
+        }
+        Error.throwWithStackTrace(error, stackTrace);
+      }
     }
     // Only caches: none may keep the account row around after the secret is
     // gone. A locked cache file can be retried by normal cache maintenance.
@@ -222,53 +268,44 @@ final class AccountRemovalService {
     );
   }
 
-  /// Revokes the password now, or leaves it in the bounded revocation queue
-  /// when the server was never reached. A server that answered — `401`
-  /// (already dead), an older server without the endpoint, an unexpected
-  /// body — is not retried: the queue is for a request that did not arrive.
-  Future<bool> _revokeOrRemember({
+  /// Revokes a locally deleted password or makes its durable reservation
+  /// retryable. A `401` proves the password is already dead.
+  Future<bool> _revokeReservedCredential({
+    required AppPasswordRevocationReservation reservation,
     required ServerBase server,
     required String loginName,
     required String appPassword,
   }) async {
-    const notReached = <NextcloudApiError>{
-      NextcloudApiError.network,
-      NextcloudApiError.timeout,
-      NextcloudApiError.cancelled,
-    };
+    final queue = _pendingRevocations!;
     try {
       await _api.revokeAppPassword(
         server: server,
         loginName: loginName,
         appPassword: appPassword,
       );
+      await queue.releaseRevokedCredential(reservation);
       return true;
     } on NextcloudApiException catch (error) {
-      if (notReached.contains(error.code)) {
-        await _remember(server, loginName, appPassword);
+      if (error.statusCode == 401) {
+        await queue.releaseRevokedCredential(reservation);
+        return false;
       }
+      await queue.queueCredential(
+        reservation: reservation,
+        server: server,
+        loginName: loginName,
+        appPassword: appPassword,
+      );
       return false;
     } on Object {
-      // Not one of the API's own answers: the request never completed.
-      await _remember(server, loginName, appPassword);
+      await queue.queueCredential(
+        reservation: reservation,
+        server: server,
+        loginName: loginName,
+        appPassword: appPassword,
+      );
       return false;
     }
-  }
-
-  Future<void> _remember(
-    ServerBase server,
-    String loginName,
-    String appPassword,
-  ) async {
-    final queue = _pendingRevocations;
-    if (queue == null) {
-      throw StateError('Pending revocation store is unavailable');
-    }
-    await queue.record(
-      server: server,
-      loginName: loginName,
-      appPassword: appPassword,
-    );
   }
 
   Future<bool> _bestEffortResult(Future<bool> Function() action) async {

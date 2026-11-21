@@ -216,6 +216,8 @@ final appPasswordRevocationQueueProvider = Provider<AppPasswordRevocationQueue>(
           ? vault as PendingRevocationStore
           : _NoPendingRevocationStore(),
       api: ref.watch(nextcloudApiProvider),
+      accounts: ref.watch(accountRepositoryProvider),
+      credentials: vault,
     );
   },
 );

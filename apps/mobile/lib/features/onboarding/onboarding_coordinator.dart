@@ -150,7 +150,8 @@ final class OnboardingCoordinator {
        _credentials = credentials,
        _launcher = launcher,
        _pendingRevocations =
-           pendingRevocations ?? _queueFromCredentials(api, credentials),
+           pendingRevocations ??
+           _queueFromCredentials(api, accounts, credentials),
        _trust = trust,
        _uuid = uuid ?? const Uuid();
 
@@ -175,18 +176,41 @@ final class OnboardingCoordinator {
 
   static AppPasswordRevocationQueue? _queueFromCredentials(
     HttpNextcloudApi api,
+    AccountRepository accounts,
     CredentialVault credentials,
   ) => credentials is PendingRevocationStore
       ? AppPasswordRevocationQueue(
           store: credentials as PendingRevocationStore,
           api: api,
+          accounts: accounts,
+          credentials: credentials,
         )
       : null;
+
+  Future<void> _recoverHeldCredentials() async {
+    final queue = _pendingRevocations;
+    if (queue == null) {
+      return;
+    }
+    try {
+      await queue.recoverHeldCredentials(
+        accounts: _accounts,
+        credentials: _credentials,
+      );
+    } on Object {
+      throw const OnboardingFailure(
+        OnboardingFailureCode.localPersistence,
+        cleanupIncomplete: true,
+      );
+    }
+  }
 
   Future<PendingLogin> start(
     String serverAddress, {
     CancellationSignal? cancellation,
   }) async {
+    cancellation?.throwIfCancelled();
+    await _recoverHeldCredentials();
     cancellation?.throwIfCancelled();
     final ServerBase server;
     try {
@@ -262,6 +286,8 @@ final class OnboardingCoordinator {
     CancellationSignal cancellation, {
     String? expectedAccountId,
   }) async {
+    await _recoverHeldCredentials();
+    cancellation.throwIfCancelled();
     final server = payload.server;
     final status = await _requireReadyServer(
       server,
@@ -483,18 +509,16 @@ final class OnboardingCoordinator {
     required String? expectedAccountId,
     AppPasswordRevocationReservation? cleanupReservation,
   }) async {
+    late final StoredAccount stored;
     try {
-      final stored = await _commitAccountWithoutCredentialCleanup(
+      stored = await _commitAccountWithoutCredentialCleanup(
         server: server,
         serverStatus: serverStatus,
         loginCredentials: loginCredentials,
         cancellation: cancellation,
         expectedAccountId: expectedAccountId,
+        cleanupReservation: cleanupReservation,
       );
-      if (cleanupReservation != null) {
-        await _releaseHeldCredential(cleanupReservation);
-      }
-      return stored;
     } on Object catch (error, stackTrace) {
       if (credentialSource == _CredentialSource.sharedQr) {
         Error.throwWithStackTrace(error, stackTrace);
@@ -521,6 +545,16 @@ final class OnboardingCoordinator {
       }
       Error.throwWithStackTrace(error, stackTrace);
     }
+    if (cleanupReservation != null) {
+      try {
+        await _releaseHeldCredential(cleanupReservation);
+      } on Object {
+        // The account and vault now own the credential. A durable held entry
+        // lets the next coordinator confirm that before releasing it.
+        _pendingRevocations!.abandonHeldCredential(cleanupReservation);
+      }
+    }
+    return stored;
   }
 
   Future<StoredAccount> _commitAccountWithoutCredentialCleanup({
@@ -529,6 +563,7 @@ final class OnboardingCoordinator {
     required LoginFlowCredentials loginCredentials,
     required CancellationSignal cancellation,
     required String? expectedAccountId,
+    required AppPasswordRevocationReservation? cleanupReservation,
   }) async {
     cancellation.throwIfCancelled();
     final expected = expectedAccountId == null
@@ -540,6 +575,20 @@ final class OnboardingCoordinator {
             expected.loginName != loginCredentials.loginName)) {
       throw const OnboardingFailure(
         OnboardingFailureCode.accountIdentityMismatch,
+      );
+    }
+    final existing =
+        expected ??
+        await _accounts.findByIdentity(
+          serverUrl: server.value,
+          loginName: loginCredentials.loginName,
+        );
+    final accountId = existing?.id ?? _uuid.v4();
+    if (cleanupReservation != null) {
+      await _pendingRevocations!.updateHeldCredentialPhase(
+        reservation: cleanupReservation,
+        phase: AppPasswordCredentialPhase.prepared,
+        accountId: accountId,
       );
     }
 
@@ -560,13 +609,6 @@ final class OnboardingCoordinator {
       throw const OnboardingFailure(OnboardingFailureCode.talkUnavailable);
     }
 
-    final existing =
-        expected ??
-        await _accounts.findByIdentity(
-          serverUrl: server.value,
-          loginName: loginCredentials.loginName,
-        );
-    final accountId = existing?.id ?? _uuid.v4();
     final String? previousPassword;
     try {
       previousPassword = await _credentials.readAppPassword(accountId);
@@ -576,14 +618,22 @@ final class OnboardingCoordinator {
     cancellation.throwIfCancelled();
 
     var credentialWritten = false;
+    late final StoredAccount stored;
     try {
       await _credentials.writeAppPassword(
         accountId,
         loginCredentials.appPassword,
       );
       credentialWritten = true;
+      if (cleanupReservation != null) {
+        await _pendingRevocations!.updateHeldCredentialPhase(
+          reservation: cleanupReservation,
+          phase: AppPasswordCredentialPhase.vaultWritten,
+          accountId: accountId,
+        );
+      }
       cancellation.throwIfCancelled();
-      final stored = await _accounts.upsertAccount(
+      stored = await _accounts.upsertAccount(
         accountId: accountId,
         serverUrl: server.value,
         loginName: loginCredentials.loginName,
@@ -609,7 +659,6 @@ final class OnboardingCoordinator {
         // Account and credential persistence already succeeded. Trust refresh
         // is fail-closed and must not roll either durable write back.
       }
-      return stored;
     } on Object catch (error, stackTrace) {
       var cleanupIncomplete = false;
       if (credentialWritten) {
@@ -631,6 +680,19 @@ final class OnboardingCoordinator {
         cleanupIncomplete: cleanupIncomplete,
       );
     }
+    if (cleanupReservation != null) {
+      try {
+        await _pendingRevocations!.updateHeldCredentialPhase(
+          reservation: cleanupReservation,
+          phase: AppPasswordCredentialPhase.accountCommitted,
+          accountId: accountId,
+        );
+      } on Object {
+        // A crash-safe phase from before the database write is enough: startup
+        // confirms the matching row and vault value before releasing it.
+      }
+    }
+    return stored;
   }
 
   Future<AppPasswordRevocationReservation> _reserveGeneratedCredential() async {
@@ -850,17 +912,7 @@ final class OnboardingCoordinator {
 
   Future<void> _releaseHeldCredential(
     AppPasswordRevocationReservation reservation,
-  ) async {
-    final queue = _pendingRevocations!;
-    while (true) {
-      try {
-        await queue.releaseHeldCredential(reservation);
-        return;
-      } on Object {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-    }
-  }
+  ) => _pendingRevocations!.releaseHeldCredential(reservation);
 
   Future<void> _releaseRevokedReservation(
     AppPasswordRevocationQueue queue,

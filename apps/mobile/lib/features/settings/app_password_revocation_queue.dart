@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../data/account_repository.dart';
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
 
@@ -19,10 +20,14 @@ final class AppPasswordRevocationQueue {
   AppPasswordRevocationQueue({
     required PendingRevocationStore store,
     required HttpNextcloudApi api,
+    AccountRepository? accounts,
+    CredentialVault? credentials,
     DateTime Function()? now,
     String Function()? reservationId,
   }) : _store = store,
        _api = api,
+       _accounts = accounts,
+       _credentials = credentials,
        _now = now ?? DateTime.now,
        _reservationId = reservationId ?? const Uuid().v4;
 
@@ -31,8 +36,12 @@ final class AppPasswordRevocationQueue {
 
   final PendingRevocationStore _store;
   final HttpNextcloudApi _api;
+  final AccountRepository? _accounts;
+  final CredentialVault? _credentials;
   final DateTime Function() _now;
   final String Function() _reservationId;
+  final Set<String> _activeReservations = <String>{};
+  Future<void> _recoveryTail = Future<void>.value();
 
   Future<void> record({
     required ServerBase server,
@@ -80,6 +89,7 @@ final class AppPasswordRevocationQueue {
       entries.add(_ReservationEntry(id: reservation.id, since: _now()));
       return _encode(entries);
     });
+    _activeReservations.add(reservation.id);
     return reservation;
   }
 
@@ -101,13 +111,16 @@ final class AppPasswordRevocationQueue {
     required ServerBase server,
     required String loginName,
     required String appPassword,
-  }) => _resolveReservation(
-    reservation: reservation,
-    server: server,
-    loginName: loginName,
-    appPassword: appPassword,
-    pending: true,
-  );
+  }) async {
+    await _resolveReservation(
+      reservation: reservation,
+      server: server,
+      loginName: loginName,
+      appPassword: appPassword,
+      pending: true,
+    );
+    _activeReservations.remove(reservation.id);
+  }
 
   Future<void> _resolveReservation({
     required AppPasswordRevocationReservation reservation,
@@ -146,6 +159,8 @@ final class AppPasswordRevocationQueue {
               loginName: loginName,
               appPassword: appPassword,
               since: existing.since,
+              phase: AppPasswordCredentialPhase.received,
+              accountId: null,
             );
       return _encode(entries);
     }
@@ -159,44 +174,122 @@ final class AppPasswordRevocationQueue {
     return raw;
   });
 
-  Future<void> releaseReservation(
-    AppPasswordRevocationReservation reservation,
-  ) => _store.updatePendingRevocations((raw) {
+  /// Atomically reserves a known credential before local account removal.
+  Future<AppPasswordRevocationReservation> reserveCredentialForRemoval({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+    required String accountId,
+  }) async {
+    final reservation = AppPasswordRevocationReservation._(_reservationId());
+    if (accountId.isEmpty || reservation.id.isEmpty) {
+      throw const AppPasswordRevocationQueueCorrupt();
+    }
+    await _store.updatePendingRevocations((raw) {
+      final entries = _decode(raw);
+      if (entries.any((entry) => entry.reservationId == reservation.id) ||
+          entries.any(
+            (entry) => entry.hasSecret(server, loginName, appPassword),
+          )) {
+        throw const AppPasswordRevocationQueueCorrupt();
+      }
+      _requireCapacity(entries);
+      entries.add(
+        _HeldEntry(
+          id: reservation.id,
+          server: server.uri.toString(),
+          loginName: loginName,
+          appPassword: appPassword,
+          since: _now(),
+          phase: AppPasswordCredentialPhase.removalReserved,
+          accountId: accountId,
+        ),
+      );
+      return _encode(entries);
+    });
+    _activeReservations.add(reservation.id);
+    return reservation;
+  }
+
+  Future<void> updateHeldCredentialPhase({
+    required AppPasswordRevocationReservation reservation,
+    required AppPasswordCredentialPhase phase,
+    required String accountId,
+  }) => _store.updatePendingRevocations((raw) {
+    if (accountId.isEmpty ||
+        phase == AppPasswordCredentialPhase.received ||
+        phase == AppPasswordCredentialPhase.removalReserved) {
+      throw const AppPasswordRevocationQueueCorrupt();
+    }
     final entries = _decode(raw);
     final index = entries.indexWhere(
       (entry) => entry.reservationId == reservation.id,
     );
-    if (index < 0 || entries[index] is! _ReservationEntry) {
-      return raw;
+    if (index < 0 || entries[index] is! _HeldEntry) {
+      throw const AppPasswordRevocationReservationMissing();
     }
-    entries.removeAt(index);
+    final held = entries[index] as _HeldEntry;
+    if (held.phase == AppPasswordCredentialPhase.removalReserved ||
+        (held.accountId != null && held.accountId != accountId) ||
+        phase.index < held.phase.index) {
+      throw const AppPasswordRevocationQueueCorrupt();
+    }
+    entries[index] = held.withPhase(phase: phase, accountId: accountId);
     return _encode(entries);
   });
+
+  Future<void> releaseReservation(
+    AppPasswordRevocationReservation reservation,
+  ) async {
+    await _store.updatePendingRevocations((raw) {
+      final entries = _decode(raw);
+      final index = entries.indexWhere(
+        (entry) => entry.reservationId == reservation.id,
+      );
+      if (index < 0 || entries[index] is! _ReservationEntry) {
+        return raw;
+      }
+      entries.removeAt(index);
+      return _encode(entries);
+    });
+    _activeReservations.remove(reservation.id);
+  }
 
   Future<void> releaseHeldCredential(
     AppPasswordRevocationReservation reservation,
-  ) => _store.updatePendingRevocations((raw) {
-    final entries = _decode(raw);
-    final index = entries.indexWhere(
-      (entry) => entry.reservationId == reservation.id,
-    );
-    if (index < 0) {
-      return raw;
-    }
-    if (entries[index] is! _HeldEntry) {
-      throw const AppPasswordRevocationQueueCorrupt();
-    }
-    entries.removeAt(index);
-    return _encode(entries);
-  });
+  ) async {
+    await _store.updatePendingRevocations((raw) {
+      final entries = _decode(raw);
+      final index = entries.indexWhere(
+        (entry) => entry.reservationId == reservation.id,
+      );
+      if (index < 0) {
+        return raw;
+      }
+      if (entries[index] is! _HeldEntry) {
+        throw const AppPasswordRevocationQueueCorrupt();
+      }
+      entries.removeAt(index);
+      return _encode(entries);
+    });
+    _activeReservations.remove(reservation.id);
+  }
 
   Future<void> releaseRevokedCredential(
     AppPasswordRevocationReservation reservation,
-  ) => _store.updatePendingRevocations((raw) {
-    final entries = _decode(raw);
-    entries.removeWhere((entry) => entry.reservationId == reservation.id);
-    return _encode(entries);
-  });
+  ) async {
+    await _store.updatePendingRevocations((raw) {
+      final entries = _decode(raw);
+      entries.removeWhere((entry) => entry.reservationId == reservation.id);
+      return _encode(entries);
+    });
+    _activeReservations.remove(reservation.id);
+  }
+
+  /// Marks an in-process operation as stopped without changing durable state.
+  /// The next recovery pass may then reconcile its held credential.
+  void abandonHeldCredential(AppPasswordRevocationReservation reservation) =>
+      _activeReservations.remove(reservation.id);
 
   Future<int> pendingCount() async => (await _load()).length;
 
@@ -207,6 +300,7 @@ final class AppPasswordRevocationQueue {
       (await _load()).whereType<_RevocationEntry>().length;
 
   Future<void> drain() async {
+    await recoverHeldCredentials();
     final entries = await _load();
     final revocations = entries.whereType<_RevocationEntry>().toList();
     if (revocations.isEmpty) {
@@ -251,6 +345,78 @@ final class AppPasswordRevocationQueue {
       }
       return _encode(reconciled);
     });
+  }
+
+  /// Reconciles known credentials left in a held state by a process exit.
+  ///
+  /// A matching account and vault value own an onboarding credential. A
+  /// removal reservation is released only while both still exist, proving
+  /// local deletion never completed. Every other known credential becomes a
+  /// retryable server revocation, after an orphaned vault value is removed.
+  Future<void> recoverHeldCredentials({
+    AccountRepository? accounts,
+    CredentialVault? credentials,
+  }) {
+    final recoveryAccounts = accounts ?? _accounts;
+    final recoveryCredentials = credentials ?? _credentials;
+    if (recoveryAccounts == null || recoveryCredentials == null) {
+      return Future<void>.value();
+    }
+    final recovery = _recoveryTail.then((_) async {
+      final heldCredentials = (await _load())
+          .whereType<_HeldEntry>()
+          .where((held) => !_activeReservations.contains(held.id))
+          .toList();
+      for (final held in heldCredentials) {
+        final accountId = held.accountId;
+        final account = accountId == null
+            ? await recoveryAccounts.findByIdentity(
+                serverUrl: held.server,
+                loginName: held.loginName,
+              )
+            : await recoveryAccounts.getAccount(accountId);
+        final vaultAccountId = accountId ?? account?.id;
+        final storedPassword = vaultAccountId == null
+            ? null
+            : await recoveryCredentials.readAppPassword(vaultAccountId);
+        final matchingAccount =
+            account != null &&
+            account.serverUrl == held.server &&
+            account.loginName == held.loginName;
+        final matchingPassword = storedPassword == held.appPassword;
+        final reservation = AppPasswordRevocationReservation._(held.id);
+
+        if (held.phase == AppPasswordCredentialPhase.removalReserved) {
+          if (matchingAccount && matchingPassword) {
+            await releaseHeldCredential(reservation);
+            continue;
+          }
+          if (account != null && !matchingAccount && matchingPassword) {
+            throw const AppPasswordRevocationQueueCorrupt();
+          }
+        } else if (matchingAccount && matchingPassword) {
+          await releaseHeldCredential(reservation);
+          continue;
+        } else if (account != null && !matchingAccount && matchingPassword) {
+          throw const AppPasswordRevocationQueueCorrupt();
+        }
+
+        if (account == null && accountId != null && matchingPassword) {
+          await recoveryCredentials.deleteAppPassword(accountId);
+        }
+        await queueCredential(
+          reservation: reservation,
+          server: ServerBase.parse(held.server),
+          loginName: held.loginName,
+          appPassword: held.appPassword,
+        );
+      }
+    });
+    _recoveryTail = recovery.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return recovery;
   }
 
   Future<bool> _revoked(_RevocationEntry entry) async {
@@ -333,6 +499,14 @@ final class AppPasswordRevocationReservation {
   const AppPasswordRevocationReservation._(this.id);
 
   final String id;
+}
+
+enum AppPasswordCredentialPhase {
+  received,
+  prepared,
+  vaultWritten,
+  accountCommitted,
+  removalReserved,
 }
 
 final class AppPasswordRevocationQueueFull implements Exception {
@@ -424,6 +598,8 @@ final class _HeldEntry extends _QueueEntry {
     required this.loginName,
     required this.appPassword,
     required this.since,
+    required this.phase,
+    required this.accountId,
   });
 
   final String id;
@@ -431,6 +607,8 @@ final class _HeldEntry extends _QueueEntry {
   final String loginName;
   final String appPassword;
   final DateTime since;
+  final AppPasswordCredentialPhase phase;
+  final String? accountId;
 
   @override
   String get reservationId => id;
@@ -451,12 +629,27 @@ final class _HeldEntry extends _QueueEntry {
     attempts: 0,
   );
 
+  _HeldEntry withPhase({
+    required AppPasswordCredentialPhase phase,
+    required String accountId,
+  }) => _HeldEntry(
+    id: id,
+    server: server,
+    loginName: loginName,
+    appPassword: appPassword,
+    since: since,
+    phase: phase,
+    accountId: accountId,
+  );
+
   @override
   bool hasSameStateAs(_QueueEntry other) =>
       other is _HeldEntry &&
       id == other.id &&
       secret == other.secret &&
-      since == other.since;
+      since == other.since &&
+      phase == other.phase &&
+      accountId == other.accountId;
 
   static _HeldEntry? fromJson(Map<String, Object?> json) {
     final id = json['id'];
@@ -464,25 +657,50 @@ final class _HeldEntry extends _QueueEntry {
     final loginName = json['loginName'];
     final appPassword = json['appPassword'];
     final since = json['since'];
+    final phaseName = json['phase'];
+    final accountId = json['accountId'];
     if (id is! String ||
         id.isEmpty ||
         server is! String ||
         loginName is! String ||
         appPassword is! String ||
         appPassword.isEmpty ||
-        since is! String) {
+        since is! String ||
+        (phaseName != null && phaseName is! String) ||
+        (accountId != null && (accountId is! String || accountId.isEmpty))) {
       return null;
     }
     final parsedSince = DateTime.tryParse(since);
-    return parsedSince == null
-        ? null
-        : _HeldEntry(
-            id: id,
-            server: server,
-            loginName: loginName,
-            appPassword: appPassword,
-            since: parsedSince,
-          );
+    final phase = phaseName == null
+        ? AppPasswordCredentialPhase.received
+        : switch (phaseName) {
+            'received' => AppPasswordCredentialPhase.received,
+            'prepared' => AppPasswordCredentialPhase.prepared,
+            'vaultWritten' => AppPasswordCredentialPhase.vaultWritten,
+            'accountCommitted' => AppPasswordCredentialPhase.accountCommitted,
+            'removalReserved' => AppPasswordCredentialPhase.removalReserved,
+            _ => null,
+          };
+    if (parsedSince == null || phase == null) {
+      return null;
+    }
+    if (phase != AppPasswordCredentialPhase.received && accountId == null) {
+      return null;
+    }
+    try {
+      ServerBase.parse(server);
+    } on TalkProtocolException {
+      return null;
+    }
+    return _HeldEntry(
+      id: id,
+      server: server,
+      loginName: loginName,
+      appPassword: appPassword,
+      since: parsedSince,
+      phase: phase,
+      accountId: accountId as String?,
+    );
   }
 
   @override
@@ -493,6 +711,8 @@ final class _HeldEntry extends _QueueEntry {
     'loginName': loginName,
     'appPassword': appPassword,
     'since': since.toUtc().toIso8601String(),
+    'phase': phase.name,
+    'accountId': ?accountId,
   };
 }
 

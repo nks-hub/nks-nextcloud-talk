@@ -684,6 +684,162 @@ void main() {
     expect(await queue.pendingRevocationCount(), 1);
   });
 
+  test('restart queues a generated password left before vault write', () async {
+    final api = _onboardingApi(withTalk: true);
+    addTearDown(api.close);
+    final server = ServerBase.parse('https://cloud.example.invalid');
+    final setupQueue = AppPasswordRevocationQueue(store: vault, api: api);
+    final reservation = await setupQueue.reserve();
+    await setupQueue.holdCredential(
+      reservation: reservation,
+      server: server,
+      loginName: 'restart-user',
+      appPassword: 'restart-app-password-never-use',
+    );
+    await setupQueue.updateHeldCredentialPhase(
+      reservation: reservation,
+      phase: AppPasswordCredentialPhase.prepared,
+      accountId: 'restart-account',
+    );
+    await setupQueue.recoverHeldCredentials(
+      accounts: repository,
+      credentials: vault,
+    );
+    expect(
+      await setupQueue.pendingRevocationCount(),
+      0,
+      reason: 'an active login is not mistaken for a crashed process',
+    );
+
+    final restartedQueue = AppPasswordRevocationQueue(
+      store: vault,
+      api: api,
+      accounts: repository,
+      credentials: vault,
+    );
+    final restarted = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pendingRevocations: restartedQueue,
+    );
+    await restarted.start('https://cloud.example.invalid');
+
+    expect(await restartedQueue.pendingRevocationCount(), 1);
+    expect(await vault.readAppPassword('restart-account'), null);
+    expect(await repository.getAccount('restart-account'), null);
+  });
+
+  test('restart removes an orphan left between vault and database', () async {
+    final api = _onboardingApi(withTalk: true);
+    addTearDown(api.close);
+    final server = ServerBase.parse('https://cloud.example.invalid');
+    final setupQueue = AppPasswordRevocationQueue(store: vault, api: api);
+    final reservation = await setupQueue.reserve();
+    await setupQueue.holdCredential(
+      reservation: reservation,
+      server: server,
+      loginName: 'restart-user',
+      appPassword: 'restart-app-password-never-use',
+    );
+    await setupQueue.updateHeldCredentialPhase(
+      reservation: reservation,
+      phase: AppPasswordCredentialPhase.prepared,
+      accountId: 'restart-account',
+    );
+    await vault.writeAppPassword(
+      'restart-account',
+      'restart-app-password-never-use',
+    );
+    await setupQueue.updateHeldCredentialPhase(
+      reservation: reservation,
+      phase: AppPasswordCredentialPhase.vaultWritten,
+      accountId: 'restart-account',
+    );
+
+    final restartedQueue = AppPasswordRevocationQueue(
+      store: vault,
+      api: api,
+      accounts: repository,
+      credentials: vault,
+    );
+    final restarted = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pendingRevocations: restartedQueue,
+    );
+    await restarted.start('https://cloud.example.invalid');
+
+    expect(await restartedQueue.pendingRevocationCount(), 1);
+    expect(await vault.readAppPassword('restart-account'), null);
+    expect(await repository.getAccount('restart-account'), null);
+  });
+
+  test('restart keeps a completed account before held release', () async {
+    final api = _onboardingApi(withTalk: true);
+    addTearDown(api.close);
+    final server = ServerBase.parse('https://cloud.example.invalid');
+    final setupQueue = AppPasswordRevocationQueue(store: vault, api: api);
+    final reservation = await setupQueue.reserve();
+    await setupQueue.holdCredential(
+      reservation: reservation,
+      server: server,
+      loginName: 'restart-user',
+      appPassword: 'restart-app-password-never-use',
+    );
+    await setupQueue.updateHeldCredentialPhase(
+      reservation: reservation,
+      phase: AppPasswordCredentialPhase.prepared,
+      accountId: 'restart-account',
+    );
+    await vault.writeAppPassword(
+      'restart-account',
+      'restart-app-password-never-use',
+    );
+    await setupQueue.updateHeldCredentialPhase(
+      reservation: reservation,
+      phase: AppPasswordCredentialPhase.vaultWritten,
+      accountId: 'restart-account',
+    );
+    await repository.upsertAccount(
+      accountId: 'restart-account',
+      serverUrl: server.value,
+      loginName: 'restart-user',
+      serverProductName: 'Nextcloud',
+      createdAt: DateTime.utc(2026, 11, 21),
+    );
+    await setupQueue.updateHeldCredentialPhase(
+      reservation: reservation,
+      phase: AppPasswordCredentialPhase.accountCommitted,
+      accountId: 'restart-account',
+    );
+
+    final restartedQueue = AppPasswordRevocationQueue(
+      store: vault,
+      api: api,
+      accounts: repository,
+      credentials: vault,
+    );
+    final restarted = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pendingRevocations: restartedQueue,
+    );
+    await restarted.start('https://cloud.example.invalid');
+
+    expect(await restartedQueue.pendingCount(), 0);
+    expect(await vault.readAppPassword('restart-account'), isA<String>());
+    expect(
+      await repository.getAccount('restart-account'),
+      isA<StoredAccount>(),
+    );
+  });
+
   test('revokes a new login password when the database commit fails', () async {
     await failNextAccountCommit();
     final faultingVault = _FaultingCredentialVault();

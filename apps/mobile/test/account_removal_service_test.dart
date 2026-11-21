@@ -121,14 +121,17 @@ void main() {
   );
 
   test(
-    'revokes push and server password before deleting the local secret',
+    'deletes the local secret before revoking the server password',
     () async {
       final steps = <String>[];
       final api = HttpNextcloudApi(
         client: MockClient((request) async {
           expect(await accounts.getAccount('account-a'), isNotNull);
           final storedPassword = await vault.readAppPassword('account-a');
-          expect(storedPassword, isNotNull);
+          expect(
+            storedPassword,
+            request.url.path.endsWith('/core/apppassword') ? isNull : isNotNull,
+          );
           steps.add('${request.method} ${request.url.path}');
           return http.Response(_okOcs(), 200);
         }),
@@ -238,9 +241,12 @@ void main() {
     expect(await accounts.getAccount('account-a'), isNotNull);
     expect(await vault.readAppPassword('account-a'), isNotNull);
     expect(aborted, 1);
+    expect(
+      await AppPasswordRevocationQueue(store: vault, api: api).pendingCount(),
+      0,
+    );
     expect(requestedPaths, <String>[
       '/ocs/v2.php/apps/notifications/api/v2/webpush',
-      '/ocs/v2.php/core/apppassword',
     ]);
 
     final outcome = await service.removeAccount('account-a');
@@ -250,7 +256,6 @@ void main() {
     expect(await vault.readAppPassword('account-a'), isNull);
     expect(requestedPaths, <String>[
       '/ocs/v2.php/apps/notifications/api/v2/webpush',
-      '/ocs/v2.php/core/apppassword',
       '/ocs/v2.php/apps/notifications/api/v2/webpush',
       '/ocs/v2.php/core/apppassword',
     ]);
@@ -275,6 +280,37 @@ void main() {
     expect(await accounts.getAccount('account-a'), isNotNull);
     expect(await vault.readAppPassword('account-a'), isNotNull);
   });
+
+  test(
+    'an ambiguous local delete is queued without remote revocation',
+    () async {
+      final requestedPaths = <String>[];
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          requestedPaths.add(request.url.path);
+          return http.Response(_okOcs(), 200);
+        }),
+      );
+      addTearDown(api.close);
+      await _seedAccount(database, accounts, vault, 'account-a', _serverA);
+
+      await expectLater(
+        buildService(
+          api,
+          credentials: _DeleteThenFailCredentialVault(vault),
+        ).removeAccount('account-a'),
+        throwsA(isA<CredentialVaultTemporarilyUnavailable>()),
+      );
+
+      expect(await accounts.getAccount('account-a'), isNotNull);
+      expect(await vault.readAppPassword('account-a'), isNull);
+      expect(requestedPaths, <String>[
+        '/ocs/v2.php/apps/notifications/api/v2/webpush',
+      ]);
+      final queue = AppPasswordRevocationQueue(store: vault, api: api);
+      expect(await queue.pendingRevocationCount(), 1);
+    },
+  );
 
   test(
     'reports a pending proxy cleanup instead of silently losing it',
@@ -473,6 +509,39 @@ void main() {
   });
 
   test(
+    'restart queues a removal left after local credential deletion',
+    () async {
+      final api = HttpNextcloudApi(
+        client: MockClient(
+          (request) async => throw StateError('unexpected request'),
+        ),
+      );
+      addTearDown(api.close);
+      await _seedAccount(database, accounts, vault, 'account-a', _serverA);
+      final setupQueue = AppPasswordRevocationQueue(store: vault, api: api);
+      await setupQueue.reserveCredentialForRemoval(
+        server: ServerBase.parse(_serverA),
+        loginName: 'user-account-a',
+        appPassword: 'fixture-app-password-never-use',
+        accountId: 'account-a',
+      );
+      await vault.deleteAppPassword('account-a');
+
+      final restartedQueue = AppPasswordRevocationQueue(
+        store: vault,
+        api: api,
+        accounts: accounts,
+        credentials: vault,
+      );
+      await restartedQueue.recoverHeldCredentials();
+
+      expect(await restartedQueue.pendingRevocationCount(), 1);
+      expect(await accounts.getAccount('account-a'), isNotNull);
+      expect(await vault.readAppPassword('account-a'), isNull);
+    },
+  );
+
+  test(
     'a sixth offline removal preserves its account and credential',
     () async {
       final api = HttpNextcloudApi(
@@ -636,6 +705,26 @@ final class _FailFirstDeleteCredentialVault implements CredentialVault {
       throw const CredentialVaultTemporarilyUnavailable();
     }
     await _inner.deleteAppPassword(accountId);
+  }
+
+  @override
+  Future<String?> readAppPassword(String accountId) =>
+      _inner.readAppPassword(accountId);
+
+  @override
+  Future<void> writeAppPassword(String accountId, String appPassword) =>
+      _inner.writeAppPassword(accountId, appPassword);
+}
+
+final class _DeleteThenFailCredentialVault implements CredentialVault {
+  _DeleteThenFailCredentialVault(this._inner);
+
+  final CredentialVault _inner;
+
+  @override
+  Future<void> deleteAppPassword(String accountId) async {
+    await _inner.deleteAppPassword(accountId);
+    throw const CredentialVaultTemporarilyUnavailable();
   }
 
   @override
