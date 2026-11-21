@@ -85,6 +85,61 @@ void main() {
     );
   });
 
+  test(
+    'loads requested conversation names without crossing accounts',
+    () async {
+      await repository.upsertAccount(
+        accountId: 'account-a',
+        serverUrl: 'https://a.example.invalid',
+        loginName: 'alex',
+        serverProductName: 'Nextcloud A',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      await repository.upsertAccount(
+        accountId: 'account-b',
+        serverUrl: 'https://b.example.invalid',
+        loginName: 'blair',
+        serverProductName: 'Nextcloud B',
+        createdAt: DateTime.utc(2026, 1, 2),
+      );
+
+      Future<void> insert(String accountId, String token, String name) {
+        return database
+            .into(database.cachedConversations)
+            .insert(
+              CachedConversationsCompanion.insert(
+                accountId: accountId,
+                token: token,
+                displayName: name,
+                description: '',
+                lastActivity: 0,
+                unreadMessages: 0,
+                favorite: false,
+                rawJson: '{}',
+              ),
+            );
+      }
+
+      await insert('account-a', 'room-a', 'Room A');
+      await insert('account-a', 'room-b', 'Room B');
+      await insert('account-b', 'room-a', 'Other account');
+
+      final names = await repository.getConversationNames(
+        accountId: 'account-a',
+        tokens: const {'room-a', 'room-b', 'missing'},
+      );
+
+      expect(names, const {'room-a': 'Room A', 'room-b': 'Room B'});
+      expect(
+        await repository.getConversationNames(
+          accountId: 'account-a',
+          tokens: const {},
+        ),
+        isEmpty,
+      );
+    },
+  );
+
   test('returns the upserted account before its transaction commits', () async {
     final interceptor = _RejectOutsideTransactionAccountSelects();
     await database.close();

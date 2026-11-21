@@ -48,8 +48,11 @@ typedef ReminderMessagePresenter =
       required CachedConversation conversation,
       required int messageId,
     });
-typedef ConversationNameLookup =
-    Future<String?> Function(String accountId, String roomToken);
+typedef ConversationNamesLookup =
+    Future<Map<String, String>> Function(
+      String accountId,
+      Set<String> roomTokens,
+    );
 
 /// One reminder, bound to the account whose server answered with it.
 final class ReminderInboxRow {
@@ -114,7 +117,7 @@ String reminderAccountLabel(StoredAccount account) =>
 Future<ReminderInbox> loadReminderInbox({
   required List<StoredAccount> accounts,
   required UpcomingReminderLister lister,
-  required ConversationNameLookup conversationName,
+  required ConversationNamesLookup conversationNames,
   int concurrency = reminderInboxFanOutLimit,
 }) async {
   final rows = <ReminderInboxRow>[];
@@ -142,15 +145,18 @@ Future<ReminderInbox> loadReminderInbox({
         unreadable.add(label);
         continue;
       }
+      final roomTokens = reminders
+          .map((reminder) => reminder.roomToken.value)
+          .toSet();
+      final names = roomTokens.isEmpty
+          ? const <String, String>{}
+          : await conversationNames(account.id, Set.unmodifiable(roomTokens));
       for (final reminder in reminders) {
         rows.add(
           ReminderInboxRow(
             accountId: account.id,
             accountLabel: label,
-            conversationName: await conversationName(
-              account.id,
-              reminder.roomToken.value,
-            ),
+            conversationName: names[reminder.roomToken.value],
             reminder: reminder,
           ),
         );
@@ -185,7 +191,7 @@ final class ReminderInboxScreen extends StatefulWidget {
     required this.accounts,
     required this.lister,
     required this.remover,
-    required this.conversationName,
+    required this.conversationNames,
     required this.onOpen,
     this.concurrency = reminderInboxFanOutLimit,
   });
@@ -193,7 +199,7 @@ final class ReminderInboxScreen extends StatefulWidget {
   final List<StoredAccount> accounts;
   final UpcomingReminderLister lister;
   final UpcomingReminderRemover remover;
-  final ConversationNameLookup conversationName;
+  final ConversationNamesLookup conversationNames;
   final ValueChanged<ReminderInboxRow> onOpen;
   final int concurrency;
 
@@ -226,7 +232,7 @@ class _ReminderInboxScreenState extends State<ReminderInboxScreen> {
     final inbox = await loadReminderInbox(
       accounts: widget.accounts,
       lister: widget.lister,
-      conversationName: widget.conversationName,
+      conversationNames: widget.conversationNames,
       concurrency: widget.concurrency,
     );
     if (!mounted || generation != _generation) {
@@ -499,13 +505,8 @@ class _ReminderInboxRouteState extends ConsumerState<ReminderInboxRoute> {
         roomToken: row.roomToken,
         messageId: row.messageId,
       ),
-      conversationName: (accountId, roomToken) async {
-        final conversation = await repository.getConversation(
-          accountId: accountId,
-          token: roomToken,
-        );
-        return conversation?.displayName;
-      },
+      conversationNames: (accountId, roomTokens) => repository
+          .getConversationNames(accountId: accountId, tokens: roomTokens),
       onOpen: (row) => unawaited(_open(row)),
     );
   }

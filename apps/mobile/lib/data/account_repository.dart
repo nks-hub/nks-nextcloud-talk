@@ -134,6 +134,43 @@ final class AccountRepository {
     return query.getSingleOrNull();
   }
 
+  /// Reads display names for several rooms without loading their JSON bodies.
+  Future<Map<String, String>> getConversationNames({
+    required String accountId,
+    required Set<String> tokens,
+  }) async {
+    if (tokens.isEmpty) {
+      return const <String, String>{};
+    }
+    const maximumTokensPerStatement = 500;
+    final requested = tokens.toList(growable: false);
+    final names = <String, String>{};
+    for (
+      var offset = 0;
+      offset < requested.length;
+      offset += maximumTokensPerStatement
+    ) {
+      final end = offset + maximumTokensPerStatement < requested.length
+          ? offset + maximumTokensPerStatement
+          : requested.length;
+      final chunk = requested.sublist(offset, end);
+      final token = _database.cachedConversations.token;
+      final displayName = _database.cachedConversations.displayName;
+      final rows =
+          await (_database.selectOnly(_database.cachedConversations)
+                ..addColumns([token, displayName])
+                ..where(
+                  _database.cachedConversations.accountId.equals(accountId) &
+                      token.isIn(chunk),
+                ))
+              .get();
+      for (final row in rows) {
+        names[row.read(token)!] = row.read(displayName)!;
+      }
+    }
+    return names;
+  }
+
   /// Drops a conversation from the cache once the server no longer has it, so
   /// the list does not keep showing a room that is gone until the next sync.
   // ponytail: the conversation row only; cached chat rows for the room are

@@ -36,8 +36,10 @@ void main() {
                   : 1_789_045_473,
             ),
           ],
-          conversationName: (accountId, roomToken) async =>
-              accountId == 'account-a' ? 'Room on A' : 'Room on B',
+          conversationNames: (accountId, roomTokens) async => {
+            for (final roomToken in roomTokens)
+              roomToken: accountId == 'account-a' ? 'Room on A' : 'Room on B',
+          },
         );
 
         expect(inbox.rows, hasLength(2));
@@ -65,7 +67,9 @@ void main() {
           }
           return <RichChatUpcomingReminder>[_reminder()];
         },
-        conversationName: (_, _) async => 'Room',
+        conversationNames: (_, roomTokens) async => {
+          for (final roomToken in roomTokens) roomToken: 'Room',
+        },
       );
 
       expect(inbox.rows, hasLength(1));
@@ -83,7 +87,9 @@ void main() {
         lister: (_) async => throw const ChatMessageActionException(
           ChatMessageActionError.network,
         ),
-        conversationName: (_, _) async => 'Room',
+        conversationNames: (_, roomTokens) async => {
+          for (final roomToken in roomTokens) roomToken: 'Room',
+        },
       );
 
       expect(inbox.rows, isEmpty);
@@ -95,7 +101,9 @@ void main() {
       final inbox = await loadReminderInbox(
         accounts: <StoredAccount>[_accountA, _accountB],
         lister: (_) async => const <RichChatUpcomingReminder>[],
-        conversationName: (_, _) async => 'Room',
+        conversationNames: (_, roomTokens) async => {
+          for (final roomToken in roomTokens) roomToken: 'Room',
+        },
       );
 
       expect(inbox.rows, isEmpty);
@@ -130,7 +138,9 @@ void main() {
             inFlight--;
             return const <RichChatUpcomingReminder>[];
           },
-          conversationName: (_, _) async => 'Room',
+          conversationNames: (_, roomTokens) async => {
+            for (final roomToken in roomTokens) roomToken: 'Room',
+          },
         );
 
         // Release the requests one at a time; each release lets exactly one more
@@ -156,10 +166,42 @@ void main() {
           _reminder(messageId: 1, deadline: 1_789_041_873),
           _reminder(messageId: 2, deadline: 1_789_043_000),
         ],
-        conversationName: (_, _) async => 'Room',
+        conversationNames: (_, roomTokens) async => {
+          for (final roomToken in roomTokens) roomToken: 'Room',
+        },
       );
 
       expect(inbox.rows.map((row) => row.messageId).toList(), <int>[1, 2, 3]);
+    });
+
+    test('conversation names are loaded once per account and room', () async {
+      var calls = 0;
+      Set<String>? requested;
+
+      final inbox = await loadReminderInbox(
+        accounts: <StoredAccount>[_accountA],
+        lister: (_) async => <RichChatUpcomingReminder>[
+          _reminder(roomToken: 'roomaaaa', messageId: 1),
+          _reminder(roomToken: 'roomaaaa', messageId: 2),
+          _reminder(roomToken: 'roombbbb', messageId: 3),
+        ],
+        conversationNames: (_, roomTokens) async {
+          calls++;
+          requested = roomTokens;
+          return const <String, String>{
+            'roomaaaa': 'Room A',
+            'roombbbb': 'Room B',
+          };
+        },
+      );
+
+      expect(calls, 1);
+      expect(requested, <String>{'roomaaaa', 'roombbbb'});
+      expect(inbox.rows.map((row) => row.conversationName), <String>[
+        'Room A',
+        'Room A',
+        'Room B',
+      ]);
     });
   });
 
@@ -738,7 +780,9 @@ Future<void> _pumpScreen(
         accounts: accounts,
         lister: lister ?? (_) async => const <RichChatUpcomingReminder>[],
         remover: remover ?? (_) async {},
-        conversationName: (accountId, _) async => 'Room on $accountId',
+        conversationNames: (accountId, roomTokens) async => {
+          for (final roomToken in roomTokens) roomToken: 'Room on $accountId',
+        },
         onOpen: onOpen ?? (_) {},
       ),
     ),
