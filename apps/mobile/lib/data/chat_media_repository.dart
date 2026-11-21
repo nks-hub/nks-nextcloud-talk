@@ -151,6 +151,11 @@ final class ChatMediaRepository {
   /// second later while the first attempt may still be generating. Asking for
   /// one size at a time removes our half of it.
   final Map<String, Future<void>> _previewGates = <String, Future<void>>{};
+  final Map<
+    ({String accountId, String uri, bool retry}),
+    Future<ChatMediaImage?>
+  >
+  _previewLoads = {};
   final Duration requestTimeout;
 
   /// How long to wait before asking again for a preview the server has not
@@ -298,10 +303,23 @@ final class ChatMediaRepository {
         ChatMediaRepositoryError.invalidUri,
       );
     }
-    return _oneAtATimePerFile(
-      '${account.id}|${uri.queryParameters['fileId']}',
-      () => _loadPreviewAttempts(account: account, uri: uri, retry: retry),
-    );
+    final key = (accountId: account.id, uri: uri.toString(), retry: retry);
+    final existing = _previewLoads[key];
+    if (existing != null) {
+      return existing;
+    }
+    late final Future<ChatMediaImage?> shared;
+    shared =
+        _oneAtATimePerFile(
+          '${account.id}|${uri.queryParameters['fileId']}',
+          () => _loadPreviewAttempts(account: account, uri: uri, retry: retry),
+        ).whenComplete(() {
+          if (identical(_previewLoads[key], shared)) {
+            _previewLoads.remove(key);
+          }
+        });
+    _previewLoads[key] = shared;
+    return shared;
   }
 
   /// Runs [action] after whatever is already queued for [key], so that two

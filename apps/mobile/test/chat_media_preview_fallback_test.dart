@@ -62,7 +62,9 @@ void main() {
     () async {
       var inFlight = 0;
       var overlaps = 0;
+      var requests = 0;
       final repository = _repository((request) async {
+        requests++;
         inFlight++;
         if (inFlight > 1) overlaps++;
         await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -81,6 +83,7 @@ void main() {
       ]);
 
       expect(overlaps, 0);
+      expect(requests, 2, reason: 'the repeated size shares its active load');
     },
   );
 
