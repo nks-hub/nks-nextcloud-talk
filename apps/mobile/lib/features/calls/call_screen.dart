@@ -43,7 +43,7 @@ Future<void> joinCallAndPresent(
         controller,
       ) &&
       ref.read(callJoinControllerProvider(key)).phase == CallJoinPhase.joined;
-  await controller.join();
+  await controller.join(withVideo: withCamera);
   if (!canPresent() || !sameJoinedCall()) return;
   if (withCamera) await controller.setCameraEnabled(true);
   if (!context.mounted || !canPresent() || !sameJoinedCall()) return;

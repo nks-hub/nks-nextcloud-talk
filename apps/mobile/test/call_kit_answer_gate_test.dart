@@ -193,7 +193,7 @@ final class _AnswerController extends CallJoinController {
   }
 
   @override
-  Future<void> join() async {
+  Future<void> join({bool withVideo = false}) async {
     if (state.isBusy || state.phase == CallJoinPhase.joined) return;
     joinedRooms.add(arg);
     state = const CallJoinState(phase: CallJoinPhase.joining);

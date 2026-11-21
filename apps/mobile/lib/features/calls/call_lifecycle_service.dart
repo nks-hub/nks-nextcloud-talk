@@ -117,14 +117,15 @@ final class CallLifecycleService {
     await Future.wait<void>(sessions.map(_deactivateRoomSession));
   }
 
-  /// Joins the call. With no [flags] the participant joins with everything
-  /// their permissions allow — see `CallRoomPolicy.permittedJoinFlags`, and
-  /// note that asking for audio and video unconditionally locks out anybody
-  /// whose moderator took publishing away.
+  /// Joins the call. With no [flags] the participant joins in the selected
+  /// call mode with everything their permissions allow. Asking for audio or
+  /// video unconditionally would lock out anybody whose moderator took that
+  /// publishing right away.
   Future<CallLifecycleState> join({
     required String accountId,
     required String roomToken,
     CallInCallFlags? flags,
+    bool withVideo = true,
     bool silent = false,
     bool recordingConsent = false,
     Iterable<ConversationSessionId> silentFor = const [],
@@ -135,18 +136,20 @@ final class CallLifecycleService {
       accountId: accountId,
       roomToken: roomToken,
       requested: flags,
+      withVideo: withVideo,
       silent: silent,
       recordingConsent: recordingConsent,
       silentFor: silentFor,
     ),
   );
 
-  /// Re-asserts this participant's call flags. With none given it sends what
-  /// their permissions allow, which is the same set [join] used.
+  /// Re-asserts this participant's call flags. Without explicit [flags], the
+  /// selected mode is limited again by the participant's current permissions.
   Future<CallLifecycleState> updateFlags({
     required String accountId,
     required String roomToken,
     CallInCallFlags? flags,
+    bool withVideo = true,
   }) => _serialize(
     accountId: accountId,
     roomToken: roomToken,
@@ -154,6 +157,7 @@ final class CallLifecycleService {
       accountId: accountId,
       roomToken: roomToken,
       requested: flags,
+      withVideo: withVideo,
     ),
   );
 
@@ -204,12 +208,14 @@ final class CallLifecycleService {
     required String accountId,
     required String roomToken,
     required CallInCallFlags? requested,
+    required bool withVideo,
     required bool silent,
     required bool recordingConsent,
     required Iterable<ConversationSessionId> silentFor,
   }) async {
     final context = await _prepare(accountId, roomToken);
-    final flags = requested ?? context.policy.permittedJoinFlags;
+    var flags =
+        requested ?? context.policy.permittedJoinFlagsFor(withVideo: withVideo);
     if (!context.policy.canJoinWith(flags)) {
       throw const CallLifecycleException(CallLifecycleError.forbidden);
     }
@@ -296,6 +302,16 @@ final class CallLifecycleService {
             if (!refreshedRejectedSession) {
               refreshedRejectedSession = true;
               activeContext = await _refreshRejectedRoomSession(activeContext);
+              flags =
+                  requested ??
+                  activeContext.policy.permittedJoinFlagsFor(
+                    withVideo: withVideo,
+                  );
+              if (!activeContext.policy.canJoinWith(flags)) {
+                throw const CallLifecycleException(
+                  CallLifecycleError.forbidden,
+                );
+              }
               continue;
             }
             throw const CallLifecycleException(CallLifecycleError.roomMissing);
@@ -317,9 +333,11 @@ final class CallLifecycleService {
     required String accountId,
     required String roomToken,
     required CallInCallFlags? requested,
+    required bool withVideo,
   }) async {
     final context = await _prepare(accountId, roomToken);
-    final flags = requested ?? context.policy.permittedJoinFlags;
+    final flags =
+        requested ?? context.policy.permittedJoinFlagsFor(withVideo: withVideo);
     if (!context.policy.canJoinWith(flags)) {
       throw const CallLifecycleException(CallLifecycleError.forbidden);
     }

@@ -29,6 +29,16 @@ void main() {
     expect(policy.canJoinWith(flags), isTrue);
   });
 
+  test('an audio call does not announce permitted video', () {
+    final policy = policyWith(255);
+    final flags = policy.permittedJoinFlagsFor(withVideo: false);
+
+    expect(flags.contains(CallFlag.inCall), isTrue);
+    expect(flags.contains(CallFlag.audio), isTrue);
+    expect(flags.contains(CallFlag.video), isFalse);
+    expect(policy.canJoinWith(flags), isTrue);
+  });
+
   test('video taken away still joins, without video', () {
     // 255 minus PERMISSIONS_PUBLISH_VIDEO (32): a webinar attendee.
     final policy = policyWith(255 - 32);

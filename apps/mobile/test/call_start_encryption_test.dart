@@ -255,6 +255,7 @@ void main() {
     admission.complete(true);
     await tester.pumpAndSettle();
     expect(controllers.values.single.cameraStarts, 1);
+    expect(controllers.values.single.joinWithVideo, [true]);
     expect(find.byKey(const Key('call-screen')), findsOneWidget);
     expect(
       find.byKey(const Key('call-banner-encryption-unsupported')),
@@ -272,6 +273,7 @@ void main() {
     expect(find.byKey(const Key('call-screen')), findsOneWidget);
     expect(find.byKey(const PageStorageKey('call-grid')), findsOneWidget);
     expect(controllers.values.single.cameraStarts, 0);
+    expect(controllers.values.single.joinWithVideo, [false]);
   });
 
   testWidgets('accepting the banner call opens the participant grid', (
@@ -400,6 +402,7 @@ final class _StartController extends CallJoinController {
   final Future<bool> admission;
   final CallLifecycleError refusal;
   int joinCalls = 0;
+  final List<bool> joinWithVideo = [];
   int cameraStarts = 0;
   Completer<void>? cameraStartup;
   bool disposed = false;
@@ -412,8 +415,9 @@ final class _StartController extends CallJoinController {
   }
 
   @override
-  Future<void> join() async {
+  Future<void> join({bool withVideo = false}) async {
     joinCalls++;
+    joinWithVideo.add(withVideo);
     if (state.isBusy || state.phase == CallJoinPhase.joined) return;
     state = const CallJoinState(phase: CallJoinPhase.joining);
     final allowed = await admission;

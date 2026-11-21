@@ -8,7 +8,12 @@ void _registerCallJoinSessionRebindTests() {
       final harness = await _CallHarness.create(
         onActiveRoom: (request, _) async {
           if (request.method == 'DELETE') return _ocsResponse(200, null);
-          return _activeRoomResponse('rooma123', 'active-${++activations}');
+          final activation = ++activations;
+          return _activeRoomResponse(
+            'rooma123',
+            'active-$activation',
+            permissions: activation > 1 ? 255 - CallPermission.video : null,
+          );
         },
         onCall: (request, index) async =>
             _ocsResponse(index == 0 ? 404 : 200, <String, Object?>{}),
@@ -72,13 +77,27 @@ void _registerCallJoinSessionRebindTests() {
         chatRoomSignalingProvider(key).future,
       );
       expect(initial.nextcloudSessionId, 'active-1');
-      await container.read(callJoinControllerProvider(key).notifier).join();
+      await container
+          .read(callJoinControllerProvider(key).notifier)
+          .join(withVideo: true);
+      await pumpEventQueue();
       expect(mediaSession, 'active-2');
       final renewed = await container.read(
         chatRoomSignalingProvider(key).future,
       );
       expect(identical(initial.session, renewed.session), isFalse);
       expect(activations, 2);
+      final mutations = harness.server.callRequests
+          .where(
+            (request) => request.method == 'POST' || request.method == 'PUT',
+          )
+          .toList(growable: false);
+      expect(mutations.first.bodyFields['flags'], '7');
+      expect(
+        mutations.skip(1).map((request) => request.bodyFields['flags']),
+        everyElement('3'),
+        reason: 'the retry and signaling rebuild must apply current rights',
+      );
       expect(
         harness.server.activeRoomRequests.where((r) => r.method == 'DELETE'),
         isEmpty,

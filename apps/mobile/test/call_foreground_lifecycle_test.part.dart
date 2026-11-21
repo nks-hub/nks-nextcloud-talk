@@ -182,7 +182,102 @@ void _registerCallForegroundLifecycleTests() {
     expect(foreground.active, isEmpty);
   });
 
-  test('camera off downgrades only after its track is disposed', () async {
+  test(
+    'camera upgrades the call mode and turning it off keeps video',
+    () async {
+      final foreground = _ForegroundCalls();
+      final engine = _CameraForegroundEngine();
+      final fixture = await _ForegroundJoinFixture.create(
+        foreground,
+        engine,
+        holdSettings: true,
+      );
+      addTearDown(fixture.close);
+      await fixture.controller.join();
+      expect(
+        fixture.rest.server.callRequests
+            .where(
+              (request) => request.method == 'POST' || request.method == 'PUT',
+            )
+            .map((request) => request.bodyFields['flags']),
+        ['3'],
+      );
+      await fixture.controller.setCameraEnabled(true);
+      expect(engine.cameraOpens, 1);
+      expect(
+        fixture.rest.server.callRequests
+            .where(
+              (request) => request.method == 'POST' || request.method == 'PUT',
+            )
+            .map((request) => request.bodyFields['flags']),
+        ['3', '7'],
+        reason: 'turning on video upgrades the announced call mode',
+      );
+      await fixture.controller.setCameraEnabled(true);
+      expect(foreground.cameraChanges.map((change) => change.$2), [true]);
+      foreground.beforeCameraDisable = () =>
+          expect(engine.video.disposed, isTrue);
+      await fixture.controller.setCameraEnabled(false);
+      expect(foreground.cameraChanges.map((change) => change.$2), [
+        true,
+        false,
+      ]);
+      expect(engine.audio.disposed, isFalse);
+      expect(
+        fixture.rest.server.callRequests
+            .where(
+              (request) => request.method == 'POST' || request.method == 'PUT',
+            )
+            .map((request) => request.bodyFields['flags']),
+        ['3', '7'],
+        reason: 'turning the camera off does not change the selected call mode',
+      );
+    },
+  );
+  test('camera upgrade reapplies permissions changed after joining', () async {
+    final foreground = _ForegroundCalls();
+    final engine = _CameraForegroundEngine();
+    final fixture = await _ForegroundJoinFixture.create(
+      foreground,
+      engine,
+      holdSettings: true,
+    );
+    addTearDown(fixture.close);
+    await fixture.controller.join();
+    await fixture.rest.seedRoom(
+      token: 'rooma123',
+      permissions: 255 - CallPermission.video,
+    );
+
+    await fixture.controller.setCameraEnabled(true);
+
+    expect(engine.cameraOpens, 0);
+    expect(foreground.cameraChanges.map((change) => change.$2), [true, false]);
+    expect(
+      fixture.container
+          .read(callJoinControllerProvider(_ForegroundJoinFixture.key))
+          .phase,
+      CallJoinPhase.joined,
+    );
+    expect(
+      fixture.container
+          .read(callJoinControllerProvider(_ForegroundJoinFixture.key))
+          .publishing
+          .video,
+      isFalse,
+      reason: 'the camera control must disappear with the revoked permission',
+    );
+    expect(
+      fixture.rest.server.callRequests
+          .where(
+            (request) => request.method == 'POST' || request.method == 'PUT',
+          )
+          .map((request) => request.bodyFields['flags']),
+      ['3', '3'],
+      reason: 'the current policy must remove video before the update',
+    );
+  });
+  test('signaling refresh stops video after permission is revoked', () async {
     final foreground = _ForegroundCalls();
     final engine = _CameraForegroundEngine();
     final fixture = await _ForegroundJoinFixture.create(
@@ -193,14 +288,76 @@ void _registerCallForegroundLifecycleTests() {
     addTearDown(fixture.close);
     await fixture.controller.join();
     await fixture.controller.setCameraEnabled(true);
-    expect(engine.cameraOpens, 1);
-    await fixture.controller.setCameraEnabled(true);
-    expect(foreground.cameraChanges.map((change) => change.$2), [true]);
-    foreground.beforeCameraDisable = () =>
-        expect(engine.video.disposed, isTrue);
-    await fixture.controller.setCameraEnabled(false);
+    expect(engine.video.disposed, isFalse);
+    await fixture.rest.seedRoom(
+      token: 'rooma123',
+      permissions: 255 - CallPermission.video,
+    );
+
+    await fixture.controller.refreshCallFlagsForTesting();
+
+    expect(engine.video.disposed, isTrue);
     expect(foreground.cameraChanges.map((change) => change.$2), [true, false]);
-    expect(engine.audio.disposed, isFalse);
+    final state = fixture.container.read(
+      callJoinControllerProvider(_ForegroundJoinFixture.key),
+    );
+    expect(state.media.cameraOn, isFalse);
+    expect(state.publishing.video, isFalse);
+    expect(
+      fixture.rest.server.callRequests
+          .where(
+            (request) => request.method == 'POST' || request.method == 'PUT',
+          )
+          .map((request) => request.bodyFields['flags']),
+      ['3', '7', '3'],
+    );
+  });
+  test('failed camera upgrade is followed by an audio refresh', () async {
+    final firstUpdateStarted = Completer<void>();
+    final releaseFirstUpdate = Completer<void>();
+    var failVideoUpdate = false;
+    final foreground = _ForegroundCalls();
+    final engine = _CameraForegroundEngine();
+    final fixture = await _ForegroundJoinFixture.create(
+      foreground,
+      engine,
+      holdSettings: true,
+      onCall: (request, index) async {
+        if (failVideoUpdate &&
+            request.method == 'PUT' &&
+            request.bodyFields['flags'] == '7') {
+          failVideoUpdate = false;
+          firstUpdateStarted.complete();
+          await releaseFirstUpdate.future;
+          return _ocsResponse(409, <String, Object?>{});
+        }
+        return _ocsResponse(200, <String, Object?>{});
+      },
+    );
+    addTearDown(fixture.close);
+    await fixture.controller.join();
+    await pumpEventQueue();
+
+    failVideoUpdate = true;
+    final camera = fixture.controller.setCameraEnabled(true);
+    await firstUpdateStarted.future;
+    final refresh = fixture.controller.refreshCallFlagsForTesting();
+    releaseFirstUpdate.complete();
+    await camera;
+    await refresh;
+
+    final flags = fixture.rest.server.callRequests
+        .where((request) => request.method == 'POST' || request.method == 'PUT')
+        .map((request) => request.bodyFields['flags'])
+        .toList(growable: false);
+    expect(flags.first, '3');
+    expect(
+      flags.sublist(flags.length - 2),
+      ['7', '3'],
+      reason: 'the queued refresh must read the rolled-back audio mode',
+    );
+    expect(engine.cameraOpens, 0);
+    expect(foreground.cameraChanges.map((change) => change.$2), [true, false]);
   });
   test(
     'media disposal failure still stops its foreground owner and REST seat',
@@ -508,14 +665,19 @@ final class _ForegroundJoinFixture {
     bool holdSettings = false,
     CallTelecom telecom = const NoCallTelecom(),
     CallScreenShareService? screenShare,
+    _CallHandler? onCall,
   }) async {
     final rest = await _CallHarness.create(
-      onCall: (request, _) async => _ocsResponse(
-        200,
-        request.method == 'GET'
-            ? <Object?>[_peer(token: 'rooma123', sessionId: 'session-rooma123')]
-            : <String, Object?>{},
-      ),
+      onCall:
+          onCall ??
+          (request, _) async => _ocsResponse(
+            200,
+            request.method == 'GET'
+                ? <Object?>[
+                    _peer(token: 'rooma123', sessionId: 'session-rooma123'),
+                  ]
+                : <String, Object?>{},
+          ),
     );
     rest.server.signalingEnabled = true;
     if (holdSettings) rest.server.signalingGate = Completer<void>();

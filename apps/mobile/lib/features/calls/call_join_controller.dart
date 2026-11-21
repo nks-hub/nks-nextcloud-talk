@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:uuid/uuid.dart';
@@ -144,6 +145,9 @@ base class CallJoinController
   StreamSubscription<CallMediaState>? _mediaStates;
   CallLifecycleService? _lifecycle;
   bool _joinedServer = false;
+  CallInCallFlags? _joinedFlags;
+  bool _withVideo = false;
+  Future<void> _callFlagUpdates = Future<void>.value();
   bool _disposed = false;
 
   /// A hang-up that arrived while the join was still in flight.
@@ -190,15 +194,38 @@ base class CallJoinController
   /// connections to each other again. A flag update is the lightest change
   /// there is: no system message, no call restart.
   void _refreshCallFlags() {
+    unawaited(_refreshCallFlagsNow());
+  }
+
+  @visibleForTesting
+  Future<void> refreshCallFlagsForTesting() => _refreshCallFlagsNow();
+
+  Future<void> _refreshCallFlagsNow() =>
+      _serializeCallFlagUpdate(_refreshCallFlagsNowSerialized);
+
+  Future<void> _refreshCallFlagsNowSerialized() async {
     final lifecycle = _lifecycle;
-    if (_disposed || !_joinedServer || lifecycle == null) {
+    final flags = _joinedFlags;
+    final withVideo = _withVideo;
+    if (_disposed || !_joinedServer || lifecycle == null || flags == null) {
       return;
     }
-    unawaited(
-      lifecycle
-          .updateFlags(accountId: arg.accountId, roomToken: arg.roomToken)
-          .then<void>((_) {}, onError: (Object _, StackTrace _) {}),
-    );
+    try {
+      final updated = await lifecycle.updateFlags(
+        accountId: arg.accountId,
+        roomToken: arg.roomToken,
+        withVideo: withVideo,
+      );
+      final videoAllowed = _applyConfirmedFlags(
+        lifecycle: lifecycle,
+        previousFlags: flags,
+        requestedVideo: withVideo,
+        updated: updated,
+      );
+      if (videoAllowed == false) await setCameraEnabled(false);
+    } on Object {
+      // A later signaling rebuild or an explicit camera action retries this.
+    }
   }
 
   var _moderator = const CallModeratorState();
@@ -245,7 +272,7 @@ base class CallJoinController
     }
   }
 
-  Future<void> join() async {
+  Future<void> join({bool withVideo = false}) async {
     if (state.isBusy || state.phase == CallJoinPhase.joined) {
       return;
     }
@@ -281,8 +308,11 @@ base class CallJoinController
       joined = await lifecycle.join(
         accountId: arg.accountId,
         roomToken: arg.roomToken,
+        withVideo: withVideo,
       );
       _joinedServer = true;
+      _joinedFlags = joined.confirmedFlags;
+      _withVideo = withVideo;
     } on CallLifecycleException catch (error) {
       _hold(false);
       if (!_disposed) {
@@ -689,6 +719,12 @@ base class CallJoinController
       if (enabled) {
         await foreground.service.setCameraEnabled(foreground.owner, true);
         if (!current()) return;
+        final videoAllowed = await _announceVideoCall();
+        if (!current()) return;
+        if (!videoAllowed) {
+          await foreground.service.setCameraEnabled(foreground.owner, false);
+          return;
+        }
       }
       await session.setCameraEnabled(enabled);
       if (!current()) return;
@@ -709,6 +745,96 @@ base class CallJoinController
     } finally {
       if (epoch == _cameraEpoch) _enablingCamera = false;
     }
+  }
+
+  Future<bool> _announceVideoCall() async {
+    return _serializeCallFlagUpdate(_announceVideoCallSerialized);
+  }
+
+  Future<bool> _announceVideoCallSerialized() async {
+    final lifecycle = _lifecycle;
+    final flags = _joinedFlags;
+    if (lifecycle == null || flags == null || !state.publishing.video) {
+      return false;
+    }
+    final previousMode = _withVideo;
+    _withVideo = true;
+    try {
+      final updated = await lifecycle.updateFlags(
+        accountId: arg.accountId,
+        roomToken: arg.roomToken,
+        withVideo: true,
+      );
+      return _applyConfirmedFlags(
+            lifecycle: lifecycle,
+            previousFlags: flags,
+            requestedVideo: true,
+            updated: updated,
+          ) ??
+          false;
+    } on CallLifecycleException {
+      _withVideo = previousMode;
+      return false;
+    }
+  }
+
+  Future<T> _serializeCallFlagUpdate<T>(Future<T> Function() operation) {
+    final result = Completer<T>();
+    _callFlagUpdates = _callFlagUpdates.then((_) async {
+      try {
+        result.complete(await operation());
+      } on Object catch (error, stackTrace) {
+        result.completeError(error, stackTrace);
+      }
+    });
+    return result.future;
+  }
+
+  bool? _applyConfirmedFlags({
+    required CallLifecycleService lifecycle,
+    required CallInCallFlags previousFlags,
+    required bool requestedVideo,
+    required CallLifecycleState updated,
+  }) {
+    if (_disposed ||
+        !_joinedServer ||
+        !identical(_lifecycle, lifecycle) ||
+        _withVideo != requestedVideo) {
+      return null;
+    }
+    final confirmed = updated.confirmedFlags ?? previousFlags;
+    _joinedFlags = confirmed;
+    if (requestedVideo && !confirmed.contains(CallFlag.video)) {
+      _withVideo = false;
+      _removeVideoPublishingRight();
+      return false;
+    }
+    return true;
+  }
+
+  void _removeVideoPublishingRight() {
+    final publishing = CallPublishingRights(
+      audio: _moderator.publishing.audio,
+      video: false,
+      screen: _moderator.publishing.screen,
+    );
+    _moderator = CallModeratorState(
+      publishing: publishing,
+      canManageRecording: _moderator.canManageRecording,
+      recordingActive: _moderator.recordingActive,
+      canDownloadAttendance: _moderator.canDownloadAttendance,
+    );
+    state = CallJoinState(
+      phase: state.phase,
+      media: state.media,
+      mediaError: state.mediaError,
+      lifecycleError: state.lifecycleError,
+      signalingUnavailable: state.signalingUnavailable,
+      publishing: publishing,
+      canManageRecording: state.canManageRecording,
+      recordingActive: state.recordingActive,
+      canDownloadAttendance: state.canDownloadAttendance,
+    );
   }
 
   void _setCameraError(CallMediaError? error) {
@@ -896,6 +1022,8 @@ base class CallJoinController
       return;
     }
     _joinedServer = false;
+    _joinedFlags = null;
+    _withVideo = false;
     try {
       await _lifecycle!.leave(
         accountId: arg.accountId,

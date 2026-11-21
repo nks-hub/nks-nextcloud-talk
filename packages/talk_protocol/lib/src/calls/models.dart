@@ -121,12 +121,20 @@ final class CallRoomPolicy {
   /// refused outright rather than joined with less. Somebody whose video was
   /// taken away must still be able to join and listen, so the flags are
   /// chosen from the permissions instead of assumed.
-  CallInCallFlags get permittedJoinFlags {
+  CallInCallFlags get permittedJoinFlags => permittedJoinFlagsFor();
+
+  /// The permitted flags for the selected call mode.
+  ///
+  /// This client follows the official mobile clients: the audio and video bits
+  /// describe the selected call mode, not the current mute or capture state.
+  /// An audio call therefore keeps audio while muted and does not announce
+  /// video merely because the room would allow it.
+  CallInCallFlags permittedJoinFlagsFor({bool withVideo = true}) {
     var value = CallFlag.inCall;
     if (_hasPermission(CallPermission.audio)) {
       value |= CallFlag.audio;
     }
-    if (_hasPermission(CallPermission.video)) {
+    if (withVideo && _hasPermission(CallPermission.video)) {
       value |= CallFlag.video;
     }
     return CallInCallFlags.parse(value);

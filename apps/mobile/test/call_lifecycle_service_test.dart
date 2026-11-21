@@ -85,6 +85,77 @@ void main() {
     expect(harness.server.callMethods, ['POST']);
   });
 
+  test('an audio-only join does not announce video', () async {
+    final harness = await _CallHarness.create();
+    addTearDown(harness.dispose);
+
+    final state = await harness.service.join(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      withVideo: false,
+    );
+
+    expect(state.confirmedFlags?.value, CallFlag.inCall | CallFlag.audio);
+    expect(harness.server.callRequests.single.bodyFields['flags'], '3');
+  });
+
+  test('a flag refresh reapplies permissions changed after joining', () async {
+    final harness = await _CallHarness.create();
+    addTearDown(harness.dispose);
+
+    final joined = await harness.service.join(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      withVideo: true,
+    );
+    expect(joined.confirmedFlags?.value, 7);
+    await harness.seedRoom(
+      token: 'rooma123',
+      permissions: 255 - CallPermission.video,
+    );
+
+    final refreshed = await harness.service.updateFlags(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      withVideo: true,
+    );
+
+    expect(refreshed.confirmedFlags?.value, 3);
+    expect(
+      harness.server.callRequests
+          .where(
+            (request) => request.method == 'POST' || request.method == 'PUT',
+          )
+          .map((request) => request.bodyFields['flags']),
+      ['7', '3'],
+    );
+  });
+
+  test('a refused flag update keeps the confirmed mode', () async {
+    final harness = await _CallHarness.create(
+      onCall: (_, index) async =>
+          _ocsResponse(index == 1 ? 409 : 200, <String, Object?>{}),
+    );
+    addTearDown(harness.dispose);
+    final joined = await harness.service.join(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      withVideo: false,
+    );
+    expect(joined.confirmedFlags?.value, 3);
+
+    await expectLater(
+      harness.service.updateFlags(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        withVideo: true,
+      ),
+      _lifecycleFailure(CallLifecycleError.conflict),
+    );
+    final stored = await harness.sessions.load(authority: joined.authority);
+    expect(stored?.confirmedFlags?.value, 3);
+  });
+
   test(
     'persists every mutation before dispatch and completes the lifecycle',
     () async {
@@ -711,6 +782,7 @@ http.Response _activeRoomResponse(
   String token,
   String sessionId, {
   String cookie = 'nc_session=call-session; Path=/; HttpOnly',
+  int? permissions,
 }) {
   final root =
       readFixtureJson(
@@ -721,6 +793,7 @@ http.Response _activeRoomResponse(
   final rooms = ocs['data']! as List<Object?>;
   final room = Map<String, Object?>.from(rooms.first! as Map<String, Object?>)
     ..addAll(<String, Object?>{'token': token, 'sessionId': sessionId});
+  if (permissions != null) room['permissions'] = permissions;
   final lastMessage = room['lastMessage'];
   if (lastMessage is Map<String, Object?>) {
     room['lastMessage'] = Map<String, Object?>.from(lastMessage)

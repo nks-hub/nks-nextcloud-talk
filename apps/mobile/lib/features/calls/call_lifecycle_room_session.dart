@@ -130,7 +130,7 @@ extension _CallLifecycleRoomSession on CallLifecycleService {
         lease: held.lease,
         sessionId: response.room.sessionId,
       );
-      return context.withSession(response.room.sessionId);
+      return context.withRoom(response.room);
     } on NextcloudApiException catch (error) {
       throw CallLifecycleException(_mapApiError(error));
     } on TalkProtocolException {
@@ -210,6 +210,22 @@ final class _CallRoomSession {
 }
 
 extension on _CallContext {
+  _CallContext withRoom(ConversationRoom room) => _CallContext(
+    account: account,
+    appPassword: appPassword,
+    profile: profile,
+    policy: CallRoomPolicy.fromConversation(room),
+    authority: CallLifecycleAuthority(
+      accountId: authority.accountId,
+      server: authority.server,
+      roomToken: authority.roomToken,
+      nextcloudSessionId: room.sessionId,
+      credentialGeneration: authority.credentialGeneration,
+      capabilityGeneration: authority.capabilityGeneration,
+      capabilityRevision: authority.capabilityRevision,
+    ),
+  );
+
   _CallContext withSession(ConversationSessionId sessionId) => _CallContext(
     account: account,
     appPassword: appPassword,
