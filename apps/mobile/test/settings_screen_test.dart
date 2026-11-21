@@ -14,6 +14,7 @@ import 'package:nextcloudtalk/data/chat_media_cache.dart';
 import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
 import 'package:nextcloudtalk/features/settings/account_removal_service.dart';
+import 'package:nextcloudtalk/features/settings/app_password_revocation_queue.dart';
 import 'package:nextcloudtalk/features/settings/settings_screen.dart';
 import 'package:nextcloudtalk/features/settings/reply_layout_preference.dart';
 import 'package:nextcloudtalk/features/settings/theme_preference.dart';
@@ -138,6 +139,7 @@ Widget _wrap({
 ({
   AccountRemovalService service,
   MemoryCredentialVault vault,
+  AppPasswordRevocationQueue revocations,
   List<String> calls,
 })
 _removalService(
@@ -179,6 +181,7 @@ _removalService(
   final CredentialVault credentials = failFirstPasswordDelete
       ? _FailFirstDeleteCredentialVault(vault)
       : vault;
+  final revocations = AppPasswordRevocationQueue(store: vault, api: api);
   return (
     service: AccountRemovalService(
       accounts: accounts,
@@ -200,8 +203,10 @@ _removalService(
         root: Directory('${root.path}${Platform.pathSeparator}sources'),
       ),
       onRemovalAborted: onRemovalAborted,
+      pendingRevocations: revocations,
     ),
     vault: vault,
+    revocations: revocations,
     calls: calls,
   );
 }
@@ -359,6 +364,7 @@ void main() {
     });
     expect(removed, isNull);
     expect(removal.vault.values.containsKey('account-a'), isFalse);
+    expect(await tester.runAsync(removal.revocations.pendingCount), 0);
     // Removing an account that was not the active one leaves the active one
     // alone.
     expect(kept, isNotNull);
@@ -426,6 +432,7 @@ void main() {
 
       expect(aborted, 1);
       expect(removal.vault.values['account-a'], isNotNull);
+      expect(await tester.runAsync(removal.revocations.pendingCount), 0);
       final removeButton = tester.widget<IconButton>(
         find.byKey(const Key('account-remove-account-a')),
       );
@@ -510,6 +517,10 @@ void main() {
     });
     expect(removed, isNull);
     expect(removal.vault.values.containsKey('account-a'), isFalse);
+    expect(
+      await tester.runAsync(removal.revocations.pendingRevocationCount),
+      1,
+    );
     expect(
       find.textContaining('did not confirm the app password was revoked'),
       findsOneWidget,
