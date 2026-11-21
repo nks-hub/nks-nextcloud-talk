@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -30,6 +31,132 @@ void main() {
 
     expect(image.body, same(source));
   });
+
+  test(
+    'voice downloads stream into a private file before becoming visible',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('voice-stream');
+      addTearDown(() => directory.delete(recursive: true));
+      final stream = StreamController<List<int>>();
+      final requestStarted = Completer<void>();
+      final vault = MemoryCredentialVault()
+        ..values[_account.id] = 'fixture-app-password';
+      final repository = ChatMediaRepository(
+        vault,
+        client: _StreamingClient((request) async {
+          requestStarted.complete();
+          return http.StreamedResponse(
+            stream.stream,
+            200,
+            headers: const {'content-type': 'audio/mp4'},
+          );
+        }),
+      );
+      addTearDown(repository.close);
+
+      final loading = repository.loadVoiceFile(
+        account: _account,
+        uri: _voiceUri,
+        directory: directory,
+        cacheKey: 'voice-cache',
+      );
+      await requestStarted.future;
+      stream.add(const <int>[1, 2, 3]);
+
+      File? partial;
+      for (var turn = 0; turn < 100; turn++) {
+        final candidates = directory.existsSync()
+            ? directory
+                  .listSync()
+                  .whereType<File>()
+                  .where((file) => file.path.contains('.part-'))
+                  .toList()
+            : const <File>[];
+        if (candidates.isNotEmpty && candidates.single.lengthSync() == 3) {
+          partial = candidates.single;
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      expect(partial, isNotNull, reason: 'the first chunk should reach disk');
+      expect(
+        File(
+          '${directory.path}${Platform.pathSeparator}voice-cache',
+        ).existsSync(),
+        isFalse,
+      );
+
+      stream.add(const <int>[4, 5]);
+      await stream.close();
+      final voice = await loading;
+
+      expect(await File(voice.path).readAsBytes(), <int>[1, 2, 3, 4, 5]);
+      expect(
+        directory.listSync().whereType<File>().where(
+          (file) => file.path.contains('.part-'),
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'a failed voice stream keeps the previous complete cache file',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('voice-failure');
+      addTearDown(() => directory.delete(recursive: true));
+      final target = File(
+        '${directory.path}${Platform.pathSeparator}voice-cache',
+      );
+      await target.writeAsBytes(const <int>[9]);
+      final stream = StreamController<List<int>>();
+      final requestStarted = Completer<void>();
+      final vault = MemoryCredentialVault()
+        ..values[_account.id] = 'fixture-app-password';
+      final repository = ChatMediaRepository(
+        vault,
+        client: _StreamingClient((request) async {
+          requestStarted.complete();
+          return http.StreamedResponse(
+            stream.stream,
+            200,
+            headers: const {'content-type': 'audio/mp4'},
+          );
+        }),
+      );
+      addTearDown(repository.close);
+
+      final loading = repository.loadVoiceFile(
+        account: _account,
+        uri: _voiceUri,
+        directory: directory,
+        cacheKey: 'voice-cache',
+      );
+      await requestStarted.future;
+      stream
+        ..add(const <int>[1, 2, 3])
+        ..addError(StateError('stream failed'));
+      await stream.close();
+
+      await expectLater(
+        loading,
+        throwsA(
+          isA<ChatMediaRepositoryException>().having(
+            (failure) => failure.code,
+            'code',
+            ChatMediaRepositoryError.unavailable,
+          ),
+        ),
+      );
+      expect(await target.readAsBytes(), <int>[9]);
+      expect(
+        directory.listSync().whereType<File>().where(
+          (file) => file.path.contains('.part-'),
+        ),
+        isEmpty,
+      );
+    },
+  );
 
   test(
     'accepts a scoped etag cache key but rejects repeated cache parameters',
@@ -717,6 +844,10 @@ final Uri _previewUri = Uri.parse(
 final Uri _originalUri = Uri.parse(
   'https://cloud.example.invalid/remote.php/dav/files/'
   'fixture-user/Talk/photo.png',
+);
+
+final Uri _voiceUri = Uri.parse(
+  'https://cloud.example.invalid/remote.php/dav/voice-message.m4a',
 );
 
 final Uint8List _pngSignature = Uint8List.fromList(const <int>[

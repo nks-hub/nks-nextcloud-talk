@@ -105,6 +105,7 @@ final class ChatMediaRepository {
   final bool _ownsClient;
   final _suspendedAccounts = <String>{};
   final _requests = <String, Set<_MediaRequest>>{};
+  int _temporaryFileNonce = 0;
   bool _closed = false;
 
   bool isAccountActive(String accountId) =>
@@ -243,21 +244,44 @@ final class ChatMediaRepository {
       );
     }
 
-    final builder = BytesBuilder(copy: false);
+    await directory.create(recursive: true);
+    operation.checkActive();
+    final file = File('${directory.path}${Platform.pathSeparator}$cacheKey');
+    final temporary = File('${file.path}.part-${_temporaryFileNonce++}');
     var length = 0;
     final iterator = StreamIterator<List<int>>(response.stream);
+    RandomAccessFile? output;
     try {
+      output = await temporary.open(mode: FileMode.write);
       await (() async {
         while (await operation.wait(iterator.moveNext())) {
-          length += iterator.current.length;
+          final chunk = iterator.current;
+          length += chunk.length;
           if (length > _maximumVoiceBytes) {
             throw const ChatMediaRepositoryException(
               ChatMediaRepositoryError.responseTooLarge,
             );
           }
-          builder.add(iterator.current);
+          if (chunk.isNotEmpty) {
+            await output!.writeFrom(chunk);
+            operation.checkActive();
+          }
         }
       })().timeout(requestTimeout);
+      if (length == 0) {
+        throw const ChatMediaRepositoryException(
+          ChatMediaRepositoryError.invalidResponse,
+        );
+      }
+      await output.flush();
+      await output.close();
+      output = null;
+      operation.checkActive();
+      if (await file.exists()) {
+        await file.delete();
+      }
+      await temporary.rename(file.path);
+      return ChatVoiceFile(path: file.path, contentType: contentType);
     } on ChatMediaRepositoryException {
       rethrow;
     } on Object {
@@ -270,19 +294,19 @@ final class ChatMediaRepository {
       } on Object {
         // The response is already complete or unusable.
       }
+      try {
+        await output?.close();
+      } on FileSystemException {
+        // The failed write is discarded below when the platform releases it.
+      }
+      try {
+        if (await temporary.exists()) {
+          await temporary.delete();
+        }
+      } on FileSystemException {
+        // A later voice-cache prune removes a partial file still held open.
+      }
     }
-    final body = builder.takeBytes();
-    if (body.isEmpty) {
-      throw const ChatMediaRepositoryException(
-        ChatMediaRepositoryError.invalidResponse,
-      );
-    }
-    operation.checkActive();
-    await directory.create(recursive: true);
-    operation.checkActive();
-    final file = File('${directory.path}${Platform.pathSeparator}$cacheKey');
-    await file.writeAsBytes(body, flush: true);
-    return ChatVoiceFile(path: file.path, contentType: contentType);
   });
 
   /// A picture somebody just posted has no preview on the server yet. Measured
