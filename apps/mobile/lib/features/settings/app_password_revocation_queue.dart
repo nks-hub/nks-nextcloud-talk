@@ -185,29 +185,36 @@ final class AppPasswordRevocationQueue {
     if (accountId.isEmpty || reservation.id.isEmpty) {
       throw const AppPasswordRevocationQueueCorrupt();
     }
-    await _store.updatePendingRevocations((raw) {
-      final entries = _decode(raw);
-      if (entries.any((entry) => entry.reservationId == reservation.id) ||
-          entries.any(
-            (entry) => entry.hasSecret(server, loginName, appPassword),
-          )) {
-        throw const AppPasswordRevocationQueueCorrupt();
-      }
-      _requireCapacity(entries);
-      entries.add(
-        _HeldEntry(
-          id: reservation.id,
-          server: server.uri.toString(),
-          loginName: loginName,
-          appPassword: appPassword,
-          since: _now(),
-          phase: AppPasswordCredentialPhase.removalReserved,
-          accountId: accountId,
-        ),
-      );
-      return _encode(entries);
-    });
-    _activeReservations.add(reservation.id);
+    if (!_activeReservations.add(reservation.id)) {
+      throw const AppPasswordRevocationQueueCorrupt();
+    }
+    try {
+      await _store.updatePendingRevocations((raw) {
+        final entries = _decode(raw);
+        if (entries.any((entry) => entry.reservationId == reservation.id) ||
+            entries.any(
+              (entry) => entry.hasSecret(server, loginName, appPassword),
+            )) {
+          throw const AppPasswordRevocationQueueCorrupt();
+        }
+        _requireCapacity(entries);
+        entries.add(
+          _HeldEntry(
+            id: reservation.id,
+            server: server.uri.toString(),
+            loginName: loginName,
+            appPassword: appPassword,
+            since: _now(),
+            phase: AppPasswordCredentialPhase.removalReserved,
+            accountId: accountId,
+          ),
+        );
+        return _encode(entries);
+      });
+    } on Object {
+      _activeReservations.remove(reservation.id);
+      rethrow;
+    }
     return reservation;
   }
 

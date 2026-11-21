@@ -542,6 +542,44 @@ void main() {
   );
 
   test(
+    'recovery cannot steal a removal reservation while its write returns',
+    () async {
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/core/apppassword')) {
+            throw const SocketException('offline');
+          }
+          return http.Response(_okOcs(), 200);
+        }),
+      );
+      addTearDown(api.close);
+      await _seedAccount(database, accounts, vault, 'account-a', _serverA);
+      final pausedStore = _PauseAfterFirstUpdateStore(vault);
+      addTearDown(pausedStore.release);
+      final queue = AppPasswordRevocationQueue(
+        store: pausedStore,
+        api: api,
+        accounts: accounts,
+        credentials: vault,
+      );
+      final removal = buildService(
+        api,
+        pendingRevocations: queue,
+      ).removeAccount('account-a');
+      await pausedStore.persisted;
+
+      await queue.recoverHeldCredentials();
+      pausedStore.release();
+      final outcome = await removal;
+
+      expect(outcome.appPasswordRevoked, isFalse);
+      expect(await queue.pendingRevocationCount(), 1);
+      expect(await accounts.getAccount('account-a'), isNull);
+      expect(await vault.readAppPassword('account-a'), isNull);
+    },
+  );
+
+  test(
     'a sixth offline removal preserves its account and credential',
     () async {
       final api = HttpNextcloudApi(
@@ -751,6 +789,43 @@ final class _UnwritablePendingStore implements PendingRevocationStore {
   @override
   Future<void> writePendingRevocations(String? json) async =>
       throw const FileSystemException('pending revocation store is read-only');
+}
+
+final class _PauseAfterFirstUpdateStore implements PendingRevocationStore {
+  _PauseAfterFirstUpdateStore(this._inner);
+
+  final PendingRevocationStore _inner;
+  final Completer<void> _persisted = Completer<void>();
+  final Completer<void> _release = Completer<void>();
+  var _pauseNext = true;
+
+  Future<void> get persisted => _persisted.future;
+
+  void release() {
+    if (!_release.isCompleted) {
+      _release.complete();
+    }
+  }
+
+  @override
+  Future<String?> readPendingRevocations() => _inner.readPendingRevocations();
+
+  @override
+  Future<void> updatePendingRevocations(
+    String? Function(String? current) update,
+  ) async {
+    await _inner.updatePendingRevocations(update);
+    if (!_pauseNext) {
+      return;
+    }
+    _pauseNext = false;
+    _persisted.complete();
+    await _release.future;
+  }
+
+  @override
+  Future<void> writePendingRevocations(String? json) =>
+      _inner.writePendingRevocations(json);
 }
 
 final class _FailingEmojiUsageStore implements EmojiUsageStore {
