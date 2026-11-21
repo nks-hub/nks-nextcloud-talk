@@ -86,6 +86,11 @@ void main() {
     expect(restored!.contentType, 'image/png');
     expect(restored.body.lengthInBytes, 64);
     expect(restored.body.every((byte) => byte == 3), isTrue);
+    expect(
+      restored.body.buffer.lengthInBytes,
+      greaterThan(restored.body.lengthInBytes),
+      reason: 'the cached body should remain a view, not a full second copy',
+    );
     expect(restarted.length, 1);
   });
 

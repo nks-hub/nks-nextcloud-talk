@@ -170,7 +170,10 @@ final class _AuthenticatedImageViewerState
         uri: widget.originalUri,
         expectedContentType: widget.originalContentType,
       );
-      return ChatMediaImage(body: file.body, contentType: file.contentType);
+      return ChatMediaImage.takeOwnership(
+        body: file.body,
+        contentType: file.contentType,
+      );
     } on ChatMediaRepositoryException {
       return null;
     }

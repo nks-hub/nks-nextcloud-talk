@@ -334,7 +334,7 @@ final class ChatMediaDiskCache {
     } on FileSystemException {
       // Losing the recency stamp only costs this entry an earlier eviction.
     }
-    return ChatMediaImage(
+    return ChatMediaImage.takeOwnership(
       body: Uint8List.sublistView(stored, separator + 1),
       contentType: ascii.decode(
         Uint8List.sublistView(stored, 0, separator),

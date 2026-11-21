@@ -1050,7 +1050,10 @@ Future<ChatMediaImage?> _loadOriginalAsPreview(
     );
     if (file.body.lengthInBytes <=
         ChatMediaRepository.maximumPreviewFallbackBytes) {
-      return ChatMediaImage(body: file.body, contentType: file.contentType);
+      return ChatMediaImage.takeOwnership(
+        body: file.body,
+        contentType: file.contentType,
+      );
     }
     return await _downscaledPreview(file.body);
   } on ChatMediaRepositoryException catch (failure) {
@@ -1087,7 +1090,7 @@ Future<ChatMediaImage?> _downscaledPreview(Uint8List original) async {
     image = (await codec.getNextFrame()).image;
     final png = await image.toByteData(format: ui.ImageByteFormat.png);
     if (png == null) return null;
-    return ChatMediaImage(
+    return ChatMediaImage.takeOwnership(
       body: png.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes),
       contentType: 'image/png',
     );

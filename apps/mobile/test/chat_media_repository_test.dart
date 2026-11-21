@@ -21,6 +21,16 @@ void main() {
     expect(file.body, <int>[1, 2, 3]);
   });
 
+  test('owned media images reuse their private byte storage', () {
+    final source = Uint8List.fromList(<int>[1, 2, 3]);
+    final image = ChatMediaImage.takeOwnership(
+      body: source,
+      contentType: 'image/png',
+    );
+
+    expect(image.body, same(source));
+  });
+
   test(
     'accepts a scoped etag cache key but rejects repeated cache parameters',
     () async {
