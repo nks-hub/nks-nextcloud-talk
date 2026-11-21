@@ -43,6 +43,8 @@ final class ChatMediaImage {
   ChatMediaImage({required Uint8List body, required this.contentType})
     : body = Uint8List.fromList(body);
 
+  ChatMediaImage._owned({required this.body, required this.contentType});
+
   final Uint8List body;
   final String contentType;
   ({int width, int height})? _decodedDimensions;
@@ -58,6 +60,8 @@ final class ChatMediaImage {
 final class ChatMediaFile {
   ChatMediaFile({required Uint8List body, required this.contentType})
     : body = Uint8List.fromList(body);
+
+  ChatMediaFile._owned({required this.body, required this.contentType});
 
   final Uint8List body;
   final String contentType;
@@ -475,7 +479,7 @@ final class ChatMediaRepository {
         ChatMediaRepositoryError.invalidResponse,
       );
     }
-    return ChatMediaImage(body: body, contentType: contentType);
+    return ChatMediaImage._owned(body: body, contentType: contentType);
   });
 
   /// Downloads the original attachment from this account's WebDAV tree.
@@ -574,7 +578,7 @@ final class ChatMediaRepository {
         ChatMediaRepositoryError.invalidResponse,
       );
     }
-    return ChatMediaFile(body: body, contentType: contentType);
+    return ChatMediaFile._owned(body: body, contentType: contentType);
   });
 
   void close() {

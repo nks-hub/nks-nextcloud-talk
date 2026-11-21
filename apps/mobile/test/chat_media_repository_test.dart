@@ -10,6 +10,17 @@ import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'test_support.dart';
 
 void main() {
+  test('public media values keep their own byte storage', () {
+    final source = Uint8List.fromList(<int>[1, 2, 3]);
+    final image = ChatMediaImage(body: source, contentType: 'image/png');
+    final file = ChatMediaFile(body: source, contentType: 'text/plain');
+
+    source[0] = 9;
+
+    expect(image.body, <int>[1, 2, 3]);
+    expect(file.body, <int>[1, 2, 3]);
+  });
+
   test(
     'accepts a scoped etag cache key but rejects repeated cache parameters',
     () async {

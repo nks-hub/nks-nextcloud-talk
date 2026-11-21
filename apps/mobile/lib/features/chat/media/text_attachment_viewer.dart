@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -99,7 +100,7 @@ final class _TextAttachmentViewerState extends State<TextAttachmentViewer> {
     );
     final truncated = file.body.length > maximumReadableTextBytes;
     final bytes = truncated
-        ? file.body.sublist(0, maximumReadableTextBytes)
+        ? Uint8List.sublistView(file.body, 0, maximumReadableTextBytes)
         : file.body;
     // A chat attachment is somebody else's file: it can be in any encoding or
     // in none. Malformed bytes become replacement characters instead of an
