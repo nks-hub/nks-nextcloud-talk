@@ -16,9 +16,13 @@ import 'owntalk_extensions_service.dart';
 /// and is never fetched twice. Only the newest few per account are kept, since
 /// a conversation that changes its photo leaves the old file behind.
 final class OwnTalkImageCache {
-  OwnTalkImageCache._(this._directory);
+  OwnTalkImageCache._(
+    this._directory, {
+    Future<DateTime> Function(File file)? lastModified,
+  }) : _lastModified = lastModified ?? _readLastModified;
 
   static const int _maximumFilesPerAccount = 24;
+  static const int _metadataConcurrency = 4;
 
   static Future<OwnTalkImageCache> openApplicationSupport() async {
     final support = await getApplicationSupportDirectory();
@@ -27,11 +31,16 @@ final class OwnTalkImageCache {
     );
   }
 
-  static OwnTalkImageCache forTesting(Directory directory) =>
-      OwnTalkImageCache._(directory);
+  static OwnTalkImageCache forTesting(
+    Directory directory, {
+    Future<DateTime> Function(File file)? lastModified,
+  }) => OwnTalkImageCache._(directory, lastModified: lastModified);
 
   final Directory _directory;
+  final Future<DateTime> Function(File file) _lastModified;
   Future<void> _tail = Future<void>.value();
+
+  static Future<DateTime> _readLastModified(File file) => file.lastModified();
 
   Future<Uint8List?> read(String accountId, String sha256) {
     final file = _file(accountId, sha256);
@@ -70,10 +79,24 @@ final class OwnTalkImageCache {
     if (files.length <= _maximumFilesPerAccount) {
       return;
     }
-    final dated = [
+    final candidates = [
       for (final file in files)
-        if (file.path != keep) (file: file, modified: file.lastModifiedSync()),
-    ]..sort((a, b) => a.modified.compareTo(b.modified));
+        if (file.path != keep) file,
+    ];
+    final dated = <({File file, DateTime modified})>[];
+    var nextFile = 0;
+    Future<void> readAges() async {
+      while (nextFile < candidates.length) {
+        final file = candidates[nextFile++];
+        dated.add((file: file, modified: await _lastModified(file)));
+      }
+    }
+
+    final workerCount = candidates.length < _metadataConcurrency
+        ? candidates.length
+        : _metadataConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => readAges()));
+    dated.sort((a, b) => a.modified.compareTo(b.modified));
     for (final entry in dated.take(files.length - _maximumFilesPerAccount)) {
       await entry.file.delete();
     }
