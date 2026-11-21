@@ -259,7 +259,7 @@ final class AndroidPushCoordinator {
   }
 
   Future<void> _reconcileAll() async {
-    final accounts = await _accounts.watchAccounts().first;
+    final accounts = await _accounts.listAccounts();
     if (_closed) {
       return;
     }

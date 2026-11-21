@@ -36,7 +36,7 @@ final class DeepLinkResolver {
   );
 
   Future<ResolvedDeepLink?> resolve(Uri uri) async {
-    final accounts = await _accounts.watchAccounts().first;
+    final accounts = await _accounts.listAccounts();
     for (final account in accounts) {
       final ServerBase server;
       try {
