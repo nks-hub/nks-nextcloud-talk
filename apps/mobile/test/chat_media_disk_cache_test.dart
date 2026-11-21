@@ -23,11 +23,13 @@ void main() {
   ChatMediaDiskCache open({
     int maximumBytes = 64 * 1024 * 1024,
     Future<FileStat> Function(File file)? statFile,
+    Future<void> Function(File file)? deleteFile,
   }) {
     return ChatMediaDiskCache(
       rootDirectory: () async => Directory('${root.path}/previews'),
       maximumBytes: maximumBytes,
       statFile: statFile,
+      deleteFile: deleteFile,
     );
   }
 
@@ -260,6 +262,72 @@ void main() {
 
     await releaseAll();
     expect(cache.length, fileCount);
+  });
+
+  test('pruning deletes files with bounded concurrency', () async {
+    const fileCount = 6;
+    final seed = open();
+    for (var fileId = 1; fileId <= fileCount; fileId++) {
+      await seed.write(
+        accountId: 'account-a',
+        uri: uriFor(fileId),
+        image: image(10),
+      );
+    }
+    final gates = <Completer<void>>[];
+    var inFlight = 0;
+    var peakInFlight = 0;
+    final cache = open(
+      maximumBytes: 0,
+      deleteFile: (file) async {
+        final gate = Completer<void>();
+        gates.add(gate);
+        inFlight++;
+        if (inFlight > peakInFlight) {
+          peakInFlight = inFlight;
+        }
+        await gate.future;
+        inFlight--;
+        await file.delete();
+      },
+    );
+    final pruning = cache.read(accountId: 'account-a', uri: uriFor(99));
+
+    Future<void> releaseAll() async {
+      for (var turn = 0; turn < 100 && gates.length < fileCount; turn++) {
+        for (final gate in gates) {
+          if (!gate.isCompleted) {
+            gate.complete();
+          }
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      for (final gate in gates) {
+        if (!gate.isCompleted) {
+          gate.complete();
+        }
+      }
+      await pruning;
+    }
+
+    addTearDown(releaseAll);
+    for (var turn = 0; turn < 50 && gates.length < 4; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(gates, hasLength(4));
+    expect(peakInFlight, 4);
+
+    gates.first.complete();
+    for (var turn = 0; turn < 50 && gates.length < 5; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(gates, hasLength(5));
+    expect(peakInFlight, 4);
+
+    await releaseAll();
+    expect(gates, hasLength(fileCount));
+    expect(cache.length, 0);
+    expect(cache.byteLength, 0);
   });
 
   test('evicting an account erases its bytes from disk only', () async {

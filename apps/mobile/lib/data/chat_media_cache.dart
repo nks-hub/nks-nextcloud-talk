@@ -259,17 +259,21 @@ final class ChatMediaDiskCache {
     required this.rootDirectory,
     this.maximumBytes = 64 * 1024 * 1024,
     Future<FileStat> Function(File file)? statFile,
-  }) : _statFile = statFile ?? _readStat;
+    Future<void> Function(File file)? deleteFile,
+  }) : _statFile = statFile ?? _readStat,
+       _deleteFile = deleteFile ?? _deleteDirect;
 
   /// Longest accepted content type header, which bounds how much of a corrupt
   /// file is scanned before it is discarded.
   static const int _maximumHeaderBytes = 64;
   static const int _scanConcurrency = 8;
+  static const int _deleteConcurrency = 4;
 
   /// Resolved once, on first use, because it needs a platform channel.
   final Future<Directory> Function() rootDirectory;
   final int maximumBytes;
   final Future<FileStat> Function(File file) _statFile;
+  final Future<void> Function(File file) _deleteFile;
   final Map<String, ({int bytes, DateTime touchedAt})> _index = {};
 
   Directory? _root;
@@ -281,6 +285,8 @@ final class ChatMediaDiskCache {
   int get length => _index.length;
 
   static Future<FileStat> _readStat(File file) => file.stat();
+
+  static Future<void> _deleteDirect(File file) => file.delete();
 
   Future<void> evict({required String accountId, required Uri uri}) async {
     final Directory root;
@@ -449,18 +455,32 @@ final class ChatMediaDiskCache {
     // previews at this bound. A heap is worth it only if the bound grows a lot.
     final ordered = _index.entries.toList()
       ..sort((a, b) => a.value.touchedAt.compareTo(b.value.touchedAt));
+    final pending = <String>[];
+    var remainingBytes = _bytes;
     for (final entry in ordered) {
-      if (_bytes <= maximumBytes) {
-        return;
+      if (remainingBytes <= maximumBytes) {
+        break;
       }
-      await _delete(entry.key);
+      pending.add(entry.key);
+      remainingBytes -= entry.value.bytes;
     }
+    var nextPath = 0;
+    Future<void> deleteNext() async {
+      while (nextPath < pending.length) {
+        await _delete(pending[nextPath++]);
+      }
+    }
+
+    final workerCount = pending.length < _deleteConcurrency
+        ? pending.length
+        : _deleteConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => deleteNext()));
   }
 
   Future<void> _delete(String path) async {
     _drop(path);
     try {
-      await File(path).delete();
+      await _deleteFile(File(path));
     } on FileSystemException {
       // Already gone; the index stopped counting it either way.
     }
