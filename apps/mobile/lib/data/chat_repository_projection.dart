@@ -647,6 +647,8 @@ extension _ChatRepositoryProjection on ChatRepository {
     final pendingThreadRootUpdates =
         <_ChatMessageKey, CachedChatMessagesCompanion>{};
     final pendingMutations = <_ChatMessageKey, ChatMessage>{};
+    final pendingMutationTargetUpdates =
+        <_ChatMessageKey, CachedChatMessagesCompanion>{};
     for (final message in messageList) {
       final messageKey = (
         roomToken: message.roomToken.value,
@@ -656,6 +658,16 @@ extension _ChatRepositoryProjection on ChatRepository {
       final mutationProjectsIntoQuotedParents =
           message.systemMessage == 'message_edited' ||
           message.systemMessage == 'message_deleted';
+      if (!mutationProjectsIntoQuotedParents &&
+          (pendingMutationTargetUpdates.containsKey(messageKey) ||
+              (requiredMessage != null &&
+                  pendingMutationTargetUpdates.containsKey(requiredMessage)))) {
+        await _flushMutationTargetUpdates(
+          accountId: accountId,
+          updates: pendingMutationTargetUpdates,
+        );
+        pendingMutationTargetUpdates.clear();
+      }
       if (mutationProjectsIntoQuotedParents ||
           (requiredMessage != null &&
               pendingMessageKeys.contains(requiredMessage))) {
@@ -688,13 +700,14 @@ extension _ChatRepositoryProjection on ChatRepository {
             threadRootUpdate.companion;
       }
       await _applyReactionsFromNotice(account, message, reactionMessages);
-      final mutation = await _applyMutationFromNotice(account, message);
+      final mutation = _prepareMutationFromNotice(account, message);
       if (mutation != null) {
-        pendingMutations[(
-              roomToken: mutation.roomToken.value,
-              messageId: mutation.messageId,
-            )] =
-            mutation;
+        final key = (
+          roomToken: mutation.message.roomToken.value,
+          messageId: mutation.message.messageId,
+        );
+        pendingMutations[key] = mutation.message;
+        pendingMutationTargetUpdates[key] = mutation.companion;
       }
       _forgetChangedReactionTargets(reactionMessages, message);
       final prepared = _prepareMessage(account, message);
@@ -712,6 +725,10 @@ extension _ChatRepositoryProjection on ChatRepository {
       updates: pendingThreadRootUpdates,
     );
     await _flushPendingMessages(pendingMessages);
+    await _flushMutationTargetUpdates(
+      accountId: accountId,
+      updates: pendingMutationTargetUpdates,
+    );
     await _projectMutationsIntoCachedParents(
       accountId: accountId,
       messages: pendingMutations.values,
@@ -728,10 +745,8 @@ extension _ChatRepositoryProjection on ChatRepository {
   /// this the bubble kept its old text (or the deleted file) for as long as
   /// the row lived in the cache — reproduced live 2026-09-03 with three
   /// deleted messages still rendered next to their "deleted a message" lines.
-  Future<ChatMessage?> _applyMutationFromNotice(
-    ChatAccountState account,
-    ChatMessage message,
-  ) async {
+  ({ChatMessage message, CachedChatMessagesCompanion companion})?
+  _prepareMutationFromNotice(ChatAccountState account, ChatMessage message) {
     const notices = <String>{'message_edited', 'message_deleted'};
     if (!notices.contains(message.systemMessage)) {
       return null;
@@ -740,30 +755,23 @@ extension _ChatRepositoryProjection on ChatRepository {
     if (parent is! ChatFullParent || parent.roomToken != message.roomToken) {
       return null;
     }
-    final accountId = account.accountId.value;
     final mutated = parent.message;
-    await (_database.update(_database.cachedChatMessages)..where(
-          (row) =>
-              row.accountId.equals(accountId) &
-              row.roomToken.equals(message.roomToken.value) &
-              row.messageId.equals(mutated.messageId),
-        ))
-        .write(
-          CachedChatMessagesCompanion(
-            actorType: Value(mutated.actorType),
-            actorId: Value(mutated.actorId),
-            actorDisplayName: Value(mutated.actorDisplayName),
-            systemMessage: Value(mutated.systemMessage),
-            messageType: Value(mutated.messageType),
-            referenceId: Value(mutated.referenceId),
-            displayText: Value(_displayText(account.server, mutated)),
-            deleted: Value(mutated.deleted),
-            rawJson: Value(jsonEncode(mutated.wire)),
-          ),
-        );
     // A quote can remain cached after its original message has fallen out of
     // the loaded blocks, so its embedded parent still needs this mutation.
-    return mutated;
+    return (
+      message: mutated,
+      companion: CachedChatMessagesCompanion(
+        actorType: Value(mutated.actorType),
+        actorId: Value(mutated.actorId),
+        actorDisplayName: Value(mutated.actorDisplayName),
+        systemMessage: Value(mutated.systemMessage),
+        messageType: Value(mutated.messageType),
+        referenceId: Value(mutated.referenceId),
+        displayText: Value(_displayText(account.server, mutated)),
+        deleted: Value(mutated.deleted),
+        rawJson: Value(jsonEncode(mutated.wire)),
+      ),
+    );
   }
 
   String _displayText(ServerBase server, ChatMessage message) {

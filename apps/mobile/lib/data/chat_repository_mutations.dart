@@ -1,6 +1,27 @@
 part of 'chat_repository.dart';
 
 extension _ChatRepositoryMutations on ChatRepository {
+  Future<void> _flushMutationTargetUpdates({
+    required String accountId,
+    required Map<_ChatMessageKey, CachedChatMessagesCompanion> updates,
+  }) async {
+    if (updates.isEmpty) {
+      return;
+    }
+    await _database.batch((batch) {
+      for (final MapEntry(key: key, value: companion) in updates.entries) {
+        batch.update(
+          _database.cachedChatMessages,
+          companion,
+          where: (row) =>
+              row.accountId.equals(accountId) &
+              row.roomToken.equals(key.roomToken) &
+              row.messageId.equals(key.messageId),
+        );
+      }
+    });
+  }
+
   Future<void> _applyMessageMutation({
     required String accountId,
     required ServerBase server,

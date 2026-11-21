@@ -117,6 +117,8 @@ void main() {
     );
 
     expect(writes.mutationProjectionSelects, 1);
+    expect(writes.directParentUpdates, 0);
+    expect(writes.parentBatchExecutions, 2);
     final quotes = await (database.select(
       database.cachedChatMessages,
     )..where((row) => row.messageId.isBetweenValues(2000, 2039))).get();
