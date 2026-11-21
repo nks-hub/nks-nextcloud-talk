@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
@@ -785,15 +786,17 @@ void main() {
       await teardownTree(tester);
     });
 
-    testWidgets('the scheduled list opens and can delete an entry', (
+    testWidgets('the scheduled list prevents duplicate deletes', (
       tester,
     ) async {
       final conversation = await insertRoom(hasScheduledMessages: 1);
+      final deleteGate = Completer<void>();
+      var deleteRequests = 0;
       await tester.pumpWidget(
         wrap(
           api: buildApi(
             localFeatures: const <String>['scheduled-messages'],
-            onRichChat: (request) {
+            onRichChat: (request) async {
               if (request.method == 'GET') {
                 return http.Response(
                   jsonEncode(
@@ -802,6 +805,8 @@ void main() {
                   200,
                 );
               }
+              deleteRequests += 1;
+              await deleteGate.future;
               // Talk answers a schedule delete with an empty object.
               return http.Response(
                 jsonEncode(_ocs(200, <String, Object?>{})),
@@ -826,13 +831,26 @@ void main() {
       expect(find.text('Scheduled hello'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('delete-scheduled-77')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('delete-scheduled-77')));
+      await tester.pump();
+
+      expect(deleteRequests, 1);
+      expect(
+        find.byKey(const Key('delete-scheduled-progress-77')),
+        findsOneWidget,
+      );
+
+      deleteGate.complete();
       await flush(tester);
 
       expect(
-        requestLog,
-        contains(
-          'DELETE /ocs/v2.php/apps/spreed/api/v1/chat/rooma123/schedule/77',
+        requestLog.where(
+          (entry) =>
+              entry ==
+              'DELETE /ocs/v2.php/apps/spreed/api/v1/chat/rooma123/schedule/77',
         ),
+        hasLength(1),
       );
       expect(
         find.byKey(const Key('scheduled-message-deleted')),

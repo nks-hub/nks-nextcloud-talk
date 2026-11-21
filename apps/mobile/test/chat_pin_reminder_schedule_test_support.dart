@@ -179,7 +179,7 @@ Future<void> insertMessage({
 HttpNextcloudApi buildApi({
   List<String> talkFeatures = _fullFeatures,
   List<String> localFeatures = const <String>[],
-  http.Response Function(http.Request request)? onRichChat,
+  FutureOr<http.Response> Function(http.Request request)? onRichChat,
 }) {
   final api = HttpNextcloudApi(
     client: MockClient((request) async {

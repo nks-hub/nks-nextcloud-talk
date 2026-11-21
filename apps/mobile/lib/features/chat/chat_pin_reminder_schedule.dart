@@ -484,6 +484,7 @@ final class ScheduledMessagesSheet extends ConsumerStatefulWidget {
 final class _ScheduledMessagesSheetState
     extends ConsumerState<ScheduledMessagesSheet> {
   List<RichChatScheduledMessage>? _messages;
+  final Set<String> _deletingScheduleIds = <String>{};
   bool _failed = false;
 
   @override
@@ -514,6 +515,11 @@ final class _ScheduledMessagesSheetState
   }
 
   Future<void> _delete(RichChatScheduledMessage message) async {
+    final scheduleId = message.scheduleId.value;
+    if (!_deletingScheduleIds.add(scheduleId)) {
+      return;
+    }
+    setState(() {});
     final strings = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -522,8 +528,11 @@ final class _ScheduledMessagesSheetState
           .deleteScheduledMessage(
             accountId: widget.accountId,
             roomToken: widget.roomToken,
-            scheduleId: message.scheduleId.value,
+            scheduleId: scheduleId,
           );
+      if (!mounted) {
+        return;
+      }
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(
@@ -536,6 +545,12 @@ final class _ScheduledMessagesSheetState
     } on Object {
       if (mounted) {
         setState(() => _failed = true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _deletingScheduleIds.remove(scheduleId));
+      } else {
+        _deletingScheduleIds.remove(scheduleId);
       }
     }
   }
@@ -576,8 +591,10 @@ final class _ScheduledMessagesSheetState
                 itemCount: messages.length,
                 itemBuilder: (itemContext, index) {
                   final message = messages[index];
+                  final scheduleId = message.scheduleId.value;
+                  final isDeleting = _deletingScheduleIds.contains(scheduleId);
                   return ListTile(
-                    key: Key('scheduled-message-${message.scheduleId.value}'),
+                    key: Key('scheduled-message-$scheduleId'),
                     title: Text(
                       message.message,
                       maxLines: 2,
@@ -592,10 +609,22 @@ final class _ScheduledMessagesSheetState
                       ),
                     ),
                     trailing: IconButton(
-                      key: Key('delete-scheduled-${message.scheduleId.value}'),
+                      key: Key('delete-scheduled-$scheduleId'),
                       tooltip: strings.scheduledMessageDelete,
-                      icon: const Icon(Icons.delete_outline_rounded),
-                      onPressed: () => unawaited(_delete(message)),
+                      icon: isDeleting
+                          ? SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(
+                                key: Key(
+                                  'delete-scheduled-progress-$scheduleId',
+                                ),
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Icon(Icons.delete_outline_rounded),
+                      onPressed: isDeleting
+                          ? null
+                          : () => unawaited(_delete(message)),
                     ),
                   );
                 },
