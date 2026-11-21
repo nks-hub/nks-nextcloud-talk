@@ -617,6 +617,100 @@ void main() {
       ],
     );
   });
+
+  test(
+    'subscription projection flushes room batches in one transaction',
+    () async {
+      await database.close();
+      final counter = _CachedMessageSelectCounter();
+      database = AppDatabase.forTesting(
+        NativeDatabase.memory().interceptWith(counter),
+      );
+      accounts = AccountRepository(database);
+      threads = ThreadRepository(database);
+      await _insertAccount(accounts, 'account-a');
+      await _insertAccount(accounts, 'account-b');
+      await _insertThreadMessages(
+        database,
+        title: 'Other account',
+        accountId: 'account-b',
+        roomToken: 'room0abc',
+      );
+      final values = <RichChatThread>[];
+      for (var room = 0; room < 10; room++) {
+        final roomToken = 'room${room}abc';
+        await _insertThreadMessages(
+          database,
+          title: 'Before',
+          replyCount: 4,
+          roomToken: roomToken,
+        );
+        values.add(
+          _threadWithMessages(title: 'After $room', roomToken: roomToken),
+        );
+      }
+      await threads.replaceSubscribed(
+        accountId: 'account-a',
+        server: _serverFor('account-a'),
+        values: [
+          _thread(roomToken: 'previous', threadId: 99, title: 'Previous'),
+        ],
+      );
+      final before = await database.select(database.cachedChatMessages).get();
+      final subscriptionsBefore = await threads.listAccount('account-a');
+      await database.customStatement('''
+      CREATE TRIGGER reject_last_room
+      BEFORE INSERT ON cached_chat_messages
+      WHEN NEW.room_token = 'room9abc'
+      BEGIN
+        SELECT RAISE(ABORT, 'fixture rejects last room');
+      END
+    ''');
+
+      Future<void> refresh() => threads.replaceSubscribed(
+        accountId: 'account-a',
+        server: _serverFor('account-a'),
+        values: values,
+      );
+      const operations = ['read:40', 'write:40', 'read:10', 'write:10'];
+
+      counter.enabled = true;
+      await expectLater(
+        refresh(),
+        throwsA(
+          predicate((Object error) {
+            return error.toString().contains('fixture rejects last room');
+          }),
+        ),
+      );
+      expect(counter.projectionOperations, operations);
+      counter.enabled = false;
+      expect(
+        await database.select(database.cachedChatMessages).get(),
+        unorderedEquals(before),
+      );
+      expect(await threads.listAccount('account-a'), subscriptionsBefore);
+
+      await database.customStatement('DROP TRIGGER reject_last_room');
+      counter.projectionOperations.clear();
+      counter.enabled = true;
+      await refresh();
+      expect(counter.projectionOperations, operations);
+      counter.enabled = false;
+      final after = await database.select(database.cachedChatMessages).get();
+      expect(after, hasLength(52));
+      for (final row in after) {
+        final title = ChatMessage.fromJson(jsonDecode(row.rawJson)).threadTitle;
+        expect(
+          title,
+          row.accountId == 'account-b'
+              ? 'Other account'
+              : 'After ${row.roomToken.substring(4, 5)}',
+        );
+      }
+      expect(await threads.listAccount('account-a'), hasLength(10));
+    },
+  );
 }
 
 Future<void> _insertAccount(AccountRepository accounts, String accountId) {
@@ -698,12 +792,15 @@ Future<void> _insertThreadMessages(
   required String title,
   bool named = true,
   int replyCount = 1,
+  String accountId = 'account-a',
+  String roomToken = 'rooma123',
 }) async {
   final root = _messageWire(
     id: 100,
     title: title,
     isRoot: named,
     message: 'Root message',
+    roomToken: roomToken,
   );
   final wires = <Map<String, Object?>>[
     root,
@@ -713,6 +810,7 @@ Future<void> _insertThreadMessages(
         title: title,
         message: 'Reply message $index',
         parent: root,
+        roomToken: roomToken,
       ),
   ];
   await database.batch((batch) {
@@ -721,8 +819,8 @@ Future<void> _insertThreadMessages(
       batch.insert(
         database.cachedChatMessages,
         CachedChatMessagesCompanion.insert(
-          accountId: 'account-a',
-          roomToken: 'rooma123',
+          accountId: accountId,
+          roomToken: roomToken,
           messageId: id,
           actorType: 'users',
           actorId: 'account-a-user',
@@ -776,6 +874,7 @@ Map<String, Object?> _messageWire({
 
 final class _CachedMessageSelectCounter extends QueryInterceptor {
   bool enabled = false;
+  final projectionOperations = <String>[];
   int selects = 0;
   int threadBatchExecutions = 0;
   int directThreadInserts = 0;
@@ -787,10 +886,13 @@ final class _CachedMessageSelectCounter extends QueryInterceptor {
     QueryExecutor executor,
     String statement,
     List<Object?> args,
-  ) {
+  ) async {
     if (enabled &&
         statement.toLowerCase().contains('from "cached_chat_messages"')) {
       selects++;
+      final rows = await super.runSelect(executor, statement, args);
+      projectionOperations.add('read:${rows.length}');
+      return rows;
     }
     return super.runSelect(executor, statement, args);
   }
@@ -813,6 +915,7 @@ final class _CachedMessageSelectCounter extends QueryInterceptor {
               statement.toLowerCase().contains('into "cached_chat_messages"'),
         )) {
       messageBatchExecutions++;
+      projectionOperations.add('write:${statements.arguments.length}');
     }
     return super.runBatched(executor, statements);
   }

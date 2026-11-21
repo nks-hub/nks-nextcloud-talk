@@ -382,20 +382,16 @@ final class ThreadRepository {
           .putIfAbsent(value.roomToken.value, () => <RichChatThread>[])
           .add(value);
     }
-    if (valuesByRoom.isEmpty) {
-      return;
-    }
-    final rowsByRoom = <String, List<CachedChatMessage>>{
-      for (final roomToken in valuesByRoom.keys)
-        roomToken: <CachedChatMessage>[],
-    };
     final roomTokens = valuesByRoom.keys.toList(growable: false);
-    const roomChunkSize = 500;
+    const roomChunkSize = 8;
     for (var offset = 0; offset < roomTokens.length; offset += roomChunkSize) {
       final end = offset + roomChunkSize < roomTokens.length
           ? offset + roomChunkSize
           : roomTokens.length;
       final chunk = roomTokens.sublist(offset, end);
+      final rowsByRoom = <String, List<CachedChatMessage>>{
+        for (final roomToken in chunk) roomToken: <CachedChatMessage>[],
+      };
       final rows =
           await (_database.select(_database.cachedChatMessages)..where(
                 (message) =>
@@ -406,25 +402,25 @@ final class ThreadRepository {
       for (final row in rows) {
         rowsByRoom[row.roomToken]!.add(row);
       }
-    }
-    final changedMessages = <CachedChatMessagesCompanion>[];
-    for (final entry in valuesByRoom.entries) {
-      changedMessages.addAll(
-        _projectRoomMessages(
-          accountId: accountId,
-          server: server,
-          values: entry.value,
-          rows: rowsByRoom[entry.key]!,
-        ),
-      );
-    }
-    if (changedMessages.isNotEmpty) {
-      await _database.batch(
-        (batch) => batch.insertAllOnConflictUpdate(
-          _database.cachedChatMessages,
-          changedMessages,
-        ),
-      );
+      final changedMessages = <CachedChatMessagesCompanion>[
+        for (final roomToken in chunk)
+          ..._projectRoomMessages(
+            accountId: accountId,
+            server: server,
+            values: valuesByRoom[roomToken]!,
+            rows: rowsByRoom[roomToken]!,
+          ),
+      ];
+      // Subscription refreshes span rooms, so release each chunk's history
+      // before loading the next one. The caller's transaction covers all chunks.
+      if (changedMessages.isNotEmpty) {
+        await _database.batch(
+          (batch) => batch.insertAllOnConflictUpdate(
+            _database.cachedChatMessages,
+            changedMessages,
+          ),
+        );
+      }
     }
   }
 
