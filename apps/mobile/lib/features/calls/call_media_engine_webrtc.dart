@@ -505,6 +505,72 @@ final class _WebRtcLocalAudio implements CallLocalAudio {
   }
 }
 
+enum _PendingStatusGroup { audio, video, speaking }
+
+final class _PendingStatusFrame {
+  const _PendingStatusFrame({required this.frame, this.group});
+
+  final String frame;
+  final _PendingStatusGroup? group;
+}
+
+final class _PendingStatusFrames {
+  static const int _unknownLimit = 16;
+
+  final List<_PendingStatusFrame> _frames = <_PendingStatusFrame>[];
+
+  bool get isEmpty => _frames.isEmpty;
+
+  void add(String type, String frame) {
+    final group = switch (type) {
+      'audioOn' || 'audioOff' => _PendingStatusGroup.audio,
+      'videoOn' || 'videoOff' => _PendingStatusGroup.video,
+      'speaking' || 'stoppedSpeaking' => _PendingStatusGroup.speaking,
+      _ => null,
+    };
+    if (group != null) {
+      _frames.removeWhere((pending) => pending.group == group);
+    }
+    _frames.add(_PendingStatusFrame(frame: frame, group: group));
+    if (group == null) {
+      final oldestUnknown = _frames.indexWhere(
+        (pending) => pending.group == null,
+      );
+      final unknownCount = _frames
+          .where((pending) => pending.group == null)
+          .length;
+      if (unknownCount > _unknownLimit && oldestUnknown >= 0) {
+        _frames.removeAt(oldestUnknown);
+      }
+    }
+  }
+
+  List<String> takeAll() {
+    final result = <String>[for (final pending in _frames) pending.frame];
+    _frames.clear();
+    return result;
+  }
+
+  void clear() => _frames.clear();
+}
+
+@visibleForTesting
+List<String> compactWebRtcStatusFramesForTesting(
+  Iterable<({String type, Object? payload})> messages,
+) {
+  final pending = _PendingStatusFrames();
+  for (final message in messages) {
+    pending.add(
+      message.type,
+      jsonEncode(<String, Object?>{
+        'type': message.type,
+        'payload': ?message.payload,
+      }),
+    );
+  }
+  return pending.takeAll();
+}
+
 final class _WebRtcPeerConnection implements CallPeerConnection {
   _WebRtcPeerConnection(
     this._connection,
@@ -569,9 +635,10 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
   /// `null` on a screen-share connection, which never opens one.
   rtc.RTCDataChannel? _statusChannel;
 
-  /// Frames [sendStatus] could not send yet because the channel was still
-  /// negotiating; flushed in declaration order once it opens.
-  final List<String> _pendingStatusFrames = <String>[];
+  /// Latest state frames [sendStatus] could not send while the channel was
+  /// negotiating. Replaced state moves to the end, preserving the order of
+  /// the last change in each group; unknown message types have a fixed cap.
+  final _PendingStatusFrames _pendingStatusFrames = _PendingStatusFrames();
 
   Timer? _speakingPoll;
   Timer? _stoppedSpeakingTimer;
@@ -645,7 +712,7 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
       'payload': ?payload,
     });
     if (channel.state != rtc.RTCDataChannelState.RTCDataChannelOpen) {
-      _pendingStatusFrames.add(frame);
+      _pendingStatusFrames.add(type, frame);
       return false;
     }
     unawaited(channel.send(rtc.RTCDataChannelMessage(frame)));
@@ -657,8 +724,7 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
     if (channel == null || _pendingStatusFrames.isEmpty) {
       return;
     }
-    final pending = List<String>.of(_pendingStatusFrames);
-    _pendingStatusFrames.clear();
+    final pending = _pendingStatusFrames.takeAll();
     for (final frame in pending) {
       unawaited(channel.send(rtc.RTCDataChannelMessage(frame)));
     }
