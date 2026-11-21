@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 void main() {
@@ -119,6 +121,43 @@ void main() {
     expect(usage.recent, <String>['🎉', '😀']);
     expect(usage.favorites, <String>['👍']);
   });
+
+  test('blocked file lookup does not delay another account', () async {
+    final firstCallStarted = Completer<void>();
+    final releaseFirstCall = Completer<void>();
+    final originalPathProvider = PathProviderPlatform.instance;
+    PathProviderPlatform.instance = _BlockingSupportPathProvider(
+      root.path,
+      firstCallStarted,
+      releaseFirstCall,
+    );
+    final first = AccountId.parse('account-a');
+    final second = AccountId.parse('account-b');
+    final store = FileEmojiUsageStore();
+    final firstWrite = store.recordSelection(first, '😀');
+    Future<EmojiUsage>? secondWrite;
+    addTearDown(() async {
+      if (!releaseFirstCall.isCompleted) {
+        releaseFirstCall.complete();
+      }
+      try {
+        await Future.wait(<Future<EmojiUsage>>[firstWrite, ?secondWrite]);
+      } finally {
+        PathProviderPlatform.instance = originalPathProvider;
+      }
+    });
+    await firstCallStarted.future;
+
+    final independentWrite = store.recordSelection(second, '🎉');
+    secondWrite = independentWrite;
+    final secondUsage = await independentWrite.timeout(
+      const Duration(seconds: 1),
+    );
+
+    expect(secondUsage.recent, <String>['🎉']);
+    releaseFirstCall.complete();
+    expect((await firstWrite).recent, <String>['😀']);
+  });
 }
 
 Future<List<File>> _filesBelow(Directory directory) async {
@@ -130,4 +169,27 @@ Future<List<File>> _filesBelow(Directory directory) async {
       .where((entity) => entity is File)
       .cast<File>()
       .toList();
+}
+
+final class _BlockingSupportPathProvider extends PathProviderPlatform {
+  _BlockingSupportPathProvider(
+    this.path,
+    this.firstCallStarted,
+    this.releaseFirstCall,
+  );
+
+  final String path;
+  final Completer<void> firstCallStarted;
+  final Completer<void> releaseFirstCall;
+  int _callCount = 0;
+
+  @override
+  Future<String?> getApplicationSupportPath() async {
+    _callCount += 1;
+    if (_callCount == 1) {
+      firstCallStarted.complete();
+      await releaseFirstCall.future;
+    }
+    return path;
+  }
 }

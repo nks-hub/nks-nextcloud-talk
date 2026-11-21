@@ -57,16 +57,16 @@ final class FileEmojiUsageStore implements EmojiUsageStore {
 
   final Directory? _directory;
   final int recentLimit;
-  Future<void> _pending = Future<void>.value();
+  final Map<String, Future<void>> _pendingByAccount = <String, Future<void>>{};
 
   @override
   Future<EmojiUsage> read(AccountId accountId) =>
-      _serialize(() => _readFile(accountId));
+      _serialize(accountId, () => _readFile(accountId));
 
   @override
   Future<EmojiUsage> recordSelection(AccountId accountId, String emoji) {
     final value = _requireEmoji(emoji);
-    return _serialize(() async {
+    return _serialize(accountId, () async {
       final current = await _readFile(accountId);
       final recent = <String>[
         value,
@@ -81,7 +81,7 @@ final class FileEmojiUsageStore implements EmojiUsageStore {
   @override
   Future<EmojiUsage> toggleFavorite(AccountId accountId, String emoji) {
     final value = _requireEmoji(emoji);
-    return _serialize(() async {
+    return _serialize(accountId, () async {
       final current = await _readFile(accountId);
       final favorites = current.favorites.contains(value)
           ? current.favorites.where((candidate) => candidate != value)
@@ -94,7 +94,7 @@ final class FileEmojiUsageStore implements EmojiUsageStore {
 
   @override
   Future<void> delete(AccountId accountId) {
-    return _serialize(() async {
+    return _serialize(accountId, () async {
       final file = await _file(accountId);
       for (final candidate in <File>[file, File('${file.path}.tmp')]) {
         if (await candidate.exists()) {
@@ -180,9 +180,19 @@ final class FileEmojiUsageStore implements EmojiUsageStore {
     return decoded;
   }
 
-  Future<T> _serialize<T>(Future<T> Function() action) {
-    final result = _pending.then((_) => action());
-    _pending = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+  Future<T> _serialize<T>(AccountId accountId, Future<T> Function() action) {
+    final key = accountId.value;
+    final previous = _pendingByAccount[key] ?? Future<void>.value();
+    final result = previous.then((_) => action());
+    late final Future<void> tail;
+    tail = result
+        .then<void>((_) {}, onError: (Object _, StackTrace _) {})
+        .whenComplete(() {
+          if (identical(_pendingByAccount[key], tail)) {
+            _pendingByAccount.remove(key);
+          }
+        });
+    _pendingByAccount[key] = tail;
     return result;
   }
 
