@@ -796,6 +796,14 @@ final class AttachmentService with _AttachmentServiceRuntime {
     await _scheduleRoom(retryRoom);
   });
 
+  /// Waits for active recovery and retries triggered by a headless wake.
+  /// Each room run ends when its next attempt is scheduled for later.
+  Future<void> drainForBackground() async {
+    await resumeRetries();
+    await _startupMaintenance;
+    await Future.wait<void>(_roomRuns.values.toList(growable: false));
+  }
+
   /// Gives every upload that ran out of automatic retries, or is still
   /// waiting for its next one, a fresh attempt now.
   ///

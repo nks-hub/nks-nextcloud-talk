@@ -67,8 +67,8 @@ final chatServiceProvider = Provider<ChatService>((ref) {
 });
 
 /// Everything a wake-up owes the user: queued text in rooms nobody has open,
-/// revocations owed to servers that were unreachable, and uploads whose
-/// automatic retries ran out while the device had no network.
+/// revocations owed to servers that were unreachable, and uploads ready to
+/// continue after a restart or a failed attempt.
 ///
 /// The platform can tear down the headless engine as soon as this returns.
 Future<void> drainForBackground(ProviderContainer container) async {
@@ -76,7 +76,7 @@ Future<void> drainForBackground(ProviderContainer container) async {
   await container.read(appPasswordRevocationQueueProvider).drain();
   final attachments = await container.read(attachmentServiceProvider.future);
   try {
-    await attachments.resumeRetries();
+    await attachments.drainForBackground();
   } finally {
     await attachments.close();
   }

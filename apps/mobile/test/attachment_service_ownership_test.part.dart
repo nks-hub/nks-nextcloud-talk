@@ -153,6 +153,89 @@ void _registerAttachmentOwnershipTests() {
     },
   );
 
+  test(
+    'headless drain finishes a recovered PUT before reporting completion',
+    () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final fixture = await _Fixture.create(fileBacked: true);
+      addTearDown(fixture.close);
+      final jobId = await fixture.seedInFlight(AttachmentRequestStep.normalPut);
+
+      final putStarted = Completer<void>();
+      final allowPut = Completer<void>();
+      var finalized = 0;
+      final attachments = fixture.service(
+        MockClient((request) async {
+          if (request.method == 'PUT') {
+            expect(request.bodyBytes, fixture.bytes);
+            putStarted.complete();
+            await allowPut.future;
+            return http.Response('', 201);
+          }
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/attachment')) {
+            finalized++;
+            return http.Response.bytes(_finalizeSuccess(), 200);
+          }
+          fail('Unexpected request: ${request.method} ${request.url}');
+        }),
+        retryDelays: const [Duration.zero],
+      );
+      final api = HttpNextcloudApi(client: _unexpectedClient());
+      addTearDown(api.close);
+      final wakeRead = Completer<void>();
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(fixture.database),
+          credentialVaultProvider.overrideWithValue(fixture.credentials),
+          attachmentServiceProvider.overrideWith((_) async {
+            wakeRead.complete();
+            return attachments;
+          }),
+          nextcloudApiProvider.overrideWithValue(api),
+        ],
+      );
+      addTearDown(container.dispose);
+      addTearDown(() async {
+        if (!allowPut.isCompleted) allowPut.complete();
+        await attachments.close();
+      });
+      const channel = MethodChannel('test/attachment_runtime/held_put');
+      final messages = <MethodCall>[];
+      (int, String?)? outcomeAtCompletion;
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        messages.add(call);
+        final stored = await fixture.repository.getStoredJob(
+          accountId: 'account-a',
+          jobId: jobId.value,
+        );
+        outcomeAtCompletion = (finalized, stored?.phase);
+        return null;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+      await putStarted.future.timeout(const Duration(seconds: 5));
+      final drain = runBackgroundDrainIsolate(
+        drain: () => drainForBackground(container),
+        channel: channel,
+      );
+      await wakeRead.future.timeout(const Duration(seconds: 5));
+      await pumpEventQueue();
+      final completedWhilePutHeld = messages.isNotEmpty;
+      allowPut.complete();
+      await drain.timeout(const Duration(seconds: 5));
+
+      expect(messages.single.method, 'finished');
+      expect(messages.single.arguments, {'retry': false});
+      expect(
+        (completedWhilePutHeld, outcomeAtCompletion),
+        (false, (1, AttachmentJobPhase.awaitingConfirmation.name)),
+      );
+    },
+  );
+
   test('a replacement waits for the prior admission to commit', () async {
     final fixture = await _Fixture.create(fileBacked: true);
     addTearDown(fixture.close);
