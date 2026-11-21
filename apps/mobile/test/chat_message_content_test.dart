@@ -18,8 +18,11 @@ import 'test_support.dart';
 import 'poll_test_support.dart';
 
 part 'chat_message_content_poll_test.part.dart';
+part 'chat_message_content_reaction_test.part.dart';
 
 void main() {
+  _registerReactionSummaryTests();
+
   testWidgets('validated incoming poll opens the server-backed viewer', (
     tester,
   ) async {
@@ -753,6 +756,7 @@ Widget _app(
   LocationTileClientFactory tileClientFactory = _defaultTileClientFactory,
   Size mediaSize = const Size(200, 400),
   double contentWidth = 160,
+  ValueChanged<String>? onReactionTap,
 }) {
   return localizedTestApp(
     home: Scaffold(
@@ -770,6 +774,7 @@ Widget _app(
               foregroundColor: Colors.black,
               showReplyPreview: showReplyPreview,
               locationTileClientFactory: tileClientFactory,
+              onReactionTap: onReactionTap,
             ),
           ),
         ),

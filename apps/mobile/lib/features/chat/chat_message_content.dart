@@ -42,6 +42,7 @@ part 'chat_message_voice_content.dart';
 part 'chat_message_giphy_content.dart';
 part 'chat_message_reference_content.dart';
 part 'chat_message_rich_content.dart';
+part 'chat_message_reaction_summary.dart';
 part 'chat_location_preview.dart';
 
 http.Client _createLocationTileClient(String accountId) => http.Client();
