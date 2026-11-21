@@ -208,19 +208,22 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
       showModalBottomSheet<void>(
         context: context,
         builder: (sheetContext) => SafeArea(
-          child: Wrap(
-            children: [
-              for (final entry in entries)
-                ListTile(
-                  key: entry.key,
-                  leading: Icon(entry.icon),
-                  title: Text(entry.label),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    entry.onSelected();
-                  },
-                ),
-            ],
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final entry in entries)
+                  ListTile(
+                    key: entry.key,
+                    leading: Icon(entry.icon),
+                    title: Text(entry.label),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      entry.onSelected();
+                    },
+                  ),
+              ],
+            ),
           ),
         ),
       ),

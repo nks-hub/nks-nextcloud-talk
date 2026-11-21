@@ -252,6 +252,53 @@ void main() {
   });
 
   group('pin action', () {
+    testWidgets('the action sheet stays above the bottom system inset', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(400, 600);
+      tester.view.padding = const FakeViewPadding(bottom: 48);
+      tester.view.viewPadding = const FakeViewPadding(bottom: 48);
+      addTearDown(tester.view.reset);
+      final conversation = await insertRoom(participantType: 2);
+      await insertMessage();
+      await tester.pumpWidget(
+        wrap(
+          api: buildApi(
+            onRichChat: (_) => http.Response(jsonEncode(_failureOcs(404)), 404),
+          ),
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+          ),
+        ),
+      );
+      await settle(tester);
+
+      await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+      await settle(tester);
+
+      final remind = find.byKey(const Key('message-action-remind'));
+      expect(remind, findsOneWidget);
+      final scrollable = find.ancestor(
+        of: remind,
+        matching: find.byType(Scrollable),
+      );
+      expect(scrollable, findsOneWidget);
+      await tester.dragUntilVisible(remind, scrollable, const Offset(0, -100));
+      await settle(tester);
+
+      final bounds = tester.getRect(remind);
+      expect(bounds.height, greaterThanOrEqualTo(48));
+      expect(bounds.bottom, lessThanOrEqualTo(552));
+      expect(remind.hitTestable(), findsOneWidget);
+      await tester.tap(remind);
+      await flush(tester);
+      expect(find.byKey(const Key('reminder-sheet-title')), findsOneWidget);
+
+      await teardownTree(tester);
+    });
+
     testWidgets('a moderator can pin a message', (tester) async {
       // participantType 2 is a moderator.
       final conversation = await insertRoom(participantType: 2);
