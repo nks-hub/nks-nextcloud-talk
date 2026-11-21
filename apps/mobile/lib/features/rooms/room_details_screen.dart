@@ -42,6 +42,7 @@ part 'room_details_meeting.part.dart';
 part 'room_details_unbind.part.dart';
 part 'room_details_importance_sensitivity.part.dart';
 part 'room_details_message_expiration.part.dart';
+part 'room_details_permissions.part.dart';
 part 'room_details_public.part.dart';
 part 'room_details_shared_items.part.dart';
 part 'room_details_sip.part.dart';
@@ -85,6 +86,9 @@ const String _botsCapability = 'bots-v1';
 const String _emailCsvImportCapability = 'email-csv-import';
 const String _scheduleMeetingCapability = 'schedule-meeting';
 const String _unbindConversationCapability = 'unbind-conversation';
+const String _conversationPermissionsCapability = 'conversation-permissions';
+const String _publishingPermissionsCapability = 'publishing-permissions';
+const String _mentionPermissionsCapability = 'mention-permissions';
 const int _classifiedRoomAttribute = 4;
 
 /// Talk's actor type for an attendee invited by e-mail address. Only these
@@ -113,7 +117,14 @@ const List<String> _avatarEmoji = <String>[
 /// What a moderator can do to one attendee from the participant menu: the
 /// three participant-moderation endpoints plus a ban, which is a different
 /// API but belongs in the same place.
-enum ParticipantAction { promote, demote, remove, resendInvitation, ban }
+enum ParticipantAction {
+  promote,
+  demote,
+  editPermissions,
+  remove,
+  resendInvitation,
+  ban,
+}
 
 /// Conversation details: room metadata, the moderator-gated settings
 /// actions (rename, description, notification level, favorite, avatar,
@@ -155,6 +166,7 @@ final class RoomDetailsScreen extends ConsumerStatefulWidget {
 final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
     with
         _RoomDetailsStateLogic,
+        _RoomPermissionStateLogic,
         _RoomBreakoutStateLogic,
         _RoomPublicStateLogic,
         _RoomSipStateLogic,
@@ -502,6 +514,27 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
               ),
               value: _readOnly != 0,
               onChanged: _busy ? null : _toggleReadOnly,
+            ),
+          if (_canEditDefaultPermissions)
+            ListTile(
+              key: const Key('room-details-default-permissions'),
+              leading: const Icon(Icons.admin_panel_settings_outlined),
+              title: Text(strings.roomDetailsDefaultPermissionsAction),
+              subtitle: Text(strings.roomDetailsDefaultPermissionsHint),
+              onTap: _busy ? null : _editDefaultPermissions,
+            ),
+          if (_canEditMentionPermissions)
+            ListTile(
+              key: const Key('room-details-mention-permissions'),
+              leading: const Icon(Icons.alternate_email_rounded),
+              title: Text(strings.roomDetailsMentionPermissionsAction),
+              subtitle: Text(
+                (_room?.mentionPermissions ?? 0) == 1
+                    ? strings.roomDetailsMentionModerators
+                    : strings.roomDetailsMentionEveryone,
+                key: const Key('room-details-mention-permissions-subtitle'),
+              ),
+              onTap: _busy ? null : _editMentionPermissions,
             ),
           if (_canSetListable)
             ListTile(

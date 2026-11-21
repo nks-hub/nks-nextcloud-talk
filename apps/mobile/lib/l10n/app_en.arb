@@ -868,6 +868,32 @@
   },
   "roomDetailsRemoveDialogConfirm": "Remove",
   "roomDetailsParticipantActionRejected": "The server refused this change for this participant.",
+  "roomDetailsDefaultPermissionsAction": "Default participant permissions",
+  "roomDetailsDefaultPermissionsHint": "Choose what participants may do unless they have an individual setting.",
+  "roomDetailsMentionPermissionsAction": "Who can mention everyone",
+  "roomDetailsMentionEveryone": "All participants",
+  "roomDetailsMentionModerators": "Moderators only",
+  "roomDetailsEditPermissions": "Edit permissions",
+  "roomDetailsParticipantPermissionsTitle": "Permissions for {name}",
+  "@roomDetailsParticipantPermissionsTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "roomDetailsPermissionInherit": "Use conversation defaults",
+  "roomDetailsPermissionCustom": "Use individual permissions",
+  "roomDetailsPermissionManaged": "Managed by the server",
+  "roomDetailsPermissionCallsDisabled": "Calls are disabled by the server. Stored call permissions are kept.",
+  "roomDetailsPermissionResetTitle": "Reset individual permissions?",
+  "roomDetailsPermissionResetMessage": "Saving conversation defaults removes every participant's individual permission setting.",
+  "roomDetailsPermissionResetConfirm": "Save and reset",
+  "roomDetailsPermissionMembershipTitle": "Make this person a regular member?",
+  "roomDetailsPermissionMembershipMessage": "Saving changes this self-joined participant into a regular member. Closing guest access will not remove them.",
+  "roomDetailsPermissionMembershipConfirm": "Save and keep member",
+  "roomDetailsPermissionChangeRejected": "The server refused this permission change.",
+  "roomDetailsPermissionPolicyChanged": "The permission settings changed while this editor was open. Review them again.",
   "callBannerTitle": "Call in progress",
   "callBannerRunningFor": "Running for {duration}",
   "@callBannerRunningFor": {

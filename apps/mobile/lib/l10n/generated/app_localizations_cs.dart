@@ -2317,6 +2317,75 @@ class AppLocalizationsCs extends AppLocalizations {
       'Server tuto změnu u tohoto účastníka odmítl.';
 
   @override
+  String get roomDetailsDefaultPermissionsAction =>
+      'Výchozí oprávnění účastníků';
+
+  @override
+  String get roomDetailsDefaultPermissionsHint =>
+      'Zvolte, co mohou účastníci dělat, pokud nemají vlastní nastavení.';
+
+  @override
+  String get roomDetailsMentionPermissionsAction => 'Kdo může zmínit všechny';
+
+  @override
+  String get roomDetailsMentionEveryone => 'Všichni účastníci';
+
+  @override
+  String get roomDetailsMentionModerators => 'Pouze moderátoři';
+
+  @override
+  String get roomDetailsEditPermissions => 'Upravit oprávnění';
+
+  @override
+  String roomDetailsParticipantPermissionsTitle(String name) {
+    return 'Oprávnění pro $name';
+  }
+
+  @override
+  String get roomDetailsPermissionInherit =>
+      'Použít výchozí oprávnění konverzace';
+
+  @override
+  String get roomDetailsPermissionCustom => 'Použít vlastní oprávnění';
+
+  @override
+  String get roomDetailsPermissionManaged => 'Spravuje server';
+
+  @override
+  String get roomDetailsPermissionCallsDisabled =>
+      'Hovory jsou na serveru vypnuté. Uložená oprávnění hovorů zůstanou zachována.';
+
+  @override
+  String get roomDetailsPermissionResetTitle => 'Obnovit vlastní oprávnění?';
+
+  @override
+  String get roomDetailsPermissionResetMessage =>
+      'Uložení výchozích oprávnění odstraní vlastní nastavení všech účastníků.';
+
+  @override
+  String get roomDetailsPermissionResetConfirm => 'Uložit a obnovit';
+
+  @override
+  String get roomDetailsPermissionMembershipTitle =>
+      'Změnit tohoto člověka na běžného člena?';
+
+  @override
+  String get roomDetailsPermissionMembershipMessage =>
+      'Uložením se samostatně připojený účastník změní na běžného člena. Vypnutí přístupu hostů ho neodebere.';
+
+  @override
+  String get roomDetailsPermissionMembershipConfirm =>
+      'Uložit a ponechat člena';
+
+  @override
+  String get roomDetailsPermissionChangeRejected =>
+      'Server tuto změnu oprávnění odmítl.';
+
+  @override
+  String get roomDetailsPermissionPolicyChanged =>
+      'Nastavení oprávnění se během úprav změnilo. Zkontrolujte je znovu.';
+
+  @override
   String get callBannerTitle => 'Probíhá hovor';
 
   @override

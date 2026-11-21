@@ -2316,6 +2316,73 @@ class AppLocalizationsEn extends AppLocalizations {
       'The server refused this change for this participant.';
 
   @override
+  String get roomDetailsDefaultPermissionsAction =>
+      'Default participant permissions';
+
+  @override
+  String get roomDetailsDefaultPermissionsHint =>
+      'Choose what participants may do unless they have an individual setting.';
+
+  @override
+  String get roomDetailsMentionPermissionsAction => 'Who can mention everyone';
+
+  @override
+  String get roomDetailsMentionEveryone => 'All participants';
+
+  @override
+  String get roomDetailsMentionModerators => 'Moderators only';
+
+  @override
+  String get roomDetailsEditPermissions => 'Edit permissions';
+
+  @override
+  String roomDetailsParticipantPermissionsTitle(String name) {
+    return 'Permissions for $name';
+  }
+
+  @override
+  String get roomDetailsPermissionInherit => 'Use conversation defaults';
+
+  @override
+  String get roomDetailsPermissionCustom => 'Use individual permissions';
+
+  @override
+  String get roomDetailsPermissionManaged => 'Managed by the server';
+
+  @override
+  String get roomDetailsPermissionCallsDisabled =>
+      'Calls are disabled by the server. Stored call permissions are kept.';
+
+  @override
+  String get roomDetailsPermissionResetTitle => 'Reset individual permissions?';
+
+  @override
+  String get roomDetailsPermissionResetMessage =>
+      'Saving conversation defaults removes every participant\'s individual permission setting.';
+
+  @override
+  String get roomDetailsPermissionResetConfirm => 'Save and reset';
+
+  @override
+  String get roomDetailsPermissionMembershipTitle =>
+      'Make this person a regular member?';
+
+  @override
+  String get roomDetailsPermissionMembershipMessage =>
+      'Saving changes this self-joined participant into a regular member. Closing guest access will not remove them.';
+
+  @override
+  String get roomDetailsPermissionMembershipConfirm => 'Save and keep member';
+
+  @override
+  String get roomDetailsPermissionChangeRejected =>
+      'The server refused this permission change.';
+
+  @override
+  String get roomDetailsPermissionPolicyChanged =>
+      'The permission settings changed while this editor was open. Review them again.';
+
+  @override
   String get callBannerTitle => 'Call in progress';
 
   @override

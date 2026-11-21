@@ -54,6 +54,7 @@ String _moderationActionLabel(
   return switch (action) {
     ParticipantAction.promote => strings.roomDetailsPromoteModerator,
     ParticipantAction.demote => strings.roomDetailsDemoteModerator,
+    ParticipantAction.editPermissions => strings.roomDetailsEditPermissions,
     ParticipantAction.remove => strings.roomDetailsRemoveParticipant,
     ParticipantAction.resendInvitation => strings.roomDetailsResendInvitation,
     ParticipantAction.ban => strings.roomDetailsBanParticipant,

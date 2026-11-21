@@ -811,6 +811,32 @@
   "roomDetailsRemoveDialogMessage": "{name} ztratí přístup do této konverzace, dokud nedostane novou pozvánku.",
   "roomDetailsRemoveDialogConfirm": "Odebrat",
   "roomDetailsParticipantActionRejected": "Server tuto změnu u tohoto účastníka odmítl.",
+  "roomDetailsDefaultPermissionsAction": "Výchozí oprávnění účastníků",
+  "roomDetailsDefaultPermissionsHint": "Zvolte, co mohou účastníci dělat, pokud nemají vlastní nastavení.",
+  "roomDetailsMentionPermissionsAction": "Kdo může zmínit všechny",
+  "roomDetailsMentionEveryone": "Všichni účastníci",
+  "roomDetailsMentionModerators": "Pouze moderátoři",
+  "roomDetailsEditPermissions": "Upravit oprávnění",
+  "roomDetailsParticipantPermissionsTitle": "Oprávnění pro {name}",
+  "@roomDetailsParticipantPermissionsTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "roomDetailsPermissionInherit": "Použít výchozí oprávnění konverzace",
+  "roomDetailsPermissionCustom": "Použít vlastní oprávnění",
+  "roomDetailsPermissionManaged": "Spravuje server",
+  "roomDetailsPermissionCallsDisabled": "Hovory jsou na serveru vypnuté. Uložená oprávnění hovorů zůstanou zachována.",
+  "roomDetailsPermissionResetTitle": "Obnovit vlastní oprávnění?",
+  "roomDetailsPermissionResetMessage": "Uložení výchozích oprávnění odstraní vlastní nastavení všech účastníků.",
+  "roomDetailsPermissionResetConfirm": "Uložit a obnovit",
+  "roomDetailsPermissionMembershipTitle": "Změnit tohoto člověka na běžného člena?",
+  "roomDetailsPermissionMembershipMessage": "Uložením se samostatně připojený účastník změní na běžného člena. Vypnutí přístupu hostů ho neodebere.",
+  "roomDetailsPermissionMembershipConfirm": "Uložit a ponechat člena",
+  "roomDetailsPermissionChangeRejected": "Server tuto změnu oprávnění odmítl.",
+  "roomDetailsPermissionPolicyChanged": "Nastavení oprávnění se během úprav změnilo. Zkontrolujte je znovu.",
   "callBannerTitle": "Probíhá hovor",
   "callBannerRunningFor": "Běží {duration}",
   "callBannerJoin": "Připojit se k hovoru",

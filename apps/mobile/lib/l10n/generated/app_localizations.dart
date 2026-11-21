@@ -4238,6 +4238,120 @@ abstract class AppLocalizations {
   /// **'The server refused this change for this participant.'**
   String get roomDetailsParticipantActionRejected;
 
+  /// No description provided for @roomDetailsDefaultPermissionsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Default participant permissions'**
+  String get roomDetailsDefaultPermissionsAction;
+
+  /// No description provided for @roomDetailsDefaultPermissionsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose what participants may do unless they have an individual setting.'**
+  String get roomDetailsDefaultPermissionsHint;
+
+  /// No description provided for @roomDetailsMentionPermissionsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Who can mention everyone'**
+  String get roomDetailsMentionPermissionsAction;
+
+  /// No description provided for @roomDetailsMentionEveryone.
+  ///
+  /// In en, this message translates to:
+  /// **'All participants'**
+  String get roomDetailsMentionEveryone;
+
+  /// No description provided for @roomDetailsMentionModerators.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderators only'**
+  String get roomDetailsMentionModerators;
+
+  /// No description provided for @roomDetailsEditPermissions.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit permissions'**
+  String get roomDetailsEditPermissions;
+
+  /// No description provided for @roomDetailsParticipantPermissionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Permissions for {name}'**
+  String roomDetailsParticipantPermissionsTitle(String name);
+
+  /// No description provided for @roomDetailsPermissionInherit.
+  ///
+  /// In en, this message translates to:
+  /// **'Use conversation defaults'**
+  String get roomDetailsPermissionInherit;
+
+  /// No description provided for @roomDetailsPermissionCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Use individual permissions'**
+  String get roomDetailsPermissionCustom;
+
+  /// No description provided for @roomDetailsPermissionManaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Managed by the server'**
+  String get roomDetailsPermissionManaged;
+
+  /// No description provided for @roomDetailsPermissionCallsDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Calls are disabled by the server. Stored call permissions are kept.'**
+  String get roomDetailsPermissionCallsDisabled;
+
+  /// No description provided for @roomDetailsPermissionResetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset individual permissions?'**
+  String get roomDetailsPermissionResetTitle;
+
+  /// No description provided for @roomDetailsPermissionResetMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving conversation defaults removes every participant\'s individual permission setting.'**
+  String get roomDetailsPermissionResetMessage;
+
+  /// No description provided for @roomDetailsPermissionResetConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Save and reset'**
+  String get roomDetailsPermissionResetConfirm;
+
+  /// No description provided for @roomDetailsPermissionMembershipTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Make this person a regular member?'**
+  String get roomDetailsPermissionMembershipTitle;
+
+  /// No description provided for @roomDetailsPermissionMembershipMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving changes this self-joined participant into a regular member. Closing guest access will not remove them.'**
+  String get roomDetailsPermissionMembershipMessage;
+
+  /// No description provided for @roomDetailsPermissionMembershipConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Save and keep member'**
+  String get roomDetailsPermissionMembershipConfirm;
+
+  /// No description provided for @roomDetailsPermissionChangeRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused this permission change.'**
+  String get roomDetailsPermissionChangeRejected;
+
+  /// No description provided for @roomDetailsPermissionPolicyChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The permission settings changed while this editor was open. Review them again.'**
+  String get roomDetailsPermissionPolicyChanged;
+
   /// No description provided for @callBannerTitle.
   ///
   /// In en, this message translates to:

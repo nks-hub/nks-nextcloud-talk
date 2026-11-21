@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -40,6 +41,7 @@ part 'room_details_unbind_test.part.dart';
 part 'room_details_importance_sensitivity_test.part.dart';
 part 'room_details_message_expiration_test.part.dart';
 part 'room_details_overview_moderation_test.part.dart';
+part 'room_details_permissions_test.part.dart';
 part 'room_details_public_test.part.dart';
 part 'room_details_sip_info_test.part.dart';
 part 'room_details_shared_items_test.part.dart';
@@ -94,6 +96,7 @@ void main() {
   tearDown(() => database.close());
 
   _registerOverviewAndModerationTests();
+  _registerPermissionEditorTests();
   _registerAdministrationTests();
   _registerPublicPasswordTests();
   _registerAvatarAndBanTests();

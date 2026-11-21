@@ -1,6 +1,9 @@
 part of 'room_details_screen.dart';
 
 mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
+  bool _canEditParticipantPermissions(Participant participant);
+  Future<void> _editParticipantPermissions(Participant participant);
+
   late Future<List<Participant>> _participants;
   late ConversationRoom? _room;
   late bool _isFavorite;
@@ -999,6 +1002,8 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
     // server accepts the call for any attendee id but mails nobody else.
     return [
       ...moderation,
+      if (_canEditParticipantPermissions(participant))
+        ParticipantAction.editPermissions,
       if (_isEmailAttendee(participant)) ParticipantAction.resendInvitation,
       if (bannable) ParticipantAction.ban,
     ];
@@ -1008,6 +1013,9 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
     Participant participant,
     ParticipantAction action,
   ) async {
+    if (action == ParticipantAction.editPermissions) {
+      return _editParticipantPermissions(participant);
+    }
     if (action == ParticipantAction.ban) {
       return _ban(participant);
     }
@@ -1020,6 +1028,9 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
       ParticipantAction.remove ||
       ParticipantAction.resendInvitation ||
       ParticipantAction.ban => ParticipantModerationAction.remove,
+      ParticipantAction.editPermissions => throw StateError(
+        'Permission editing must not reach participant moderation.',
+      ),
     });
   }
 
