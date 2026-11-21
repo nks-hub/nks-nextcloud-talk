@@ -261,17 +261,24 @@ final class _BreakoutSwitchDialog extends StatelessWidget {
       title: Text(strings.roomDetailsBreakoutSwitchTitle),
       content: SizedBox(
         width: 400,
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            for (final room in rooms)
-              ListTile(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.6,
+          ),
+          child: ListView.builder(
+            key: const Key('room-details-breakout-switch-list'),
+            shrinkWrap: true,
+            itemCount: rooms.length,
+            itemBuilder: (context, index) {
+              final room = rooms[index];
+              return ListTile(
                 key: Key('room-details-breakout-switch-${room.token.value}'),
                 leading: const Icon(Icons.meeting_room_outlined),
                 title: Text(room.displayName),
                 onTap: () => Navigator.of(context).pop(room),
-              ),
-          ],
+              );
+            },
+          ),
         ),
       ),
       actions: [

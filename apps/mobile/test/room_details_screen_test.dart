@@ -33,6 +33,7 @@ import 'test_support.dart';
 part 'room_details_administration_test.part.dart';
 part 'room_details_avatar_bans_test.part.dart';
 part 'room_details_background_test.part.dart';
+part 'room_details_breakout_test.part.dart';
 part 'room_details_call_notifications_test.part.dart';
 part 'room_details_clear_history_test.part.dart';
 part 'room_details_conversation_tags_test.part.dart';
@@ -101,6 +102,7 @@ void main() {
   _registerPublicPasswordTests();
   _registerAvatarAndBanTests();
   _registerBackgroundTests();
+  _registerBreakoutTests();
   _registerCallNotificationTests();
   _registerClearHistoryTests();
   _registerConversationTagsTests();
