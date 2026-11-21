@@ -483,136 +483,197 @@ final class _ChatComposer extends ConsumerWidget {
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: scheme.surface,
-      elevation: 3,
+      color: scheme.surfaceContainerLow,
+      shape: Border(
+        top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.7)),
+      ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-          child: readOnly
-              ? ConstrainedBox(
-                  // A floor, not a ceiling: this line says why the composer is
-                  // gone, and the Czech lobby sentence needs about seven lines
-                  // at 200 % text on a phone. A fixed 48 clipped all but the
-                  // first, which left the person locked out with no reason.
-                  constraints: const BoxConstraints(minHeight: 48),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.lock_outline_rounded),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(switch (postingBlock!) {
-                          ChatPostingBlock.readOnly =>
-                            strings.readOnlyConversation,
-                          ChatPostingBlock.noChatPermission =>
-                            strings.noChatPermissionConversation,
-                          ChatPostingBlock.lobby => strings.lobbyConversation,
-                        }),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: _chatContentMaxWidth),
+              child: readOnly
+                  ? Container(
+                      // A floor, not a ceiling: this line says why the composer
+                      // is gone, and long translated text must stay readable.
+                      constraints: const BoxConstraints(minHeight: 48),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
                       ),
-                    ],
-                  ),
-                )
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // First, so the floating tile hangs from the composer's
-                    // top edge whatever else is shown inside it.
-                    ClipboardImageOffer(
-                      key: ValueKey<ChatRoomProviderKey>(roomKey),
-                      focusNode: focusNode,
-                      blocked: () => sending || media.isBusy,
-                      refresh: media.changes,
-                      sending: sending,
-                      onAttach: onPasteImage,
-                      // Only with the image waiting: when its preparation
-                      // failed, a send would carry the text alone.
-                      onSend: () {
-                        if (hasAttachment()) {
-                          onSubmit();
-                        }
-                      },
-                    ),
-                    if (replyTo != null)
-                      _ReplyBanner(message: replyTo!, onCancel: onCancelReply),
-                    MentionSuggestionsBar(
-                      controller: controller,
-                      source: mentionSource,
-                      enabled: !sending,
-                      labels: MentionSuggestionsLabels(
-                        noResults: strings.mentionSuggestionsEmpty,
-                        error: strings.mentionSuggestionsError,
+                      decoration: BoxDecoration(
+                        color: scheme.tertiaryContainer.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                    ),
-                    Focus(
-                      onKeyEvent: (node, event) => _handleKey(
-                        context,
-                        event,
-                        sendsOnEnter: context.sendsOnEnter,
-                      ),
-                      child: TextField(
-                        key: const Key('chat-composer'),
-                        controller: controller,
-                        onChanged: (_) => ref
-                            .read(windowActivityProvider)
-                            ?.recordInteraction(),
-                        focusNode: focusNode,
-                        autofocus: autofocus,
-                        minLines: 1,
-                        maxLines: 5,
-                        maxLength: composerMaximumCharacters,
-                        inputFormatters: [
-                          OversizedPasteFormatter(
-                            onOversizedPaste,
-                            canDivert: canDivertPaste,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.lock_outline_rounded,
+                            color: scheme.onTertiaryContainer,
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              switch (postingBlock!) {
+                                ChatPostingBlock.readOnly =>
+                                  strings.readOnlyConversation,
+                                ChatPostingBlock.noChatPermission =>
+                                  strings.noChatPermissionConversation,
+                                ChatPostingBlock.lobby =>
+                                  strings.lobbyConversation,
+                              },
+                              style: TextStyle(
+                                color: scheme.onTertiaryContainer,
+                              ),
+                            ),
                           ),
                         ],
-                        buildCounter:
-                            (
-                              _, {
-                              required currentLength,
-                              required isFocused,
-                              maxLength,
-                            }) => null,
-                        textCapitalization: TextCapitalization.sentences,
-                        keyboardType: TextInputType.multiline,
-                        // Android keyboards hand over an image from their
-                        // clipboard or GIF tray through commitContent.
-                        contentInsertionConfiguration:
-                            ContentInsertionConfiguration(
-                              allowedMimeTypes: const <String>[
-                                'image/png',
-                                'image/jpeg',
-                                'image/gif',
-                                'image/webp',
-                                'image/bmp',
-                              ],
-                              onContentInserted: (content) {
-                                ref
-                                    .read(windowActivityProvider)
-                                    ?.recordInteraction();
-                                unawaited(
-                                  _insertKeyboardContent(
-                                    content,
-                                    ProviderScope.containerOf(
-                                      context,
-                                      listen: false,
+                      ),
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // First, so the floating tile hangs from the composer's
+                        // top edge whatever else is shown inside it.
+                        ClipboardImageOffer(
+                          key: ValueKey<ChatRoomProviderKey>(roomKey),
+                          focusNode: focusNode,
+                          blocked: () => sending || media.isBusy,
+                          refresh: media.changes,
+                          sending: sending,
+                          onAttach: onPasteImage,
+                          onSend: () {
+                            if (hasAttachment()) {
+                              onSubmit();
+                            }
+                          },
+                        ),
+                        if (replyTo != null)
+                          _ReplyBanner(
+                            message: replyTo!,
+                            onCancel: onCancelReply,
+                          ),
+                        MentionSuggestionsBar(
+                          controller: controller,
+                          source: mentionSource,
+                          enabled: !sending,
+                          labels: MentionSuggestionsLabels(
+                            noResults: strings.mentionSuggestionsEmpty,
+                            error: strings.mentionSuggestionsError,
+                          ),
+                        ),
+                        ListenableBuilder(
+                          listenable: focusNode,
+                          builder: (context, _) => Container(
+                            decoration: BoxDecoration(
+                              color: scheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: focusNode.hasFocus
+                                    ? scheme.primary
+                                    : scheme.outlineVariant,
+                                width: 2,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Focus(
+                                  onKeyEvent: (node, event) => _handleKey(
+                                    context,
+                                    event,
+                                    sendsOnEnter: context.sendsOnEnter,
+                                  ),
+                                  child: TextField(
+                                    key: const Key('chat-composer'),
+                                    controller: controller,
+                                    onChanged: (_) => ref
+                                        .read(windowActivityProvider)
+                                        ?.recordInteraction(),
+                                    focusNode: focusNode,
+                                    autofocus: autofocus,
+                                    minLines: 1,
+                                    maxLines: 5,
+                                    maxLength: composerMaximumCharacters,
+                                    inputFormatters: [
+                                      OversizedPasteFormatter(
+                                        onOversizedPaste,
+                                        canDivert: canDivertPaste,
+                                      ),
+                                    ],
+                                    buildCounter:
+                                        (
+                                          _, {
+                                          required currentLength,
+                                          required isFocused,
+                                          maxLength,
+                                        }) => null,
+                                    textCapitalization:
+                                        TextCapitalization.sentences,
+                                    keyboardType: TextInputType.multiline,
+                                    contentInsertionConfiguration:
+                                        ContentInsertionConfiguration(
+                                          allowedMimeTypes: const <String>[
+                                            'image/png',
+                                            'image/jpeg',
+                                            'image/gif',
+                                            'image/webp',
+                                            'image/bmp',
+                                          ],
+                                          onContentInserted: (content) {
+                                            ref
+                                                .read(windowActivityProvider)
+                                                ?.recordInteraction();
+                                            unawaited(
+                                              _insertKeyboardContent(
+                                                content,
+                                                ProviderScope.containerOf(
+                                                  context,
+                                                  listen: false,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                    decoration: InputDecoration(
+                                      hintText: strings.messageHint,
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      contentPadding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        14,
+                                        16,
+                                        10,
+                                      ),
                                     ),
                                   ),
-                                );
-                              },
+                                ),
+                                Divider(
+                                  height: 1,
+                                  color: scheme.outlineVariant.withValues(
+                                    alpha: 0.7,
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 2,
+                                  ),
+                                  child: mediaComposer,
+                                ),
+                              ],
                             ),
-                        decoration: InputDecoration(
-                          labelText: strings.messageHint,
-                          border: const OutlineInputBorder(),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    mediaComposer,
-                  ],
-                ),
+            ),
+          ),
         ),
       ),
     );

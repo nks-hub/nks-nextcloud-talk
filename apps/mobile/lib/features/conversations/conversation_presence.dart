@@ -23,6 +23,7 @@ import 'conversation_absence.dart';
 import 'conversation_upcoming_event.dart';
 
 const int _oneToOneConversationType = 1;
+const double _chatHeaderContentMaxWidth = 960;
 
 enum ConversationPresenceKind { online, away, busy, doNotDisturb }
 
@@ -339,72 +340,87 @@ final class PresenceChatRoomPane extends ConsumerWidget {
       header: (context, tinted) => Container(
         key: const Key('chat-room-header'),
         constraints: BoxConstraints(minHeight: context.paneHeaderHeight),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
+          color: tinted
+              ? null
+              : Theme.of(context).colorScheme.surfaceContainerLow,
           border: Border(
             bottom: BorderSide(
               color: Theme.of(context).colorScheme.outlineVariant,
             ),
           ),
         ),
-        child: LayoutBuilder(
-          builder: (context, box) => Row(
-            children: [
-              if (onToggleList != null) ...[
-                IconButton(
-                  key: const Key('toggle-conversation-list'),
-                  tooltip: listCollapsed
-                      ? strings.showConversationList
-                      : strings.hideConversationList,
-                  icon: Icon(
-                    listCollapsed
-                        ? Icons.menu_open_rounded
-                        : Icons.menu_rounded,
-                  ),
-                  onPressed: onToggleList,
-                ),
-                const SizedBox(width: 4),
-              ],
-              if (onClose != null) ...[
-                IconButton(
-                  key: const Key('close-conversation'),
-                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                  icon: const BackButtonIcon(),
-                  onPressed: onClose,
-                ),
-                const SizedBox(width: 4),
-              ],
-              ExcludeSemantics(
-                child: ConversationAvatar(
-                  account: account,
-                  conversation: conversation,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: _chatHeaderContentMaxWidth,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: LayoutBuilder(
+                builder: (context, box) => Row(
+                  children: [
+                    if (onToggleList != null) ...[
+                      IconButton(
+                        key: const Key('toggle-conversation-list'),
+                        tooltip: listCollapsed
+                            ? strings.showConversationList
+                            : strings.hideConversationList,
+                        icon: Icon(
+                          listCollapsed
+                              ? Icons.menu_open_rounded
+                              : Icons.menu_rounded,
+                        ),
+                        onPressed: onToggleList,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    if (onClose != null) ...[
+                      IconButton(
+                        key: const Key('close-conversation'),
+                        tooltip: MaterialLocalizations.of(
+                          context,
+                        ).backButtonTooltip,
+                        icon: const BackButtonIcon(),
+                        onPressed: onClose,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    ExcludeSemantics(
+                      child: ConversationAvatar(
+                        account: account,
+                        conversation: conversation,
+                      ),
+                    ),
+                    const SizedBox(width: avatarGap),
+                    Expanded(
+                      child: ConversationPresenceTitle(
+                        conversation: conversation,
+                        titleStyle: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                        fallbackSubtitle: conversation.description,
+                      ),
+                    ),
+                    ...conversationHeaderActions(
+                      _headerActions(
+                        context,
+                        ref,
+                        account,
+                        conversation,
+                        onOpenDetails: onOpenDetails,
+                      ),
+                      width: box.maxWidth - leadingExtent,
+                      actionExtent: actionExtentOf(context),
+                      titleFloor: conversationTitleFloor(
+                        context,
+                        avatarExtent: avatarExtent,
+                        gap: avatarGap,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: avatarGap),
-              Expanded(
-                child: ConversationPresenceTitle(
-                  conversation: conversation,
-                  titleStyle: Theme.of(context).textTheme.titleMedium,
-                  fallbackSubtitle: conversation.description,
-                ),
-              ),
-              ...conversationHeaderActions(
-                _headerActions(
-                  context,
-                  ref,
-                  account,
-                  conversation,
-                  onOpenDetails: onOpenDetails,
-                ),
-                width: box.maxWidth - leadingExtent,
-                actionExtent: actionExtentOf(context),
-                titleFloor: conversationTitleFloor(
-                  context,
-                  avatarExtent: avatarExtent,
-                  gap: avatarGap,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

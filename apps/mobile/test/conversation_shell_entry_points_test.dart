@@ -249,6 +249,32 @@ void main() {
       },
     );
 
+    testWidgets(
+      '${layout.key}: the conversation list names itself and search',
+      (tester) async {
+        await pumpShell(tester);
+
+        expect(find.text('Conversations'), findsOneWidget);
+        expect(find.byKey(const Key('open-message-search')), findsOneWidget);
+        if (layout.key == 'expanded') {
+          expect(
+            find.byKey(const Key('conversation-list-pane')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const Key('conversation-list-header')),
+            findsOneWidget,
+          );
+        } else {
+          expect(
+            find.byKey(const Key('conversation-shell-compact')),
+            findsOneWidget,
+          );
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets('${layout.key}: arrows walk the conversation list', (
       tester,
     ) async {

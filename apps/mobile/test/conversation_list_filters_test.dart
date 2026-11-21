@@ -78,6 +78,74 @@ void main() {
     expect(cache.entryCount, 2);
   });
 
+  testWidgets('three localized filters fit a 300 dp pane or reflow', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    Future<void> pumpAt(double textScale, Locale locale) => tester.pumpWidget(
+      _app(
+        account: _account(withArchiveCapability: true),
+        conversations: [_conversation(token: 'room0001')],
+        locale: locale,
+        textScale: textScale,
+      ),
+    );
+
+    const filterKeys = <Key>[
+      Key('conversation-filter-unread'),
+      Key('conversation-filter-mentions'),
+      Key('conversation-filter-archived'),
+    ];
+
+    await pumpAt(1, const Locale('en'));
+
+    final filterBounds = tester.getRect(
+      find.byKey(const Key('conversation-filters')),
+    );
+    final regularBounds = [
+      for (final key in filterKeys) tester.getRect(find.byKey(key)),
+    ];
+    for (final bounds in regularBounds) {
+      expect(bounds.left, greaterThanOrEqualTo(filterBounds.left));
+      expect(bounds.right, lessThanOrEqualTo(filterBounds.right));
+    }
+    expect(
+      regularBounds.map((bounds) => bounds.top).toSet(),
+      hasLength(1),
+      reason:
+          'The normal labels should stay in one compact row: $regularBounds',
+    );
+    expect(find.text('Unread'), findsOneWidget);
+    expect(find.text('Mentions'), findsOneWidget);
+    expect(find.text('Archived'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await pumpAt(2, const Locale('cs'));
+
+    final scaledFilterBounds = tester.getRect(
+      find.byKey(const Key('conversation-filters')),
+    );
+    final scaledBounds = [
+      for (final key in filterKeys) tester.getRect(find.byKey(key)),
+    ];
+    for (final bounds in scaledBounds) {
+      expect(bounds.left, greaterThanOrEqualTo(scaledFilterBounds.left));
+      expect(bounds.right, lessThanOrEqualTo(scaledFilterBounds.right));
+    }
+    expect(
+      scaledBounds.map((bounds) => bounds.top).toSet().length,
+      greaterThan(1),
+      reason: 'Large localized labels should reflow instead of clipping.',
+    );
+    expect(find.text('Nepřečtené'), findsOneWidget);
+    expect(find.text('Zmínky'), findsOneWidget);
+    expect(find.text('Archivované'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('unread and mention filters combine without exposing archives', (
     tester,
   ) async {
@@ -383,12 +451,16 @@ void main() {
 Widget _app({
   required StoredAccount account,
   required List<CachedConversation> conversations,
+  Locale locale = const Locale('en'),
+  double textScale = 1,
 }) {
   return ProviderScope(
     overrides: [
       conversationAvatarProvider.overrideWith((ref, key) async => null),
     ],
     child: localizedTestApp(
+      locale: locale,
+      textScale: textScale,
       home: Scaffold(
         body: ConversationListView(
           account: account,

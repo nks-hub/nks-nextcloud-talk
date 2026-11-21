@@ -98,6 +98,10 @@ part 'chat_room_pane_widgets.dart';
 /// Talk's `roomType` for a one-to-one conversation.
 const int _oneToOneRoomType = 1;
 
+/// Keeps a desktop conversation readable without narrowing phones or split
+/// windows.
+const double _chatContentMaxWidth = 920;
+
 final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     with WidgetsBindingObserver {
   static const _quickReactionEmoji = <String>[

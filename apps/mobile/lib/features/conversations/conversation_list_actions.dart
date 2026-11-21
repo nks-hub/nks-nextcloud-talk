@@ -294,36 +294,66 @@ final class _ConversationFilterBar extends StatelessWidget {
     return Semantics(
       container: true,
       label: strings.conversationFiltersLabel,
-      child: SingleChildScrollView(
+      child: Padding(
         key: const Key('conversation-filters'),
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+        child: Wrap(
+          spacing: 4,
+          runSpacing: 4,
           children: [
-            FilterChip(
+            _chip(
+              context,
               key: const Key('conversation-filter-unread'),
               selected: selected.contains(_ConversationListFilter.unread),
               label: Text(strings.conversationFilterUnread),
               onSelected: (_) => onToggle(_ConversationListFilter.unread),
             ),
-            const SizedBox(width: 8),
-            FilterChip(
+            _chip(
+              context,
               key: const Key('conversation-filter-mentions'),
               selected: selected.contains(_ConversationListFilter.mentions),
               label: Text(strings.conversationFilterMentions),
               onSelected: (_) => onToggle(_ConversationListFilter.mentions),
             ),
-            if (showArchived) ...[
-              const SizedBox(width: 8),
-              FilterChip(
+            if (showArchived)
+              _chip(
+                context,
                 key: const Key('conversation-filter-archived'),
                 selected: selected.contains(_ConversationListFilter.archived),
                 label: Text(strings.conversationFilterArchived),
                 onSelected: (_) => onToggle(_ConversationListFilter.archived),
               ),
-            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _chip(
+    BuildContext context, {
+    required Key key,
+    required bool selected,
+    required Widget label,
+    required ValueChanged<bool> onSelected,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return FilterChip(
+      key: key,
+      selected: selected,
+      label: label,
+      onSelected: onSelected,
+      showCheckmark: false,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      visualDensity: const VisualDensity(horizontal: -4),
+      padding: EdgeInsets.zero,
+      labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+      side: BorderSide(
+        color: selected ? scheme.secondary : scheme.outlineVariant,
+      ),
+      selectedColor: scheme.secondaryContainer,
+      labelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant,
+        fontWeight: FontWeight.w600,
       ),
     );
   }
@@ -357,6 +387,22 @@ final class _ConversationTile extends StatelessWidget {
         ConversationCallState.fromConversation(conversation) != null;
     final delivery = lastMessageDelivery(conversation);
     final read = delivery == OutgoingMessageDeliveryState.read;
+    final unread = conversation.unreadMessages > 0;
+    final tileColor = selected
+        ? scheme.secondaryContainer
+        : unread
+        ? scheme.tertiaryContainer.withValues(alpha: 0.42)
+        : Colors.transparent;
+    final titleColor = selected
+        ? scheme.onSecondaryContainer
+        : unread
+        ? scheme.onTertiaryContainer
+        : scheme.onSurface;
+    final supportingColor = selected
+        ? scheme.onSecondaryContainer.withValues(alpha: 0.74)
+        : unread
+        ? scheme.onTertiaryContainer.withValues(alpha: 0.72)
+        : scheme.onSurfaceVariant;
     final semanticsValue = [
       if (hasCall) strings.callBannerTitle,
       if (presence != null) presence.description(strings),
@@ -375,167 +421,179 @@ final class _ConversationTile extends StatelessWidget {
       onTap: onTap,
       onLongPress: onLongPress,
       child: ExcludeSemantics(
-        child: Material(
-          color: selected ? scheme.secondaryContainer : Colors.transparent,
-          // Right-click reaches the same sheet as a long press: holding a
-          // mouse button down is the wrong gesture on a desktop, and the two
-          // never collide because no pointer produces both.
-          child: GestureDetector(
-            onSecondaryTap: onLongPress,
-            child: InkWell(
-              onTap: onTap,
-              onLongPress: onLongPress,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: context.listRowHeight),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  child: Row(
-                    children: [
-                      ConversationAvatar(
-                        account: account,
-                        conversation: conversation,
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                if (conversation.favorite) ...[
-                                  Icon(
-                                    Icons.star_rounded,
-                                    size: 18,
-                                    color: scheme.primary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                ],
-                                if (conversation.isArchived) ...[
-                                  Icon(
-                                    Icons.archive_outlined,
-                                    size: 18,
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                  const SizedBox(width: 4),
-                                ],
-                                if (hasCall) ...[
-                                  // Announced through the tile's semantics
-                                  // value, which this subtree is excluded from.
-                                  Icon(
-                                    Icons.videocam_rounded,
-                                    key: Key(
-                                      'conversation-call-'
-                                      '${conversation.token}',
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          child: Material(
+            color: tileColor,
+            borderRadius: BorderRadius.circular(12),
+            clipBehavior: Clip.antiAlias,
+            // Right-click reaches the same sheet as a long press: holding a
+            // mouse button down is the wrong gesture on a desktop, and the two
+            // never collide because no pointer produces both.
+            child: GestureDetector(
+              onSecondaryTap: onLongPress,
+              child: InkWell(
+                onTap: onTap,
+                onLongPress: onLongPress,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: context.listRowHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      children: [
+                        ConversationAvatar(
+                          account: account,
+                          conversation: conversation,
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  if (conversation.favorite) ...[
+                                    Icon(
+                                      Icons.star_rounded,
+                                      size: 18,
+                                      color: scheme.primary,
                                     ),
-                                    size: 18,
-                                    color: scheme.primary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                ],
-                                Expanded(
-                                  child: Text(
-                                    conversation.displayName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleMedium,
-                                  ),
-                                ),
-                                if (presence != null) ...[
-                                  const SizedBox(width: 7),
-                                  ConversationPresenceBadge(
-                                    conversation: conversation,
-                                  ),
-                                ],
-                                const SizedBox(width: 8),
-                                // Flexible because the name beside it can
-                                // already shrink and this cannot: at 200 %
-                                // text an absolute date is wider than the
-                                // 240 px the list may be dragged to, and the
-                                // row overflowed by 65 px rather than trim
-                                // the one part of it nobody reads twice.
-                                Flexible(
-                                  child: Text(
-                                    _formatActivity(
-                                      context,
-                                      conversation.lastActivity,
+                                    const SizedBox(width: 4),
+                                  ],
+                                  if (conversation.isArchived) ...[
+                                    Icon(
+                                      Icons.archive_outlined,
+                                      size: 18,
+                                      color: scheme.onSurfaceVariant,
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
-                                        ?.copyWith(
-                                          color: scheme.onSurfaceVariant,
-                                        ),
+                                    const SizedBox(width: 4),
+                                  ],
+                                  if (hasCall) ...[
+                                    // Announced through the tile's semantics
+                                    // value, which this subtree is excluded from.
+                                    Icon(
+                                      Icons.videocam_rounded,
+                                      key: Key(
+                                        'conversation-call-'
+                                        '${conversation.token}',
+                                      ),
+                                      size: 18,
+                                      color: scheme.primary,
+                                    ),
+                                    const SizedBox(width: 4),
+                                  ],
+                                  Expanded(
+                                    child: Text(
+                                      conversation.displayName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            color: titleColor,
+                                            fontWeight: unread || selected
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                          ),
+                                    ),
                                   ),
+                                  if (presence != null) ...[
+                                    const SizedBox(width: 7),
+                                    ConversationPresenceBadge(
+                                      conversation: conversation,
+                                    ),
+                                  ],
+                                  const SizedBox(width: 8),
+                                  // Flexible because the name beside it can
+                                  // already shrink and this cannot: at 200 %
+                                  // text an absolute date is wider than the
+                                  // 240 px the list may be dragged to, and the
+                                  // row overflowed by 65 px rather than trim
+                                  // the one part of it nobody reads twice.
+                                  Flexible(
+                                    child: Text(
+                                      _formatActivity(
+                                        context,
+                                        conversation.lastActivity,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(color: supportingColor),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (statusMessage != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  statusMessage,
+                                  key: Key(
+                                    'conversation-presence-message-'
+                                    '${conversation.token}',
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(color: supportingColor),
                                 ),
                               ],
-                            ),
-                            if (statusMessage != null) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                statusMessage,
-                                key: Key(
-                                  'conversation-presence-message-'
-                                  '${conversation.token}',
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(color: scheme.onSurfaceVariant),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  if (delivery != null) ...[
+                                    // The marks of the chat bubbles: one tick
+                                    // once stored, two once everyone read it.
+                                    Icon(
+                                      read
+                                          ? Icons.done_all_rounded
+                                          : Icons.done_rounded,
+                                      key: Key(
+                                        'conversation-delivery-'
+                                        '${conversation.token}',
+                                      ),
+                                      size: 16,
+                                      color: read
+                                          ? scheme.primary
+                                          : scheme.onSurfaceVariant,
+                                    ),
+                                    const SizedBox(width: 4),
+                                  ],
+                                  Expanded(
+                                    child: Text(
+                                      preview,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: supportingColor,
+                                            fontWeight: unread
+                                                ? FontWeight.w600
+                                                : null,
+                                          ),
+                                    ),
+                                  ),
+                                  if (conversation.unreadMessages > 0) ...[
+                                    const SizedBox(width: 8),
+                                    _UnreadBadge(
+                                      count: conversation.unreadMessages,
+                                    ),
+                                  ],
+                                ],
                               ),
                             ],
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                if (delivery != null) ...[
-                                  // The marks of the chat bubbles: one tick
-                                  // once stored, two once everyone read it.
-                                  Icon(
-                                    read
-                                        ? Icons.done_all_rounded
-                                        : Icons.done_rounded,
-                                    key: Key(
-                                      'conversation-delivery-'
-                                      '${conversation.token}',
-                                    ),
-                                    size: 16,
-                                    color: read
-                                        ? scheme.primary
-                                        : scheme.onSurfaceVariant,
-                                  ),
-                                  const SizedBox(width: 4),
-                                ],
-                                Expanded(
-                                  child: Text(
-                                    preview,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                          color: scheme.onSurfaceVariant,
-                                        ),
-                                  ),
-                                ),
-                                if (conversation.unreadMessages > 0) ...[
-                                  const SizedBox(width: 8),
-                                  _UnreadBadge(
-                                    count: conversation.unreadMessages,
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -562,14 +620,14 @@ final class _UnreadBadge extends StatelessWidget {
           constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
           decoration: BoxDecoration(
-            color: scheme.primary,
+            color: scheme.tertiary,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
             count > 99 ? '99+' : '$count',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: scheme.onPrimary,
+              color: scheme.onTertiary,
               fontWeight: FontWeight.w700,
             ),
           ),

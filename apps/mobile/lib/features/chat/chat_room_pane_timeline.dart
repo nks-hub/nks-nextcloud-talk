@@ -11,48 +11,60 @@ final class _ChatHeader extends StatelessWidget {
     return Container(
       key: const Key('chat-room-header'),
       constraints: BoxConstraints(minHeight: context.paneHeaderHeight),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       decoration: BoxDecoration(
-        color: ChatBackgroundChip.colorOf(context),
+        color:
+            ChatBackgroundChip.colorOf(context) ??
+            Theme.of(context).colorScheme.surfaceContainerLow,
         border: Border(
           bottom: BorderSide(
             color: Theme.of(context).colorScheme.outlineVariant,
           ),
         ),
       ),
-      child: Row(
-        children: [
-          ExcludeSemantics(
-            child: ConversationAvatar(
-              account: account,
-              conversation: conversation,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _chatContentMaxWidth),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: Row(
               children: [
-                Text(
-                  conversation.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                if (conversation.description.trim().isNotEmpty)
-                  Text(
-                    conversation.description,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                ExcludeSemantics(
+                  child: ConversationAvatar(
+                    account: account,
+                    conversation: conversation,
                   ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        conversation.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      if (conversation.description.trim().isNotEmpty)
+                        Text(
+                          conversation.description,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                        ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -492,7 +504,9 @@ final class _ChatTimeline extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate(
-              (context, index) => buildAt(context, itemCount - 1 - index),
+              (context, index) => _ChatContentLane(
+                child: buildAt(context, itemCount - 1 - index),
+              ),
               childCount: newerCount,
             ),
           ),
@@ -502,7 +516,9 @@ final class _ChatTimeline extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate(
-              (context, index) => buildAt(context, anchorIndex - index),
+              (context, index) => _ChatContentLane(
+                child: buildAt(context, anchorIndex - index),
+              ),
               childCount: anchorIndex + 1,
             ),
           ),
@@ -602,6 +618,21 @@ final class _ChatTimeline extends StatelessWidget {
     final currentBlock = _blockIndexOf(ranges, messages[index].messageId);
     return previousBlock != currentBlock;
   }
+}
+
+final class _ChatContentLane extends StatelessWidget {
+  const _ChatContentLane({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.topCenter,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: _chatContentMaxWidth),
+      child: child,
+    ),
+  );
 }
 
 final class _DaySeparator extends StatelessWidget {
