@@ -274,30 +274,31 @@ final class ChatRepository {
       threadId: null,
     );
     if (networkScope == null) {
-      await _migrateLegacyThreadNetworkScopesInCurrentTransaction(
+      final changedScopes = await _legacyThreadNetworkScopeMigrations(
         accountId: viewScope.accountId,
         roomToken: viewScope.roomToken,
       );
-      await _database
-          .into(_database.chatScopes)
-          .insert(
-            ChatScopesCompanion.insert(
-              accountId: viewScope.accountId,
-              roomToken: viewScope.roomToken,
-              scopeKey: _networkRootScopeKey,
-              threadId: const Value(null),
-              historyCursor: viewScope.historyCursor,
-              futureCursor: viewScope.futureCursor,
-              lastCommonRead: viewScope.lastCommonRead,
-              lastReadMessage: viewScope.lastReadMessage,
-              unreadMessages: viewScope.unreadMessages,
-              hasHistory: viewScope.hasHistory,
-              futureConverged: viewScope.futureConverged,
-              blocksJson: viewScope.blocksJson,
-              lastSyncedAtMillis: Value(viewScope.lastSyncedAtMillis),
-              lastSyncError: Value(viewScope.lastSyncError),
-            ),
-          );
+      changedScopes.add(
+        ChatScopesCompanion.insert(
+          accountId: viewScope.accountId,
+          roomToken: viewScope.roomToken,
+          scopeKey: _networkRootScopeKey,
+          threadId: const Value(null),
+          historyCursor: viewScope.historyCursor,
+          futureCursor: viewScope.futureCursor,
+          lastCommonRead: viewScope.lastCommonRead,
+          lastReadMessage: viewScope.lastReadMessage,
+          unreadMessages: viewScope.unreadMessages,
+          hasHistory: viewScope.hasHistory,
+          futureConverged: viewScope.futureConverged,
+          blocksJson: viewScope.blocksJson,
+          lastSyncedAtMillis: Value(viewScope.lastSyncedAtMillis),
+          lastSyncError: Value(viewScope.lastSyncError),
+        ),
+      );
+      await _database.batch(
+        (batch) => batch.insertAll(_database.chatScopes, changedScopes),
+      );
     } else {
       await _adoptConversationReadState(networkScope, room, commonRead);
     }
@@ -344,11 +345,11 @@ final class ChatRepository {
     return true;
   }
 
-  Future<void> _migrateLegacyThreadNetworkScopesInCurrentTransaction({
+  Future<List<ChatScopesCompanion>> _legacyThreadNetworkScopeMigrations({
     required String accountId,
     required String roomToken,
   }) async {
-    final legacyScopes =
+    final threadScopes =
         await (_database.select(_database.chatScopes)..where(
               (scope) =>
                   scope.accountId.equals(accountId) &
@@ -356,46 +357,43 @@ final class ChatRepository {
                   scope.threadId.isNotNull(),
             ))
             .get();
-    for (final legacyScope in legacyScopes) {
-      final threadId = legacyScope.threadId!;
-      if (legacyScope.scopeKey != _scopeKey(threadId) ||
-          await _networkScope(
-                accountId: accountId,
-                roomToken: roomToken,
-                threadId: threadId,
-              ) !=
-              null) {
-        continue;
-      }
-      final isNamedThread = await cachedRootIsNamedThread(
-        accountId: accountId,
-        roomToken: roomToken,
-        threadId: threadId,
-      );
-      if (isNamedThread != true) {
-        continue;
-      }
-      await _database
-          .into(_database.chatScopes)
-          .insert(
-            ChatScopesCompanion.insert(
-              accountId: accountId,
-              roomToken: roomToken,
-              scopeKey: _networkScopeKey(threadId),
-              threadId: Value(threadId),
-              historyCursor: legacyScope.historyCursor,
-              futureCursor: legacyScope.futureCursor,
-              lastCommonRead: legacyScope.lastCommonRead,
-              lastReadMessage: legacyScope.lastReadMessage,
-              unreadMessages: legacyScope.unreadMessages,
-              hasHistory: legacyScope.hasHistory,
-              futureConverged: legacyScope.futureConverged,
-              blocksJson: legacyScope.blocksJson,
-              lastSyncedAtMillis: Value(legacyScope.lastSyncedAtMillis),
-              lastSyncError: Value(legacyScope.lastSyncError),
-            ),
-          );
-    }
+    final existingNetworkThreadIds = <int>{
+      for (final scope in threadScopes)
+        if (scope.scopeKey == _networkScopeKey(scope.threadId!))
+          scope.threadId!,
+    };
+    final legacyScopes = threadScopes
+        .where(
+          (scope) =>
+              scope.scopeKey == _scopeKey(scope.threadId!) &&
+              !existingNetworkThreadIds.contains(scope.threadId),
+        )
+        .toList(growable: false);
+    final rootKinds = await _cachedRootKinds(
+      accountId: accountId,
+      roomToken: roomToken,
+      messageIds: legacyScopes.map((scope) => scope.threadId!),
+    );
+    return <ChatScopesCompanion>[
+      for (final legacyScope in legacyScopes)
+        if (rootKinds[legacyScope.threadId!] == true)
+          ChatScopesCompanion.insert(
+            accountId: accountId,
+            roomToken: roomToken,
+            scopeKey: _networkScopeKey(legacyScope.threadId!),
+            threadId: Value(legacyScope.threadId),
+            historyCursor: legacyScope.historyCursor,
+            futureCursor: legacyScope.futureCursor,
+            lastCommonRead: legacyScope.lastCommonRead,
+            lastReadMessage: legacyScope.lastReadMessage,
+            unreadMessages: legacyScope.unreadMessages,
+            hasHistory: legacyScope.hasHistory,
+            futureConverged: legacyScope.futureConverged,
+            blocksJson: legacyScope.blocksJson,
+            lastSyncedAtMillis: Value(legacyScope.lastSyncedAtMillis),
+            lastSyncError: Value(legacyScope.lastSyncError),
+          ),
+    ];
   }
 
   Future<StoredChatScope> ensureThreadScope({

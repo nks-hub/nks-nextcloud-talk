@@ -8,6 +8,8 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'test_support.dart';
+
 void main() {
   late AppDatabase database;
   late ChatRepository repository;
@@ -131,6 +133,133 @@ void main() {
       );
     }
   });
+
+  test('legacy named thread scopes migrate in one batch', () async {
+    const threadCount = 40;
+    const firstThreadId = 2000;
+    await database.delete(database.chatScopes).go();
+    final roomWire =
+        ((readFixtureJson(
+                      'conversation-list/fixtures/conversations-full.response.json',
+                    )!
+                    as Map<String, Object?>)['ocs']!
+                as Map<String, Object?>)['data']!
+            as List<Object?>;
+    final room = ConversationRoom.fromJson(
+      Map<String, Object?>.from(roomWire.first! as Map<String, Object?>),
+    );
+    await database
+        .into(database.cachedConversations)
+        .insert(
+          CachedConversationsCompanion.insert(
+            accountId: 'account-a',
+            token: room.token.value,
+            displayName: room.displayName,
+            description: room.description,
+            lastActivity: room.lastActivity,
+            unreadMessages: room.unreadMessages,
+            favorite: room.isFavorite,
+            readOnly: Value(room.readOnly),
+            roomType: Value(room.type),
+            roomName: Value(room.name),
+            objectType: Value(room.objectType),
+            avatarVersion: Value(room.avatarVersion),
+            isCustomAvatar: Value(room.isCustomAvatar),
+            rawJson: jsonEncode(roomWire.first),
+          ),
+        );
+    await database.batch((batch) {
+      batch.insert(
+        database.chatScopes,
+        ChatScopesCompanion.insert(
+          accountId: 'account-a',
+          roomToken: room.token.value,
+          scopeKey: 'root',
+          historyCursor: '0',
+          futureCursor: '0',
+          lastCommonRead: '0',
+          lastReadMessage: 0,
+          unreadMessages: 0,
+          hasHistory: true,
+          futureConverged: true,
+          blocksJson: '[["0","0"]]',
+        ),
+      );
+      for (var index = 0; index < threadCount; index++) {
+        final threadId = firstThreadId + index;
+        batch.insert(
+          database.chatScopes,
+          ChatScopesCompanion.insert(
+            accountId: 'account-a',
+            roomToken: room.token.value,
+            scopeKey: 'thread:$threadId',
+            threadId: Value(threadId),
+            historyCursor: '$threadId',
+            futureCursor: '$threadId',
+            lastCommonRead: '0',
+            lastReadMessage: 0,
+            unreadMessages: 0,
+            hasHistory: true,
+            futureConverged: true,
+            blocksJson: '[["$threadId","$threadId"]]',
+          ),
+        );
+        batch.insert(
+          database.cachedChatMessages,
+          CachedChatMessagesCompanion.insert(
+            accountId: 'account-a',
+            roomToken: room.token.value,
+            messageId: threadId,
+            actorType: 'users',
+            actorId: 'fixture-user',
+            actorDisplayName: 'Fixture User',
+            timestamp: threadId,
+            systemMessage: '',
+            messageType: 'comment',
+            referenceId: 'reference-$threadId',
+            displayText: 'Thread $threadId',
+            deleted: false,
+            threadId: Value(threadId),
+            rawJson: jsonEncode(
+              _messageJson(
+                id: threadId,
+                roomToken: room.token.value,
+                threadId: threadId,
+                isThread: true,
+                threadTitle: 'Named thread $threadId',
+              ),
+            ),
+          ),
+        );
+      }
+    });
+    final account = (await AccountRepository(
+      database,
+    ).getAccount('account-a'))!;
+    final conversation = (await repository.getConversation(
+      accountId: 'account-a',
+      roomToken: room.token.value,
+    ))!;
+    queryCounter.enabled = true;
+
+    await repository.ensureRootScope(
+      account: account,
+      conversation: conversation,
+    );
+
+    expect(queryCounter.singleRootSelects, 0);
+    expect(queryCounter.directScopeInserts, 0);
+    expect(queryCounter.scopeBatchExecutions, 1);
+    final networkScopes =
+        await (database.select(database.chatScopes)..where(
+              (scope) =>
+                  scope.accountId.equals('account-a') &
+                  scope.roomToken.equals(room.token.value) &
+                  scope.scopeKey.like('network-%'),
+            ))
+            .get();
+    expect(networkScopes, hasLength(threadCount + 1));
+  });
 }
 
 ChatGetResponse _rootFutureResponse() {
@@ -173,13 +302,14 @@ ChatGetResponse _rootFutureResponse() {
 
 Map<String, Object?> _messageJson({
   required int id,
+  String roomToken = 'rooma123',
   int? threadId,
   bool? isThread,
   String? threadTitle,
 }) {
   return {
     'id': id,
-    'token': 'rooma123',
+    'token': roomToken,
     'actorType': 'users',
     'actorId': 'fixture-user',
     'actorDisplayName': 'Fixture User',
