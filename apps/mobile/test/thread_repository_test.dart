@@ -445,35 +445,40 @@ void main() {
     expect(await threads.listAccount('account-a'), isEmpty);
   });
 
-  test('subscription projection reads cached messages once per room', () async {
-    await database.close();
-    final counter = _CachedMessageSelectCounter();
-    database = AppDatabase.forTesting(
-      NativeDatabase.memory().interceptWith(counter),
-    );
-    accounts = AccountRepository(database);
-    threads = ThreadRepository(database);
-    await _insertAccount(accounts, 'account-a');
-    final values = <RichChatThread>[
-      for (var room = 0; room < 2; room++)
-        for (var thread = 0; thread < 20; thread++)
-          _thread(
-            roomToken: 'room${room}abc',
-            threadId: 1000 + (room * 1000) + thread,
-            title: 'Thread $room-$thread',
-          ),
-    ];
-    counter.enabled = true;
+  test(
+    'subscription refresh batches rows and reads messages once per room',
+    () async {
+      await database.close();
+      final counter = _CachedMessageSelectCounter();
+      database = AppDatabase.forTesting(
+        NativeDatabase.memory().interceptWith(counter),
+      );
+      accounts = AccountRepository(database);
+      threads = ThreadRepository(database);
+      await _insertAccount(accounts, 'account-a');
+      final values = <RichChatThread>[
+        for (var room = 0; room < 2; room++)
+          for (var thread = 0; thread < 20; thread++)
+            _thread(
+              roomToken: 'room${room}abc',
+              threadId: 1000 + (room * 1000) + thread,
+              title: 'Thread $room-$thread',
+            ),
+      ];
+      counter.enabled = true;
 
-    await threads.replaceSubscribed(
-      accountId: 'account-a',
-      server: _serverFor('account-a'),
-      values: values,
-    );
+      await threads.replaceSubscribed(
+        accountId: 'account-a',
+        server: _serverFor('account-a'),
+        values: values,
+      );
 
-    expect(counter.selects, 2);
-    expect(await threads.listAccount('account-a'), hasLength(40));
-  });
+      expect(counter.selects, 2);
+      expect(counter.threadBatchExecutions, 1);
+      expect(counter.directThreadInserts, 0);
+      expect(await threads.listAccount('account-a'), hasLength(40));
+    },
+  );
 }
 
 Future<void> _insertAccount(AccountRepository accounts, String accountId) {
@@ -618,6 +623,8 @@ Map<String, Object?> _messageWire({
 final class _CachedMessageSelectCounter extends QueryInterceptor {
   bool enabled = false;
   int selects = 0;
+  int threadBatchExecutions = 0;
+  int directThreadInserts = 0;
 
   @override
   Future<List<Map<String, Object?>>> runSelect(
@@ -630,5 +637,32 @@ final class _CachedMessageSelectCounter extends QueryInterceptor {
       selects++;
     }
     return super.runSelect(executor, statement, args);
+  }
+
+  @override
+  Future<void> runBatched(
+    QueryExecutor executor,
+    BatchedStatements statements,
+  ) {
+    if (enabled &&
+        statements.statements.any(
+          (statement) =>
+              statement.toLowerCase().contains('into "cached_threads"'),
+        )) {
+      threadBatchExecutions++;
+    }
+    return super.runBatched(executor, statements);
+  }
+
+  @override
+  Future<int> runInsert(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) {
+    if (enabled && statement.toLowerCase().contains('into "cached_threads"')) {
+      directThreadInserts++;
+    }
+    return super.runInsert(executor, statement, args);
   }
 }

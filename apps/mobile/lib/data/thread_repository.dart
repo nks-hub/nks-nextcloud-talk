@@ -117,16 +117,20 @@ final class ThreadRepository {
         server: server,
         values: values,
       );
+      final threadRows = <CachedThreadsCompanion>[];
       for (final value in values) {
         final current = existing[value.threadId];
-        await _upsert(
-          accountId: accountId,
-          value: value,
-          recent: true,
-          subscribed: current?.subscribed ?? false,
-          detailed: current?.detailed ?? false,
+        threadRows.add(
+          _threadCompanion(
+            accountId: accountId,
+            value: value,
+            recent: true,
+            subscribed: current?.subscribed ?? false,
+            detailed: current?.detailed ?? false,
+          ),
         );
       }
+      await _upsertAll(threadRows);
       await _mergeCachedRootsInCurrentTransaction(accountId, roomToken);
       await _deleteUnlisted(accountId);
     });
@@ -249,16 +253,20 @@ final class ThreadRepository {
         server: server,
         values: values,
       );
+      final threadRows = <CachedThreadsCompanion>[];
       for (final value in values) {
         final current = existing[(value.roomToken.value, value.threadId)];
-        await _upsert(
-          accountId: accountId,
-          value: value,
-          recent: current?.recent ?? false,
-          subscribed: true,
-          detailed: current?.detailed ?? false,
+        threadRows.add(
+          _threadCompanion(
+            accountId: accountId,
+            value: value,
+            recent: current?.recent ?? false,
+            subscribed: true,
+            detailed: current?.detailed ?? false,
+          ),
         );
       }
+      await _upsertAll(threadRows);
       await _deleteUnlisted(accountId);
     });
   }
@@ -320,25 +328,47 @@ final class ThreadRepository {
     required bool recent,
     required bool subscribed,
     required bool detailed,
-  }) async {
-    await _database
-        .into(_database.cachedThreads)
-        .insertOnConflictUpdate(
-          CachedThreadsCompanion.insert(
-            accountId: accountId,
-            roomToken: value.roomToken.value,
-            threadId: value.threadId,
-            title: value.title,
-            lastMessageId: value.lastMessageId,
-            lastActivity: value.lastActivity,
-            numReplies: value.numReplies,
-            notificationLevel: value.notificationLevel,
-            recent: Value(recent),
-            subscribed: Value(subscribed),
-            detailed: Value(detailed),
-            rawJson: jsonEncode(value.wire),
-          ),
-        );
+  }) => _database
+      .into(_database.cachedThreads)
+      .insertOnConflictUpdate(
+        _threadCompanion(
+          accountId: accountId,
+          value: value,
+          recent: recent,
+          subscribed: subscribed,
+          detailed: detailed,
+        ),
+      );
+
+  CachedThreadsCompanion _threadCompanion({
+    required String accountId,
+    required RichChatThread value,
+    required bool recent,
+    required bool subscribed,
+    required bool detailed,
+  }) => CachedThreadsCompanion.insert(
+    accountId: accountId,
+    roomToken: value.roomToken.value,
+    threadId: value.threadId,
+    title: value.title,
+    lastMessageId: value.lastMessageId,
+    lastActivity: value.lastActivity,
+    numReplies: value.numReplies,
+    notificationLevel: value.notificationLevel,
+    recent: Value(recent),
+    subscribed: Value(subscribed),
+    detailed: Value(detailed),
+    rawJson: jsonEncode(value.wire),
+  );
+
+  Future<void> _upsertAll(List<CachedThreadsCompanion> threads) {
+    if (threads.isEmpty) {
+      return Future<void>.value();
+    }
+    return _database.batch(
+      (batch) =>
+          batch.insertAllOnConflictUpdate(_database.cachedThreads, threads),
+    );
   }
 
   Future<void> _projectMessages({
