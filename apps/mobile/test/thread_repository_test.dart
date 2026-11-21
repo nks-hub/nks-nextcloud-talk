@@ -532,40 +532,91 @@ void main() {
     expect(await threads.listAccount('account-a'), isEmpty);
   });
 
-  test(
-    'subscription refresh batches rows and reads messages once per room',
-    () async {
-      await database.close();
-      final counter = _CachedMessageSelectCounter();
-      database = AppDatabase.forTesting(
-        NativeDatabase.memory().interceptWith(counter),
-      );
-      accounts = AccountRepository(database);
-      threads = ThreadRepository(database);
-      await _insertAccount(accounts, 'account-a');
-      final values = <RichChatThread>[
-        for (var room = 0; room < 2; room++)
-          for (var thread = 0; thread < 20; thread++)
-            _thread(
-              roomToken: 'room${room}abc',
-              threadId: 1000 + (room * 1000) + thread,
-              title: 'Thread $room-$thread',
-            ),
-      ];
-      counter.enabled = true;
+  test('subscription refresh batches rows and reads messages once', () async {
+    await database.close();
+    final counter = _CachedMessageSelectCounter();
+    database = AppDatabase.forTesting(
+      NativeDatabase.memory().interceptWith(counter),
+    );
+    accounts = AccountRepository(database);
+    threads = ThreadRepository(database);
+    await _insertAccount(accounts, 'account-a');
+    final values = <RichChatThread>[
+      for (var room = 0; room < 2; room++)
+        for (var thread = 0; thread < 20; thread++)
+          _thread(
+            roomToken: 'room${room}abc',
+            threadId: 1000 + (room * 1000) + thread,
+            title: 'Thread $room-$thread',
+          ),
+    ];
+    counter.enabled = true;
 
-      await threads.replaceSubscribed(
-        accountId: 'account-a',
-        server: _serverFor('account-a'),
-        values: values,
-      );
+    await threads.replaceSubscribed(
+      accountId: 'account-a',
+      server: _serverFor('account-a'),
+      values: values,
+    );
 
-      expect(counter.selects, 2);
-      expect(counter.threadBatchExecutions, 1);
-      expect(counter.directThreadInserts, 0);
-      expect(await threads.listAccount('account-a'), hasLength(40));
-    },
-  );
+    expect(counter.selects, 1);
+    expect(counter.threadBatchExecutions, 1);
+    expect(counter.directThreadInserts, 0);
+    expect(await threads.listAccount('account-a'), hasLength(40));
+  });
+
+  test('subscription projection keeps multiple rooms isolated', () async {
+    await database.close();
+    final counter = _CachedMessageSelectCounter();
+    database = AppDatabase.forTesting(
+      NativeDatabase.memory().interceptWith(counter),
+    );
+    accounts = AccountRepository(database);
+    threads = ThreadRepository(database);
+    await _insertAccount(accounts, 'account-a');
+    counter.enabled = true;
+
+    await threads.replaceSubscribed(
+      accountId: 'account-a',
+      server: _serverFor('account-a'),
+      values: <RichChatThread>[
+        _threadWithMessages(
+          title: 'Room A thread',
+          roomToken: 'rooma123',
+          rootId: 100,
+        ),
+        _threadWithMessages(
+          title: 'Room B thread',
+          roomToken: 'roomb123',
+          rootId: 200,
+        ),
+      ],
+    );
+
+    expect(counter.selects, 1);
+    expect(counter.messageBatchExecutions, 1);
+    expect(counter.directMessageInserts, 0);
+    final messages = await (database.select(
+      database.cachedChatMessages,
+    )..orderBy([(row) => OrderingTerm.asc(row.messageId)])).get();
+    expect(messages, hasLength(4));
+    expect(messages.map((row) => row.roomToken), <String>[
+      'rooma123',
+      'rooma123',
+      'roomb123',
+      'roomb123',
+    ]);
+    expect(
+      messages.map(
+        (row) => ChatMessage.fromJson(jsonDecode(row.rawJson)).threadTitle,
+      ),
+      <String>[
+        'Room A thread',
+        'Room A thread',
+        'Room B thread',
+        'Room B thread',
+      ],
+    );
+  });
 }
 
 Future<void> _insertAccount(AccountRepository accounts, String accountId) {
@@ -606,26 +657,34 @@ RichChatThread _thread({
   );
 }
 
-RichChatThread _threadWithMessages({required String title}) {
+RichChatThread _threadWithMessages({
+  required String title,
+  String roomToken = 'rooma123',
+  int rootId = 100,
+}) {
   final root = _messageWire(
-    id: 100,
+    id: rootId,
     title: title,
     isRoot: true,
     message: 'Root message',
+    roomToken: roomToken,
+    threadId: rootId,
   );
   final reply = _messageWire(
-    id: 101,
+    id: rootId + 1,
     title: title,
     message: 'Reply message',
     parent: root,
+    roomToken: roomToken,
+    threadId: rootId,
   );
   return RichChatThread.fromJson(<String, Object?>{
     'thread': <String, Object?>{
-      'id': 100,
-      'roomToken': 'rooma123',
+      'id': rootId,
+      'roomToken': roomToken,
       'title': title,
-      'lastMessageId': 101,
-      'lastActivity': 1724300101,
+      'lastMessageId': rootId + 1,
+      'lastActivity': 1724300000 + rootId + 1,
       'numReplies': 1,
     },
     'attendee': const <String, Object?>{'notificationLevel': 1},
@@ -688,10 +747,12 @@ Map<String, Object?> _messageWire({
   required String message,
   bool isRoot = false,
   Map<String, Object?>? parent,
+  String roomToken = 'rooma123',
+  int threadId = 100,
 }) {
   return <String, Object?>{
     'id': id,
-    'token': 'rooma123',
+    'token': roomToken,
     'actorType': 'users',
     'actorId': 'account-a-user',
     'actorDisplayName': 'Account A',
@@ -705,7 +766,7 @@ Map<String, Object?> _messageWire({
     'markdown': false,
     'reactions': const <String, Object?>{},
     'reactionsSelf': const <Object?>[],
-    'threadId': 100,
+    'threadId': threadId,
     'isThread': isRoot,
     'threadTitle': title,
     'threadReplies': 1,

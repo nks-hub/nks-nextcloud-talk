@@ -382,29 +382,58 @@ final class ThreadRepository {
           .putIfAbsent(value.roomToken.value, () => <RichChatThread>[])
           .add(value);
     }
+    if (valuesByRoom.isEmpty) {
+      return;
+    }
+    final rowsByRoom = <String, List<CachedChatMessage>>{
+      for (final roomToken in valuesByRoom.keys)
+        roomToken: <CachedChatMessage>[],
+    };
+    final roomTokens = valuesByRoom.keys.toList(growable: false);
+    const roomChunkSize = 500;
+    for (var offset = 0; offset < roomTokens.length; offset += roomChunkSize) {
+      final end = offset + roomChunkSize < roomTokens.length
+          ? offset + roomChunkSize
+          : roomTokens.length;
+      final chunk = roomTokens.sublist(offset, end);
+      final rows =
+          await (_database.select(_database.cachedChatMessages)..where(
+                (message) =>
+                    message.accountId.equals(accountId) &
+                    message.roomToken.isIn(chunk),
+              ))
+              .get();
+      for (final row in rows) {
+        rowsByRoom[row.roomToken]!.add(row);
+      }
+    }
+    final changedMessages = <CachedChatMessagesCompanion>[];
     for (final entry in valuesByRoom.entries) {
-      await _projectRoomMessages(
-        accountId: accountId,
-        server: server,
-        roomToken: entry.key,
-        values: entry.value,
+      changedMessages.addAll(
+        _projectRoomMessages(
+          accountId: accountId,
+          server: server,
+          values: entry.value,
+          rows: rowsByRoom[entry.key]!,
+        ),
+      );
+    }
+    if (changedMessages.isNotEmpty) {
+      await _database.batch(
+        (batch) => batch.insertAllOnConflictUpdate(
+          _database.cachedChatMessages,
+          changedMessages,
+        ),
       );
     }
   }
 
-  Future<void> _projectRoomMessages({
+  List<CachedChatMessagesCompanion> _projectRoomMessages({
     required String accountId,
     required ServerBase server,
-    required String roomToken,
     required List<RichChatThread> values,
-  }) async {
-    final rows =
-        await (_database.select(_database.cachedChatMessages)..where(
-              (message) =>
-                  message.accountId.equals(accountId) &
-                  message.roomToken.equals(roomToken),
-            ))
-            .get();
+    required List<CachedChatMessage> rows,
+  }) {
     final originals = <int, ChatMessage>{};
     final projected = <int, ChatMessage>{};
     for (final row in rows) {
@@ -468,14 +497,7 @@ final class ThreadRepository {
         ),
       );
     }
-    if (changedMessages.isNotEmpty) {
-      await _database.batch(
-        (batch) => batch.insertAllOnConflictUpdate(
-          _database.cachedChatMessages,
-          changedMessages,
-        ),
-      );
-    }
+    return changedMessages;
   }
 
   CachedChatMessagesCompanion _messageCompanion({
