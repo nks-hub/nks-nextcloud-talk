@@ -257,6 +257,10 @@ final class DurableImageAttachmentPicker {
   final int maximumImageBytes;
   final ReportAttachmentUploadDiagnostic reportDiagnostic;
 
+  /// Two streams hide storage latency without opening every selected photo at
+  /// once on older phones.
+  static const int _maximumConcurrentCopies = 2;
+
   /// [onSelected] reports how many images the gallery returned and
   /// [onCopied] each durable copy as it lands, so a caller can show every
   /// preview slot at once instead of after the last copy.
@@ -273,26 +277,52 @@ final class DurableImageAttachmentPicker {
     final selections = await (selectionBackend as MultipleImageSelectionBackend)
         .selectImages();
     onSelected?.call(selections.length);
-    final sources = <PreparedAttachmentSource>[];
-    try {
-      for (final selection in selections) {
-        sources.add(
-          await _copySelection(
-            selection,
+    final sources = List<PreparedAttachmentSource?>.filled(
+      selections.length,
+      null,
+    );
+    Object? firstError;
+    StackTrace? firstStack;
+    var next = 0;
+
+    Future<void> copyNext() async {
+      while (firstError == null) {
+        final index = next++;
+        if (index >= selections.length) {
+          return;
+        }
+        try {
+          final source = await _copySelection(
+            selections[index],
             imageOnly: true,
             diagnosticSource: AttachmentUploadSource.gallery,
             cancellationSignal: cancellationSignal,
-          ),
-        );
-        onCopied?.call(sources.length - 1, sources.last);
+          );
+          sources[index] = source;
+          if (firstError == null) {
+            onCopied?.call(index, source);
+          }
+        } on Object catch (error, stack) {
+          firstError ??= error;
+          firstStack ??= stack;
+        }
       }
-      return sources;
-    } on Object {
-      for (final source in sources) {
+    }
+
+    await Future.wait(
+      List<Future<void>>.generate(
+        min(_maximumConcurrentCopies, selections.length),
+        (_) => copyNext(),
+      ),
+    );
+    final error = firstError;
+    if (error != null) {
+      for (final source in sources.nonNulls) {
         await store.discard(source.handle);
       }
-      rethrow;
+      Error.throwWithStackTrace(error, firstStack!);
     }
+    return [for (final source in sources) source!];
   }
 
   Future<PreparedAttachmentSource?> pick({

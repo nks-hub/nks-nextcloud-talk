@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
@@ -242,6 +243,126 @@ void main() {
   });
 
   group('DurableImageAttachmentPicker', () {
+    test(
+      'copies a gallery batch concurrently and preserves its order',
+      () async {
+        final gates = List.generate(5, (_) => Completer<void>());
+        var inFlight = 0;
+        var peak = 0;
+        final selected = <int>[];
+        final copied = <int>[];
+        final selections = <ImageSelection>[
+          for (var index = 0; index < gates.length; index++)
+            ImageSelection(
+              displayName: 'photo-$index.png',
+              declaredMimeType: 'image/png',
+              byteLength: _pngBytes.length,
+              openRead: ({int? start, int? end}) {
+                if (start != null || end != null) {
+                  return Stream<List<int>>.value(
+                    _pngBytes.sublist(start ?? 0, end ?? _pngBytes.length),
+                  );
+                }
+                return (() async* {
+                  inFlight++;
+                  peak = peak > inFlight ? peak : inFlight;
+                  try {
+                    await gates[index].future;
+                    yield _pngBytes;
+                  } finally {
+                    inFlight--;
+                  }
+                })();
+              },
+            ),
+        ];
+        final picker = DurableImageAttachmentPicker(
+          backend: _FakeMultipleImageSelectionBackend(selections),
+          store: store,
+          maximumImageBytes: 64,
+        );
+        final future = picker.pickImages(
+          onSelected: selected.add,
+          onCopied: (index, _) => copied.add(index),
+        );
+        addTearDown(() async {
+          for (final gate in gates) {
+            if (!gate.isCompleted) gate.complete();
+          }
+          await future;
+        });
+
+        for (var turn = 0; turn < 20 && inFlight < 2; turn++) {
+          await pumpEventQueue();
+        }
+        expect(inFlight, 2);
+
+        // Let the second copy land first. Its callback carries the original
+        // selection index while the returned list still keeps selection order.
+        gates[1].complete();
+        for (var turn = 0; turn < 20 && !copied.contains(1); turn++) {
+          await pumpEventQueue();
+        }
+        for (final gate in gates) {
+          if (!gate.isCompleted) gate.complete();
+        }
+        final sources = await future;
+
+        expect(peak, 2);
+        expect(selected, <int>[5]);
+        expect(copied.first, 1);
+        expect(copied.toSet(), <int>{0, 1, 2, 3, 4});
+        expect(sources.map((source) => source.displayName), <String>[
+          'photo-0.png',
+          'photo-1.png',
+          'photo-2.png',
+          'photo-3.png',
+          'photo-4.png',
+        ]);
+      },
+    );
+
+    test('a failed gallery batch discards every completed copy', () async {
+      ImageSelection selection(String name, List<int> bytes, String mimeType) {
+        return ImageSelection(
+          displayName: name,
+          declaredMimeType: mimeType,
+          byteLength: bytes.length,
+          openRead: ({int? start, int? end}) => Stream<List<int>>.value(
+            bytes.sublist(start ?? 0, end ?? bytes.length),
+          ),
+        );
+      }
+
+      final picker = DurableImageAttachmentPicker(
+        backend: _FakeMultipleImageSelectionBackend([
+          selection('photo.png', _pngBytes, 'image/png'),
+          selection('notes.txt', 'not an image'.codeUnits, 'text/plain'),
+        ]),
+        store: store,
+        maximumImageBytes: 64,
+      );
+
+      await expectLater(
+        picker.pickImages(),
+        throwsA(
+          isA<ImageAttachmentPickerException>().having(
+            (error) => error.code,
+            'code',
+            ImageAttachmentPickerError.unsupportedType,
+          ),
+        ),
+      );
+
+      expect(
+        await root
+            .list(recursive: true)
+            .where((entry) => entry is File)
+            .toList(),
+        isEmpty,
+      );
+    });
+
     test(
       'returns null without creating a source when selection is cancelled',
       () async {
@@ -592,6 +713,20 @@ final class _FakeImageSelectionBackend implements ImageSelectionBackend {
     requested.add(source);
     return selection;
   }
+}
+
+final class _FakeMultipleImageSelectionBackend
+    implements ImageSelectionBackend, MultipleImageSelectionBackend {
+  _FakeMultipleImageSelectionBackend(this.selections);
+
+  final List<ImageSelection> selections;
+
+  @override
+  Future<ImageSelection?> selectImage(AttachmentPickerSource source) =>
+      throw StateError('Single selection used for a gallery batch');
+
+  @override
+  Future<List<ImageSelection>> selectImages() async => selections;
 }
 
 final class _RecordingAndroidPicker extends picker_wire.ImagePickerApi {
