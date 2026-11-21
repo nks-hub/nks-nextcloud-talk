@@ -184,23 +184,36 @@ extension _CallMediaSessionScreen on CallMediaSession {
         }
       }
     }
-    for (final share in _shares.values.toList(growable: false)) {
-      try {
-        await _send(
-          peerId: share.peerId,
-          type: 'unshareScreen',
-          payload: null,
-          via: share,
-        );
-      } on CallMediaException {
-        // Nothing to do: the connection closes below regardless.
-      }
-      await share.connection?.close();
-    }
+    await _closeShares(_shares.values.toList(growable: false));
     _shares.clear();
     final screen = _screen;
     _screen = null;
     await screen?.dispose();
+  }
+
+  Future<void> _closeShares(List<_MediaPeer> shares) async {
+    var nextShare = 0;
+    Future<void> closeNext() async {
+      while (nextShare < shares.length) {
+        final share = shares[nextShare++];
+        try {
+          await _send(
+            peerId: share.peerId,
+            type: 'unshareScreen',
+            payload: null,
+            via: share,
+          );
+        } on CallMediaException {
+          // Nothing to do: the connection closes below regardless.
+        }
+        await share.connection?.close();
+      }
+    }
+
+    final workerCount = shares.length < _screenShareConnectionConcurrency
+        ? shares.length
+        : _screenShareConnectionConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => closeNext()));
   }
 
   /// A participant started sharing their screen: a receive-only connection of

@@ -149,6 +149,63 @@ extension _ScreenMediaSessionTests on _MediaSessionTests {
       expect(media.state.screenSharing, isTrue);
     });
 
+    test(
+      'mesh screen sharing closes at most four peers concurrently',
+      () async {
+        final media = session(
+          _update(
+            localPeerId: _local,
+            participants: [
+              for (final peerId in const [
+                'peer-a',
+                'peer-b',
+                'peer-c',
+                'peer-d',
+                'peer-e',
+                'peer-f',
+              ])
+                _participant(peerId),
+            ],
+          ),
+        );
+        addTearDown(media.dispose);
+        await media.start();
+        expect(engine.connections, hasLength(6));
+
+        final closeGate = Completer<void>();
+        engine.connectionCloseGate = closeGate;
+        addTearDown(() {
+          if (!closeGate.isCompleted) closeGate.complete();
+        });
+        await media.setScreenSharing(true);
+        final shares = engine.connections.skip(6).toList(growable: false);
+        expect(shares, hasLength(6));
+
+        final stopping = media.setScreenSharing(false);
+        for (
+          var turn = 0;
+          turn < 50 && engine.connectionCloseStarts < 4;
+          turn++
+        ) {
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+        }
+        expect(engine.connectionCloseStarts, 4);
+        expect(shares.where((connection) => connection.closed), isEmpty);
+        expect(engine.screens.single.disposed, isFalse);
+
+        closeGate.complete();
+        await stopping;
+        expect(engine.connectionCloseStarts, 6);
+        expect(shares.every((connection) => connection.closed), isTrue);
+        expect(
+          engine.connections.take(6).every((connection) => !connection.closed),
+          isTrue,
+        );
+        expect(engine.screens.single.disposed, isTrue);
+        expect(media.state.screenSharing, isFalse);
+      },
+    );
+
     test('a screen that will not open leaves the call alone', () async {
       engine.screenError = CallMediaError.screenSharePermissionDenied;
       final media = session(
