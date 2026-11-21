@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -69,6 +70,72 @@ final class IncomingShareRoom {
   /// What the conversation last carried, the same line the conversation list
   /// shows under the name.
   final String? subtitle;
+}
+
+typedef IncomingShareConversationLoader =
+    Future<List<CachedConversation>> Function(String accountId);
+typedef IncomingShareFileAcceptance =
+    Future<bool> Function(String accountId, String roomToken);
+
+/// Builds the share target list without making one slow account hold every
+/// later account behind it. Results retain account order.
+Future<List<IncomingShareAccount>> loadIncomingShareAccounts({
+  required List<StoredAccount> accounts,
+  required IncomingShareConversationLoader conversations,
+  required IncomingShareFileAcceptance acceptsFiles,
+  required bool forFile,
+  int concurrency = 4,
+}) async {
+  if (concurrency < 1) {
+    throw RangeError.range(concurrency, 1, null, 'concurrency');
+  }
+  final result = List<IncomingShareAccount?>.filled(accounts.length, null);
+  var next = 0;
+
+  Future<void> worker() async {
+    while (true) {
+      final index = next++;
+      if (index >= accounts.length) {
+        return;
+      }
+      final account = accounts[index];
+      final rooms = (await conversations(account.id))
+          .where((room) => room.readOnly == 0 && !room.isArchived)
+          .map(
+            (room) => IncomingShareRoom(
+              token: room.token,
+              label: _roomLabel(room),
+              conversation: room,
+              subtitle: room.lastMessageText?.trim(),
+            ),
+          )
+          .toList(growable: false);
+      if (rooms.isEmpty) {
+        continue;
+      }
+      // Capabilities are per account, so one writable room is enough to ask.
+      final accountAcceptsFiles =
+          !forFile || await acceptsFiles(account.id, rooms.first.token);
+      if (forFile && !accountAcceptsFiles) {
+        continue;
+      }
+      result[index] = IncomingShareAccount(
+        id: account.id,
+        label: _accountLabel(account),
+        rooms: rooms,
+        account: account,
+        acceptsFiles: accountAcceptsFiles,
+      );
+    }
+  }
+
+  await Future.wait(
+    List<Future<void>>.generate(
+      math.min(concurrency, accounts.length),
+      (_) => worker(),
+    ),
+  );
+  return result.nonNulls.toList(growable: false);
 }
 
 final class IncomingShareHost extends ConsumerStatefulWidget {
@@ -172,41 +239,13 @@ final class _IncomingShareHostState extends ConsumerState<IncomingShareHost> {
   }) async {
     final repository = ref.read(accountRepositoryProvider);
     final accounts = await repository.listAccounts();
-    final result = <IncomingShareAccount>[];
-    for (final account in accounts) {
-      final conversations = await ref.read(
-        conversationsProvider(account.id).future,
-      );
-      final rooms = conversations
-          .where((room) => room.readOnly == 0 && !room.isArchived)
-          .map(
-            (room) => IncomingShareRoom(
-              token: room.token,
-              label: _roomLabel(room),
-              conversation: room,
-              subtitle: room.lastMessageText?.trim(),
-            ),
-          )
-          .toList(growable: false);
-      if (rooms.isEmpty) continue;
-      // Asked once per account, against any of its rooms: the answer comes
-      // from the server's capabilities, which are per account, not per room.
-      final acceptsFiles =
-          !forFile || await _acceptsFiles(account.id, rooms.first.token);
-      if (forFile && !acceptsFiles) {
-        continue;
-      }
-      result.add(
-        IncomingShareAccount(
-          id: account.id,
-          label: _accountLabel(account),
-          rooms: rooms,
-          account: account,
-          acceptsFiles: acceptsFiles,
-        ),
-      );
-    }
-    return result;
+    return loadIncomingShareAccounts(
+      accounts: accounts,
+      forFile: forFile,
+      conversations: (accountId) =>
+          ref.read(conversationsProvider(accountId).future),
+      acceptsFiles: _acceptsFiles,
+    );
   }
 
   Future<void> _send(IncomingShare share, IncomingShareTarget target) async {

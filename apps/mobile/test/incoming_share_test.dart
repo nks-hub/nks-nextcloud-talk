@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/share/incoming_share_bridge.dart';
 import 'package:nextcloudtalk/features/share/incoming_share_coordinator.dart';
 import 'package:nextcloudtalk/features/share/incoming_share_host.dart';
@@ -171,6 +172,145 @@ void main() {
     );
     debugDefaultTargetPlatformOverride = null;
   });
+
+  test(
+    'share targets load four accounts at once and keep account order',
+    () async {
+      final accounts = <StoredAccount>[
+        for (var index = 0; index < 7; index++)
+          StoredAccount(
+            id: 'account-$index',
+            serverUrl: 'https://server-$index.example.invalid',
+            loginName: 'user-$index',
+            serverProductName: 'Nextcloud',
+            talkFeaturesJson: '[]',
+            selected: index == 0,
+            createdAtMillis: index,
+          ),
+      ];
+      final gates = <String, Completer<void>>{};
+      var inFlight = 0;
+      var peak = 0;
+      final started = <String>[];
+      final acceptanceChecks = <String>[];
+
+      final future = loadIncomingShareAccounts(
+        accounts: accounts,
+        forFile: true,
+        conversations: (accountId) async {
+          started.add(accountId);
+          inFlight++;
+          peak = peak > inFlight ? peak : inFlight;
+          final gate = gates[accountId] = Completer<void>();
+          await gate.future;
+          inFlight--;
+          return <CachedConversation>[_shareRoom(accountId)];
+        },
+        acceptsFiles: (accountId, _) async {
+          acceptanceChecks.add(accountId);
+          return true;
+        },
+      );
+      addTearDown(() async {
+        for (final gate in gates.values) {
+          if (!gate.isCompleted) gate.complete();
+        }
+        await future;
+      });
+
+      for (var turn = 0; turn < 20 && inFlight < 4; turn++) {
+        await pumpEventQueue();
+      }
+      expect(inFlight, 4);
+      expect(started, <String>[
+        'account-0',
+        'account-1',
+        'account-2',
+        'account-3',
+      ]);
+
+      gates['account-3']!.complete();
+      for (var turn = 0; turn < 20 && !started.contains('account-4'); turn++) {
+        await pumpEventQueue();
+      }
+      for (final gate in gates.values) {
+        if (!gate.isCompleted) gate.complete();
+      }
+      for (var turn = 0; turn < 50 && gates.length < accounts.length; turn++) {
+        await pumpEventQueue();
+        for (final gate in gates.values) {
+          if (!gate.isCompleted) gate.complete();
+        }
+      }
+      expect(gates, hasLength(accounts.length));
+      final loaded = await future;
+
+      expect(peak, 4);
+      expect(
+        loaded.map((account) => account.id),
+        accounts.map((account) => account.id),
+      );
+      expect(
+        acceptanceChecks.toSet(),
+        accounts.map((account) => account.id).toSet(),
+      );
+    },
+  );
+
+  test(
+    'share targets omit read-only, archived and file-refusing rooms',
+    () async {
+      final accounts = <StoredAccount>[
+        for (var index = 0; index < 4; index++)
+          StoredAccount(
+            id: 'account-$index',
+            serverUrl: 'https://server-$index.example.invalid',
+            loginName: 'user-$index',
+            serverProductName: 'Nextcloud',
+            talkFeaturesJson: '[]',
+            selected: index == 0,
+            createdAtMillis: index,
+          ),
+      ];
+      final rooms = <String, CachedConversation>{
+        'account-0': _shareRoom('account-0'),
+        'account-1': _shareRoom('account-1').copyWith(readOnly: 1),
+        'account-2': _shareRoom('account-2').copyWith(isArchived: true),
+        'account-3': _shareRoom('account-3'),
+      };
+      final acceptanceChecks = <String>[];
+
+      final files = await loadIncomingShareAccounts(
+        accounts: accounts,
+        forFile: true,
+        conversations: (accountId) async => [rooms[accountId]!],
+        acceptsFiles: (accountId, _) async {
+          acceptanceChecks.add(accountId);
+          return accountId != 'account-3';
+        },
+      );
+
+      expect(files.map((account) => account.id), <String>['account-0']);
+      expect(acceptanceChecks, unorderedEquals(['account-0', 'account-3']));
+
+      acceptanceChecks.clear();
+      final text = await loadIncomingShareAccounts(
+        accounts: accounts,
+        forFile: false,
+        conversations: (accountId) async => [rooms[accountId]!],
+        acceptsFiles: (accountId, _) async {
+          acceptanceChecks.add(accountId);
+          return false;
+        },
+      );
+
+      expect(text.map((account) => account.id), <String>[
+        'account-0',
+        'account-3',
+      ]);
+      expect(acceptanceChecks, isEmpty);
+    },
+  );
 
   test('bridge parses cold text and completes its exact native id', () async {
     MethodCall? completed;
@@ -556,3 +696,21 @@ final class _ShareLockAuthenticator implements AppLockAuthenticator {
   @override
   Future<bool> isSupported() async => true;
 }
+
+CachedConversation _shareRoom(String accountId) => CachedConversation(
+  accountId: accountId,
+  token: 'room-${accountId.split('-').last.padLeft(4, '0')}',
+  displayName: 'Room $accountId',
+  description: '',
+  lastActivity: 0,
+  unreadMessages: 0,
+  favorite: false,
+  isArchived: false,
+  readOnly: 0,
+  roomType: 2,
+  roomName: accountId,
+  objectType: '',
+  avatarVersion: '',
+  isCustomAvatar: false,
+  rawJson: '{}',
+);
