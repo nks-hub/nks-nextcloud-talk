@@ -238,24 +238,6 @@ extension _CallMediaSessionControls on CallMediaSession {
     await _runPeerTasks(_peers.keys, _announceMedia);
   }
 
-  Future<void> _runPeerTasks<T>(
-    Iterable<T> items,
-    Future<void> Function(T item) task,
-  ) async {
-    final pending = items.toList(growable: false);
-    var nextItem = 0;
-    Future<void> runNext() async {
-      while (nextItem < pending.length) {
-        await task(pending[nextItem++]);
-      }
-    }
-
-    final workerCount = pending.length < CallMediaSession._peerTaskConcurrency
-        ? pending.length
-        : CallMediaSession._peerTaskConcurrency;
-    await Future.wait(List.generate(workerCount, (_) => runNext()));
-  }
-
   Future<void> _sendRaiseHand(String peerId) async {
     try {
       await _send(

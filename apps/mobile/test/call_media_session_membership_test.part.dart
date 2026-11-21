@@ -43,9 +43,81 @@ extension _MediaMembershipTests on _MediaSessionTests {
         await starting;
         expect(engine.connectionCreateStarts, 6);
         expect(engine.connections, hasLength(6));
-      expect(media.state.phase, CallMediaPhase.negotiating);
+        expect(media.state.phase, CallMediaPhase.negotiating);
       },
     );
+
+    test('MCU subscriptions send at most four requests concurrently', () async {
+      final peers = List.generate(6, (index) => 'peer-$index');
+      final releases = <Completer<void>>[];
+      var active = 0;
+      var maximumActive = 0;
+      final media = session(
+        _update(
+          localPeerId: _local,
+          participants: [for (final peer in peers) _participant(peer)],
+          topology: SignalingTopology.externalMcu,
+        ),
+        withControl: true,
+        sendMessage: (message) async {
+          sent.add(message);
+          if (message.type != 'requestoffer') {
+            return true;
+          }
+          active++;
+          maximumActive = active > maximumActive ? active : maximumActive;
+          final release = Completer<void>();
+          releases.add(release);
+          await release.future;
+          active--;
+          return true;
+        },
+      );
+      addTearDown(media.dispose);
+      addTearDown(() {
+        for (final release in releases) {
+          if (!release.isCompleted) release.complete();
+        }
+      });
+
+      final starting = media.start();
+      for (var turn = 0; turn < 50 && releases.length < 4; turn++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(releases, hasLength(4));
+      expect(active, 4);
+      expect(maximumActive, 4);
+
+      releases.first.complete();
+      for (var turn = 0; turn < 50 && releases.length < 5; turn++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(
+        releases,
+        hasLength(5),
+        reason: 'the next subscription starts when one worker becomes free',
+      );
+      for (var index = 1; index < 4; index++) {
+        releases[index].complete();
+      }
+      for (var turn = 0; turn < 50 && releases.length < 6; turn++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(releases, hasLength(6));
+      for (var index = 4; index < releases.length; index++) {
+        releases[index].complete();
+      }
+      await starting;
+
+      expect(active, 0);
+      expect(maximumActive, 4);
+      expect(
+        sent.where((message) => message.type == 'requestoffer'),
+        hasLength(6),
+      );
+      expect(engine.connections, hasLength(1), reason: 'publisher only');
+      expect(media.state.peers, 6);
+    });
 
     for (final phase in [
       SignalingAccountPhase.terminated,

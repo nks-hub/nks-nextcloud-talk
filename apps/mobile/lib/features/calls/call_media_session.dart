@@ -369,7 +369,7 @@ final class CallMediaSession {
         .where((peerId) => !_peers.containsKey(peerId))
         .toList(growable: false);
     if (_mcu) {
-      for (final peerId in missingPeers) {
+      await _runPeerTasks(missingPeers, (peerId) async {
         await _subscribe(peerId);
         // Someone who joins while the screen is up has to be told about it:
         // the one publisher already carries the picture, but the server does
@@ -377,7 +377,7 @@ final class CallMediaSession {
         if (_screen != null) {
           await _announceShare(peerId);
         }
-      }
+      });
     } else {
       await _openMeshPeers(
         missingPeers,
@@ -596,6 +596,24 @@ final class CallMediaSession {
     if (!_states.isClosed) {
       _states.add(state);
     }
+  }
+
+  Future<void> _runPeerTasks<T>(
+    Iterable<T> items,
+    Future<void> Function(T item) task,
+  ) async {
+    final pending = items.toList(growable: false);
+    var nextItem = 0;
+    Future<void> runNext() async {
+      while (nextItem < pending.length) {
+        await task(pending[nextItem++]);
+      }
+    }
+
+    final workerCount = pending.length < _peerTaskConcurrency
+        ? pending.length
+        : _peerTaskConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => runNext()));
   }
 
   Future<T> _enqueue<T>(Future<T> Function() operation) {
