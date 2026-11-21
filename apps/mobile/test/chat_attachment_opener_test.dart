@@ -276,6 +276,90 @@ void main() {
     },
   );
 
+  test(
+    'housekeeping removes an old orphan but preserves a live download',
+    () async {
+      final root = await Directory.systemTemp.createTemp('attachment-orphan-');
+      addTearDown(() => root.delete(recursive: true));
+      final stream = StreamController<List<int>>();
+      addTearDown(() async {
+        if (!stream.isClosed) {
+          await stream.close();
+        }
+      });
+      final firstBytes = Completer<void>();
+      final clock = _ManualLeaseScheduler();
+      addTearDown(clock.expireAll);
+      final opener = ChatAttachmentOpener(
+        repository: _repository(
+          (_) async => http.StreamedResponse(
+            stream.stream,
+            200,
+            contentLength: 4,
+            headers: const {'content-type': 'text/plain'},
+          ),
+        ),
+        cacheDirectory: () async => root,
+        launcher: _RecordingLauncher(),
+        incompleteGracePeriod: const Duration(hours: 48),
+        leaseScheduler: clock.schedule,
+        now: clock.now,
+      );
+      final opening = opener.open(
+        account: _account,
+        uri: _uri,
+        fileName: 'live.txt',
+        expectedContentType: 'text/plain',
+        onProgress: (received, _) {
+          if (received > 0 && !firstBytes.isCompleted) {
+            firstBytes.complete();
+          }
+        },
+      );
+      addTearDown(() async {
+        if (!stream.isClosed) {
+          await stream.close();
+        }
+        await opening;
+      });
+      stream.add(const [1]);
+      await firstBytes.future;
+
+      final accountDirectory = chatAttachmentCacheAccountDirectory(
+        rootDirectory: root,
+        accountId: _account.id,
+      );
+      final liveDirectory = (await accountDirectory.list().toList())
+          .whereType<Directory>()
+          .single;
+      final liveFile = (await liveDirectory.list().toList())
+          .whereType<File>()
+          .single;
+      final orphan = await accountDirectory.createTemp('download-');
+      final orphanFile = File(
+        '${orphan.path}${Platform.pathSeparator}orphan.bin',
+      );
+      await orphanFile.writeAsString('old');
+      clock.advance(const Duration(hours: 72));
+      final housekeeper = ChatAttachmentCacheHousekeeper(
+        cacheDirectory: () async => root,
+        incompleteGracePeriod: const Duration(hours: 48),
+        scheduler: clock.schedule,
+        now: clock.now,
+      );
+      addTearDown(housekeeper.dispose);
+
+      await housekeeper.run();
+
+      expect(await liveFile.exists(), isTrue);
+      expect(await orphan.exists(), isFalse);
+
+      stream.add(const [2, 3, 4]);
+      await stream.close();
+      expect(await opening, ChatAttachmentOpenResult.opened);
+    },
+  );
+
   test('a persisted future lease survives process restart', () async {
     final root = await Directory.systemTemp.createTemp('attachment-restart-');
     addTearDown(() => root.delete(recursive: true));
@@ -328,6 +412,113 @@ void main() {
     expect(await File(path).exists(), isFalse);
     expect(clock.durations, isEmpty);
   });
+
+  test('housekeeping keeps one timer and cancels it on dispose', () async {
+    final root = await Directory.systemTemp.createTemp('attachment-timer-');
+    addTearDown(() => root.delete(recursive: true));
+    final clock = _ManualLeaseScheduler();
+    await _seedCompletedAttachment(
+      root: root,
+      leaseUntil: clock.now().add(const Duration(minutes: 10)),
+      bytes: 4,
+    );
+    final housekeeper = ChatAttachmentCacheHousekeeper(
+      cacheDirectory: () async => root,
+      maximumCacheBytes: 3,
+      maximumCacheEntries: 1,
+      scheduler: clock.schedule,
+      now: clock.now,
+    );
+
+    await housekeeper.run();
+    expect(clock.activeCount, 1);
+
+    await housekeeper.run();
+    expect(clock.activeCount, 1);
+    expect(clock.cancellations, 1);
+
+    housekeeper.dispose();
+    expect(clock.activeCount, 0);
+    expect(clock.cancellations, 2);
+  });
+
+  test(
+    'account eviction cancels its lease and releases its coordinator',
+    () async {
+      final root = await Directory.systemTemp.createTemp('attachment-evict-');
+      addTearDown(() => root.delete(recursive: true));
+      final clock = _ManualLeaseScheduler();
+      addTearDown(clock.expireAll);
+      final opener = ChatAttachmentOpener(
+        repository: _repository(
+          (_) async => http.StreamedResponse(
+            Stream<List<int>>.value(utf8.encode('data')),
+            200,
+            headers: const {'content-type': 'text/plain'},
+          ),
+        ),
+        cacheDirectory: () async => root,
+        launcher: _RecordingLauncher(),
+        leaseScheduler: clock.schedule,
+        now: clock.now,
+      );
+      expect(await _open(opener), ChatAttachmentOpenResult.opened);
+      final accountDirectory = chatAttachmentCacheAccountDirectory(
+        rootDirectory: root,
+        accountId: _account.id,
+      );
+      expect(debugHasChatAttachmentCacheCoordinator(accountDirectory), isTrue);
+      expect(clock.activeCount, 1);
+
+      await evictChatAttachmentFiles(
+        rootDirectory: root,
+        accountId: _account.id,
+      );
+
+      expect(debugHasChatAttachmentCacheCoordinator(accountDirectory), isFalse);
+      expect(clock.activeCount, 0);
+      expect(clock.cancellations, 1);
+    },
+  );
+
+  test(
+    'account eviction keeps a live coordinator until opening finishes',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'attachment-active-evict-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final launcher = _BlockingLauncher(result: false);
+      addTearDown(launcher.release);
+      final opener = ChatAttachmentOpener(
+        repository: _repository(
+          (_) async => http.StreamedResponse(
+            Stream<List<int>>.value(utf8.encode('data')),
+            200,
+            headers: const {'content-type': 'text/plain'},
+          ),
+        ),
+        cacheDirectory: () async => root,
+        launcher: launcher,
+      );
+      final opening = _open(opener);
+      await launcher.started;
+      final accountDirectory = chatAttachmentCacheAccountDirectory(
+        rootDirectory: root,
+        accountId: _account.id,
+      );
+
+      await evictChatAttachmentFiles(
+        rootDirectory: root,
+        accountId: _account.id,
+      );
+
+      expect(debugHasChatAttachmentCacheCoordinator(accountDirectory), isTrue);
+      launcher.release();
+      expect(await opening, ChatAttachmentOpenResult.openFailed);
+      expect(debugHasChatAttachmentCacheCoordinator(accountDirectory), isFalse);
+    },
+  );
 
   test(
     'an oversized download is pruned automatically after its lease',
@@ -657,8 +848,11 @@ final class _RecordingLauncher implements ChatAttachmentFileLauncher {
 }
 
 final class _BlockingLauncher implements ChatAttachmentFileLauncher {
+  _BlockingLauncher({this.result = true});
+
   final Completer<void> _started = Completer<void>();
   final Completer<void> _released = Completer<void>();
+  final bool result;
 
   String? path;
 
@@ -675,35 +869,62 @@ final class _BlockingLauncher implements ChatAttachmentFileLauncher {
     this.path = path;
     _started.complete();
     await _released.future;
-    return true;
+    return result;
   }
 }
 
 final class _ManualLeaseScheduler {
   final List<Duration> durations = <Duration>[];
-  final List<({Duration duration, Future<void> Function() expire})>
-  _expirations = <({Duration duration, Future<void> Function() expire})>[];
+  final List<_ManualExpiration> _expirations = <_ManualExpiration>[];
   DateTime _time = DateTime.utc(2026, 11, 21, 12);
+  var cancellations = 0;
+
+  int get activeCount =>
+      _expirations.where((expiration) => !expiration.cancelled).length;
 
   DateTime now() => _time;
 
-  void schedule(Duration duration, Future<void> Function() onExpired) {
+  void advance(Duration duration) {
+    _time = _time.add(duration);
+  }
+
+  ChatAttachmentLeaseCancellation schedule(
+    Duration duration,
+    Future<void> Function() onExpired,
+  ) {
     durations.add(duration);
-    _expirations.add((duration: duration, expire: onExpired));
+    final expiration = _ManualExpiration(duration, onExpired);
+    _expirations.add(expiration);
+    return () {
+      if (!expiration.cancelled) {
+        expiration.cancelled = true;
+        cancellations++;
+      }
+    };
   }
 
   Future<void> expireNext() async {
+    _expirations.removeWhere((expiration) => expiration.cancelled);
     expect(_expirations, isNotEmpty);
-    final expiration = _expirations.removeAt(0);
+    final expiration = _expirations.removeAt(0)..cancelled = true;
     _time = _time.add(expiration.duration);
-    await expiration.expire();
+    await expiration.onExpired();
   }
 
   Future<void> expireAll() async {
-    while (_expirations.isNotEmpty) {
+    while (activeCount > 0) {
       await expireNext();
     }
+    _expirations.clear();
   }
+}
+
+final class _ManualExpiration {
+  _ManualExpiration(this.duration, this.onExpired);
+
+  final Duration duration;
+  final Future<void> Function() onExpired;
+  var cancelled = false;
 }
 
 final class _StreamingClient extends http.BaseClient {
