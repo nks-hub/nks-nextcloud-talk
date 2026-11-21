@@ -661,17 +661,28 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
                   child: Text(strings.roomDetailsParticipantsEmpty),
                 );
               }
-              return Column(
-                children: [
-                  if (_canResendEmailInvitations(participants))
-                    ListTile(
-                      key: const Key('room-details-resend-invitations'),
-                      leading: const Icon(Icons.forward_to_inbox_outlined),
-                      title: Text(strings.roomDetailsResendInvitationsAction),
-                      onTap: _busy ? null : _resendAllEmailInvitations,
-                    ),
-                  for (final participant in participants)
-                    _ParticipantTile(
+              final showResend = _canResendEmailInvitations(participants);
+              final participantOffset = showResend ? 1 : 0;
+              return ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.6,
+                ),
+                child: ListView.builder(
+                  key: const Key('room-details-participant-list'),
+                  primary: false,
+                  shrinkWrap: true,
+                  itemCount: participants.length + participantOffset,
+                  itemBuilder: (context, index) {
+                    if (showResend && index == 0) {
+                      return ListTile(
+                        key: const Key('room-details-resend-invitations'),
+                        leading: const Icon(Icons.forward_to_inbox_outlined),
+                        title: Text(strings.roomDetailsResendInvitationsAction),
+                        onTap: _busy ? null : _resendAllEmailInvitations,
+                      );
+                    }
+                    final participant = participants[index - participantOffset];
+                    return _ParticipantTile(
                       account: widget.account,
                       participant: participant,
                       actions: _availableActions(participant),
@@ -679,8 +690,9 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
                           ? null
                           : (action) =>
                                 _runParticipantAction(participant, action),
-                    ),
-                ],
+                    );
+                  },
+                ),
               );
             },
           ),
