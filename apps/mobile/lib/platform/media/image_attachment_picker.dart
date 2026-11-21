@@ -306,12 +306,12 @@ final class DurableImageAttachmentPicker {
       selections.length,
       null,
     );
-    Object? firstError;
-    StackTrace? firstStack;
+    final batchCancellation = AttachmentCancellationController();
+    ({Object error, StackTrace stack})? firstFailure;
     var next = 0;
 
     Future<void> copyNext() async {
-      while (firstError == null) {
+      while (firstFailure == null) {
         final index = next++;
         if (index >= selections.length) {
           return;
@@ -321,34 +321,41 @@ final class DurableImageAttachmentPicker {
             selections[index],
             imageOnly: true,
             diagnosticSource: AttachmentUploadSource.gallery,
-            cancellationSignal: cancellationSignal,
+            cancellationSignal: batchCancellation.signal,
           );
           sources[index] = source;
-          if (firstError == null) {
+          if (firstFailure == null) {
             onCopied?.call(index, source);
           }
         } on Object catch (error, stack) {
-          firstError ??= error;
-          firstStack ??= stack;
+          if (firstFailure == null) {
+            firstFailure = (error: error, stack: stack);
+            batchCancellation.cancel();
+          }
         }
       }
     }
 
-    await Future.wait(
-      List<Future<void>>.generate(
-        min(_maximumConcurrentCopies, selections.length),
-        (_) => copyNext(),
-      ),
-    );
-    final error = firstError;
-    if (error != null) {
+    final registration = cancellationSignal?.register(batchCancellation.cancel);
+    try {
+      await Future.wait(
+        List<Future<void>>.generate(
+          min(_maximumConcurrentCopies, selections.length),
+          (_) => copyNext(),
+        ),
+      );
+    } finally {
+      registration?.detach();
+    }
+    final failure = firstFailure;
+    if (failure != null) {
       try {
         await store.discardAll(sources.nonNulls.map((source) => source.handle));
       } on Object {
         // The picker failure is the useful error; cleanup was attempted for
         // every completed copy and must not replace it.
       }
-      Error.throwWithStackTrace(error, firstStack!);
+      Error.throwWithStackTrace(failure.error, failure.stack);
     }
     return [for (final source in sources) source!];
   }
@@ -453,6 +460,7 @@ final class DurableImageAttachmentPicker {
           end: min(selection.byteLength, defaultMagicNumbersMaxLength),
         ),
         defaultMagicNumbersMaxLength,
+        cancellationSignal,
       );
       reportDiagnostic(
         AttachmentUploadDiagnostic(
@@ -568,17 +576,32 @@ AttachmentUploadFailure _durableFailure(DurableAttachmentSourceError error) =>
       DurableAttachmentSourceError.cancelled => AttachmentUploadFailure.none,
     };
 
-Future<List<int>> _readPrefix(Stream<List<int>> stream, int maximum) async {
+Future<List<int>> _readPrefix(
+  Stream<List<int>> stream,
+  int maximum,
+  AttachmentCancellationSignal? cancellationSignal,
+) async {
   final bytes = <int>[];
   final iterator = StreamIterator<List<int>>(stream);
+  Future<void>? cancelRead;
+  final registration = cancellationSignal?.register(
+    () => cancelRead ??= iterator.cancel(),
+  );
   try {
     while (bytes.length < maximum && await iterator.moveNext()) {
+      if (cancellationSignal?.isCancelled ?? false) break;
       final chunk = iterator.current;
       final remaining = maximum - bytes.length;
       bytes.addAll(chunk.length <= remaining ? chunk : chunk.take(remaining));
     }
   } finally {
-    await iterator.cancel();
+    registration?.detach();
+    await (cancelRead ?? iterator.cancel());
+  }
+  if (cancellationSignal?.isCancelled ?? false) {
+    throw const DurableAttachmentSourceException(
+      DurableAttachmentSourceError.cancelled,
+    );
   }
   return bytes;
 }

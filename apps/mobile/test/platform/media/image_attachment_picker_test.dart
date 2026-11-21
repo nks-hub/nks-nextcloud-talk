@@ -467,6 +467,74 @@ void main() {
       },
     );
 
+    for (final stallAtPrefix in [false, true]) {
+      final stage = stallAtPrefix ? 'prefix read' : 'durable copy';
+      test('a gallery read failure cancels a sibling in $stage', () async {
+        const deadline = Duration(seconds: 3);
+        final stalledStarted = Completer<void>();
+        final failingStarted = Completer<void>();
+        final stalled = StreamController<List<int>>(
+          onListen: stalledStarted.complete,
+        );
+        final failing = StreamController<List<int>>(
+          onListen: failingStarted.complete,
+        );
+        ImageSelection photo(
+          String name,
+          Stream<List<int>> Function(bool prefix) read,
+        ) => ImageSelection(
+          displayName: name,
+          declaredMimeType: 'image/png',
+          byteLength: _pngBytes.length,
+          openRead: ({start, end}) => read(end != null),
+        );
+        final picker = DurableImageAttachmentPicker(
+          backend: _FakeMultipleImageSelectionBackend([
+            photo('copied.png', (_) => Stream.value(_pngBytes)),
+            photo('stalled.png', (prefix) {
+              return prefix == stallAtPrefix
+                  ? stalled.stream
+                  : Stream.value(_pngBytes);
+            }),
+            photo('failed.png', (prefix) {
+              return prefix ? Stream.value(_pngBytes) : failing.stream;
+            }),
+          ]),
+          store: store,
+          maximumImageBytes: 64,
+        );
+        final copied = <int>[];
+        final picked = picker
+            .pickImages(onCopied: (index, _) => copied.add(index))
+            .then<(Object?, StackTrace?)>(
+              (_) => (null, null),
+              onError: (Object error, StackTrace stack) => (error, stack),
+            );
+        addTearDown(() async {
+          unawaited(failing.close());
+          unawaited(stalled.close());
+          await picked;
+        });
+
+        await stalledStarted.future.timeout(deadline);
+        await failingStarted.future.timeout(deadline);
+        expect(copied, [0]);
+        final error = StateError('Selected photo read failed');
+        final stack = StackTrace.fromString('gallery source read');
+        failing.addError(error, stack);
+
+        final (failure, failureStack) = await picked.timeout(deadline);
+        expect(failure, same(error));
+        expect(failureStack.toString(), stack.toString());
+        expect(stalled.hasListener, isFalse);
+        expect(copied, [0]);
+        expect(
+          await root.list(recursive: true).where((e) => e is File).toList(),
+          isEmpty,
+        );
+      });
+    }
+
     test(
       'detects image MIME and copies selected bytes into the store',
       () async {
@@ -506,6 +574,51 @@ void main() {
         expect((await store.observe(source.handle)).matches(source), isTrue);
       },
     );
+
+    test('user cancellation stops an active gallery copy', () async {
+      const deadline = Duration(seconds: 3);
+      final started = Completer<void>();
+      final input = StreamController<List<int>>(onListen: started.complete);
+      addTearDown(() async {
+        if (started.isCompleted) await input.close();
+      });
+      final picker = DurableImageAttachmentPicker(
+        backend: _FakeMultipleImageSelectionBackend([
+          ImageSelection(
+            displayName: 'photo.png',
+            declaredMimeType: 'image/png',
+            byteLength: _pngBytes.length,
+            openRead: ({start, end}) =>
+                end == null ? input.stream : Stream.value(_pngBytes),
+          ),
+        ]),
+        store: store,
+        maximumImageBytes: 64,
+      );
+      final cancellation = AttachmentCancellationController();
+      final picked = expectLater(
+        picker
+            .pickImages(cancellationSignal: cancellation.signal)
+            .timeout(deadline),
+        throwsA(
+          isA<DurableAttachmentSourceException>().having(
+            (error) => error.code,
+            'code',
+            DurableAttachmentSourceError.cancelled,
+          ),
+        ),
+      );
+
+      await started.future.timeout(deadline);
+      cancellation.cancel();
+      await picked;
+
+      expect(input.hasListener, isFalse);
+      expect(
+        await root.list(recursive: true).where((e) => e is File).toList(),
+        isEmpty,
+      );
+    });
 
     test('reports picker and durable copy boundaries in order', () async {
       final diagnostics = <AttachmentUploadDiagnostic>[];
