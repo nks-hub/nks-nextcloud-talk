@@ -52,13 +52,10 @@ final class AccountRemovalOutcome {
 /// Removes one account and everything the device stored for it.
 ///
 /// Ordering follows `docs/architecture/system-design.md` ("Odhlášení"): the
-/// push cleanup runs while the app password is still valid. The local secret
-/// is deleted before the server password is revoked, while its in-memory copy
-/// can still make that final request; this leaves rollback possible when the
-/// credential vault is temporarily unavailable. Every remote step is best
-/// effort — somebody removing an account is often offline, or is removing it
-/// precisely because the password was already revoked elsewhere — so a remote
-/// failure never blocks the local wipe.
+/// push cleanup runs while the app password is still valid. Server revocation
+/// is attempted next. If the server is unreachable, the same credential is
+/// durably queued before its account slot is deleted. A full, corrupt or
+/// unavailable queue stops removal so no live password loses its local owner.
 ///
 /// Deleting the local password is the one blocking local step. The account
 /// row stays in place until that succeeds, so a temporarily unavailable vault
@@ -160,10 +157,15 @@ final class AccountRemovalService {
       }
     }
 
-    // The secret goes first. If the vault is temporarily unavailable the
-    // account must remain addressable, or its password could never be deleted
-    // by a later retry.
     try {
+      if (server != null) {
+        appPasswordRevoked = await _revokeOrRemember(
+          server: server,
+          loginName: account.loginName,
+          appPassword: appPassword!,
+        );
+      }
+      // The queue write above is durable before the local owner disappears.
       await _credentials.deleteAppPassword(accountId);
     } on Object catch (error, stackTrace) {
       try {
@@ -173,13 +175,6 @@ final class AccountRemovalService {
         // must not replace it with a less useful error.
       }
       Error.throwWithStackTrace(error, stackTrace);
-    }
-    if (server != null) {
-      appPasswordRevoked = await _revokeOrRemember(
-        server: server,
-        loginName: account.loginName,
-        appPassword: appPassword!,
-      );
     }
     // Only caches: none may keep the account row around after the secret is
     // gone. A locked cache file can be retried by normal cache maintenance.
@@ -267,14 +262,12 @@ final class AccountRemovalService {
   ) async {
     final queue = _pendingRevocations;
     if (queue == null) {
-      return;
+      throw StateError('Pending revocation store is unavailable');
     }
-    await _bestEffort(
-      () => queue.record(
-        server: server,
-        loginName: loginName,
-        appPassword: appPassword,
-      ),
+    await queue.record(
+      server: server,
+      loginName: loginName,
+      appPassword: appPassword,
     );
   }
 

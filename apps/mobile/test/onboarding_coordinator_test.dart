@@ -418,9 +418,98 @@ void main() {
     expect(await repository.watchAccounts().first, isEmpty);
 
     client.releaseResponse();
-    await client.revoked.future.timeout(const Duration(seconds: 1));
-    expect(client.revokedPassword, 'fixture-app-password-never-use');
+    final queue = AppPasswordRevocationQueue(store: vault, api: api);
+    await _waitForPendingRevocations(queue, 1);
+    expect(client.revokedPassword, null);
   });
+
+  test(
+    'late credential survives a full queue, failed write and restart',
+    () async {
+      final client = _LateGeneratedCredentialClient.loginPoll(
+        revokeOffline: true,
+      );
+      final api = HttpNextcloudApi(
+        client: client,
+        requestTimeout: const Duration(seconds: 20),
+      );
+      addTearDown(api.close);
+      final pendingStore = _FailOncePendingStore(vault);
+      final queue = AppPasswordRevocationQueue(store: pendingStore, api: api);
+      final coordinator = OnboardingCoordinator(
+        api: api,
+        accounts: repository,
+        credentials: vault,
+        launcher: launcher,
+        pendingRevocations: queue,
+        pollInterval: Duration.zero,
+      );
+      final pending = await coordinator.start('https://cloud.example.invalid');
+      final cancellation = CancellationSignal();
+
+      final result = coordinator.completeLogin(pending, cancellation);
+      await client.requestStarted.future;
+      expect(await queue.unresolvedReservationCount(), 1);
+      cancellation.cancel();
+      await expectLater(result, throwsA(isA<OnboardingCancelled>()));
+
+      for (var index = 0; index < 4; index++) {
+        await queue.record(
+          server: pending.server,
+          loginName: 'queued-user-$index',
+          appPassword: 'queued-password-$index',
+        );
+      }
+      pendingStore.failNextUpdate = true;
+      client.releaseResponse();
+      await client.revoked.future.timeout(const Duration(seconds: 1));
+      await _waitForPendingRevocations(queue, 5);
+      expect(await queue.unresolvedReservationCount(), 0);
+
+      var exchanges = 0;
+      final restartedApi = _onboardingApi(
+        withTalk: true,
+        onOneTimeExchange: () => exchanges++,
+        oneTimeAppPassword: 'unused-password',
+      );
+      addTearDown(restartedApi.close);
+      final restarted = OnboardingCoordinator(
+        api: restartedApi,
+        accounts: repository,
+        credentials: vault,
+        launcher: launcher,
+        pendingRevocations: AppPasswordRevocationQueue(
+          store: pendingStore,
+          api: restartedApi,
+        ),
+      );
+      final payload =
+          parseQrLoginPayload(
+                'nc://onetime-login/user:fixture-user'
+                '&server:https%3A//cloud.example.invalid'
+                '&password:single-use-token',
+              )!
+              as QrLoginCredentials;
+
+      await expectLater(
+        restarted.commitScannedLogin(payload, CancellationSignal()),
+        throwsA(
+          isA<OnboardingFailure>()
+              .having(
+                (error) => error.code,
+                'code',
+                OnboardingFailureCode.localPersistence,
+              )
+              .having(
+                (error) => error.cleanupIncomplete,
+                'cleanupIncomplete',
+                isTrue,
+              ),
+        ),
+      );
+      expect(exchanges, 0);
+    },
+  );
 
   test(
     'cancellation during capabilities does not persist the account',
@@ -590,7 +679,9 @@ void main() {
     expect(faultingVault.deleteCalls, 1);
     expect(faultingVault.values, isEmpty);
     expect(await repository.watchAccounts().first, isEmpty);
-    expect(revokeCalls, 1);
+    expect(revokeCalls, 0);
+    final queue = AppPasswordRevocationQueue(store: faultingVault, api: api);
+    expect(await queue.pendingRevocationCount(), 1);
   });
 
   test('revokes a new login password when the database commit fails', () async {
@@ -769,6 +860,51 @@ void main() {
     );
   });
 
+  test('a corrupt cleanup queue blocks one-time credential creation', () async {
+    const corrupt = 'not json';
+    vault.pendingRevocations = corrupt;
+    var exchanges = 0;
+    final api = _onboardingApi(
+      withTalk: true,
+      onOneTimeExchange: () => exchanges++,
+      oneTimeAppPassword: 'unused-password',
+    );
+    addTearDown(api.close);
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+    );
+    final payload =
+        parseQrLoginPayload(
+              'nc://onetime-login/user:fixture-user'
+              '&server:https%3A//cloud.example.invalid'
+              '&password:single-use-token',
+            )!
+            as QrLoginCredentials;
+
+    await expectLater(
+      coordinator.commitScannedLogin(payload, CancellationSignal()),
+      throwsA(
+        isA<OnboardingFailure>()
+            .having(
+              (error) => error.code,
+              'code',
+              OnboardingFailureCode.localPersistence,
+            )
+            .having(
+              (error) => error.cleanupIncomplete,
+              'cleanupIncomplete',
+              isTrue,
+            ),
+      ),
+    );
+
+    expect(exchanges, 0);
+    expect(vault.pendingRevocations, corrupt);
+  });
+
   test('reports an incomplete local rollback instead of hiding it', () async {
     await failNextAccountCommit();
     final faultingVault = _FaultingCredentialVault(deleteFailuresRemaining: 1);
@@ -833,11 +969,14 @@ void main() {
     },
   );
 
-  test('a one-time token is exchanged before anything is stored', () async {
+  test('one-time exchange starts only after durable reservation', () async {
     var exchanges = 0;
     final api = _onboardingApi(
       withTalk: true,
-      onOneTimeExchange: () => exchanges++,
+      onOneTimeExchange: () {
+        expect(vault.pendingRevocations, isA<String>());
+        exchanges++;
+      },
       oneTimeAppPassword: 'exchanged-app-password-never-use',
     );
     final coordinator = OnboardingCoordinator(
@@ -902,8 +1041,9 @@ void main() {
     expect(await repository.watchAccounts().first, isEmpty);
 
     client.releaseResponse();
-    await client.revoked.future.timeout(const Duration(seconds: 1));
-    expect(client.revokedPassword, 'late-qr-app-password-never-use');
+    final queue = AppPasswordRevocationQueue(store: vault, api: api);
+    await _waitForPendingRevocations(queue, 1);
+    expect(client.revokedPassword, null);
   });
 
   test('a spent one-time token fails without storing anything', () async {
@@ -1016,6 +1156,19 @@ void main() {
   });
 }
 
+Future<void> _waitForPendingRevocations(
+  AppPasswordRevocationQueue queue,
+  int expected,
+) async {
+  for (var attempt = 0; attempt < 100; attempt++) {
+    if (await queue.pendingRevocationCount() == expected) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+  fail('Pending revocation did not become durable');
+}
+
 HttpNextcloudApi _onboardingApi({
   required bool withTalk,
   VoidCallback? onPoll,
@@ -1094,7 +1247,8 @@ HttpNextcloudApi _onboardingApi({
   );
 }
 
-final class _FaultingCredentialVault implements CredentialVault {
+final class _FaultingCredentialVault
+    implements CredentialVault, PendingRevocationStore {
   _FaultingCredentialVault({
     Map<String, String> values = const {},
     this.readFailure,
@@ -1112,6 +1266,8 @@ final class _FaultingCredentialVault implements CredentialVault {
   int deleteFailuresRemaining;
   int writeCalls = 0;
   int deleteCalls = 0;
+  String? pendingRevocations;
+  Future<void> _pendingMutationTail = Future<void>.value();
 
   @override
   Future<void> deleteAppPassword(String accountId) async {
@@ -1143,16 +1299,66 @@ final class _FaultingCredentialVault implements CredentialVault {
     }
     values[accountId] = appPassword;
   }
+
+  @override
+  Future<String?> readPendingRevocations() async => pendingRevocations;
+
+  @override
+  Future<void> updatePendingRevocations(
+    String? Function(String? current) update,
+  ) {
+    final result = _pendingMutationTail.then((_) {
+      pendingRevocations = update(pendingRevocations);
+    });
+    _pendingMutationTail = result.catchError((Object _) {});
+    return result;
+  }
+
+  @override
+  Future<void> writePendingRevocations(String? json) async {
+    await updatePendingRevocations((_) => json);
+  }
+}
+
+final class _FailOncePendingStore implements PendingRevocationStore {
+  _FailOncePendingStore(this._inner);
+
+  final PendingRevocationStore _inner;
+  var failNextUpdate = false;
+
+  @override
+  Future<String?> readPendingRevocations() => _inner.readPendingRevocations();
+
+  @override
+  Future<void> updatePendingRevocations(
+    String? Function(String? current) update,
+  ) async {
+    if (failNextUpdate) {
+      failNextUpdate = false;
+      throw const FileSystemException('pending queue write failed');
+    }
+    await _inner.updatePendingRevocations(update);
+  }
+
+  @override
+  Future<void> writePendingRevocations(String? json) =>
+      _inner.writePendingRevocations(json);
 }
 
 final class _LateGeneratedCredentialClient extends http.BaseClient {
-  _LateGeneratedCredentialClient._(this._heldPath, this._responseBody);
+  _LateGeneratedCredentialClient._(
+    this._heldPath,
+    this._responseBody, {
+    this.revokeOffline = false,
+  });
 
-  factory _LateGeneratedCredentialClient.loginPoll() =>
-      _LateGeneratedCredentialClient._(
-        '/index.php/login/v2/poll',
-        loginSuccessJson(),
-      );
+  factory _LateGeneratedCredentialClient.loginPoll({
+    bool revokeOffline = false,
+  }) => _LateGeneratedCredentialClient._(
+    '/index.php/login/v2/poll',
+    loginSuccessJson(),
+    revokeOffline: revokeOffline,
+  );
 
   factory _LateGeneratedCredentialClient.oneTimeExchange() =>
       _LateGeneratedCredentialClient._(
@@ -1173,6 +1379,7 @@ final class _LateGeneratedCredentialClient extends http.BaseClient {
 
   final String _heldPath;
   final Object _responseBody;
+  final bool revokeOffline;
   final StreamController<List<int>> _body = StreamController<List<int>>();
   final Completer<void> requestStarted = Completer<void>();
   final Completer<void> revoked = Completer<void>();
@@ -1193,6 +1400,9 @@ final class _LateGeneratedCredentialClient extends http.BaseClient {
       revokedPassword = credential.substring(credential.indexOf(':') + 1);
       if (!revoked.isCompleted) {
         revoked.complete();
+      }
+      if (revokeOffline) {
+        throw const SocketException('offline');
       }
       return _streamedResponse(<String, Object?>{
         'ocs': <String, Object?>{

@@ -149,7 +149,8 @@ final class OnboardingCoordinator {
        _accounts = accounts,
        _credentials = credentials,
        _launcher = launcher,
-       _pendingRevocations = pendingRevocations,
+       _pendingRevocations =
+           pendingRevocations ?? _queueFromCredentials(api, credentials),
        _trust = trust,
        _uuid = uuid ?? const Uuid();
 
@@ -162,7 +163,6 @@ final class OnboardingCoordinator {
   final Uuid _uuid;
   final Duration pollInterval;
   final Duration loginTimeout;
-  var _generatedCredentialCleanupBlocked = false;
 
   /// True while the app is off the screen. The server hands the credentials
   /// out exactly once, and a phone that cuts background apps off the network
@@ -172,6 +172,16 @@ final class OnboardingCoordinator {
   final bool Function() _inBackground;
 
   static bool _never() => false;
+
+  static AppPasswordRevocationQueue? _queueFromCredentials(
+    HttpNextcloudApi api,
+    CredentialVault credentials,
+  ) => credentials is PendingRevocationStore
+      ? AppPasswordRevocationQueue(
+          store: credentials as PendingRevocationStore,
+          api: api,
+        )
+      : null;
 
   Future<PendingLogin> start(
     String serverAddress, {
@@ -260,38 +270,45 @@ final class OnboardingCoordinator {
     cancellation.throwIfCancelled();
 
     var credentials = payload.toLoginFlowCredentials();
+    AppPasswordRevocationReservation? cleanupReservation;
     if (payload.isOneTime) {
-      await _ensureGeneratedCredentialCleanupCapacity();
-      cancellation.throwIfCancelled();
-      final String appPassword;
+      final _ReservedOneShot<String> exchange;
       try {
-        appPassword = await _awaitOneShotResult(
-          _api.exchangeOneTimeAppPassword(
+        exchange = await _awaitReservedOneShot(
+          operation: () => _api.exchangeOneTimeAppPassword(
             server: server,
             loginName: payload.loginName,
             oneTimeToken: payload.secret,
           ),
-          cancellation,
-          onLateValue: (latePassword) => _retireLateGeneratedCredential(
-            server: server,
-            loginName: payload.loginName,
-            appPassword: latePassword,
-          ),
+          cancellation: cancellation,
+          server: server,
+          credentialFrom: (appPassword) =>
+              (loginName: payload.loginName, appPassword: appPassword),
+          provesNoCredential: (error) =>
+              error is NextcloudApiException && error.statusCode == 401,
         );
       } on OnboardingFailure {
         rethrow;
+      } on NextcloudApiException catch (error) {
+        cancellation.throwIfCancelled();
+        throw OnboardingFailure(
+          OnboardingFailureCode.scannedLoginRejected,
+          cleanupIncomplete: error.statusCode != 401,
+        );
       } on Object {
         cancellation.throwIfCancelled();
-        // A single-use token is spent on first use and expires on its own, so
-        // a failure here is nothing the user can retry with the same code.
+        // The request may have spent the token before its response was lost.
+        // Its durable reservation stays behind and blocks unsafe reuse.
         throw const OnboardingFailure(
           OnboardingFailureCode.scannedLoginRejected,
+          cleanupIncomplete: true,
         );
       }
+      cleanupReservation = exchange.reservation;
       credentials = LoginFlowCredentials.scanned(
         server: server,
         loginName: payload.loginName,
-        appPassword: appPassword,
+        appPassword: exchange.value,
       );
     }
     try {
@@ -304,6 +321,7 @@ final class OnboardingCoordinator {
             : _CredentialSource.sharedQr,
         cancellation: cancellation,
         expectedAccountId: expectedAccountId,
+        cleanupReservation: cleanupReservation,
       );
     } on NextcloudApiException catch (error) {
       // A scanned password is the only credential the app does not obtain from
@@ -345,20 +363,32 @@ final class OnboardingCoordinator {
     String? expectedAccountId,
     VoidCallback? onLoginPageOpened,
   }) async {
+    AppPasswordRevocationReservation? reservation;
+    var loginPageOpened = false;
     try {
-      await _ensureGeneratedCredentialCleanupCapacity();
+      cancellation.throwIfCancelled();
+      reservation = await _reserveGeneratedCredential();
       cancellation.throwIfCancelled();
       final opened = await _launcher.open(pending.initialization.loginUri);
-      cancellation.throwIfCancelled();
       if (!opened) {
+        await _releaseEmptyReservation(_pendingRevocations!, reservation);
+        reservation = null;
         throw const OnboardingFailure(OnboardingFailureCode.browserUnavailable);
       }
+      loginPageOpened = true;
+      cancellation.throwIfCancelled();
       onLoginPageOpened?.call();
       return await _pollForAccount(
         pending,
         cancellation,
+        reservation: reservation,
         expectedAccountId: expectedAccountId,
       );
+    } on Object catch (error, stackTrace) {
+      if (!loginPageOpened && reservation != null) {
+        await _releaseEmptyReservation(_pendingRevocations!, reservation);
+      }
+      Error.throwWithStackTrace(error, stackTrace);
     } finally {
       await _closeLoginPage();
     }
@@ -375,6 +405,7 @@ final class OnboardingCoordinator {
   Future<StoredAccount> _pollForAccount(
     PendingLogin pending,
     CancellationSignal cancellation, {
+    required AppPasswordRevocationReservation reservation,
     String? expectedAccountId,
   }) async {
     final deadline = DateTime.now().toUtc().add(loginTimeout);
@@ -387,22 +418,24 @@ final class OnboardingCoordinator {
         ]);
         continue;
       }
-      await _ensureGeneratedCredentialCleanupCapacity();
-      cancellation.throwIfCancelled();
-      final LoginPollResult? result;
+      final _ReservedOneShot<LoginPollResult> poll;
       try {
-        result = await _awaitOneShotResult(
-          _api.pollLogin(pending),
-          cancellation,
-          onLateValue: (lateResult) async {
-            if (lateResult case LoginPollSucceeded(:final credentials)) {
-              await _retireLateGeneratedCredential(
-                server: pending.server,
+        poll = await _awaitReservedOneShot(
+          operation: () => _api.pollLogin(pending),
+          cancellation: cancellation,
+          server: pending.server,
+          reservation: reservation,
+          releaseWhenEmpty: false,
+          credentialFrom: (result) {
+            if (result case LoginPollSucceeded(:final credentials)) {
+              return (
                 loginName: credentials.loginName,
                 appPassword: credentials.appPassword,
               );
             }
+            return null;
           },
+          provesNoCredential: (_) => false,
         );
       } on NextcloudApiException catch (error) {
         cancellation.throwIfCancelled();
@@ -419,6 +452,7 @@ final class OnboardingCoordinator {
         ]);
         continue;
       }
+      final result = poll.value;
       if (result case LoginPollSucceeded(:final credentials)) {
         return _commitAccount(
           server: pending.server,
@@ -427,6 +461,7 @@ final class OnboardingCoordinator {
           credentialSource: _CredentialSource.generated,
           cancellation: cancellation,
           expectedAccountId: expectedAccountId,
+          cleanupReservation: poll.reservation,
         );
       }
       cancellation.throwIfCancelled();
@@ -446,25 +481,38 @@ final class OnboardingCoordinator {
     required _CredentialSource credentialSource,
     required CancellationSignal cancellation,
     required String? expectedAccountId,
+    AppPasswordRevocationReservation? cleanupReservation,
   }) async {
     try {
-      return await _commitAccountWithoutCredentialCleanup(
+      final stored = await _commitAccountWithoutCredentialCleanup(
         server: server,
         serverStatus: serverStatus,
         loginCredentials: loginCredentials,
         cancellation: cancellation,
         expectedAccountId: expectedAccountId,
       );
+      if (cleanupReservation != null) {
+        await _releaseHeldCredential(cleanupReservation);
+      }
+      return stored;
     } on Object catch (error, stackTrace) {
       if (credentialSource == _CredentialSource.sharedQr) {
         Error.throwWithStackTrace(error, stackTrace);
       }
-      final cleanedUp = await _revokeOrRememberGeneratedCredential(
-        server: server,
-        loginName: loginCredentials.loginName,
-        appPassword: loginCredentials.appPassword,
-        preferQueue: error is OnboardingCancelled,
-      );
+      final cleanedUp = cleanupReservation == null
+          ? await _revokeOrRememberGeneratedCredential(
+              server: server,
+              loginName: loginCredentials.loginName,
+              appPassword: loginCredentials.appPassword,
+              preferQueue: error is OnboardingCancelled,
+            )
+          : await _retireReservedCredential(
+              reservation: cleanupReservation,
+              server: server,
+              loginName: loginCredentials.loginName,
+              appPassword: loginCredentials.appPassword,
+              preferQueue: error is OnboardingCancelled,
+            );
       if (!cleanedUp) {
         throw const OnboardingFailure(
           OnboardingFailureCode.localPersistence,
@@ -585,16 +633,17 @@ final class OnboardingCoordinator {
     }
   }
 
-  Future<void> _ensureGeneratedCredentialCleanupCapacity() async {
-    if (_generatedCredentialCleanupBlocked) {
+  Future<AppPasswordRevocationReservation> _reserveGeneratedCredential() async {
+    final queue = _pendingRevocations;
+    if (queue == null) {
       throw const OnboardingFailure(
         OnboardingFailureCode.localPersistence,
         cleanupIncomplete: true,
       );
     }
     try {
-      await _pendingRevocations?.ensureCapacity();
-    } on AppPasswordRevocationQueueFull {
+      return await queue.reserve();
+    } on Object {
       throw const OnboardingFailure(
         OnboardingFailureCode.localPersistence,
         cleanupIncomplete: true,
@@ -602,12 +651,35 @@ final class OnboardingCoordinator {
     }
   }
 
-  Future<T> _awaitOneShotResult<T>(
-    Future<T> operation,
-    CancellationSignal cancellation, {
-    required Future<void> Function(T value) onLateValue,
+  Future<_ReservedOneShot<T>> _awaitReservedOneShot<T>({
+    required Future<T> Function() operation,
+    required CancellationSignal cancellation,
+    required ServerBase server,
+    required _GeneratedCredential? Function(T value) credentialFrom,
+    required bool Function(Object error) provesNoCredential,
+    AppPasswordRevocationReservation? reservation,
+    bool releaseWhenEmpty = true,
   }) async {
-    final outcome = operation.then<_OneShotOutcome<T>>(
+    final queue = _pendingRevocations;
+    if (queue == null) {
+      throw const OnboardingFailure(
+        OnboardingFailureCode.localPersistence,
+        cleanupIncomplete: true,
+      );
+    }
+    final activeReservation =
+        reservation ?? await _reserveGeneratedCredential();
+    if (cancellation.isCancelled) {
+      if (releaseWhenEmpty) {
+        try {
+          await queue.releaseReservation(activeReservation);
+        } on Object {
+          // No request was sent, so the empty reservation is safe to retain.
+        }
+      }
+      throw const OnboardingCancelled();
+    }
+    final outcome = Future<T>.sync(operation).then<_OneShotOutcome<T>>(
       _OneShotValue<T>.new,
       onError: (Object error, StackTrace stackTrace) =>
           _OneShotError<T>(error, stackTrace),
@@ -617,43 +689,217 @@ final class OnboardingCoordinator {
       cancellation.whenCancelled.then((_) => _OneShotCancelled<T>()),
     ]);
     if (first case _OneShotValue<T>(:final value)) {
-      return value;
+      final credential = credentialFrom(value);
+      if (credential == null) {
+        if (releaseWhenEmpty) {
+          await _releaseEmptyReservation(queue, activeReservation);
+        }
+        return _ReservedOneShot<T>(value: value, reservation: null);
+      }
+      final held = await _holdKnownCredential(
+        queue: queue,
+        reservation: activeReservation,
+        server: server,
+        credential: credential,
+      );
+      if (!held) {
+        throw const OnboardingFailure(OnboardingFailureCode.localPersistence);
+      }
+      return _ReservedOneShot<T>(value: value, reservation: activeReservation);
     }
     if (first case _OneShotError<T>(:final error, :final stackTrace)) {
+      if (releaseWhenEmpty && provesNoCredential(error)) {
+        await _releaseEmptyReservation(queue, activeReservation);
+      }
       Error.throwWithStackTrace(error, stackTrace);
     }
-    unawaited(_handleLateOneShot(outcome, onLateValue));
+    unawaited(
+      _handleLateReservedOneShot(
+        outcome: outcome,
+        queue: queue,
+        reservation: activeReservation,
+        server: server,
+        credentialFrom: credentialFrom,
+        provesNoCredential: provesNoCredential,
+        releaseWhenEmpty: releaseWhenEmpty,
+      ),
+    );
     throw const OnboardingCancelled();
   }
 
-  Future<void> _handleLateOneShot<T>(
-    Future<_OneShotOutcome<T>> outcome,
-    Future<void> Function(T value) onLateValue,
-  ) async {
+  Future<void> _handleLateReservedOneShot<T>({
+    required Future<_OneShotOutcome<T>> outcome,
+    required AppPasswordRevocationQueue queue,
+    required AppPasswordRevocationReservation reservation,
+    required ServerBase server,
+    required _GeneratedCredential? Function(T value) credentialFrom,
+    required bool Function(Object error) provesNoCredential,
+    required bool releaseWhenEmpty,
+  }) async {
     final late = await outcome;
     if (late case _OneShotValue<T>(:final value)) {
-      try {
-        await onLateValue(value);
-      } on Object {
-        _generatedCredentialCleanupBlocked = true;
+      final credential = credentialFrom(value);
+      if (credential == null) {
+        if (releaseWhenEmpty) {
+          await _releaseEmptyReservation(queue, reservation);
+        }
+        return;
+      }
+      await _persistLateCredential(
+        queue: queue,
+        reservation: reservation,
+        server: server,
+        credential: credential,
+      );
+      return;
+    }
+    if (late case _OneShotError<T>(:final error)) {
+      if (releaseWhenEmpty && provesNoCredential(error)) {
+        await _releaseEmptyReservation(queue, reservation);
       }
     }
   }
 
-  Future<void> _retireLateGeneratedCredential({
+  Future<bool> _holdKnownCredential({
+    required AppPasswordRevocationQueue queue,
+    required AppPasswordRevocationReservation reservation,
+    required ServerBase server,
+    required _GeneratedCredential credential,
+  }) async {
+    while (true) {
+      try {
+        await queue.holdCredential(
+          reservation: reservation,
+          server: server,
+          loginName: credential.loginName,
+          appPassword: credential.appPassword,
+        );
+        return true;
+      } on Object {
+        if (await _tryRevokeGeneratedCredential(
+          server: server,
+          credential: credential,
+        )) {
+          await _releaseRevokedReservation(queue, reservation);
+          return false;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
+  }
+
+  Future<void> _persistLateCredential({
+    required AppPasswordRevocationQueue queue,
+    required AppPasswordRevocationReservation reservation,
+    required ServerBase server,
+    required _GeneratedCredential credential,
+  }) async {
+    while (true) {
+      try {
+        await queue.queueCredential(
+          reservation: reservation,
+          server: server,
+          loginName: credential.loginName,
+          appPassword: credential.appPassword,
+        );
+        return;
+      } on Object {
+        if (await _tryRevokeGeneratedCredential(
+          server: server,
+          credential: credential,
+        )) {
+          await _releaseRevokedReservation(queue, reservation);
+          return;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
+  }
+
+  Future<bool> _tryRevokeGeneratedCredential({
+    required ServerBase server,
+    required _GeneratedCredential credential,
+  }) async {
+    try {
+      await _api.revokeAppPassword(
+        server: server,
+        loginName: credential.loginName,
+        appPassword: credential.appPassword,
+      );
+      return true;
+    } on NextcloudApiException catch (error) {
+      return error.statusCode == 401;
+    } on Object {
+      return false;
+    }
+  }
+
+  Future<void> _releaseEmptyReservation(
+    AppPasswordRevocationQueue queue,
+    AppPasswordRevocationReservation reservation,
+  ) async {
+    while (true) {
+      try {
+        await queue.releaseReservation(reservation);
+        return;
+      } on Object {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
+  }
+
+  Future<void> _releaseHeldCredential(
+    AppPasswordRevocationReservation reservation,
+  ) async {
+    final queue = _pendingRevocations!;
+    while (true) {
+      try {
+        await queue.releaseHeldCredential(reservation);
+        return;
+      } on Object {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
+  }
+
+  Future<void> _releaseRevokedReservation(
+    AppPasswordRevocationQueue queue,
+    AppPasswordRevocationReservation reservation,
+  ) async {
+    while (true) {
+      try {
+        await queue.releaseRevokedCredential(reservation);
+        return;
+      } on Object {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
+  }
+
+  Future<bool> _retireReservedCredential({
+    required AppPasswordRevocationReservation reservation,
     required ServerBase server,
     required String loginName,
     required String appPassword,
+    required bool preferQueue,
   }) async {
-    final cleanedUp = await _revokeOrRememberGeneratedCredential(
-      server: server,
-      loginName: loginName,
-      appPassword: appPassword,
-      preferQueue: true,
-    );
-    if (!cleanedUp) {
-      _generatedCredentialCleanupBlocked = true;
+    final queue = _pendingRevocations!;
+    final credential = (loginName: loginName, appPassword: appPassword);
+    if (!preferQueue &&
+        await _tryRevokeGeneratedCredential(
+          server: server,
+          credential: credential,
+        )) {
+      await _releaseRevokedReservation(queue, reservation);
+      return true;
     }
+    await _persistLateCredential(
+      queue: queue,
+      reservation: reservation,
+      server: server,
+      credential: credential,
+    );
+    return true;
   }
 
   Future<bool> _revokeOrRememberGeneratedCredential({
@@ -707,6 +953,15 @@ final class OnboardingCoordinator {
       return false;
     }
   }
+}
+
+typedef _GeneratedCredential = ({String loginName, String appPassword});
+
+final class _ReservedOneShot<T> {
+  const _ReservedOneShot({required this.value, required this.reservation});
+
+  final T value;
+  final AppPasswordRevocationReservation? reservation;
 }
 
 sealed class _OneShotOutcome<T> {

@@ -205,7 +205,7 @@ void main() {
       throwsA(isA<AppPasswordRevocationQueueFull>()),
     );
     await expectLater(
-      q.ensureCapacity(),
+      q.reserve(),
       throwsA(isA<AppPasswordRevocationQueueFull>()),
     );
     expect(await q.pendingCount(), AppPasswordRevocationQueue.maximumEntries);
@@ -239,20 +239,120 @@ void main() {
     reachable = true;
     await q.drain();
     expect(await q.pendingCount(), 0);
-    await q.ensureCapacity();
     await q.record(server: server, loginName: 'me', appPassword: 'pw5');
     expect(await q.pendingCount(), 1);
   });
 
-  test(
-    'a corrupt store is treated as empty instead of crashing the drain',
-    () async {
-      vault.pendingRevocations = 'not json';
-      final q = queue(
-        MockClient((request) async => http.Response(_okOcs(), 200)),
+  test('reservations occupy capacity and resolve in place when full', () async {
+    var nextId = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient(
+        (request) async => throw const SocketException('offline'),
+      ),
+    );
+    final q = AppPasswordRevocationQueue(
+      store: vault,
+      api: api,
+      now: () => clock,
+      reservationId: () => 'reservation-${nextId++}',
+    );
+    final reservation = await q.reserve();
+    for (var index = 0; index < 4; index++) {
+      await q.record(
+        server: server,
+        loginName: 'user-$index',
+        appPassword: 'password-$index',
       );
-      await q.drain();
-      expect(await q.pendingCount(), 0);
-    },
-  );
+    }
+    expect(await q.pendingCount(), AppPasswordRevocationQueue.maximumEntries);
+    expect(await q.unresolvedReservationCount(), 1);
+
+    await q.queueCredential(
+      reservation: reservation,
+      server: server,
+      loginName: 'late-user',
+      appPassword: 'late-password',
+    );
+
+    expect(await q.pendingCount(), AppPasswordRevocationQueue.maximumEntries);
+    expect(await q.unresolvedReservationCount(), 0);
+    expect(await q.pendingRevocationCount(), 5);
+  });
+
+  test('held credentials are never drained before owner handoff', () async {
+    var requests = 0;
+    final q = queue(
+      MockClient((request) async {
+        requests++;
+        return http.Response(_okOcs(), 200);
+      }),
+    );
+    final reservation = await q.reserve();
+    await q.holdCredential(
+      reservation: reservation,
+      server: server,
+      loginName: 'new-user',
+      appPassword: 'held-password',
+    );
+
+    await q.drain();
+
+    expect(requests, 0);
+    expect(await q.pendingCount(), 1);
+    expect(await q.pendingRevocationCount(), 0);
+    await q.releaseHeldCredential(reservation);
+    expect(await q.pendingCount(), 0);
+  });
+
+  test('concurrent reservations cannot exceed capacity', () async {
+    var nextId = 0;
+    final q = AppPasswordRevocationQueue(
+      store: vault,
+      api: HttpNextcloudApi(
+        client: MockClient((_) async => http.Response('', 500)),
+      ),
+      reservationId: () => 'reservation-${nextId++}',
+    );
+
+    final outcomes = await Future.wait(
+      List.generate(6, (_) async {
+        try {
+          await q.reserve();
+          return true;
+        } on AppPasswordRevocationQueueFull {
+          return false;
+        }
+      }),
+    );
+
+    expect(outcomes.where((value) => value), hasLength(5));
+    expect(await q.pendingCount(), 5);
+    expect(await q.unresolvedReservationCount(), 5);
+  });
+
+  test('corrupt queue data is preserved and blocks every mutation', () async {
+    const corrupt = 'not json';
+    vault.pendingRevocations = corrupt;
+    final q = queue(
+      MockClient((request) async => http.Response(_okOcs(), 200)),
+    );
+
+    await expectLater(
+      q.pendingCount(),
+      throwsA(isA<AppPasswordRevocationQueueCorrupt>()),
+    );
+    await expectLater(
+      q.drain(),
+      throwsA(isA<AppPasswordRevocationQueueCorrupt>()),
+    );
+    await expectLater(
+      q.reserve(),
+      throwsA(isA<AppPasswordRevocationQueueCorrupt>()),
+    );
+    await expectLater(
+      q.record(server: server, loginName: 'me', appPassword: 'new-password'),
+      throwsA(isA<AppPasswordRevocationQueueCorrupt>()),
+    );
+    expect(vault.pendingRevocations, corrupt);
+  });
 }

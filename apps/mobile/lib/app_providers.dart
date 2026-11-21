@@ -222,17 +222,17 @@ final appPasswordRevocationQueueProvider = Provider<AppPasswordRevocationQueue>(
 
 final class _NoPendingRevocationStore implements PendingRevocationStore {
   @override
-  Future<String?> readPendingRevocations() async => null;
+  Future<String?> readPendingRevocations() async =>
+      throw StateError('Pending revocation store is unavailable');
 
   @override
   Future<void> updatePendingRevocations(
     String? Function(String? current) update,
-  ) async {
-    update(null);
-  }
+  ) async => throw StateError('Pending revocation store is unavailable');
 
   @override
-  Future<void> writePendingRevocations(String? json) async {}
+  Future<void> writePendingRevocations(String? json) async =>
+      throw StateError('Pending revocation store is unavailable');
 }
 
 final emojiUsageStoreProvider = Provider<EmojiUsageStore>((ref) {

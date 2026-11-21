@@ -3,26 +3,28 @@
 import 'dart:convert';
 
 import 'package:talk_protocol/talk_protocol.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
 
 /// App passwords the device still owes a `DELETE /core/apppassword` for.
 ///
-/// An account removed while offline leaves its password valid on the server.
-/// The removal service records it here and every drain (start, connectivity,
-/// resume) retries the revocation. At most [maximumEntries] passwords are kept.
-/// A full queue refuses another password instead of forgetting an unverified
-/// revocation. Entries leave the queue only after a successful request or a
-/// `401`, which means the password is already dead.
+/// Every entry is durable before its local owner disappears. A one-shot login
+/// first stores a reservation, then atomically replaces it with either a held
+/// credential or a pending revocation. Held credentials are ignored by
+/// [drain] while onboarding commits their account. Entries leave the queue
+/// only after a successful request, a `401`, or a safe owner handoff.
 final class AppPasswordRevocationQueue {
   AppPasswordRevocationQueue({
     required PendingRevocationStore store,
     required HttpNextcloudApi api,
     DateTime Function()? now,
+    String Function()? reservationId,
   }) : _store = store,
        _api = api,
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _reservationId = reservationId ?? const Uuid().v4;
 
   static const maximumEntries = 5;
   static const _drainConcurrency = 3;
@@ -30,6 +32,7 @@ final class AppPasswordRevocationQueue {
   final PendingRevocationStore _store;
   final HttpNextcloudApi _api;
   final DateTime Function() _now;
+  final String Function() _reservationId;
 
   Future<void> record({
     required ServerBase server,
@@ -37,75 +40,211 @@ final class AppPasswordRevocationQueue {
     required String appPassword,
   }) => _store.updatePendingRevocations((raw) {
     final entries = _decode(raw);
-    final added = _Entry(
-      server: server.uri.toString(),
-      loginName: loginName,
-      appPassword: appPassword,
-      since: _now(),
-      attempts: 0,
-    );
     final existingIndex = entries.indexWhere(
-      (entry) => entry.sameSecretAs(added),
+      (entry) => entry.hasSecret(server, loginName, appPassword),
     );
     if (existingIndex >= 0) {
-      entries.removeAt(existingIndex);
-    } else if (entries.length >= maximumEntries) {
-      throw const AppPasswordRevocationQueueFull();
+      final existing = entries[existingIndex];
+      if (existing is _HeldEntry) {
+        entries[existingIndex] = existing.pending();
+        return _encode(entries);
+      }
+      return raw;
     }
-    entries.add(added);
+    _requireCapacity(entries);
+    entries.add(
+      _RevocationEntry(
+        reservationId: null,
+        server: server.uri.toString(),
+        loginName: loginName,
+        appPassword: appPassword,
+        since: _now(),
+        attempts: 0,
+      ),
+    );
     return _encode(entries);
   });
 
-  /// Refuses work that could mint another password when cleanup has no slot.
-  Future<void> ensureCapacity() async {
-    if ((await _load()).length >= maximumEntries) {
-      throw const AppPasswordRevocationQueueFull();
+  /// Atomically reserves one durable slot before a one-shot request is sent.
+  Future<AppPasswordRevocationReservation> reserve() async {
+    final reservation = AppPasswordRevocationReservation._(_reservationId());
+    if (reservation.id.isEmpty) {
+      throw const AppPasswordRevocationQueueCorrupt();
     }
+    await _store.updatePendingRevocations((raw) {
+      final entries = _decode(raw);
+      if (entries.any((entry) => entry.reservationId == reservation.id)) {
+        throw const AppPasswordRevocationQueueCorrupt();
+      }
+      _requireCapacity(entries);
+      entries.add(_ReservationEntry(id: reservation.id, since: _now()));
+      return _encode(entries);
+    });
+    return reservation;
   }
 
-  /// Number of revocations still owed; for diagnostics and tests.
+  Future<void> holdCredential({
+    required AppPasswordRevocationReservation reservation,
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+  }) => _resolveReservation(
+    reservation: reservation,
+    server: server,
+    loginName: loginName,
+    appPassword: appPassword,
+    pending: false,
+  );
+
+  Future<void> queueCredential({
+    required AppPasswordRevocationReservation reservation,
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+  }) => _resolveReservation(
+    reservation: reservation,
+    server: server,
+    loginName: loginName,
+    appPassword: appPassword,
+    pending: true,
+  );
+
+  Future<void> _resolveReservation({
+    required AppPasswordRevocationReservation reservation,
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+    required bool pending,
+  }) => _store.updatePendingRevocations((raw) {
+    final entries = _decode(raw);
+    final index = entries.indexWhere(
+      (entry) => entry.reservationId == reservation.id,
+    );
+    if (index < 0) {
+      throw const AppPasswordRevocationReservationMissing();
+    }
+    final existing = entries[index];
+    if (existing is _ReservationEntry) {
+      final duplicate = entries.indexWhere(
+        (entry) => entry.hasSecret(server, loginName, appPassword),
+      );
+      if (duplicate >= 0) {
+        throw const AppPasswordRevocationQueueCorrupt();
+      }
+      entries[index] = pending
+          ? _RevocationEntry(
+              reservationId: reservation.id,
+              server: server.uri.toString(),
+              loginName: loginName,
+              appPassword: appPassword,
+              since: existing.since,
+              attempts: 0,
+            )
+          : _HeldEntry(
+              id: reservation.id,
+              server: server.uri.toString(),
+              loginName: loginName,
+              appPassword: appPassword,
+              since: existing.since,
+            );
+      return _encode(entries);
+    }
+    if (!existing.hasSecret(server, loginName, appPassword)) {
+      throw const AppPasswordRevocationQueueCorrupt();
+    }
+    if (pending && existing is _HeldEntry) {
+      entries[index] = existing.pending();
+      return _encode(entries);
+    }
+    return raw;
+  });
+
+  Future<void> releaseReservation(
+    AppPasswordRevocationReservation reservation,
+  ) => _store.updatePendingRevocations((raw) {
+    final entries = _decode(raw);
+    final index = entries.indexWhere(
+      (entry) => entry.reservationId == reservation.id,
+    );
+    if (index < 0 || entries[index] is! _ReservationEntry) {
+      return raw;
+    }
+    entries.removeAt(index);
+    return _encode(entries);
+  });
+
+  Future<void> releaseHeldCredential(
+    AppPasswordRevocationReservation reservation,
+  ) => _store.updatePendingRevocations((raw) {
+    final entries = _decode(raw);
+    final index = entries.indexWhere(
+      (entry) => entry.reservationId == reservation.id,
+    );
+    if (index < 0) {
+      return raw;
+    }
+    if (entries[index] is! _HeldEntry) {
+      throw const AppPasswordRevocationQueueCorrupt();
+    }
+    entries.removeAt(index);
+    return _encode(entries);
+  });
+
+  Future<void> releaseRevokedCredential(
+    AppPasswordRevocationReservation reservation,
+  ) => _store.updatePendingRevocations((raw) {
+    final entries = _decode(raw);
+    entries.removeWhere((entry) => entry.reservationId == reservation.id);
+    return _encode(entries);
+  });
+
   Future<int> pendingCount() async => (await _load()).length;
+
+  Future<int> unresolvedReservationCount() async =>
+      (await _load()).whereType<_ReservationEntry>().length;
+
+  Future<int> pendingRevocationCount() async =>
+      (await _load()).whereType<_RevocationEntry>().length;
 
   Future<void> drain() async {
     final entries = await _load();
-    if (entries.isEmpty) {
+    final revocations = entries.whereType<_RevocationEntry>().toList();
+    if (revocations.isEmpty) {
       return;
     }
-    final outcomes = List<_Entry?>.filled(entries.length, null);
+    final outcomes = <_QueueIdentity, _RevocationEntry?>{};
     var nextEntry = 0;
 
     Future<void> revokeNext() async {
-      while (nextEntry < entries.length) {
-        final index = nextEntry++;
-        final entry = entries[index];
-        if (await _revoked(entry)) {
-          continue;
-        }
-        outcomes[index] = entry.afterAttempt();
+      while (nextEntry < revocations.length) {
+        final entry = revocations[nextEntry++];
+        outcomes[entry.identity] = await _revoked(entry)
+            ? null
+            : entry.afterAttempt();
       }
     }
 
-    final workerCount = entries.length < _drainConcurrency
-        ? entries.length
+    final workerCount = revocations.length < _drainConcurrency
+        ? revocations.length
         : _drainConcurrency;
     await Future.wait(List.generate(workerCount, (_) => revokeNext()));
-    final originalBySecret = <_Secret, int>{
-      for (var index = 0; index < entries.length; index++)
-        entries[index].secret: index,
+    final originalByIdentity = <_QueueIdentity, _QueueEntry>{
+      for (final entry in entries) entry.identity: entry,
     };
     await _store.updatePendingRevocations((raw) {
       final latest = _decode(raw);
-      final reconciled = <_Entry>[];
+      final reconciled = <_QueueEntry>[];
       for (final current in latest) {
-        final originalIndex = originalBySecret[current.secret];
-        if (originalIndex == null ||
-            !current.hasSameStateAs(entries[originalIndex])) {
-          // Added, retried or re-recorded by another isolate while the network
-          // calls were running. Its newer state belongs to the next drain.
+        final original = originalByIdentity[current.identity];
+        if (original == null || !current.hasSameStateAs(original)) {
           reconciled.add(current);
           continue;
         }
-        final outcome = outcomes[originalIndex];
+        if (current is! _RevocationEntry) {
+          reconciled.add(current);
+          continue;
+        }
+        final outcome = outcomes[current.identity];
         if (outcome != null) {
           reconciled.add(outcome);
         }
@@ -114,7 +253,7 @@ final class AppPasswordRevocationQueue {
     });
   }
 
-  Future<bool> _revoked(_Entry entry) async {
+  Future<bool> _revoked(_RevocationEntry entry) async {
     final ServerBase server;
     try {
       server = ServerBase.parse(entry.server);
@@ -129,51 +268,237 @@ final class AppPasswordRevocationQueue {
       );
       return true;
     } on NextcloudApiException catch (error) {
-      // Already revoked elsewhere: nothing left to destroy.
       return error.statusCode == 401;
     } on Object {
       return false;
     }
   }
 
-  Future<List<_Entry>> _load() async =>
+  Future<List<_QueueEntry>> _load() async =>
       _decode(await _store.readPendingRevocations());
 
-  List<_Entry> _decode(String? raw) {
+  void _requireCapacity(List<_QueueEntry> entries) {
+    if (entries.length >= maximumEntries) {
+      throw const AppPasswordRevocationQueueFull();
+    }
+  }
+
+  List<_QueueEntry> _decode(String? raw) {
     if (raw == null || raw.isEmpty) {
-      return <_Entry>[];
+      return <_QueueEntry>[];
     }
     final Object? decoded;
     try {
       decoded = jsonDecode(raw);
     } on FormatException {
-      return <_Entry>[];
+      throw const AppPasswordRevocationQueueCorrupt();
     }
-    if (decoded is! List) {
-      return <_Entry>[];
+    if (decoded is! List<Object?>) {
+      throw const AppPasswordRevocationQueueCorrupt();
     }
-    return <_Entry>[
-      for (final item in decoded)
-        if (item is Map<String, Object?>) ?_Entry.fromJson(item),
-    ];
+    final entries = <_QueueEntry>[];
+    for (final item in decoded) {
+      if (item is! Map<String, Object?>) {
+        throw const AppPasswordRevocationQueueCorrupt();
+      }
+      final entry = _QueueEntry.fromJson(item);
+      if (entry == null) {
+        throw const AppPasswordRevocationQueueCorrupt();
+      }
+      entries.add(entry);
+    }
+    if (entries.length > maximumEntries) {
+      throw const AppPasswordRevocationQueueCorrupt();
+    }
+    final identities = <_QueueIdentity>{};
+    final secrets = <_Secret>{};
+    for (final entry in entries) {
+      if (!identities.add(entry.identity)) {
+        throw const AppPasswordRevocationQueueCorrupt();
+      }
+      final secret = entry.secret;
+      if (secret != null && !secrets.add(secret)) {
+        throw const AppPasswordRevocationQueueCorrupt();
+      }
+    }
+    return entries;
   }
 
-  String? _encode(List<_Entry> entries) => entries.isEmpty
+  String? _encode(List<_QueueEntry> entries) => entries.isEmpty
       ? null
       : jsonEncode([for (final entry in entries) entry.toJson()]);
 }
 
+final class AppPasswordRevocationReservation {
+  const AppPasswordRevocationReservation._(this.id);
+
+  final String id;
+}
+
 final class AppPasswordRevocationQueueFull implements Exception {
   const AppPasswordRevocationQueueFull();
+}
 
-  @override
-  String toString() => 'AppPasswordRevocationQueueFull';
+final class AppPasswordRevocationQueueCorrupt implements Exception {
+  const AppPasswordRevocationQueueCorrupt();
+}
+
+final class AppPasswordRevocationReservationMissing implements Exception {
+  const AppPasswordRevocationReservationMissing();
 }
 
 typedef _Secret = ({String server, String loginName, String appPassword});
+typedef _QueueIdentity = ({String kind, String value});
 
-final class _Entry {
-  const _Entry({
+sealed class _QueueEntry {
+  const _QueueEntry();
+
+  String? get reservationId;
+  _QueueIdentity get identity;
+  _Secret? get secret;
+
+  bool hasSecret(ServerBase server, String loginName, String appPassword) =>
+      secret ==
+      (
+        server: server.uri.toString(),
+        loginName: loginName,
+        appPassword: appPassword,
+      );
+
+  bool hasSameStateAs(_QueueEntry other);
+  Map<String, Object?> toJson();
+
+  static _QueueEntry? fromJson(Map<String, Object?> json) {
+    return switch (json['kind']) {
+      'reservation' => _ReservationEntry.fromJson(json),
+      'held' => _HeldEntry.fromJson(json),
+      'revocation' || null => _RevocationEntry.fromJson(json),
+      _ => null,
+    };
+  }
+}
+
+final class _ReservationEntry extends _QueueEntry {
+  const _ReservationEntry({required this.id, required this.since});
+
+  final String id;
+  final DateTime since;
+
+  @override
+  String get reservationId => id;
+
+  @override
+  _QueueIdentity get identity => (kind: 'reservation', value: id);
+
+  @override
+  _Secret? get secret => null;
+
+  @override
+  bool hasSameStateAs(_QueueEntry other) =>
+      other is _ReservationEntry && id == other.id && since == other.since;
+
+  static _ReservationEntry? fromJson(Map<String, Object?> json) {
+    final id = json['id'];
+    final since = json['since'];
+    if (id is! String || id.isEmpty || since is! String) {
+      return null;
+    }
+    final parsedSince = DateTime.tryParse(since);
+    return parsedSince == null
+        ? null
+        : _ReservationEntry(id: id, since: parsedSince);
+  }
+
+  @override
+  Map<String, Object?> toJson() => <String, Object?>{
+    'kind': 'reservation',
+    'id': id,
+    'since': since.toUtc().toIso8601String(),
+  };
+}
+
+final class _HeldEntry extends _QueueEntry {
+  const _HeldEntry({
+    required this.id,
+    required this.server,
+    required this.loginName,
+    required this.appPassword,
+    required this.since,
+  });
+
+  final String id;
+  final String server;
+  final String loginName;
+  final String appPassword;
+  final DateTime since;
+
+  @override
+  String get reservationId => id;
+
+  @override
+  _QueueIdentity get identity => (kind: 'reservation', value: id);
+
+  @override
+  _Secret get secret =>
+      (server: server, loginName: loginName, appPassword: appPassword);
+
+  _RevocationEntry pending() => _RevocationEntry(
+    reservationId: id,
+    server: server,
+    loginName: loginName,
+    appPassword: appPassword,
+    since: since,
+    attempts: 0,
+  );
+
+  @override
+  bool hasSameStateAs(_QueueEntry other) =>
+      other is _HeldEntry &&
+      id == other.id &&
+      secret == other.secret &&
+      since == other.since;
+
+  static _HeldEntry? fromJson(Map<String, Object?> json) {
+    final id = json['id'];
+    final server = json['server'];
+    final loginName = json['loginName'];
+    final appPassword = json['appPassword'];
+    final since = json['since'];
+    if (id is! String ||
+        id.isEmpty ||
+        server is! String ||
+        loginName is! String ||
+        appPassword is! String ||
+        appPassword.isEmpty ||
+        since is! String) {
+      return null;
+    }
+    final parsedSince = DateTime.tryParse(since);
+    return parsedSince == null
+        ? null
+        : _HeldEntry(
+            id: id,
+            server: server,
+            loginName: loginName,
+            appPassword: appPassword,
+            since: parsedSince,
+          );
+  }
+
+  @override
+  Map<String, Object?> toJson() => <String, Object?>{
+    'kind': 'held',
+    'id': id,
+    'server': server,
+    'loginName': loginName,
+    'appPassword': appPassword,
+    'since': since.toUtc().toIso8601String(),
+  };
+}
+
+final class _RevocationEntry extends _QueueEntry {
+  const _RevocationEntry({
+    required this.reservationId,
     required this.server,
     required this.loginName,
     required this.appPassword,
@@ -181,47 +506,69 @@ final class _Entry {
     required this.attempts,
   });
 
+  @override
+  final String? reservationId;
   final String server;
   final String loginName;
   final String appPassword;
   final DateTime since;
   final int attempts;
 
+  @override
+  _QueueIdentity get identity => reservationId == null
+      ? (
+          kind: 'secret',
+          value: jsonEncode(<String>[server, loginName, appPassword]),
+        )
+      : (kind: 'reservation', value: reservationId!);
+
+  @override
   _Secret get secret =>
       (server: server, loginName: loginName, appPassword: appPassword);
 
-  bool sameSecretAs(_Entry other) => secret == other.secret;
+  @override
+  bool hasSameStateAs(_QueueEntry other) =>
+      other is _RevocationEntry &&
+      reservationId == other.reservationId &&
+      secret == other.secret &&
+      since == other.since &&
+      attempts == other.attempts;
 
-  bool hasSameStateAs(_Entry other) =>
-      sameSecretAs(other) && since == other.since && attempts == other.attempts;
-
-  static _Entry? fromJson(Map<String, Object?> json) {
+  static _RevocationEntry? fromJson(Map<String, Object?> json) {
+    final reservationId = json['reservationId'];
     final server = json['server'];
     final loginName = json['loginName'];
     final appPassword = json['appPassword'];
     final since = json['since'];
     final attempts = json['attempts'];
-    if (server is! String ||
+    if ((reservationId != null &&
+            (reservationId is! String || reservationId.isEmpty)) ||
+        server is! String ||
         loginName is! String ||
         appPassword is! String ||
+        appPassword.isEmpty ||
         since is! String ||
-        attempts is! int) {
+        attempts is! int ||
+        attempts < 0) {
       return null;
     }
     final parsedSince = DateTime.tryParse(since);
-    if (parsedSince == null) {
-      return null;
-    }
-    return _Entry(
-      server: server,
-      loginName: loginName,
-      appPassword: appPassword,
-      since: parsedSince,
-      attempts: attempts,
-    );
+    return parsedSince == null
+        ? null
+        : _RevocationEntry(
+            reservationId: reservationId as String?,
+            server: server,
+            loginName: loginName,
+            appPassword: appPassword,
+            since: parsedSince,
+            attempts: attempts,
+          );
   }
 
-  Map<String, Object?> toJson() => {
+  @override
+  Map<String, Object?> toJson() => <String, Object?>{
+    'kind': 'revocation',
+    'reservationId': ?reservationId,
     'server': server,
     'loginName': loginName,
     'appPassword': appPassword,
@@ -229,7 +576,8 @@ final class _Entry {
     'attempts': attempts,
   };
 
-  _Entry afterAttempt() => _Entry(
+  _RevocationEntry afterAttempt() => _RevocationEntry(
+    reservationId: reservationId,
     server: server,
     loginName: loginName,
     appPassword: appPassword,
