@@ -26,6 +26,36 @@ void main() {
   Matcher failure(RoomSettingsError code) =>
       throwsA(isA<RoomSettingsException>().having((e) => e.code, 'code', code));
 
+  test('loads the room and participants in the same network turn', () async {
+    final releaseRoom = Completer<void>();
+    final participantsStarted = Completer<void>();
+    server.beforeRoomRead = (_) => releaseRoom.future;
+    server.onParticipantsRead = (_) => participantsStarted.complete();
+
+    final edit = server.edit(PermissionEditKind.attendee);
+    await participantsStarted.future.timeout(const Duration(seconds: 1));
+    releaseRoom.complete();
+
+    expect((await edit).target?.attendeeId, 17);
+  });
+
+  test('loads permission readback in the same network turn', () async {
+    final edit = await server.edit(PermissionEditKind.attendee);
+    final releaseRoom = Completer<void>();
+    final participantsStarted = Completer<void>();
+    server.beforeRoomRead = (read) =>
+        read == 3 ? releaseRoom.future : Future<void>.value();
+    server.onParticipantsRead = (read) {
+      if (read == 3) participantsStarted.complete();
+    };
+
+    final apply = server.apply(edit, 129);
+    await participantsStarted.future.timeout(const Duration(seconds: 1));
+    releaseRoom.complete();
+
+    expect((await apply).participants.last.attendeePermissions, 129);
+  });
+
   test(
     'changing even the same default requires confirmation and resets all overrides',
     () async {
@@ -530,6 +560,10 @@ final class _PermissionServer {
   bool staleRoomAck = false;
   bool keepOverrides = false;
   bool failReadback = false;
+  int roomReads = 0;
+  int participantReads = 0;
+  Future<void> Function(int read)? beforeRoomRead;
+  void Function(int read)? onParticipantsRead;
 
   Future<void> prepare() async {
     await accounts.upsertAccount(
@@ -577,8 +611,14 @@ final class _PermissionServer {
             },
           ]);
         }
-        if (request.url.path.endsWith('/room')) return _success([room]);
+        if (request.url.path.endsWith('/room')) {
+          roomReads++;
+          await beforeRoomRead?.call(roomReads);
+          return _success([room]);
+        }
         if (request.url.path.endsWith('/participants')) {
+          participantReads++;
+          onParticipantsRead?.call(participantReads);
           return _success(_participants());
         }
         throw StateError('Unexpected test request');

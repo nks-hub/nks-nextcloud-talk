@@ -98,14 +98,24 @@ extension RoomSettingsPermissions on RoomSettingsService {
     if (!policy.supports(kind)) {
       throw const RoomSettingsException(RoomSettingsError.forbidden);
     }
-    final room = await _readAccessRoom(context, roomToken, abortTrigger);
-    check();
-    _requirePermissionModerator(room, kind);
-    final participants = await _readPermissionParticipants(
+    final roomRead = _readAccessRoom(context, roomToken, abortTrigger);
+    final participantsRead = _readPermissionParticipantsGuarded(
       context,
       roomToken,
       abortTrigger,
     );
+    final room = await roomRead;
+    check();
+    _requirePermissionModerator(room, kind);
+    final participantResult = await participantsRead;
+    final participantError = participantResult.error;
+    if (participantError != null) {
+      Error.throwWithStackTrace(
+        participantError,
+        participantResult.stackTrace!,
+      );
+    }
+    final participants = participantResult.participants!;
     check();
     await _validateAccessIdentity(context);
     check();
@@ -244,17 +254,27 @@ extension RoomSettingsPermissions on RoomSettingsService {
       }
       await _validateAccessIdentity(context);
       check();
-      final room = await _readAccessRoom(
+      final roomRead = _readAccessRoom(
         context,
         edit.room.token.value,
         abortTrigger,
       );
+      final participantsRead = _readPermissionParticipantsGuarded(
+        context,
+        edit.room.token.value,
+        abortTrigger,
+      );
+      final room = await roomRead;
       check();
-      final participants = await _readPermissionParticipants(
-        context,
-        edit.room.token.value,
-        abortTrigger,
-      );
+      final participantResult = await participantsRead;
+      final participantError = participantResult.error;
+      if (participantError != null) {
+        Error.throwWithStackTrace(
+          participantError,
+          participantResult.stackTrace!,
+        );
+      }
+      final participants = participantResult.participants!;
       await _validateAccessIdentity(context);
       check();
       _verifyPermissionReadback(fresh, value, room, participants);
@@ -311,7 +331,24 @@ extension RoomSettingsPermissions on RoomSettingsService {
       ),
     };
   }
+
+  Future<_PermissionParticipantsRead> _readPermissionParticipantsGuarded(
+    _AuthContext context,
+    String roomToken,
+    Future<void>? abortTrigger,
+  ) => _readPermissionParticipants(context, roomToken, abortTrigger).then(
+    (participants) =>
+        (participants: participants, error: null, stackTrace: null),
+    onError: (Object error, StackTrace stackTrace) =>
+        (participants: null, error: error, stackTrace: stackTrace),
+  );
 }
+
+typedef _PermissionParticipantsRead = ({
+  List<Participant>? participants,
+  Object? error,
+  StackTrace? stackTrace,
+});
 
 void _requirePermissionModerator(
   ConversationRoom room,
