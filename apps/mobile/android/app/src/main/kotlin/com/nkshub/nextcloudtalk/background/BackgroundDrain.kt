@@ -43,8 +43,12 @@ object BackgroundDrain {
     @Volatile
     private var foreground: MethodChannel? = null
 
-    fun attachForeground(channel: MethodChannel?) {
+    fun attachForeground(channel: MethodChannel) {
         foreground = channel
+    }
+
+    fun detachForeground(channel: MethodChannel?) {
+        if (foreground === channel) foreground = null
     }
 
     fun foregroundChannel(): MethodChannel? = foreground

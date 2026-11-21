@@ -529,7 +529,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         emojiGlyphChannel = null
         clipboardImageChannel?.dispose()
         clipboardImageChannel = null
-        BackgroundDrain.attachForeground(null)
+        BackgroundDrain.detachForeground(backgroundDrainChannel)
         backgroundDrainChannel?.setMethodCallHandler(null)
         backgroundDrainChannel = null
         shortcutChannel?.setMethodCallHandler(null)

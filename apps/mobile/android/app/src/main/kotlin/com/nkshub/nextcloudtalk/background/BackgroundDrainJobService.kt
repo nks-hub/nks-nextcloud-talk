@@ -18,36 +18,38 @@ import io.flutter.plugin.common.MethodChannel
  */
 class BackgroundDrainJobService : JobService() {
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var engine: FlutterEngine? = null
-    private var timeout: Runnable? = null
-    private var finished = false
+    private val runs = BackgroundDrainRuns()
 
     override fun onStartJob(params: JobParameters): Boolean {
+        val resources = DrainResources(mainHandler)
+        val run = runs.start(params.jobId, resources::release)
         val app = BackgroundDrain.foregroundChannel()
-        armTimeout(params)
+        val timeout = Runnable { finish(params, run, true) }
+        resources.timeout = timeout
+        mainHandler.postDelayed(timeout, TIMEOUT_MILLIS)
         if (app != null) {
             app.invokeMethod(
                 "runDrain",
                 null,
                 object : MethodChannel.Result {
-                    override fun success(result: Any?) = finish(params, false)
+                    override fun success(result: Any?) = finish(params, run, false)
 
                     override fun error(code: String, message: String?, details: Any?) =
-                        finish(params, true)
+                        finish(params, run, true)
 
-                    override fun notImplemented() = finish(params, false)
+                    override fun notImplemented() = finish(params, run, false)
                 },
             )
             return true
         }
         val created = FlutterEngine(applicationContext)
-        engine = created
+        resources.engine = created
         MethodChannel(created.dartExecutor.binaryMessenger, BackgroundDrain.CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "finished" -> {
                         result.success(null)
-                        finish(params, call.argument<Boolean>("retry") == true)
+                        finish(params, run, call.argument<Boolean>("retry") == true)
                     }
                     "readPendingRevocations" -> PendingRevocationStorage.read(
                         applicationContext,
@@ -71,41 +73,59 @@ class BackgroundDrainJobService : JobService() {
         return true
     }
 
-    /**
-     * The system stops an unfinished job after about ten minutes and counts it
-     * against the app. A drain that has not reported by then is stuck on a
-     * server that never answers, and the next wake is a better bet than
-     * holding this one open.
-     */
-    private fun armTimeout(params: JobParameters) {
-        val runnable = Runnable { finish(params, true) }
-        timeout = runnable
-        mainHandler.postDelayed(runnable, TIMEOUT_MILLIS)
+    override fun onStopJob(params: JobParameters): Boolean = runs.stop(params.jobId)
+
+    override fun onDestroy() {
+        runs.stopAll()
+        super.onDestroy()
     }
 
-    override fun onStopJob(params: JobParameters): Boolean {
-        release()
-        return !finished
+    private fun finish(params: JobParameters, run: BackgroundDrainRuns.Run, reschedule: Boolean) {
+        if (runs.finish(run)) jobFinished(params, reschedule)
     }
 
-    private fun finish(params: JobParameters, reschedule: Boolean) {
-        if (finished) {
-            return
+    private class DrainResources(private val handler: Handler) {
+        var engine: FlutterEngine? = null
+        var timeout: Runnable? = null
+
+        fun release() {
+            timeout?.let(handler::removeCallbacks)
+            timeout = null
+            engine?.destroy()
+            engine = null
         }
-        finished = true
-        release()
-        jobFinished(params, reschedule)
-    }
-
-    private fun release() {
-        timeout?.let(mainHandler::removeCallbacks)
-        timeout = null
-        engine?.destroy()
-        engine = null
     }
 
     private companion object {
         const val ENTRYPOINT = "backgroundDrainMain"
         const val TIMEOUT_MILLIS = 4L * 60L * 1000L
+    }
+}
+
+/** A JobService instance can receive callbacks for several job IDs. */
+internal class BackgroundDrainRuns {
+    class Run(val jobId: Int, val release: () -> Unit)
+
+    private val active = mutableMapOf<Int, Run>()
+
+    fun start(jobId: Int, release: () -> Unit): Run {
+        val run = Run(jobId, release)
+        active.put(jobId, run)?.release?.invoke()
+        return run
+    }
+
+    fun stop(jobId: Int): Boolean = active[jobId]?.let(::finish) ?: false
+
+    fun stopAll() {
+        val runs = active.values.toList()
+        active.clear()
+        runs.forEach { it.release() }
+    }
+
+    fun finish(run: Run): Boolean {
+        if (active[run.jobId] !== run) return false
+        active.remove(run.jobId)
+        run.release()
+        return true
     }
 }
