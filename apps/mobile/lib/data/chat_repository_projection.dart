@@ -642,8 +642,12 @@ extension _ChatRepositoryProjection on ChatRepository {
     final pendingMessageKeys = <({String roomToken, int messageId})>{};
     for (final message in messageList) {
       final requiredMessage = _requiredPriorCachedMessage(message);
-      if (requiredMessage != null &&
-          pendingMessageKeys.contains(requiredMessage)) {
+      final mutationProjectsIntoQuotedParents =
+          message.systemMessage == 'message_edited' ||
+          message.systemMessage == 'message_deleted';
+      if (mutationProjectsIntoQuotedParents ||
+          (requiredMessage != null &&
+              pendingMessageKeys.contains(requiredMessage))) {
         await _flushPendingMessages(pendingMessages);
         pendingMessages.clear();
         pendingMessageKeys.clear();

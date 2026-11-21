@@ -98,6 +98,29 @@ void main() {
       expect(stored.reactionsSelf, ['thumbs-up']);
     },
   );
+
+  test(
+    'a mutation updates an earlier quoted parent from the same page',
+    () async {
+      expect(
+        await repository.applyChatGetResponse(_rootQuoteAndMutationResponse()),
+        ChatMergeOutcome.applied,
+      );
+
+      final row =
+          await (database.select(database.cachedChatMessages)..where(
+                (message) =>
+                    message.accountId.equals('account-a') &
+                    message.roomToken.equals('rooma123') &
+                    message.messageId.equals(3001),
+              ))
+              .getSingle();
+      final stored = ChatMessage.fromJson(jsonDecode(row.rawJson));
+      expect(stored.parent, isA<ChatFullParent>());
+      final parent = stored.parent as ChatFullParent;
+      expect(parent.message.message, 'Edited message');
+    },
+  );
 }
 
 Future<void> _insertConversation(AppDatabase database) async {
@@ -174,9 +197,49 @@ ChatGetResponse _rootFutureResponse() {
 }
 
 ChatGetResponse _rootAndReactionResponse() {
+  final original = _messageJson(2000);
+  final reacted = Map<String, Object?>.of(original)
+    ..['reactions'] = {'thumbs-up': 2}
+    ..['reactionsSelf'] = <String>['thumbs-up'];
+  final notice = _messageJson(2001)
+    ..['systemMessage'] = 'reaction'
+    ..['messageType'] = 'system'
+    ..['message'] = 'thumbs-up'
+    ..['parent'] = reacted;
+  return _futureResponse(
+    requestId: 'message-reaction-order',
+    lastGiven: 2001,
+    messages: [original, notice],
+  );
+}
+
+ChatGetResponse _rootQuoteAndMutationResponse() {
+  final original = _messageJson(3000);
+  final quoted = _messageJson(3001)
+    ..['message'] = 'Quoted reply'
+    ..['parent'] = original;
+  final edited = Map<String, Object?>.of(original)
+    ..['message'] = 'Edited message';
+  final notice = _messageJson(3002)
+    ..['systemMessage'] = 'message_edited'
+    ..['messageType'] = 'system'
+    ..['message'] = '{actor} edited a message'
+    ..['parent'] = edited;
+  return _futureResponse(
+    requestId: 'message-mutation-order',
+    lastGiven: 3002,
+    messages: [original, quoted, notice],
+  );
+}
+
+ChatGetResponse _futureResponse({
+  required String requestId,
+  required int lastGiven,
+  required List<Map<String, Object?>> messages,
+}) {
   final request = ChatFetchRequest(
     accountId: AccountId.parse('account-a'),
-    requestId: ChatRequestId.parse('message-reaction-order'),
+    requestId: ChatRequestId.parse(requestId),
     server: ServerBase.parse('https://cloud.example.invalid'),
     roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
     profile: ChatCapabilityProfile.fromTalkFeatures(const <Object?>[
@@ -190,15 +253,6 @@ ChatGetResponse _rootAndReactionResponse() {
     timeoutSeconds: 0,
     interactive: true,
   );
-  final original = _messageJson(2000);
-  final reacted = Map<String, Object?>.of(original)
-    ..['reactions'] = {'thumbs-up': 2}
-    ..['reactionsSelf'] = <String>['thumbs-up'];
-  final notice = _messageJson(2001)
-    ..['systemMessage'] = 'reaction'
-    ..['messageType'] = 'system'
-    ..['message'] = 'thumbs-up'
-    ..['parent'] = reacted;
   return decodeChatGetResponse(
     request: request,
     statusCode: 200,
@@ -207,13 +261,13 @@ ChatGetResponse _rootAndReactionResponse() {
         jsonEncode({
           'ocs': {
             'meta': {'status': 'ok', 'statuscode': 200, 'message': 'OK'},
-            'data': [original, notice],
+            'data': messages,
           },
         }),
       ),
     ),
-    headers: ChatResponseHeaders.fromMap(const {
-      'X-Chat-Last-Given': '2001',
+    headers: ChatResponseHeaders.fromMap({
+      'X-Chat-Last-Given': '$lastGiven',
       'X-Chat-Last-Common-Read': '0',
     }),
   );
