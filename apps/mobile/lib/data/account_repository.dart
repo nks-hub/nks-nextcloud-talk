@@ -400,16 +400,9 @@ final class AccountRepository {
         '[accounts] dropping ${invalidTokens.length} of ${cached.length} '
         'cached conversations for ${account.id}: $firstFailure',
       );
-      await _database.transaction(() async {
-        for (final token in invalidTokens) {
-          await (_database.delete(_database.cachedConversations)..where(
-                (conversation) =>
-                    conversation.accountId.equals(account.id) &
-                    conversation.token.equals(token),
-              ))
-              .go();
-        }
-      });
+      await _database.transaction(
+        () => _deleteConversations(account.id, invalidTokens),
+      );
     }
 
     try {
@@ -453,22 +446,26 @@ final class AccountRepository {
 
   Future<void> applyConversationMerge(ConversationMergePlan plan) async {
     await _database.transaction(() async {
-      for (final room in plan.upserts) {
-        await _upsertConversation(plan.accountId.value, room);
+      final accountId = plan.accountId.value;
+      if (plan.upserts.isNotEmpty) {
+        await _database.batch((batch) {
+          batch.insertAllOnConflictUpdate(_database.cachedConversations, [
+            for (final room in plan.upserts)
+              _conversationCompanion(accountId, room),
+          ]);
+        });
       }
-      for (final token in plan.deleteTokens) {
-        await (_database.delete(_database.cachedConversations)..where(
-              (conversation) =>
-                  conversation.accountId.equals(plan.accountId.value) &
-                  conversation.token.equals(token.value),
-            ))
-            .go();
+      if (plan.deleteTokens.isNotEmpty) {
+        await _deleteConversations(
+          accountId,
+          plan.deleteTokens.map((token) => token.value),
+        );
       }
 
       final next = plan.nextAccountState;
       await (_database.update(
         _database.accounts,
-      )..where((account) => account.id.equals(plan.accountId.value))).write(
+      )..where((account) => account.id.equals(accountId))).write(
         AccountsCompanion(
           conversationCursor: Value(next.cursor?.value),
           conversationHash: Value(next.configurationHash?.value),
@@ -504,31 +501,35 @@ final class AccountRepository {
   Future<void> _upsertConversation(String accountId, ConversationRoom room) {
     return _database
         .into(_database.cachedConversations)
-        .insertOnConflictUpdate(
-          CachedConversationsCompanion.insert(
-            accountId: accountId,
-            token: room.token.value,
-            displayName: room.displayName,
-            description: room.description,
-            lastActivity: room.lastActivity,
-            unreadMessages: room.unreadMessages,
-            favorite: room.isFavorite,
-            isArchived: Value(room.isArchived),
-            readOnly: Value(room.readOnly),
-            roomType: Value(room.type),
-            roomName: Value(room.name),
-            objectType: Value(room.objectType),
-            avatarVersion: Value(room.avatarVersion),
-            isCustomAvatar: Value(room.isCustomAvatar),
-            peerStatus: Value(room.status),
-            peerStatusIcon: Value(room.statusIcon),
-            peerStatusMessage: Value(room.statusMessage),
-            peerStatusClearAt: Value(room.statusClearAt),
-            lastMessageText: Value(_safePreview(room)),
-            lastMessageTimestamp: Value(room.lastMessage?.timestamp),
-            rawJson: jsonEncode(room.wire),
-          ),
-        );
+        .insertOnConflictUpdate(_conversationCompanion(accountId, room));
+  }
+
+  Future<void> _deleteConversations(
+    String accountId,
+    Iterable<String> tokens,
+  ) async {
+    // Keep the account id plus token binds below legacy SQLite limits.
+    const maximumTokensPerStatement = 500;
+    final chunk = <String>[];
+    for (final token in tokens) {
+      chunk.add(token);
+      if (chunk.length == maximumTokensPerStatement) {
+        await _deleteConversationChunk(accountId, chunk);
+        chunk.clear();
+      }
+    }
+    if (chunk.isNotEmpty) {
+      await _deleteConversationChunk(accountId, chunk);
+    }
+  }
+
+  Future<void> _deleteConversationChunk(String accountId, List<String> tokens) {
+    return (_database.delete(_database.cachedConversations)..where(
+          (conversation) =>
+              conversation.accountId.equals(accountId) &
+              conversation.token.isIn(tokens),
+        ))
+        .go();
   }
 
   Future<void> recordSyncError(String accountId, String errorCode) {
@@ -555,6 +556,35 @@ final class AccountRepository {
       ),
     );
   }
+}
+
+CachedConversationsCompanion _conversationCompanion(
+  String accountId,
+  ConversationRoom room,
+) {
+  return CachedConversationsCompanion.insert(
+    accountId: accountId,
+    token: room.token.value,
+    displayName: room.displayName,
+    description: room.description,
+    lastActivity: room.lastActivity,
+    unreadMessages: room.unreadMessages,
+    favorite: room.isFavorite,
+    isArchived: Value(room.isArchived),
+    readOnly: Value(room.readOnly),
+    roomType: Value(room.type),
+    roomName: Value(room.name),
+    objectType: Value(room.objectType),
+    avatarVersion: Value(room.avatarVersion),
+    isCustomAvatar: Value(room.isCustomAvatar),
+    peerStatus: Value(room.status),
+    peerStatusIcon: Value(room.statusIcon),
+    peerStatusMessage: Value(room.statusMessage),
+    peerStatusClearAt: Value(room.statusClearAt),
+    lastMessageText: Value(_safePreview(room)),
+    lastMessageTimestamp: Value(room.lastMessage?.timestamp),
+    rawJson: jsonEncode(room.wire),
+  );
 }
 
 String? _safePreview(ConversationRoom room) {
