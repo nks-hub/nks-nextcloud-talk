@@ -30,6 +30,12 @@ final class ConversationAvatarImage {
     this.isCustomAvatar,
   }) : body = Uint8List.fromList(body);
 
+  ConversationAvatarImage._owned({
+    required this.body,
+    required this.contentType,
+    this.isCustomAvatar,
+  });
+
   final Uint8List body;
   final String contentType;
   final bool? isCustomAvatar;
@@ -162,14 +168,13 @@ final class ConversationAvatarRepository {
     required DateTime now,
   }) async {
     final contentType = response.contentType!;
-    final image = ConversationAvatarImage(
-      body: response.body,
-      contentType: contentType,
-      isCustomAvatar: response.isCustomAvatar,
-    );
     if (_hasCacheDirective(response.cacheControl, 'no-store')) {
       await _delete(accountId, cacheKey);
-      return image;
+      return ConversationAvatarImage._owned(
+        body: response.body,
+        contentType: contentType,
+        isCustomAvatar: response.isCustomAvatar,
+      );
     }
     final nowMillis = now.millisecondsSinceEpoch;
     await _database
@@ -187,7 +192,11 @@ final class ConversationAvatarRepository {
             updatedAtMillis: nowMillis,
           ),
         );
-    return image;
+    return ConversationAvatarImage._owned(
+      body: response.body,
+      contentType: contentType,
+      isCustomAvatar: response.isCustomAvatar,
+    );
   }
 
   Future<ConversationAvatarImage> _refreshCached({
@@ -241,7 +250,7 @@ final class ConversationAvatarRepository {
   }
 
   ConversationAvatarImage _image(StoredConversationAvatar cached) {
-    return ConversationAvatarImage(
+    return ConversationAvatarImage._owned(
       body: cached.body,
       contentType: cached.contentType,
       isCustomAvatar: cached.isCustomAvatar,

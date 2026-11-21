@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,6 +35,18 @@ void main() {
   });
 
   tearDown(() => database.close());
+
+  test('public avatar values keep their own byte storage', () {
+    final source = Uint8List.fromList(<int>[1, 2, 3]);
+    final image = ConversationAvatarImage(
+      body: source,
+      contentType: 'image/png',
+    );
+
+    source[0] = 9;
+
+    expect(image.body, <int>[1, 2, 3]);
+  });
 
   test('only a loaded versioned avatar outlives its last listener', () async {
     var fail = false;
