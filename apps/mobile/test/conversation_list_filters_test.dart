@@ -13,6 +13,60 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 void main() {
+  test('mention parsing is reused across large Drift-style emissions', () {
+    var parseCount = 0;
+    final cache = ConversationUnreadMentionCache(
+      maximumEntries: 1024,
+      parser: (conversation) {
+        parseCount++;
+        return conversation.rawJson.endsWith('-mention');
+      },
+    );
+    final template = _conversation(token: 'room0000', rawJson: 'revision-0');
+    final first = List<CachedConversation>.generate(
+      1000,
+      (index) =>
+          template.copyWith(token: 'room${index.toString().padLeft(4, '0')}'),
+    );
+
+    cache.retainConversations(first);
+    final firstResult = [
+      for (final conversation in first) cache.hasUnreadMention(conversation),
+    ];
+    expect(firstResult, everyElement(isFalse));
+    expect(parseCount, 1000);
+
+    final second = [for (final conversation in first) conversation.copyWith()];
+    second[500] = second[500].copyWith(rawJson: 'revision-1-mention');
+    cache.retainConversations(second);
+    final secondResult = [
+      for (final conversation in second) cache.hasUnreadMention(conversation),
+    ];
+
+    expect(secondResult.where((value) => value), hasLength(1));
+    expect(secondResult[500], isTrue);
+    expect(parseCount, 1001);
+    expect(cache.entryCount, 1000);
+  });
+
+  test('mention cache evicts least recently used rooms at its bound', () {
+    final cache = ConversationUnreadMentionCache(
+      maximumEntries: 2,
+      parser: (_) => false,
+    );
+    final rooms = [
+      _conversation(token: 'bounded1', rawJson: 'one'),
+      _conversation(token: 'bounded2', rawJson: 'two'),
+      _conversation(token: 'bounded3', rawJson: 'three'),
+    ];
+
+    for (final room in rooms) {
+      cache.hasUnreadMention(room);
+    }
+
+    expect(cache.entryCount, 2);
+  });
+
   testWidgets('unread and mention filters combine without exposing archives', (
     tester,
   ) async {

@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -61,12 +62,15 @@ final class ConversationListView extends ConsumerStatefulWidget {
 final class _ConversationListViewState
     extends ConsumerState<ConversationListView> {
   final Set<_ConversationListFilter> _filters = {};
+  final ConversationUnreadMentionCache _unreadMentions =
+      ConversationUnreadMentionCache();
 
   @override
   void didUpdateWidget(covariant ConversationListView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.account.id != widget.account.id) {
       _filters.clear();
+      _unreadMentions.clear();
       return;
     }
     if (!_canViewArchived(widget.account)) {
@@ -76,7 +80,11 @@ final class _ConversationListViewState
 
   void _toggleFilter(_ConversationListFilter filter) {
     setState(() {
-      if (!_filters.remove(filter)) {
+      if (_filters.remove(filter)) {
+        if (filter == _ConversationListFilter.mentions) {
+          _unreadMentions.clear();
+        }
+      } else {
         _filters.add(filter);
       }
     });
@@ -209,8 +217,17 @@ final class _ConversationListViewState
     if (!canViewArchived) {
       filters.remove(_ConversationListFilter.archived);
     }
+    if (filters.contains(_ConversationListFilter.mentions)) {
+      _unreadMentions.retainConversations(widget.conversations);
+    }
     final shown = widget.conversations
-        .where((conversation) => _matchesFilters(conversation, filters))
+        .where(
+          (conversation) => _matchesFilters(
+            conversation,
+            filters,
+            unreadMentions: _unreadMentions,
+          ),
+        )
         .toList(growable: false);
 
     final filterBar = _ConversationFilterBar(
@@ -606,8 +623,9 @@ final class _EmptyConversations extends StatelessWidget {
 
 bool _matchesFilters(
   CachedConversation conversation,
-  Set<_ConversationListFilter> filters,
-) {
+  Set<_ConversationListFilter> filters, {
+  required ConversationUnreadMentionCache unreadMentions,
+}) {
   final showArchived = filters.contains(_ConversationListFilter.archived);
   if (conversation.isArchived != showArchived) {
     return false;
@@ -617,14 +635,82 @@ bool _matchesFilters(
     return false;
   }
   return !filters.contains(_ConversationListFilter.mentions) ||
-      _hasUnreadMention(conversation);
+      unreadMentions.hasUnreadMention(conversation);
 }
 
-// The mentions filter runs over every conversation on every build.
-final _unreadMention = Expando<bool>();
+typedef ConversationUnreadMentionParser =
+    bool Function(CachedConversation conversation);
 
-bool _hasUnreadMention(CachedConversation conversation) {
-  return _unreadMention[conversation] ??= _parseUnreadMention(conversation);
+typedef _ConversationMentionKey = ({String accountId, String token});
+
+typedef _UnreadMentionEntry = ({
+  String rawJson,
+  int unreadMessages,
+  bool hasUnreadMention,
+});
+
+/// Reuses mention parsing across Drift emissions, which create new row objects.
+///
+/// Entries are scoped to the current list and capped as a second guard. A hit
+/// is moved to the end so a list larger than the cap retains the rooms used
+/// most recently instead of keeping stale rooms from an earlier emission.
+@visibleForTesting
+final class ConversationUnreadMentionCache {
+  ConversationUnreadMentionCache({
+    this.maximumEntries = 4096,
+    this.parser = _parseUnreadMention,
+  }) {
+    if (maximumEntries < 1) {
+      throw ArgumentError.value(
+        maximumEntries,
+        'maximumEntries',
+        'must be positive',
+      );
+    }
+  }
+
+  final int maximumEntries;
+  final ConversationUnreadMentionParser parser;
+  final LinkedHashMap<_ConversationMentionKey, _UnreadMentionEntry> _entries =
+      LinkedHashMap<_ConversationMentionKey, _UnreadMentionEntry>();
+
+  @visibleForTesting
+  int get entryCount => _entries.length;
+
+  bool hasUnreadMention(CachedConversation conversation) {
+    final key = (accountId: conversation.accountId, token: conversation.token);
+    final cached = _entries.remove(key);
+    if (cached != null &&
+        cached.rawJson == conversation.rawJson &&
+        cached.unreadMessages == conversation.unreadMessages) {
+      _entries[key] = (
+        rawJson: conversation.rawJson,
+        unreadMessages: conversation.unreadMessages,
+        hasUnreadMention: cached.hasUnreadMention,
+      );
+      return cached.hasUnreadMention;
+    }
+    final result = parser(conversation);
+    _entries[key] = (
+      rawJson: conversation.rawJson,
+      unreadMessages: conversation.unreadMessages,
+      hasUnreadMention: result,
+    );
+    while (_entries.length > maximumEntries) {
+      _entries.remove(_entries.keys.first);
+    }
+    return result;
+  }
+
+  void retainConversations(Iterable<CachedConversation> conversations) {
+    final retained = <_ConversationMentionKey>{
+      for (final conversation in conversations)
+        (accountId: conversation.accountId, token: conversation.token),
+    };
+    _entries.removeWhere((key, _) => !retained.contains(key));
+  }
+
+  void clear() => _entries.clear();
 }
 
 bool _parseUnreadMention(CachedConversation conversation) {
