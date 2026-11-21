@@ -172,6 +172,61 @@ void _registerChatMediaComposerFileTests(
     expect(captionsConsumed, 0);
   });
 
+  testWidgets('cancelling pending admission preserves caption and reply', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final profile = _profile(caption: true);
+    final bridge = _RecordingBridge(profile: profile, enqueueGate: gate.future);
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+    var field = 'Caption';
+    final consumed = <String>[];
+    final acceptedReplies = <int>[];
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore(),
+        bridge: bridge.bridge,
+        threadId: null,
+        profile: profile,
+        voiceBackends: voiceBackends,
+        captionSource: () => field,
+        onCaptionConsumed: (caption) {
+          consumed.add(caption);
+          field = '';
+        },
+        replyTarget: _replyTarget(messageId: 65),
+        onReplyDurablyAccepted: acceptedReplies.add,
+      ),
+    );
+    await _pickAttachmentSource(tester);
+    await _pumpUntil(tester, () => bridge.metadata.isNotEmpty);
+    expect(bridge.sessions, isEmpty);
+    expect(bridge.metadata.single.caption, 'Caption');
+    expect(bridge.metadata.single.replyTo, 65);
+
+    final cancel = find.byKey(const Key('cancel-image-attachment-upload'));
+    expect(cancel, findsOneWidget);
+    await tester.tap(cancel);
+    await tester.pump();
+    expect(tester.widget<TextButton>(cancel).onPressed, isNull);
+
+    gate.complete();
+    await _pumpUntil(
+      tester,
+      () =>
+          bridge.sessions.length == 1 &&
+          bridge.sessions.single.cancelCount == 1,
+    );
+
+    expect(consumed, isEmpty);
+    expect(field, 'Caption');
+    expect(acceptedReplies, isEmpty);
+    expect(bridge.sessions.single.cancelCount, 1);
+  });
+
   testWidgets('an empty field sends no caption and clears nothing', (
     tester,
   ) async {

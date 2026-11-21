@@ -27,8 +27,13 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
     try {
       final session = await bridge.startImageUpload(request);
       durablyAccepted = true;
+      final cancellationPending =
+          image.controller.state.phase == ImageAttachmentUploadPhase.cancelling;
       final caption = request.metadata.caption;
-      if (!_disposed && !image.disposed && caption != null) {
+      if (!cancellationPending &&
+          !_disposed &&
+          !image.disposed &&
+          caption != null) {
         widget.onCaptionConsumed?.call(caption);
       }
       if (_sameSource(image.source, request.source)) {
@@ -43,10 +48,12 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
           }
         });
       }
-      _notifyReplyDurablyAccepted(
-        acceptedReplyTo,
-        callback: acceptanceCallback,
-      );
+      if (!cancellationPending) {
+        _notifyReplyDurablyAccepted(
+          acceptedReplyTo,
+          callback: acceptanceCallback,
+        );
+      }
       return session;
     } finally {
       image.admissionPending = false;
