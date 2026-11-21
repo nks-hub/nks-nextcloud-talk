@@ -440,7 +440,11 @@ Future<void> _seedFixture(AppDatabase database) async {
 /// A diagnostics record whose only interesting half is the push one, so a
 /// screen test can pin what the push section renders without seeding a
 /// database for everything around it.
-LocalDiagnostics _diagnosticsWith(PushDiagnostics push) => LocalDiagnostics(
+LocalDiagnostics _diagnosticsWith(
+  PushDiagnostics push, {
+  List<StalledAttachmentJob> stalledAttachments =
+      const <StalledAttachmentJob>[],
+}) => LocalDiagnostics(
   operatingSystem: 'test',
   database: const DatabaseDiagnostics(
     expectedSchemaVersion: 18,
@@ -464,7 +468,7 @@ LocalDiagnostics _diagnosticsWith(PushDiagnostics push) => LocalDiagnostics(
     lastErrorClass: null,
     lastErrorAt: null,
   ),
-  stalledAttachments: const <StalledAttachmentJob>[],
+  stalledAttachments: stalledAttachments,
   push: push,
   lastSyncedAt: null,
   lastSyncError: null,
@@ -1153,6 +1157,68 @@ void main() {
         .substring('version:'.length)
         .trim();
     expect(declared, '$appVersionName+$appBuildNumber');
+  });
+
+  testWidgets('large unfinished attachment lists stay lazy and actionable', (
+    tester,
+  ) async {
+    useTightPhoneViewport(tester);
+    final jobs = List<StalledAttachmentJob>.generate(
+      200,
+      (index) => StalledAttachmentJob(
+        jobId: 'job-$index',
+        kind: AttachmentMessageKind.file,
+        phase: AttachmentJobPhase.uploading,
+        age: Duration(minutes: index),
+        attemptBucket: '1',
+        cancellable: true,
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          localDiagnosticsProvider.overrideWith(
+            (ref, accountId) async => _diagnosticsWith(
+              PushDiagnostics.unavailable(
+                PushDiagnosticsGap.platformUnsupported,
+              ),
+              stalledAttachments: jobs,
+            ),
+          ),
+        ],
+        child: localizedTestApp(
+          home: const DiagnosticsScreen(accountId: 'account-a'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byType(Scrollable).first;
+    final first = find.byKey(const Key('diagnostics-stalled-attachment-job-0'));
+    final last = find.byKey(
+      const Key('diagnostics-stalled-attachment-job-199'),
+    );
+    expect(last, findsNothing);
+
+    await tester.scrollUntilVisible(first, 500, scrollable: list);
+    expect(first, findsOneWidget);
+    expect(
+      last,
+      findsNothing,
+      reason: 'off-screen attachment rows must not be built eagerly',
+    );
+
+    await tester.scrollUntilVisible(last, 500, scrollable: list);
+    expect(last, findsOneWidget);
+    await tester.tap(
+      find.byKey(const Key('diagnostics-stalled-attachment-cancel-job-199')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('diagnostics-stalled-attachment-cancel-dialog')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('diagnostics names every control and reads in layout order', (

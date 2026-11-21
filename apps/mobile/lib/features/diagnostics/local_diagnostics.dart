@@ -427,6 +427,9 @@ final class LocalDiagnosticsLoader {
         table.createdAtMillis,
       ])
       ..where(table.accountId.equals(accountId))
+      ..where(
+        table.phase.isIn(_pendingAttachmentPhases.map((phase) => phase.name)),
+      )
       ..orderBy([OrderingTerm.asc(table.createdAtMillis)]);
     final rows = await query.get();
 

@@ -90,10 +90,11 @@ final class _StalledAttachmentTile extends ConsumerWidget {
         '${strings.diagnosticsStalledAttachmentAttempts} ${job.attemptBucket}',
       ),
       trailing: job.cancellable
-          ? TextButton(
+          ? IconButton(
               key: Key('diagnostics-stalled-attachment-cancel-${job.jobId}'),
+              tooltip: strings.diagnosticsStalledAttachmentCancel,
               onPressed: () => _confirmCancel(context, ref, strings),
-              child: Text(strings.diagnosticsStalledAttachmentCancel),
+              icon: const Icon(Icons.cancel_outlined),
             )
           : Tooltip(
               message: strings.diagnosticsStalledAttachmentLocked,
@@ -172,144 +173,162 @@ final class _DiagnosticsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
-    return ListView(
+    return CustomScrollView(
       key: const Key('diagnostics-list'),
-      children: [
-        _SectionHeader(strings.diagnosticsAppSection),
-        _Entry(
-          entryKey: const Key('diagnostics-app-version'),
-          label: strings.diagnosticsAppVersion,
-          value: appVersionName,
+      slivers: [
+        SliverList.list(
+          children: [
+            _SectionHeader(strings.diagnosticsAppSection),
+            _Entry(
+              entryKey: const Key('diagnostics-app-version'),
+              label: strings.diagnosticsAppVersion,
+              value: appVersionName,
+            ),
+            _Entry(
+              entryKey: const Key('diagnostics-app-build'),
+              label: strings.diagnosticsAppBuild,
+              value: appBuildNumber,
+            ),
+            _Entry(
+              entryKey: const Key('diagnostics-platform'),
+              label: strings.diagnosticsPlatform,
+              value: data.operatingSystem,
+            ),
+            // The app is GPL-3.0 and ships 171 third-party packages, most of them
+            // BSD or MIT, whose terms require their notices to travel with the
+            // binary. Flutter collects every bundled licence itself, so the only
+            // thing missing was a way to reach the page.
+            ListTile(
+              key: const Key('diagnostics-licenses'),
+              title: Text(strings.diagnosticsLicenses),
+              subtitle: Text(strings.diagnosticsLicensesSubtitle),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => showLicensePage(
+                context: context,
+                applicationName: 'OwnTalk',
+                applicationVersion: '$appVersionName ($appBuildNumber)',
+                // The written offer LGPL-2.1 §3 / GPL-3 §6 ask for: the repo is
+                // private, so recipients of a build must be told where the
+                // complete corresponding source comes from.
+                applicationLegalese: strings.diagnosticsLicensesLegalese,
+              ),
+            ),
+            const Divider(height: 1),
+            _SectionHeader(strings.diagnosticsDatabaseSection),
+            _Entry(
+              entryKey: const Key('diagnostics-schema-version'),
+              label: strings.diagnosticsSchemaVersion,
+              value: '${data.database.storedSchemaVersion}',
+            ),
+            _Entry(
+              entryKey: const Key('diagnostics-expected-schema-version'),
+              label: strings.diagnosticsExpectedSchemaVersion,
+              value: '${data.database.expectedSchemaVersion}',
+            ),
+            _Entry(
+              entryKey: const Key('diagnostics-migration-state'),
+              label: strings.diagnosticsMigrationState,
+              value: _migrationState(strings, data.database.migrationState),
+            ),
+            _Entry(
+              entryKey: const Key('diagnostics-foreign-key-violations'),
+              label: strings.diagnosticsForeignKeyViolations,
+              value: '${data.database.foreignKeyViolationCount}',
+            ),
+            _Entry(
+              entryKey: const Key('diagnostics-conversation-rows'),
+              label: strings.diagnosticsConversationRows,
+              value: '${data.conversationCount}',
+            ),
+            _Entry(
+              entryKey: const Key('diagnostics-message-rows'),
+              label: strings.diagnosticsMessageRows,
+              value: '${data.messageCount}',
+            ),
+            _Entry(
+              entryKey: const Key('diagnostics-thread-rows'),
+              label: strings.diagnosticsThreadRows,
+              value: '${data.threadCount}',
+            ),
+            _Entry(
+              entryKey: const Key('diagnostics-text-outbox-rows'),
+              label: strings.diagnosticsTextOutboxRows,
+              value: '${data.textOutbox.total}',
+            ),
+            _Entry(
+              entryKey: const Key('diagnostics-attachment-outbox-rows'),
+              label: strings.diagnosticsAttachmentOutboxRows,
+              value: '${data.attachmentOutbox.total}',
+            ),
+            const Divider(height: 1),
+            _SectionHeader(strings.diagnosticsOutboxSection),
+            _OutboxEntries(
+              prefix: 'text',
+              title: strings.diagnosticsOutboxTextTitle,
+              outbox: data.textOutbox,
+            ),
+            _OutboxEntries(
+              prefix: 'attachment',
+              title: strings.diagnosticsOutboxAttachmentsTitle,
+              outbox: data.attachmentOutbox,
+            ),
+            const Divider(height: 1),
+            _SectionHeader(strings.diagnosticsStalledAttachmentsSection),
+          ],
         ),
-        _Entry(
-          entryKey: const Key('diagnostics-app-build'),
-          label: strings.diagnosticsAppBuild,
-          value: appBuildNumber,
+        SliverList.builder(
+          key: const Key('diagnostics-stalled-attachments-list'),
+          itemCount: data.stalledAttachments.isEmpty
+              ? 1
+              : data.stalledAttachments.length,
+          itemBuilder: (context, index) {
+            if (data.stalledAttachments.isEmpty) {
+              return _Entry(
+                entryKey: const Key('diagnostics-stalled-attachments-none'),
+                label: strings.diagnosticsStalledAttachmentsNone,
+                value: '',
+              );
+            }
+            return _StalledAttachmentTile(
+              job: data.stalledAttachments[index],
+              accountId: accountId,
+            );
+          },
         ),
-        _Entry(
-          entryKey: const Key('diagnostics-platform'),
-          label: strings.diagnosticsPlatform,
-          value: data.operatingSystem,
+        SliverList.list(
+          children: [
+            const Divider(height: 1),
+            _SectionHeader(strings.diagnosticsSyncSection),
+            _Entry(
+              entryKey: const Key('diagnostics-sync-last-success'),
+              label: strings.diagnosticsSyncLastSuccess,
+              value: _instant(strings, data.lastSyncedAt),
+            ),
+            _Entry(
+              entryKey: const Key('diagnostics-sync-last-error'),
+              label: strings.diagnosticsSyncLastError,
+              value: data.lastSyncError ?? strings.diagnosticsValueNone,
+            ),
+            const Divider(height: 1),
+            _SectionHeader(strings.diagnosticsPushSection),
+            ..._pushEntries(strings, data.push),
+            const Divider(height: 1),
+            _SectionHeader(strings.diagnosticsCapabilitiesSection),
+            _Entry(
+              entryKey: const Key('diagnostics-talk-feature-count'),
+              label: strings.diagnosticsTalkFeatureCount,
+              value: '${data.talkFeatureCount}',
+            ),
+            for (final entry in data.keyTalkFeatures.entries)
+              _Entry(
+                entryKey: Key('diagnostics-talk-feature-${entry.key}'),
+                label: entry.key,
+                value: entry.value
+                    ? strings.diagnosticsValueYes
+                    : strings.diagnosticsValueNo,
+              ),
+          ],
         ),
-        // The app is GPL-3.0 and ships 171 third-party packages, most of them
-        // BSD or MIT, whose terms require their notices to travel with the
-        // binary. Flutter collects every bundled licence itself, so the only
-        // thing missing was a way to reach the page.
-        ListTile(
-          key: const Key('diagnostics-licenses'),
-          title: Text(strings.diagnosticsLicenses),
-          subtitle: Text(strings.diagnosticsLicensesSubtitle),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => showLicensePage(
-            context: context,
-            applicationName: 'OwnTalk',
-            applicationVersion: '$appVersionName ($appBuildNumber)',
-            // The written offer LGPL-2.1 §3 / GPL-3 §6 ask for: the repo is
-            // private, so recipients of a build must be told where the
-            // complete corresponding source comes from.
-            applicationLegalese: strings.diagnosticsLicensesLegalese,
-          ),
-        ),
-        const Divider(height: 1),
-        _SectionHeader(strings.diagnosticsDatabaseSection),
-        _Entry(
-          entryKey: const Key('diagnostics-schema-version'),
-          label: strings.diagnosticsSchemaVersion,
-          value: '${data.database.storedSchemaVersion}',
-        ),
-        _Entry(
-          entryKey: const Key('diagnostics-expected-schema-version'),
-          label: strings.diagnosticsExpectedSchemaVersion,
-          value: '${data.database.expectedSchemaVersion}',
-        ),
-        _Entry(
-          entryKey: const Key('diagnostics-migration-state'),
-          label: strings.diagnosticsMigrationState,
-          value: _migrationState(strings, data.database.migrationState),
-        ),
-        _Entry(
-          entryKey: const Key('diagnostics-foreign-key-violations'),
-          label: strings.diagnosticsForeignKeyViolations,
-          value: '${data.database.foreignKeyViolationCount}',
-        ),
-        _Entry(
-          entryKey: const Key('diagnostics-conversation-rows'),
-          label: strings.diagnosticsConversationRows,
-          value: '${data.conversationCount}',
-        ),
-        _Entry(
-          entryKey: const Key('diagnostics-message-rows'),
-          label: strings.diagnosticsMessageRows,
-          value: '${data.messageCount}',
-        ),
-        _Entry(
-          entryKey: const Key('diagnostics-thread-rows'),
-          label: strings.diagnosticsThreadRows,
-          value: '${data.threadCount}',
-        ),
-        _Entry(
-          entryKey: const Key('diagnostics-text-outbox-rows'),
-          label: strings.diagnosticsTextOutboxRows,
-          value: '${data.textOutbox.total}',
-        ),
-        _Entry(
-          entryKey: const Key('diagnostics-attachment-outbox-rows'),
-          label: strings.diagnosticsAttachmentOutboxRows,
-          value: '${data.attachmentOutbox.total}',
-        ),
-        const Divider(height: 1),
-        _SectionHeader(strings.diagnosticsOutboxSection),
-        _OutboxEntries(
-          prefix: 'text',
-          title: strings.diagnosticsOutboxTextTitle,
-          outbox: data.textOutbox,
-        ),
-        _OutboxEntries(
-          prefix: 'attachment',
-          title: strings.diagnosticsOutboxAttachmentsTitle,
-          outbox: data.attachmentOutbox,
-        ),
-        const Divider(height: 1),
-        _SectionHeader(strings.diagnosticsStalledAttachmentsSection),
-        if (data.stalledAttachments.isEmpty)
-          _Entry(
-            entryKey: const Key('diagnostics-stalled-attachments-none'),
-            label: strings.diagnosticsStalledAttachmentsNone,
-            value: '',
-          )
-        else
-          for (final job in data.stalledAttachments)
-            _StalledAttachmentTile(job: job, accountId: accountId),
-        const Divider(height: 1),
-        _SectionHeader(strings.diagnosticsSyncSection),
-        _Entry(
-          entryKey: const Key('diagnostics-sync-last-success'),
-          label: strings.diagnosticsSyncLastSuccess,
-          value: _instant(strings, data.lastSyncedAt),
-        ),
-        _Entry(
-          entryKey: const Key('diagnostics-sync-last-error'),
-          label: strings.diagnosticsSyncLastError,
-          value: data.lastSyncError ?? strings.diagnosticsValueNone,
-        ),
-        const Divider(height: 1),
-        _SectionHeader(strings.diagnosticsPushSection),
-        ..._pushEntries(strings, data.push),
-        const Divider(height: 1),
-        _SectionHeader(strings.diagnosticsCapabilitiesSection),
-        _Entry(
-          entryKey: const Key('diagnostics-talk-feature-count'),
-          label: strings.diagnosticsTalkFeatureCount,
-          value: '${data.talkFeatureCount}',
-        ),
-        for (final entry in data.keyTalkFeatures.entries)
-          _Entry(
-            entryKey: Key('diagnostics-talk-feature-${entry.key}'),
-            label: entry.key,
-            value: entry.value
-                ? strings.diagnosticsValueYes
-                : strings.diagnosticsValueNo,
-          ),
       ],
     );
   }
