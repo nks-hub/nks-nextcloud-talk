@@ -55,6 +55,10 @@ final class AccountRemovalOutcome {
 /// best effort — somebody removing an account is often offline, or is removing
 /// it precisely because the password was already revoked elsewhere — so a
 /// remote failure never blocks the local wipe.
+///
+/// Deleting the local password is the one blocking local step. The account
+/// row stays in place until that succeeds, so a temporarily unavailable vault
+/// cannot leave a secret with no account through which removal can be retried.
 final class AccountRemovalService {
   const AccountRemovalService({
     required AccountRepository accounts,
@@ -154,12 +158,16 @@ final class AccountRemovalService {
       }
     }
 
-    // From here on nothing may be skipped, whatever the server did.
-    await _emojiUsage.delete(AccountId.parse(accountId));
+    // The secret goes first. If the vault is temporarily unavailable the
+    // account must remain addressable, or its password could never be deleted
+    // by a later retry.
+    await _credentials.deleteAppPassword(accountId);
+    // Only caches: none may keep the account row around after the secret is
+    // gone. A locked cache file can be retried by normal cache maintenance.
+    await _bestEffort(() => _emojiUsage.delete(AccountId.parse(accountId)));
     // Only caches: a locked file must not keep the credentials on the device.
     await _bestEffort(() => _clearChatBackgrounds(accountId));
     final sourceHandles = await _accounts.purgeAccount(accountId);
-    await _credentials.deleteAppPassword(accountId);
     _mediaCache.evictAccount(accountId);
     await _bestEffort(() => _mediaDiskCache.evictAccount(accountId));
     await _bestEffort(

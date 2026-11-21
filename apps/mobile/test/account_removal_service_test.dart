@@ -12,6 +12,7 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/call_session_repository.dart';
 import 'package:nextcloudtalk/data/chat_media_cache.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
+import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
 import 'package:nextcloudtalk/features/chat/chat_background_store.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_attachment_opener.dart';
@@ -82,6 +83,8 @@ void main() {
     AccountRemovalStarted? onRemovalStarted,
     AccountPushRevocation? revokePush,
     AccountBackgroundCleanup? clearChatBackgrounds,
+    CredentialVault? credentials,
+    EmojiUsageStore? emojiUsageStore,
   }) {
     final pendingRevocations = AppPasswordRevocationQueue(
       store: vault,
@@ -90,11 +93,11 @@ void main() {
     return AccountRemovalService(
       pendingRevocations: pendingRevocations,
       accounts: accounts,
-      credentials: vault,
+      credentials: credentials ?? vault,
       api: api,
       mediaCache: mediaCache,
       mediaDiskCache: mediaDiskCache,
-      emojiUsage: emojiUsage,
+      emojiUsage: emojiUsageStore ?? emojiUsage,
       clearChatBackgrounds:
           clearChatBackgrounds ?? chatBackgrounds.removeAccount,
       voiceDirectory: () async => voiceRoot,
@@ -166,10 +169,35 @@ void main() {
 
     await buildService(
       api,
+      emojiUsageStore: _FailingEmojiUsageStore(),
       clearChatBackgrounds: (_) async =>
           throw const FileSystemException('locked by another process'),
     ).removeAccount('account-a');
 
+    expect(await accounts.getAccount('account-a'), isNull);
+    expect(await vault.readAppPassword('account-a'), isNull);
+  });
+
+  test('a failed password delete keeps the account removable', () async {
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async => http.Response(_okOcs(), 200)),
+    );
+    addTearDown(api.close);
+    await _seedAccount(database, accounts, vault, 'account-a', _serverA);
+    final credentials = _FailFirstDeleteCredentialVault(vault);
+    final service = buildService(api, credentials: credentials);
+
+    await expectLater(
+      service.removeAccount('account-a'),
+      throwsA(isA<CredentialVaultTemporarilyUnavailable>()),
+    );
+
+    expect(await accounts.getAccount('account-a'), isNotNull);
+    expect(await vault.readAppPassword('account-a'), isNotNull);
+
+    final outcome = await service.removeAccount('account-a');
+    expect(outcome.accountExisted, isTrue);
+    expect(credentials.deleteAttempts, 2);
     expect(await accounts.getAccount('account-a'), isNull);
     expect(await vault.readAppPassword('account-a'), isNull);
   });
@@ -441,6 +469,48 @@ void main() {
     expect((await service.removeAccount('account-a')).accountExisted, isTrue);
     expect((await service.removeAccount('account-a')).accountExisted, isFalse);
   });
+}
+
+final class _FailFirstDeleteCredentialVault implements CredentialVault {
+  _FailFirstDeleteCredentialVault(this._inner);
+
+  final CredentialVault _inner;
+  int deleteAttempts = 0;
+
+  @override
+  Future<void> deleteAppPassword(String accountId) async {
+    deleteAttempts++;
+    if (deleteAttempts == 1) {
+      throw const CredentialVaultTemporarilyUnavailable();
+    }
+    await _inner.deleteAppPassword(accountId);
+  }
+
+  @override
+  Future<String?> readAppPassword(String accountId) =>
+      _inner.readAppPassword(accountId);
+
+  @override
+  Future<void> writeAppPassword(String accountId, String appPassword) =>
+      _inner.writeAppPassword(accountId, appPassword);
+}
+
+final class _FailingEmojiUsageStore implements EmojiUsageStore {
+  @override
+  Future<void> delete(AccountId accountId) async =>
+      throw const FileSystemException('locked emoji cache');
+
+  @override
+  Future<EmojiUsage> read(AccountId accountId) =>
+      throw UnsupportedError('not used');
+
+  @override
+  Future<EmojiUsage> recordSelection(AccountId accountId, String emoji) =>
+      throw UnsupportedError('not used');
+
+  @override
+  Future<EmojiUsage> toggleFavorite(AccountId accountId, String emoji) =>
+      throw UnsupportedError('not used');
 }
 
 final Uri _previewUri = Uri.parse('$_serverA/core/preview?fileId=7');
