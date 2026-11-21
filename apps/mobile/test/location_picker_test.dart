@@ -133,6 +133,40 @@ void main() {
     expect(host.result?.longitude, closeTo(14.4356, 0.000001));
   });
 
+  testWidgets('a changed query rejects the old place search result', (
+    tester,
+  ) async {
+    final source = _HoldingPlaceSearch();
+    await _openPicker(
+      tester,
+      overrides: <Override>[
+        placeSearchSourceProvider.overrideWithValue(source),
+      ],
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('location-picker-search')),
+      'Prague',
+    );
+    await tester.tap(find.byKey(const Key('location-picker-search-submit')));
+    await tester.pump();
+
+    await tester.enterText(
+      find.byKey(const Key('location-picker-search')),
+      'Brno',
+    );
+    source.result.complete(const <PlaceSuggestion>[
+      PlaceSuggestion(
+        name: 'Old Prague result',
+        latitude: 50.0830,
+        longitude: 14.4356,
+      ),
+    ]);
+    await tester.pump();
+
+    expect(find.text('Old Prague result'), findsNothing);
+  });
+
   testWidgets('cancelling hands back nothing at all', (tester) async {
     final host = await _openPicker(tester);
     await _enterPoint(tester, latitude: '50.0875', longitude: '14.42076');
@@ -302,6 +336,13 @@ final class _StubPlaceSearch implements PlaceSearchSource {
   Future<List<PlaceSuggestion>> search(String query) async => <PlaceSuggestion>[
     suggestion,
   ];
+}
+
+final class _HoldingPlaceSearch implements PlaceSearchSource {
+  final result = Completer<List<PlaceSuggestion>>();
+
+  @override
+  Future<List<PlaceSuggestion>> search(String query) => result.future;
 }
 
 final class _HoldingTileClient extends http.BaseClient {

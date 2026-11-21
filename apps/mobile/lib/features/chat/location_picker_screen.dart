@@ -288,12 +288,12 @@ final class _LocationPickerScreenState
     });
     try {
       final results = await ref.read(placeSearchSourceProvider).search(query);
-      if (!mounted) {
+      if (!mounted || _searchField.text.trim() != query) {
         return;
       }
       setState(() => _results = results);
     } on PlaceSearchException catch (error) {
-      if (!mounted) {
+      if (!mounted || _searchField.text.trim() != query) {
         return;
       }
       setState(() {
@@ -304,7 +304,7 @@ final class _LocationPickerScreenState
         };
       });
     } on Object {
-      if (!mounted) {
+      if (!mounted || _searchField.text.trim() != query) {
         return;
       }
       setState(() => _message = strings.locationSearchUnavailable);
