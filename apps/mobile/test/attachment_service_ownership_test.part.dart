@@ -2,6 +2,100 @@ part of 'attachment_service_test.dart';
 
 void _registerAttachmentOwnershipTests() {
   test(
+    'account suspension follows the replacement after provider invalidation',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final accountId = AccountId.parse('account-a');
+      await fixture.seedInFlight(AttachmentRequestStep.finalize);
+      final queue = AttachmentRuntimeQueue();
+      final priorOwner = AttachmentRuntimeOwner(queue.reserve());
+      final prior = await priorOwner.open(
+        () => fixture.service(_unexpectedClient()),
+      );
+      await prior.ready;
+      AttachmentRuntimeOwner? nextOwner;
+      var generation = 0;
+      final container = ProviderContainer(
+        overrides: [
+          attachmentServiceProvider.overrideWith((_) async {
+            if (generation++ == 0) return prior;
+            final owner = nextOwner = AttachmentRuntimeOwner(queue.reserve());
+            return owner.open(() => fixture.service(_unexpectedClient()));
+          }),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await priorOwner.close();
+        await nextOwner?.close();
+      });
+      final oldFuture = container.read(attachmentServiceProvider.future);
+      expect(await oldFuture, same(prior));
+      final reads = <Future<AttachmentService>>[];
+      final suspending = suspendAttachmentRuntime(accountId, () {
+        final read = container.read(attachmentServiceProvider.future);
+        reads.add(read);
+        return read;
+      });
+      final closing = priorOwner.close();
+      container.invalidate(attachmentServiceProvider);
+
+      await closing;
+      await suspending;
+
+      expect(reads, hasLength(2));
+      expect(await reads.first, same(prior));
+      expect(reads.last, isNot(same(reads.first)));
+      final runtime = await fixture.repository.loadRuntime();
+      expect(
+        runtime.snapshot.accounts[accountId]!.lane,
+        AttachmentAccountLane.suspended,
+      );
+    },
+  );
+
+  test(
+    'close preserves an account suspension already writing to disk',
+    () async {
+      final fixture = await _Fixture.create(fileBacked: true);
+      addTearDown(fixture.close);
+      final accountId = AccountId.parse('account-a');
+      await fixture.seedInFlight(AttachmentRequestStep.finalize);
+      final gate = _HeldAttachmentInsert(
+        'attachment_runtime_accounts',
+        marker: 'suspended',
+      );
+      final database = AppDatabase.forTesting(
+        NativeDatabase(fixture.databaseFile!).interceptWith(gate),
+      );
+      addTearDown(database.close);
+      final service = fixture.service(
+        _unexpectedClient(),
+        attachmentRepository: AttachmentRepository(database),
+      );
+      addTearDown(() async {
+        if (!gate.allow.isCompleted) gate.allow.complete();
+        await service.close();
+      });
+
+      final suspension = service.suspendAccount(accountId);
+      await gate.started.future;
+      final closing = service.close();
+
+      expect(service.suspendAccount(accountId), same(suspension));
+      gate.allow.complete();
+      await suspension;
+      await closing;
+      final runtime = await fixture.repository.loadRuntime();
+      expect(
+        runtime.snapshot.accounts[accountId]!.lane,
+        AttachmentAccountLane.suspended,
+      );
+    },
+  );
+
+  test(
     'headless drain reports completion after attachment close settles',
     () async {
       TestWidgetsFlutterBinding.ensureInitialized();
@@ -62,7 +156,7 @@ void _registerAttachmentOwnershipTests() {
   test('a replacement waits for the prior admission to commit', () async {
     final fixture = await _Fixture.create(fileBacked: true);
     addTearDown(fixture.close);
-    final gate = _HeldAttachmentAdmission();
+    final gate = _HeldAttachmentInsert('attachment_jobs');
     final database = AppDatabase.forTesting(
       NativeDatabase(fixture.databaseFile!).interceptWith(gate),
     );
@@ -111,7 +205,11 @@ void _registerAttachmentOwnershipTests() {
   });
 }
 
-final class _HeldAttachmentAdmission extends QueryInterceptor {
+final class _HeldAttachmentInsert extends QueryInterceptor {
+  _HeldAttachmentInsert(this.table, {this.marker});
+
+  final String table;
+  final String? marker;
   final started = Completer<void>();
   final allow = Completer<void>();
 
@@ -121,7 +219,8 @@ final class _HeldAttachmentAdmission extends QueryInterceptor {
     String statement,
     List<Object?> args,
   ) async {
-    if (statement.toLowerCase().startsWith('insert into "attachment_jobs"')) {
+    if (statement.toLowerCase().startsWith('insert into "$table"') &&
+        (marker == null || args.contains(marker))) {
       if (!started.isCompleted) started.complete();
       await allow.future;
     }

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:talk_protocol/talk_protocol.dart' show AccountId;
 import 'package:uuid/uuid.dart';
 
 import 'attachment_service.dart';
@@ -59,7 +60,7 @@ final class AttachmentRuntimeOwner {
 
   Future<AttachmentService> open(AttachmentService Function() create) async {
     if (!await _reservation.granted || _closing != null) {
-      throw StateError('Attachment runtime has been disposed');
+      throw AttachmentServiceClosed();
     }
     return _service = create();
   }
@@ -76,6 +77,23 @@ final class AttachmentRuntimeOwner {
       }
     } finally {
       await _reservation.release();
+    }
+  }
+}
+
+Future<void> suspendAttachmentRuntime(
+  AccountId accountId,
+  Future<AttachmentService> Function() readRuntime,
+) async {
+  var current = readRuntime();
+  while (true) {
+    try {
+      await (await current).suspendAccount(accountId);
+      return;
+    } on AttachmentServiceClosed {
+      final replacement = readRuntime();
+      if (identical(replacement, current)) rethrow;
+      current = replacement;
     }
   }
 }

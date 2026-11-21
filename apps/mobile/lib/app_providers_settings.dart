@@ -66,14 +66,15 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
     attachmentSources: () => ref.read(attachmentSourceProvider.future),
     pendingRevocations: ref.watch(appPasswordRevocationQueueProvider),
     onRemovalStarted: (accountId) async {
-      final attachment = ref.read(attachmentServiceProvider.future);
+      final attachment = suspendAttachmentRuntime(
+        AccountId.parse(accountId),
+        () => ref.read(attachmentServiceProvider.future),
+      );
       await Future.wait<void>(<Future<void>>[
         ref.read(chatMediaRepositoryProvider).suspendAccount(accountId),
         ref.read(callSignalingCoordinatorProvider).shutdownAccount(accountId),
         ref.read(chatServiceProvider).suspendAccount(accountId),
-        attachment.then(
-          (service) => service.suspendAccount(AccountId.parse(accountId)),
-        ),
+        attachment,
         if (ref.read(androidPushCoordinatorProvider) case final coordinator?)
           coordinator.suspendAccount(accountId),
       ]);

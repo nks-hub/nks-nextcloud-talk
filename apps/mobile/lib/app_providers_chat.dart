@@ -321,7 +321,7 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
         inFlightBytes: ref.watch(attachmentInFlightBytesProvider),
       ),
     );
-    if (disposed) throw StateError('Attachment provider has been disposed');
+    if (disposed) throw AttachmentServiceClosed();
     // A network hint or a resumed app is worth one more attempt for uploads
     // whose automatic retries ran out while the device was offline.
     final wakes = <StreamSubscription<void>>[
@@ -346,7 +346,7 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
       }
     });
     await service.ready;
-    if (disposed) throw StateError('Attachment provider has been disposed');
+    if (disposed) throw AttachmentServiceClosed();
     // Jobs are loaded, so anything the store holds without a job is an orphan:
     // a pick the user never sent before the process died, or a job removed
     // without its source. Best effort; the next start tries again.

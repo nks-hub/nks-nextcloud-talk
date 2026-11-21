@@ -425,11 +425,11 @@ final class AttachmentService with _AttachmentServiceRuntime {
   /// Persists an account-wide stop before its credential is revoked, aborts
   /// active requests, and waits a bounded time for their cleanup paths.
   Future<void> suspendAccount(AccountId accountId) {
-    if (_closed) return Future<void>.value();
     final existing = _accountSuspensions[accountId];
     if (existing != null) {
       return existing;
     }
+    if (_closed) return Future<void>.error(AttachmentServiceClosed());
     _suspendedAccounts.add(accountId);
     _steps.cancelWaiters(accountId);
     final operation = _trackOperation(() => _suspendAccount(accountId));
@@ -968,4 +968,8 @@ final class AttachmentService with _AttachmentServiceRuntime {
     _closed = true;
     return _closing ??= _closeRuntime();
   }
+}
+
+final class AttachmentServiceClosed extends StateError {
+  AttachmentServiceClosed() : super('Attachment service is closed');
 }
