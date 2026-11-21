@@ -496,6 +496,61 @@ void main() {
     expect(sent?.roomToken, 'room-7');
   });
 
+  testWidgets('a large target list builds rows lazily and reaches the end', (
+    tester,
+  ) async {
+    IncomingShareTarget? sent;
+    await tester.pumpWidget(
+      _localizedApp(
+        IncomingShareTargetDialog(
+          share: const IncomingShare(
+            id: 'share-many',
+            text: 'hello',
+            file: null,
+          ),
+          loadAccounts: () async => [
+            IncomingShareAccount(
+              id: 'account-a',
+              label: 'alice',
+              rooms: [
+                for (var index = 0; index < 80; index++)
+                  IncomingShareRoom(token: 'room-$index', label: 'Room $index'),
+              ],
+            ),
+          ],
+          send: (target) async => sent = target,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final listFinder = find.byKey(const Key('incoming-share-room-list'));
+    final list = tester.widget<ListView>(listFinder);
+    expect(list.childrenDelegate, isA<SliverChildBuilderDelegate>());
+    expect(
+      find.byKey(const Key('incoming-share-room-account-a-room-79')),
+      findsNothing,
+      reason: 'off-screen room widgets must not be built up front',
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('incoming-share-room-account-a-room-79')),
+      500,
+      scrollable: find.descendant(
+        of: listFinder,
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.tap(
+      find.byKey(const Key('incoming-share-room-account-a-room-79')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('incoming-share-send')));
+    await tester.pumpAndSettle();
+
+    expect(sent?.roomToken, 'room-79');
+  });
+
   testWidgets('a file share says so when no server takes attachments', (
     tester,
   ) async {

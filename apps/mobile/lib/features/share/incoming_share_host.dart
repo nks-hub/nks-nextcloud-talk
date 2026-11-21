@@ -534,7 +534,7 @@ final class _IncomingShareTargetDialogState
     // One heading per account and one tile per conversation, flattened into a
     // single scroller so the whole thing scrolls as one - a list per account
     // would give each its own scrollbar.
-    final rows = <Widget>[];
+    final rows = <({IncomingShareAccount account, IncomingShareRoom? room})>[];
     for (final account in accounts) {
       final rooms = query.isEmpty
           ? account.rooms
@@ -546,15 +546,10 @@ final class _IncomingShareTargetDialogState
       }
       // With a single account its name is noise: every row belongs to it.
       if (accounts.length > 1) {
-        rows.add(
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
-            child: Text(account.label, style: _accountHeadingStyle(context)),
-          ),
-        );
+        rows.add((account: account, room: null));
       }
       for (final room in rooms) {
-        rows.add(_roomTile(account, room));
+        rows.add((account: account, room: room));
       }
     }
     if (rows.isEmpty) {
@@ -566,7 +561,23 @@ final class _IncomingShareTargetDialogState
         ),
       );
     }
-    return ListView(padding: EdgeInsets.zero, shrinkWrap: true, children: rows);
+    return ListView.builder(
+      key: const Key('incoming-share-room-list'),
+      padding: EdgeInsets.zero,
+      shrinkWrap: true,
+      itemCount: rows.length,
+      itemBuilder: (context, index) {
+        final row = rows[index];
+        final room = row.room;
+        if (room != null) {
+          return _roomTile(row.account, room);
+        }
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
+          child: Text(row.account.label, style: _accountHeadingStyle(context)),
+        );
+      },
+    );
   }
 
   Widget _roomTile(IncomingShareAccount account, IncomingShareRoom room) {
