@@ -51,6 +51,82 @@ void main() {
     (total, file) => total + file.lengthSync(),
   );
 
+  test(
+    'account eviction deletes voice files with bounded concurrency',
+    () async {
+      const ownedCount = 6;
+      final owned = await seed(
+        accountId: 'account-a',
+        count: ownedCount,
+        bytes: 1,
+      );
+      final other = await seed(accountId: 'account-b', count: 2, bytes: 1);
+      final gates = <Completer<void>>[];
+      final firstDeleteStarted = Completer<void>();
+      var inFlight = 0;
+      var peakInFlight = 0;
+      final eviction = evictAccountVoiceFiles(
+        directory: directory,
+        accountId: 'account-a',
+        deleteFile: (file) async {
+          final gate = Completer<void>();
+          gates.add(gate);
+          if (!firstDeleteStarted.isCompleted) {
+            firstDeleteStarted.complete();
+          }
+          inFlight++;
+          peakInFlight = max(peakInFlight, inFlight);
+          await gate.future;
+          inFlight--;
+          await file.delete();
+        },
+      );
+
+      Future<void> releaseAll() async {
+        while (gates.length < ownedCount) {
+          for (final gate in gates) {
+            if (!gate.isCompleted) {
+              gate.complete();
+            }
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+        }
+        for (final gate in gates) {
+          if (!gate.isCompleted) {
+            gate.complete();
+          }
+        }
+        await eviction;
+      }
+
+      addTearDown(releaseAll);
+      await firstDeleteStarted.future;
+      for (var turn = 0; turn < 20 && gates.length < 4; turn++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(gates, hasLength(4));
+      expect(peakInFlight, 4);
+
+      gates.first.complete();
+      for (var turn = 0; turn < 20 && gates.length < 5; turn++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(gates, hasLength(5));
+      expect(peakInFlight, 4);
+
+      await releaseAll();
+      final survivors = directory
+          .listSync()
+          .whereType<File>()
+          .map((file) => file.uri.pathSegments.last)
+          .toSet();
+      expect(survivors, containsAll(other));
+      for (final removed in owned) {
+        expect(survivors, isNot(contains(removed)));
+      }
+    },
+  );
+
   test('prunes to the bound and keeps the most recently written files', () async {
     const bytes = 1024 * 1024;
     final names = await seed(accountId: 'account-a', count: 20, bytes: bytes);

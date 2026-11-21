@@ -127,22 +127,37 @@ String _voiceAccountPrefix(String accountId) =>
 Future<void> evictAccountVoiceFiles({
   required Directory directory,
   required String accountId,
+  Future<void> Function(File file)? deleteFile,
 }) async {
   final prefix = _voiceAccountPrefix(accountId);
   if (!directory.existsSync()) {
     return;
   }
+  final pending = <File>[];
   await for (final entity in directory.list(followLinks: false)) {
-    if (entity is! File || !p.basename(entity.path).startsWith(prefix)) {
-      continue;
-    }
-    try {
-      await entity.delete();
-    } on FileSystemException {
-      // Already gone, or the platform is holding it open; either way there is
-      // nothing else this step can do about that one file.
+    if (entity is File && p.basename(entity.path).startsWith(prefix)) {
+      pending.add(entity);
     }
   }
+  final remove = deleteFile ?? _deleteVoiceFile;
+  var nextFile = 0;
+
+  Future<void> deleteNext() async {
+    while (nextFile < pending.length) {
+      final file = pending[nextFile++];
+      try {
+        await remove(file);
+      } on FileSystemException {
+        // Already gone, or the platform is holding it open; either way there
+        // is nothing else this step can do about that one file.
+      }
+    }
+  }
+
+  final workerCount = pending.length < _voiceDeletionConcurrency
+      ? pending.length
+      : _voiceDeletionConcurrency;
+  await Future.wait(List.generate(workerCount, (_) => deleteNext()));
 }
 
 /// Keeps one account's voice cache under [maximumBytes], dropping the least
