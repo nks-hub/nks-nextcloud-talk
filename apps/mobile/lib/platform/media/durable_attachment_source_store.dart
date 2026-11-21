@@ -87,7 +87,7 @@ final class DurableAttachmentSourceStore implements AttachmentSourceProvider {
   static final RegExp _sourceIdPattern = RegExp(r'^[0-9a-f]{32}$');
   static final RegExp _extensionPattern = RegExp(r'^\.[a-z0-9]{1,12}$');
   static const int _readChunkBytes = 64 * 1024;
-  static const int _discardConcurrency = 4;
+  static const int _fileDeletionConcurrency = 4;
 
   final Directory _configuredRoot;
   final int maximumSourceBytes;
@@ -356,9 +356,9 @@ final class DurableAttachmentSourceStore implements AttachmentSourceProvider {
       }
     }
 
-    final workerCount = pending.length < _discardConcurrency
+    final workerCount = pending.length < _fileDeletionConcurrency
         ? pending.length
-        : _discardConcurrency;
+        : _fileDeletionConcurrency;
     await Future.wait(List.generate(workerCount, (_) => discardNext()));
     final error = firstError;
     if (error != null) {
@@ -424,9 +424,9 @@ final class DurableAttachmentSourceStore implements AttachmentSourceProvider {
       }
     }
 
-    final workerCount = candidates.length < _discardConcurrency
+    final workerCount = candidates.length < _fileDeletionConcurrency
         ? candidates.length
-        : _discardConcurrency;
+        : _fileDeletionConcurrency;
     await Future.wait(List.generate(workerCount, (_) => discardNext()));
     final error = firstError;
     if (error != null) {
@@ -437,18 +437,44 @@ final class DurableAttachmentSourceStore implements AttachmentSourceProvider {
 
   Future<int> cleanupTemporaryFiles() async {
     await initialize();
-    var removed = 0;
+    final pending = <File>[];
     await for (final entity in Directory(
       _stagingPath,
     ).list(followLinks: false)) {
-      if (entity is File) {
-        final normalized = p.normalize(p.absolute(entity.path));
-        if (!p.isWithin(_stagingPath, normalized)) {
-          continue;
-        }
-        await entity.delete();
-        removed++;
+      if (entity is! File) {
+        continue;
       }
+      final normalized = p.normalize(p.absolute(entity.path));
+      if (p.isWithin(_stagingPath, normalized)) {
+        pending.add(entity);
+      }
+    }
+
+    var removed = 0;
+    Object? firstError;
+    StackTrace? firstStackTrace;
+    var nextFile = 0;
+
+    Future<void> deleteNext() async {
+      while (nextFile < pending.length) {
+        final file = pending[nextFile++];
+        try {
+          await file.delete();
+          removed++;
+        } on Object catch (error, stackTrace) {
+          firstError ??= error;
+          firstStackTrace ??= stackTrace;
+        }
+      }
+    }
+
+    final workerCount = pending.length < _fileDeletionConcurrency
+        ? pending.length
+        : _fileDeletionConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => deleteNext()));
+    final error = firstError;
+    if (error != null) {
+      Error.throwWithStackTrace(error, firstStackTrace!);
     }
     return removed;
   }

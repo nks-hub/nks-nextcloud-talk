@@ -213,6 +213,26 @@ void main() {
       expect(await File(pending.filePath).exists(), isFalse);
     });
 
+    test('restart cleanup removes every abandoned external write', () async {
+      final firstStore = DurableAttachmentSourceStore(root: root);
+      final pending = <DurableAttachmentWriteSession>[];
+      for (var index = 0; index < 6; index++) {
+        final session = await firstStore.beginExternalWrite(
+          fileExtension: '.wav',
+        );
+        await File(
+          session.filePath,
+        ).writeAsBytes(<int>[index + 1], flush: true);
+        pending.add(session);
+      }
+
+      final restartedStore = DurableAttachmentSourceStore(root: root);
+      expect(await restartedStore.cleanupTemporaryFiles(), pending.length);
+      for (final session in pending) {
+        expect(await File(session.filePath).exists(), isFalse);
+      }
+    });
+
     test('the sweep removes only old sources no job names', () async {
       // A picked file waits in the composer until the send; when the process
       // dies first, its durable copy has no job and nothing would ever delete
