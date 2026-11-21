@@ -284,16 +284,13 @@ mixin _AttachmentServiceRuntime {
     if (account == null || account.lane != AttachmentAccountLane.ready) {
       return null;
     }
-    final jobs =
-        account.jobs.values
-            .where((job) => job.draft.roomToken == roomKey.roomToken)
-            .toList()
-          ..sort(
-            (left, right) => left.draft.enqueueSequence.compareTo(
-              right.draft.enqueueSequence,
-            ),
-          );
-    for (final job in jobs) {
+    AttachmentPersistenceKey? selectedKey;
+    int? selectedSequence;
+    DateTime? now;
+    for (final job in account.jobs.values) {
+      if (job.draft.roomToken != roomKey.roomToken) {
+        continue;
+      }
       final phase = job.phase;
       if (_isTerminal(phase)) {
         continue;
@@ -318,11 +315,18 @@ mixin _AttachmentServiceRuntime {
         if (next == null && metadata.automaticRetryCount > 0) {
           continue;
         }
-        if (next != null && next.isAfter(_clock().toUtc())) {
+        if (next != null && next.isAfter(now ??= _clock().toUtc())) {
           continue;
         }
       }
-      return _SelectedAttachmentJob(key, roomKey);
+      final sequence = job.draft.enqueueSequence;
+      if (selectedSequence == null || sequence < selectedSequence) {
+        selectedKey = key;
+        selectedSequence = sequence;
+      }
+    }
+    if (selectedKey != null) {
+      return _SelectedAttachmentJob(selectedKey, roomKey);
     }
     _armEarliestRetry(roomKey);
     return null;
