@@ -161,50 +161,44 @@ extension _CallMediaSessionScreen on CallMediaSession {
     }
   }
 
-  /// Tells everyone the share is over and closes it. Quiet about a failure to
-  /// send: the connections go either way, and a peer that missed the message
-  /// sees the track end.
+  /// A peer that misses the stop notification still sees the track end.
   Future<void> _stopSharing() async {
     // Through an MCU the only share is the publish to this side's own
     // session, which tells the SERVER to drop the publisher; the other
     // participants hear nothing from it, so they are told separately.
     if (_mcu) {
-      await _runPeerTasks(_peers.keys, (peerId) async {
-        try {
-          await _send(
-            peerId: peerId,
-            type: 'unshareScreen',
-            payload: null,
-            roomType: CallMediaSession._screenRoomType,
-          );
-        } on CallMediaException {
-          // Nothing to do: their subscription ends with the track.
-        }
-      });
+      await _runPeerTasks(_peers.keys, _notifyUnshare);
     }
-    await _closeShares(_shares.values.toList(growable: false));
+    final shares = _shares.values.toList(growable: false);
     _shares.clear();
     final screen = _screen;
     _screen = null;
-    await screen?.dispose();
+    await _closeShares(shares);
+    await _releaseCallResource('screen capture', screen?.dispose);
   }
+
+  Future<void> _notifyUnshare(String peerId, {_MediaPeer? share}) =>
+      _releaseCallResource(
+        'screen share notification',
+        () => _send(
+          peerId: peerId,
+          type: 'unshareScreen',
+          payload: null,
+          via: share,
+          roomType: share == null ? CallMediaSession._screenRoomType : null,
+        ),
+      );
 
   Future<void> _closeShares(List<_MediaPeer> shares) async {
     var nextShare = 0;
     Future<void> closeNext() async {
       while (nextShare < shares.length) {
         final share = shares[nextShare++];
-        try {
-          await _send(
-            peerId: share.peerId,
-            type: 'unshareScreen',
-            payload: null,
-            via: share,
-          );
-        } on CallMediaException {
-          // Nothing to do: the connection closes below regardless.
-        }
-        await share.connection?.close();
+        await _notifyUnshare(share.peerId, share: share);
+        await _releaseCallResource(
+          'outgoing screen peer',
+          share.connection?.close,
+        );
       }
     }
 
@@ -310,9 +304,7 @@ extension _CallMediaSessionScreen on CallMediaSession {
     if (screen == null) {
       return;
     }
-    await screen.video?.dispose();
-    screen.video = null;
-    await screen.connection?.close();
+    await _closeMediaPeer('incoming screen peer', screen);
     if (!_disposed) {
       _publish();
     }

@@ -237,13 +237,21 @@ final class CallMediaSession {
     // Pending capture must see Leave before its queued cleanup can run.
     _disposed = true;
     return _disposal = _enqueue(() async {
-      await _routeChanges?.cancel();
+      final routeChanges = _routeChanges;
       _routeChanges = null;
+      await _releaseCallResource(
+        'audio route subscription',
+        routeChanges?.cancel,
+      );
       _reactionTimer?.cancel();
       _renegotiationHold?.cancel();
       _renegotiationHold = null;
-      await _subscription?.cancel();
+      final subscription = _subscription;
       _subscription = null;
+      await _releaseCallResource(
+        'signaling subscription',
+        subscription?.cancel,
+      );
       await _stopMedia();
       _emit(CallMediaState.idle);
       await _states.close();
@@ -482,14 +490,17 @@ final class CallMediaSession {
   Future<void> _stopMedia() async {
     final interruptions = _interruptionEvents;
     _interruptionEvents = null;
-    await interruptions?.cancel();
+    await _releaseCallResource(
+      'interruption subscription',
+      interruptions?.cancel,
+    );
     await _closeAllPeers();
     final video = _video;
     _video = null;
-    await video?.dispose();
+    await _releaseCallResource('camera', video?.dispose);
     final audio = _audio;
     _audio = null;
-    await audio?.dispose();
+    await _releaseCallResource('microphone', audio?.dispose);
   }
 
   Future<void> _closeAllPeers() async {
@@ -498,7 +509,7 @@ final class CallMediaSession {
     await _closePeers(_peers.keys.toList(growable: false));
     final publisher = _publisher;
     _publisher = null;
-    await publisher?.connection?.close();
+    await _releaseCallResource('MCU publisher', publisher?.connection?.close);
   }
 
   Future<void> _closePeers(Iterable<String> peerIds) async {
@@ -520,14 +531,22 @@ final class CallMediaSession {
     _offerRequests.remove(peerId)?.cancel();
     await _closeScreen(peerId);
     final share = _shares.remove(peerId);
-    await share?.connection?.close();
+    await _releaseCallResource(
+      'outgoing screen peer',
+      share?.connection?.close,
+    );
     final peer = _peers.remove(peerId);
     _raisedHands.remove(peerId);
     _peerAudioMuted.remove(peerId);
     _speakingPeers.remove(peerId);
-    await peer?.video?.dispose();
+    await _closeMediaPeer('call peer', peer);
+  }
+
+  Future<void> _closeMediaPeer(String resource, _MediaPeer? peer) async {
+    final video = peer?.video;
     peer?.video = null;
-    await peer?.connection?.close();
+    await _releaseCallResource('$resource renderer', video?.dispose);
+    await _releaseCallResource('$resource connection', peer?.connection?.close);
   }
 
   /// A renderer that arrives for a peer already gone is disposed on the
@@ -626,6 +645,22 @@ final class CallMediaSession {
       }
     });
     return completer.future;
+  }
+}
+
+Future<void> _releaseCallResource(
+  String resource,
+  Future<void> Function()? release,
+) async {
+  try {
+    await release?.call();
+  } on Object catch (error, stackTrace) {
+    // A native cleanup failure cannot abort another release or the call exit.
+    final reason = error is CallMediaException
+        ? error.code.name
+        : error.runtimeType;
+    debugPrint('[call] $resource cleanup failed: $reason');
+    if (kDebugMode) debugPrintStack(stackTrace: stackTrace, maxFrames: 5);
   }
 }
 

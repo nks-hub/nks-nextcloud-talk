@@ -174,14 +174,15 @@ final class _FakeEngine implements CallMediaEngine {
 }
 
 final class _FakeVideo implements CallLocalVideo {
-  bool disposed = false;
+  int disposeCalls = 0;
+  bool get disposed => disposeCalls != 0;
 
   @override
   Widget buildPreview(BuildContext context, {bool contain = false}) =>
       const SizedBox.shrink();
 
   @override
-  Future<void> dispose() async => disposed = true;
+  Future<void> dispose() async => disposeCalls++;
 }
 
 final class _FakeRemoteVideo implements CallRemoteVideo {
@@ -199,7 +200,8 @@ final class _FakeRemoteVideo implements CallRemoteVideo {
 }
 
 final class _FakeAudio implements CallLocalAudio {
-  bool disposed = false;
+  int disposeCalls = 0;
+  bool get disposed => disposeCalls != 0;
   bool muted = false;
   bool speakerphone = false;
   final List<bool> muteCalls = <bool>[];
@@ -233,7 +235,7 @@ final class _FakeAudio implements CallLocalAudio {
   Stream<void> get routeChanges => routeChangeController.stream;
 
   @override
-  Future<void> dispose() async => disposed = true;
+  Future<void> dispose() async => disposeCalls++;
 }
 
 final class _FakeConnection implements CallPeerConnection {
@@ -286,6 +288,7 @@ final class _FakeConnection implements CallPeerConnection {
   int createdOffers = 0;
   int createdAnswers = 0;
   bool closed = false;
+  StateError? closeFailure;
   final List<CallLocalVideo?> localVideos = <CallLocalVideo?>[];
 
   @override
@@ -340,6 +343,7 @@ final class _FakeConnection implements CallPeerConnection {
   Future<void> close() async {
     onCloseStarted?.call();
     await closeGate;
+    if (closeFailure case final failure?) throw failure;
     closed = true;
   }
 }
