@@ -258,6 +258,61 @@ void _registerLifecycleTests() {
     },
   );
 
+  test('close releases verified sources with bounded concurrency', () async {
+    const sourceCount = 6;
+    final provider = _GatedCloseSourceProvider(_normalBytes);
+    final transport = HttpAttachmentTransport(
+      client: MockClient((_) async => fail('HTTP must not be called')),
+      sourceProvider: provider,
+    );
+    for (var index = 0; index < sourceCount; index++) {
+      await transport.verifySource(
+        source: _source(
+          _normalBytes,
+          sha256: _normalSha256,
+          handle: 'close-source-$index',
+        ),
+        authorization: _authorization,
+      );
+    }
+    final closing = transport.close();
+
+    Future<void> releaseAll() async {
+      while (provider.closeGates.length < sourceCount) {
+        for (final gate in provider.closeGates) {
+          if (!gate.isCompleted) {
+            gate.complete();
+          }
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      for (final gate in provider.closeGates) {
+        if (!gate.isCompleted) {
+          gate.complete();
+        }
+      }
+      await closing;
+    }
+
+    addTearDown(releaseAll);
+    await provider.firstCloseStarted.future;
+    for (var turn = 0; turn < 20 && provider.closeGates.length < 4; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(provider.closeGates, hasLength(4));
+    expect(provider.peakInFlight, 4);
+
+    provider.closeGates.first.complete();
+    for (var turn = 0; turn < 20 && provider.closeGates.length < 5; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(provider.closeGates, hasLength(5));
+    expect(provider.peakInFlight, 4);
+
+    await releaseAll();
+    expect(provider.closeCount, sourceCount);
+  });
+
   test('connect timeout aborts a request with no progress', () async {
     final entered = Completer<void>();
     final abortObserved = Completer<void>();

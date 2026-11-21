@@ -158,6 +158,8 @@ final class AttachmentVerifiedSource {
 }
 
 final class HttpAttachmentTransport with _HttpAttachmentTransportInternals {
+  static const _sourceCleanupConcurrency = 4;
+
   factory HttpAttachmentTransport({
     required http.Client client,
     required AttachmentSourceProvider sourceProvider,
@@ -412,12 +414,33 @@ final class HttpAttachmentTransport with _HttpAttachmentTransportInternals {
     for (final operation in _activeOperations.toList(growable: false)) {
       operation.abort(AttachmentTransportError.closed, protocolCode: null);
     }
+    final sources = _verifiedSources.toList(growable: false);
+    final sourceFailures = List<AttachmentTransportException?>.filled(
+      sources.length,
+      null,
+    );
+    var nextSource = 0;
+
+    Future<void> releaseNext() async {
+      while (nextSource < sources.length) {
+        final index = nextSource++;
+        try {
+          await releaseSource(sources[index]);
+        } on AttachmentTransportException catch (error) {
+          sourceFailures[index] = error;
+        }
+      }
+    }
+
+    final workerCount = sources.length < _sourceCleanupConcurrency
+        ? sources.length
+        : _sourceCleanupConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => releaseNext()));
     AttachmentTransportException? firstFailure;
-    for (final source in _verifiedSources.toList(growable: false)) {
-      try {
-        await releaseSource(source);
-      } on AttachmentTransportException catch (error) {
-        firstFailure ??= error;
+    for (final failure in sourceFailures) {
+      if (failure != null) {
+        firstFailure = failure;
+        break;
       }
     }
     try {

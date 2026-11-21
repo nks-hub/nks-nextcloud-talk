@@ -232,6 +232,57 @@ final class _MemorySourceLease implements AttachmentSourceLease {
   }
 }
 
+final class _GatedCloseSourceProvider implements AttachmentSourceProvider {
+  _GatedCloseSourceProvider(List<int> bytes)
+    : _bytes = Uint8List.fromList(bytes);
+
+  final Uint8List _bytes;
+  final List<Completer<void>> closeGates = <Completer<void>>[];
+  final Completer<void> firstCloseStarted = Completer<void>();
+  int inFlight = 0;
+  int peakInFlight = 0;
+  int closeCount = 0;
+
+  @override
+  Future<AttachmentSourceLease> open(
+    AttachmentSourceHandle handle, {
+    AttachmentCancellationSignal? cancellationSignal,
+  }) async => _GatedCloseSourceLease(_bytes, _closeLease);
+
+  Future<void> _closeLease() async {
+    final gate = Completer<void>();
+    closeGates.add(gate);
+    if (!firstCloseStarted.isCompleted) {
+      firstCloseStarted.complete();
+    }
+    inFlight++;
+    if (inFlight > peakInFlight) {
+      peakInFlight = inFlight;
+    }
+    await gate.future;
+    inFlight--;
+    closeCount++;
+  }
+}
+
+final class _GatedCloseSourceLease implements AttachmentSourceLease {
+  const _GatedCloseSourceLease(this._bytes, this._close);
+
+  final Uint8List _bytes;
+  final Future<void> Function() _close;
+
+  @override
+  Stream<List<int>> openRead({int offset = 0, int? length}) {
+    final end = length == null || offset + length > _bytes.length
+        ? _bytes.length
+        : offset + length;
+    return Stream<List<int>>.value(_bytes.sublist(offset, end));
+  }
+
+  @override
+  Future<void> close() => _close();
+}
+
 /// Reads from disk the way the app's own store does, so the event loop keeps
 /// turning between chunks.
 final class _FileSourceProvider implements AttachmentSourceProvider {
