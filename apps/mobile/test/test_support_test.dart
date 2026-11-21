@@ -30,4 +30,23 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 5)),
   );
+
+  testWidgets('pumpUntilCondition can flush before its first check', (
+    tester,
+  ) async {
+    var frameDrawn = false;
+    tester.binding.scheduleFrame();
+    tester.binding.addPostFrameCallback((_) => frameDrawn = true);
+    final fakeTime = tester.binding.clock.now();
+
+    await pumpUntilCondition(
+      tester,
+      () => true,
+      pumpBeforeChecking: true,
+      frame: null,
+    );
+
+    expect(frameDrawn, isTrue);
+    expect(tester.binding.clock.now(), fakeTime);
+  });
 }
