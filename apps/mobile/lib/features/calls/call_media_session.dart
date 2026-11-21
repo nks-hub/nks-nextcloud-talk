@@ -19,6 +19,8 @@ part 'call_media_session_state.dart';
 /// Mesh calls connect directly to peers; MCU calls use a publisher and
 /// separate subscriptions. Both reuse the room's existing signalling transport.
 final class CallMediaSession {
+  static const int _peerCloseConcurrency = 4;
+
   CallMediaSession({
     required CallSignalingUpdate initial,
     required Stream<CallSignalingUpdate> updates,
@@ -354,9 +356,7 @@ final class CallMediaSession {
           if (expected.contains(participant.peerId.value))
             MapEntry(participant.peerId.value, participant),
       ]);
-    for (final gone in _peers.keys.toSet().difference(expected)) {
-      await _closePeer(gone);
-    }
+    await _closePeers(_peers.keys.toSet().difference(expected));
     _retiredSubscriberSids.removeWhere(
       (peerId, _) => !expected.contains(peerId),
     );
@@ -470,12 +470,25 @@ final class CallMediaSession {
   Future<void> _closeAllPeers() async {
     _retiredSubscriberSids.clear();
     await _stopSharing();
-    for (final peerId in _peers.keys.toList(growable: false)) {
-      await _closePeer(peerId);
-    }
+    await _closePeers(_peers.keys.toList(growable: false));
     final publisher = _publisher;
     _publisher = null;
     await publisher?.connection?.close();
+  }
+
+  Future<void> _closePeers(Iterable<String> peerIds) async {
+    final pending = peerIds.toList(growable: false);
+    var nextPeer = 0;
+    Future<void> closeNext() async {
+      while (nextPeer < pending.length) {
+        await _closePeer(pending[nextPeer++]);
+      }
+    }
+
+    final workerCount = pending.length < _peerCloseConcurrency
+        ? pending.length
+        : _peerCloseConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => closeNext()));
   }
 
   Future<void> _closePeer(String peerId) async {

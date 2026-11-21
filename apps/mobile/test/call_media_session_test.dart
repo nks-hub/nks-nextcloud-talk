@@ -10,6 +10,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 part 'call_media_session_screen_test.part.dart';
 part 'call_media_session_controls_test.part.dart';
+part 'call_media_session_disposal_test.part.dart';
 part 'call_media_session_support_test.part.dart';
 part 'call_media_session_membership_test.part.dart';
 
@@ -39,6 +40,7 @@ final class _MediaSessionTests {
     _registerCore();
     _registerScreenSharing();
     _registerControls();
+    _registerDisposal();
     _registerRecovery();
     _registerMembership();
   }

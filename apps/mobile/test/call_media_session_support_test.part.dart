@@ -76,6 +76,8 @@ final class _FakeEngine implements CallMediaEngine {
   CallMediaError? connectionError;
   CallMediaError? microphoneError;
   Completer<void>? microphoneStartup;
+  Completer<void>? connectionCloseGate;
+  int connectionCloseStarts = 0;
   final List<_FakeAudio> audio = <_FakeAudio>[];
   final List<_FakeConnection> connections = <_FakeConnection>[];
 
@@ -155,6 +157,8 @@ final class _FakeEngine implements CallMediaEngine {
       onRemoteVideo: onRemoteVideo,
       onStatusMessage: onStatusMessage,
       index: connections.length + 1,
+      closeGate: connectionCloseGate?.future,
+      onCloseStarted: () => connectionCloseStarts++,
     );
     connections.add(connection);
     return connection;
@@ -235,6 +239,8 @@ final class _FakeConnection implements CallPeerConnection {
     required this.onRemoteVideo,
     this.onStatusMessage,
     required this.index,
+    this.closeGate,
+    this.onCloseStarted,
   });
 
   final CallLocalAudio? audio;
@@ -246,6 +252,8 @@ final class _FakeConnection implements CallPeerConnection {
   final void Function(CallRemoteVideo? video) onRemoteVideo;
   final void Function(String type, Object? payload)? onStatusMessage;
   final int index;
+  final Future<void>? closeGate;
+  final void Function()? onCloseStarted;
 
   /// Every `sendStatus` call this connection accepted, in order. Stays empty
   /// when [onStatusMessage] was never given — a screen-share connection,
@@ -316,5 +324,9 @@ final class _FakeConnection implements CallPeerConnection {
   }
 
   @override
-  Future<void> close() async => closed = true;
+  Future<void> close() async {
+    onCloseStarted?.call();
+    await closeGate;
+    closed = true;
+  }
 }
