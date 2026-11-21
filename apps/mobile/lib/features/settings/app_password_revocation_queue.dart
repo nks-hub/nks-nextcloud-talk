@@ -11,12 +11,10 @@ import '../../network/nextcloud_api.dart';
 ///
 /// An account removed while offline leaves its password valid on the server.
 /// The removal service records it here and every drain (start, connectivity,
-/// resume) retries the revocation. The queue is bounded twice over: at most
-/// [maximumEntries] passwords are kept (the oldest goes first), and each one
-/// is given up after [maximumAttempts] tries or [maximumAge], whichever comes
-/// first — a server that is gone for good must not keep a secret alive on the
-/// device forever. A `401` means the password is already dead and counts as
-/// done.
+/// resume) retries the revocation. At most [maximumEntries] passwords are kept.
+/// A full queue refuses another password instead of forgetting an unverified
+/// revocation. Entries leave the queue only after a successful request or a
+/// `401`, which means the password is already dead.
 final class AppPasswordRevocationQueue {
   AppPasswordRevocationQueue({
     required PendingRevocationStore store,
@@ -27,8 +25,6 @@ final class AppPasswordRevocationQueue {
        _now = now ?? DateTime.now;
 
   static const maximumEntries = 5;
-  static const maximumAttempts = 20;
-  static const maximumAge = Duration(days: 14);
   static const _drainConcurrency = 3;
 
   final PendingRevocationStore _store;
@@ -48,13 +44,24 @@ final class AppPasswordRevocationQueue {
       since: _now(),
       attempts: 0,
     );
-    entries.removeWhere((entry) => entry.sameSecretAs(added));
-    entries.add(added);
-    while (entries.length > maximumEntries) {
-      entries.removeAt(0);
+    final existingIndex = entries.indexWhere(
+      (entry) => entry.sameSecretAs(added),
+    );
+    if (existingIndex >= 0) {
+      entries.removeAt(existingIndex);
+    } else if (entries.length >= maximumEntries) {
+      throw const AppPasswordRevocationQueueFull();
     }
+    entries.add(added);
     return _encode(entries);
   });
+
+  /// Refuses work that could mint another password when cleanup has no slot.
+  Future<void> ensureCapacity() async {
+    if ((await _load()).length >= maximumEntries) {
+      throw const AppPasswordRevocationQueueFull();
+    }
+  }
 
   /// Number of revocations still owed; for diagnostics and tests.
   Future<int> pendingCount() async => (await _load()).length;
@@ -65,7 +72,6 @@ final class AppPasswordRevocationQueue {
       return;
     }
     final outcomes = List<_Entry?>.filled(entries.length, null);
-    final now = _now();
     var nextEntry = 0;
 
     Future<void> revokeNext() async {
@@ -75,12 +81,7 @@ final class AppPasswordRevocationQueue {
         if (await _revoked(entry)) {
           continue;
         }
-        final next = entry.afterAttempt();
-        if (next.attempts >= maximumAttempts ||
-            now.difference(next.since) >= maximumAge) {
-          continue;
-        }
-        outcomes[index] = next;
+        outcomes[index] = entry.afterAttempt();
       }
     }
 
@@ -118,7 +119,7 @@ final class AppPasswordRevocationQueue {
     try {
       server = ServerBase.parse(entry.server);
     } on TalkProtocolException {
-      return true;
+      return false;
     }
     try {
       await _api.revokeAppPassword(
@@ -160,6 +161,13 @@ final class AppPasswordRevocationQueue {
   String? _encode(List<_Entry> entries) => entries.isEmpty
       ? null
       : jsonEncode([for (final entry in entries) entry.toJson()]);
+}
+
+final class AppPasswordRevocationQueueFull implements Exception {
+  const AppPasswordRevocationQueueFull();
+
+  @override
+  String toString() => 'AppPasswordRevocationQueueFull';
 }
 
 typedef _Secret = ({String server, String loginName, String appPassword});

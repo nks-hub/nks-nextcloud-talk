@@ -162,6 +162,7 @@ final class OnboardingCoordinator {
   final Uuid _uuid;
   final Duration pollInterval;
   final Duration loginTimeout;
+  var _generatedCredentialCleanupBlocked = false;
 
   /// True while the app is off the screen. The server hands the credentials
   /// out exactly once, and a phone that cuts background apps off the network
@@ -260,13 +261,22 @@ final class OnboardingCoordinator {
 
     var credentials = payload.toLoginFlowCredentials();
     if (payload.isOneTime) {
+      await _ensureGeneratedCredentialCleanupCapacity();
+      cancellation.throwIfCancelled();
       final String appPassword;
       try {
-        appPassword = await _api.exchangeOneTimeAppPassword(
-          server: server,
-          loginName: payload.loginName,
-          oneTimeToken: payload.secret,
-          abortTrigger: cancellation.whenCancelled,
+        appPassword = await _awaitOneShotResult(
+          _api.exchangeOneTimeAppPassword(
+            server: server,
+            loginName: payload.loginName,
+            oneTimeToken: payload.secret,
+          ),
+          cancellation,
+          onLateValue: (latePassword) => _retireLateGeneratedCredential(
+            server: server,
+            loginName: payload.loginName,
+            appPassword: latePassword,
+          ),
         );
       } on OnboardingFailure {
         rethrow;
@@ -336,6 +346,7 @@ final class OnboardingCoordinator {
     VoidCallback? onLoginPageOpened,
   }) async {
     try {
+      await _ensureGeneratedCredentialCleanupCapacity();
       cancellation.throwIfCancelled();
       final opened = await _launcher.open(pending.initialization.loginUri);
       cancellation.throwIfCancelled();
@@ -376,11 +387,22 @@ final class OnboardingCoordinator {
         ]);
         continue;
       }
+      await _ensureGeneratedCredentialCleanupCapacity();
+      cancellation.throwIfCancelled();
       final LoginPollResult? result;
       try {
-        result = await _api.pollLogin(
-          pending,
-          abortTrigger: cancellation.whenCancelled,
+        result = await _awaitOneShotResult(
+          _api.pollLogin(pending),
+          cancellation,
+          onLateValue: (lateResult) async {
+            if (lateResult case LoginPollSucceeded(:final credentials)) {
+              await _retireLateGeneratedCredential(
+                server: pending.server,
+                loginName: credentials.loginName,
+                appPassword: credentials.appPassword,
+              );
+            }
+          },
         );
       } on NextcloudApiException catch (error) {
         cancellation.throwIfCancelled();
@@ -512,6 +534,7 @@ final class OnboardingCoordinator {
         loginCredentials.appPassword,
       );
       credentialWritten = true;
+      cancellation.throwIfCancelled();
       final stored = await _accounts.upsertAccount(
         accountId: accountId,
         serverUrl: server.value,
@@ -539,7 +562,7 @@ final class OnboardingCoordinator {
         // is fail-closed and must not roll either durable write back.
       }
       return stored;
-    } on Object {
+    } on Object catch (error, stackTrace) {
       var cleanupIncomplete = false;
       if (credentialWritten) {
         try {
@@ -552,10 +575,84 @@ final class OnboardingCoordinator {
           cleanupIncomplete = true;
         }
       }
+      if (!cleanupIncomplete && error is OnboardingCancelled) {
+        Error.throwWithStackTrace(error, stackTrace);
+      }
       throw OnboardingFailure(
         OnboardingFailureCode.localPersistence,
         cleanupIncomplete: cleanupIncomplete,
       );
+    }
+  }
+
+  Future<void> _ensureGeneratedCredentialCleanupCapacity() async {
+    if (_generatedCredentialCleanupBlocked) {
+      throw const OnboardingFailure(
+        OnboardingFailureCode.localPersistence,
+        cleanupIncomplete: true,
+      );
+    }
+    try {
+      await _pendingRevocations?.ensureCapacity();
+    } on AppPasswordRevocationQueueFull {
+      throw const OnboardingFailure(
+        OnboardingFailureCode.localPersistence,
+        cleanupIncomplete: true,
+      );
+    }
+  }
+
+  Future<T> _awaitOneShotResult<T>(
+    Future<T> operation,
+    CancellationSignal cancellation, {
+    required Future<void> Function(T value) onLateValue,
+  }) async {
+    final outcome = operation.then<_OneShotOutcome<T>>(
+      _OneShotValue<T>.new,
+      onError: (Object error, StackTrace stackTrace) =>
+          _OneShotError<T>(error, stackTrace),
+    );
+    final first = await Future.any<_OneShotOutcome<T>>([
+      outcome,
+      cancellation.whenCancelled.then((_) => _OneShotCancelled<T>()),
+    ]);
+    if (first case _OneShotValue<T>(:final value)) {
+      return value;
+    }
+    if (first case _OneShotError<T>(:final error, :final stackTrace)) {
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+    unawaited(_handleLateOneShot(outcome, onLateValue));
+    throw const OnboardingCancelled();
+  }
+
+  Future<void> _handleLateOneShot<T>(
+    Future<_OneShotOutcome<T>> outcome,
+    Future<void> Function(T value) onLateValue,
+  ) async {
+    final late = await outcome;
+    if (late case _OneShotValue<T>(:final value)) {
+      try {
+        await onLateValue(value);
+      } on Object {
+        _generatedCredentialCleanupBlocked = true;
+      }
+    }
+  }
+
+  Future<void> _retireLateGeneratedCredential({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+  }) async {
+    final cleanedUp = await _revokeOrRememberGeneratedCredential(
+      server: server,
+      loginName: loginName,
+      appPassword: appPassword,
+      preferQueue: true,
+    );
+    if (!cleanedUp) {
+      _generatedCredentialCleanupBlocked = true;
     }
   }
 
@@ -610,4 +707,25 @@ final class OnboardingCoordinator {
       return false;
     }
   }
+}
+
+sealed class _OneShotOutcome<T> {
+  const _OneShotOutcome();
+}
+
+final class _OneShotValue<T> extends _OneShotOutcome<T> {
+  const _OneShotValue(this.value);
+
+  final T value;
+}
+
+final class _OneShotError<T> extends _OneShotOutcome<T> {
+  const _OneShotError(this.error, this.stackTrace);
+
+  final Object error;
+  final StackTrace stackTrace;
+}
+
+final class _OneShotCancelled<T> extends _OneShotOutcome<T> {
+  const _OneShotCancelled();
 }

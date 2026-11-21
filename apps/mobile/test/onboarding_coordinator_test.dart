@@ -388,37 +388,8 @@ void main() {
     },
   );
 
-  test('cancellation during login poll does not persist the account', () async {
-    final pollStarted = Completer<void>();
-    final releasePoll = Completer<void>();
-    final api = _onboardingApi(
-      withTalk: true,
-      onPoll: pollStarted.complete,
-      pollGate: releasePoll.future,
-    );
-    addTearDown(api.close);
-    final coordinator = OnboardingCoordinator(
-      api: api,
-      accounts: repository,
-      credentials: vault,
-      launcher: launcher,
-      pollInterval: Duration.zero,
-    );
-    final pending = await coordinator.start('https://cloud.example.invalid');
-    final cancellation = CancellationSignal();
-
-    final result = coordinator.completeLogin(pending, cancellation);
-    await pollStarted.future;
-    cancellation.cancel();
-    releasePoll.complete();
-
-    await expectLater(result, throwsA(isA<OnboardingCancelled>()));
-    expect(vault.values, isEmpty);
-    expect(await repository.watchAccounts().first, isEmpty);
-  });
-
-  test('cancellation aborts a held login poll immediately', () async {
-    final client = _HeldLoginPollClient();
+  test('cancelled login poll retires a late one-time response', () async {
+    final client = _LateGeneratedCredentialClient.loginPoll();
     final api = HttpNextcloudApi(
       client: client,
       requestTimeout: const Duration(seconds: 20),
@@ -435,7 +406,7 @@ void main() {
     final cancellation = CancellationSignal();
 
     final result = coordinator.completeLogin(pending, cancellation);
-    await client.pollStarted.future;
+    await client.requestStarted.future;
     cancellation.cancel();
 
     await expectLater(
@@ -444,6 +415,11 @@ void main() {
     );
     expect(launcher.closeCount, 1);
     expect(vault.values, isEmpty);
+    expect(await repository.watchAccounts().first, isEmpty);
+
+    client.releaseResponse();
+    await client.revoked.future.timeout(const Duration(seconds: 1));
+    expect(client.revokedPassword, 'fixture-app-password-never-use');
   });
 
   test(
@@ -580,6 +556,43 @@ void main() {
     expect(await repository.watchAccounts().first, isEmpty);
   });
 
+  test('cancellation after a slow credential write rolls it back', () async {
+    final writeStarted = Completer<void>();
+    final releaseWrite = Completer<void>();
+    final faultingVault = _FaultingCredentialVault(
+      onWrite: writeStarted.complete,
+      writeGate: releaseWrite.future,
+    );
+    var revokeCalls = 0;
+    final api = _onboardingApi(withTalk: true, onRevoke: () => revokeCalls++);
+    addTearDown(api.close);
+    addTearDown(() {
+      if (!releaseWrite.isCompleted) {
+        releaseWrite.complete();
+      }
+    });
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: faultingVault,
+      launcher: launcher,
+      pollInterval: Duration.zero,
+    );
+    final pending = await coordinator.start('https://cloud.example.invalid');
+    final cancellation = CancellationSignal();
+
+    final result = coordinator.completeLogin(pending, cancellation);
+    await writeStarted.future;
+    cancellation.cancel();
+    releaseWrite.complete();
+
+    await expectLater(result, throwsA(isA<OnboardingCancelled>()));
+    expect(faultingVault.deleteCalls, 1);
+    expect(faultingVault.values, isEmpty);
+    expect(await repository.watchAccounts().first, isEmpty);
+    expect(revokeCalls, 1);
+  });
+
   test('revokes a new login password when the database commit fails', () async {
     await failNextAccountCommit();
     final faultingVault = _FaultingCredentialVault();
@@ -703,6 +716,59 @@ void main() {
     expect(vault.values, isEmpty);
   });
 
+  test('a full cleanup queue blocks another generated password', () async {
+    var polls = 0;
+    final api = _onboardingApi(withTalk: true, onPoll: () => polls++);
+    addTearDown(api.close);
+    final pendingStore = MemoryCredentialVault();
+    final queue = AppPasswordRevocationQueue(store: pendingStore, api: api);
+    final server = ServerBase.parse('https://cloud.example.invalid');
+    for (
+      var index = 0;
+      index < AppPasswordRevocationQueue.maximumEntries;
+      index++
+    ) {
+      await queue.record(
+        server: server,
+        loginName: 'old-user-$index',
+        appPassword: 'old-password-$index',
+      );
+    }
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pendingRevocations: queue,
+      pollInterval: Duration.zero,
+    );
+    final pending = await coordinator.start('https://cloud.example.invalid');
+
+    await expectLater(
+      coordinator.completeLogin(pending, CancellationSignal()),
+      throwsA(
+        isA<OnboardingFailure>()
+            .having(
+              (error) => error.code,
+              'code',
+              OnboardingFailureCode.localPersistence,
+            )
+            .having(
+              (error) => error.cleanupIncomplete,
+              'cleanupIncomplete',
+              isTrue,
+            ),
+      ),
+    );
+
+    expect(polls, 0);
+    expect(launcher.openedUri, null);
+    expect(
+      await queue.pendingCount(),
+      AppPasswordRevocationQueue.maximumEntries,
+    );
+  });
+
   test('reports an incomplete local rollback instead of hiding it', () async {
     await failNextAccountCommit();
     final faultingVault = _FaultingCredentialVault(deleteFailuresRemaining: 1);
@@ -799,6 +865,45 @@ void main() {
       await vault.readAppPassword(account.id),
       'exchanged-app-password-never-use',
     );
+  });
+
+  test('cancelled QR exchange retires its late app password', () async {
+    final client = _LateGeneratedCredentialClient.oneTimeExchange();
+    final api = HttpNextcloudApi(
+      client: client,
+      requestTimeout: const Duration(seconds: 20),
+    );
+    addTearDown(api.close);
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pollInterval: Duration.zero,
+    );
+    final payload =
+        parseQrLoginPayload(
+              'nc://onetime-login/user:fixture-user'
+              '&server:https%3A//cloud.example.invalid'
+              '&password:single-use-token',
+            )!
+            as QrLoginCredentials;
+    final cancellation = CancellationSignal();
+
+    final result = coordinator.commitScannedLogin(payload, cancellation);
+    await client.requestStarted.future;
+    cancellation.cancel();
+
+    await expectLater(
+      result.timeout(const Duration(seconds: 1)),
+      throwsA(isA<OnboardingCancelled>()),
+    );
+    expect(vault.values, isEmpty);
+    expect(await repository.watchAccounts().first, isEmpty);
+
+    client.releaseResponse();
+    await client.revoked.future.timeout(const Duration(seconds: 1));
+    expect(client.revokedPassword, 'late-qr-app-password-never-use');
   });
 
   test('a spent one-time token fails without storing anything', () async {
@@ -993,12 +1098,16 @@ final class _FaultingCredentialVault implements CredentialVault {
   _FaultingCredentialVault({
     Map<String, String> values = const {},
     this.readFailure,
+    this.onWrite,
+    this.writeGate,
     this.writeFailuresRemaining = 0,
     this.deleteFailuresRemaining = 0,
   }) : values = Map.of(values);
 
   final Map<String, String> values;
   final Object? readFailure;
+  final VoidCallback? onWrite;
+  final Future<void>? writeGate;
   int writeFailuresRemaining;
   int deleteFailuresRemaining;
   int writeCalls = 0;
@@ -1026,6 +1135,8 @@ final class _FaultingCredentialVault implements CredentialVault {
   @override
   Future<void> writeAppPassword(String accountId, String appPassword) async {
     writeCalls++;
+    onWrite?.call();
+    await writeGate;
     if (writeFailuresRemaining > 0) {
       writeFailuresRemaining--;
       throw StateError('credential write failed');
@@ -1034,24 +1145,93 @@ final class _FaultingCredentialVault implements CredentialVault {
   }
 }
 
-final class _HeldLoginPollClient extends http.BaseClient {
-  final Completer<void> pollStarted = Completer<void>();
+final class _LateGeneratedCredentialClient extends http.BaseClient {
+  _LateGeneratedCredentialClient._(this._heldPath, this._responseBody);
+
+  factory _LateGeneratedCredentialClient.loginPoll() =>
+      _LateGeneratedCredentialClient._(
+        '/index.php/login/v2/poll',
+        loginSuccessJson(),
+      );
+
+  factory _LateGeneratedCredentialClient.oneTimeExchange() =>
+      _LateGeneratedCredentialClient._(
+        '/ocs/v2.php/core/getapppassword-onetime',
+        <String, Object?>{
+          'ocs': <String, Object?>{
+            'meta': <String, Object?>{
+              'status': 'ok',
+              'statuscode': 200,
+              'message': 'OK',
+            },
+            'data': <String, Object?>{
+              'apppassword': 'late-qr-app-password-never-use',
+            },
+          },
+        },
+      );
+
+  final String _heldPath;
+  final Object _responseBody;
+  final StreamController<List<int>> _body = StreamController<List<int>>();
+  final Completer<void> requestStarted = Completer<void>();
+  final Completer<void> revoked = Completer<void>();
+  String? revokedPassword;
+  var _released = false;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     if (request.url.path == '/status.php') {
       return _streamedResponse(readyStatusJson());
     }
+    if (request.method == 'DELETE' &&
+        request.url.path.endsWith('/core/apppassword')) {
+      final authorization = request.headers['Authorization']!;
+      final credential = utf8.decode(
+        base64Decode(authorization.substring('Basic '.length)),
+      );
+      revokedPassword = credential.substring(credential.indexOf(':') + 1);
+      if (!revoked.isCompleted) {
+        revoked.complete();
+      }
+      return _streamedResponse(<String, Object?>{
+        'ocs': <String, Object?>{
+          'meta': <String, Object?>{
+            'status': 'ok',
+            'statuscode': 200,
+            'message': 'OK',
+          },
+          'data': <String, Object?>{},
+        },
+      });
+    }
+    if (request.url.path == _heldPath) {
+      expect(request, isNot(isA<http.Abortable>()));
+      if (!requestStarted.isCompleted) {
+        requestStarted.complete();
+      }
+      return http.StreamedResponse(_body.stream, 200);
+    }
     if (request.url.path.endsWith('/login/v2')) {
       return _streamedResponse(loginInitializationJson());
     }
-    if (request.url.path.endsWith('/login/v2/poll')) {
-      expect(request, isA<http.Abortable>());
-      pollStarted.complete();
-      await (request as http.Abortable).abortTrigger;
-      throw http.RequestAbortedException(request.url);
-    }
     return http.StreamedResponse(const Stream<List<int>>.empty(), 404);
+  }
+
+  void releaseResponse() {
+    if (_released) return;
+    _released = true;
+    _body.add(utf8.encode(jsonEncode(_responseBody)));
+    unawaited(_body.close());
+  }
+
+  @override
+  void close() {
+    if (!_released) {
+      _released = true;
+      unawaited(_body.close());
+    }
+    super.close();
   }
 
   http.StreamedResponse _streamedResponse(Object body) {

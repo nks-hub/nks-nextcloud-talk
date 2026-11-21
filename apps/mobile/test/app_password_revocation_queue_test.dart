@@ -183,34 +183,65 @@ void main() {
     expect(vault.pendingRevocations, isNot(contains('first-secret')));
   });
 
-  test('the queue is bounded by count, attempts and age', () async {
+  test('a full queue keeps every unverified revocation', () async {
+    var reachable = false;
     final q = queue(
-      MockClient((request) async => throw const SocketException('offline')),
+      MockClient((request) async {
+        if (!reachable) {
+          throw const SocketException('offline');
+        }
+        return http.Response(_okOcs(), 200);
+      }),
     );
     for (
       var index = 0;
-      index < AppPasswordRevocationQueue.maximumEntries + 2;
+      index < AppPasswordRevocationQueue.maximumEntries;
       index++
     ) {
       await q.record(server: server, loginName: 'me', appPassword: 'pw$index');
     }
+    await expectLater(
+      q.record(server: server, loginName: 'me', appPassword: 'pw5'),
+      throwsA(isA<AppPasswordRevocationQueueFull>()),
+    );
+    await expectLater(
+      q.ensureCapacity(),
+      throwsA(isA<AppPasswordRevocationQueueFull>()),
+    );
     expect(await q.pendingCount(), AppPasswordRevocationQueue.maximumEntries);
-    expect(vault.pendingRevocations, isNot(contains('pw0')));
-    expect(vault.pendingRevocations, contains('pw6'));
-
     for (
-      var attempt = 0;
-      attempt < AppPasswordRevocationQueue.maximumAttempts;
-      attempt++
+      var index = 0;
+      index < AppPasswordRevocationQueue.maximumEntries;
+      index++
     ) {
+      expect(vault.pendingRevocations, contains('pw$index'));
+    }
+    expect(vault.pendingRevocations, isNot(contains('pw5')));
+
+    for (var attempt = 0; attempt < 25; attempt++) {
       await q.drain();
     }
-    expect(await q.pendingCount(), 0, reason: 'given up after the attempt cap');
+    expect(
+      await q.pendingCount(),
+      AppPasswordRevocationQueue.maximumEntries,
+      reason: 'failed revocations are not discarded after repeated attempts',
+    );
+    expect(vault.pendingRevocations, contains('"attempts":25'));
 
-    await q.record(server: server, loginName: 'me', appPassword: 'old');
-    clock = clock.add(AppPasswordRevocationQueue.maximumAge);
+    clock = clock.add(const Duration(days: 30));
     await q.drain();
-    expect(await q.pendingCount(), 0, reason: 'given up after the age cap');
+    expect(
+      await q.pendingCount(),
+      AppPasswordRevocationQueue.maximumEntries,
+      reason: 'age does not prove that a server password was revoked',
+    );
+
+    reachable = true;
+    await q.drain();
+    expect(await q.pendingCount(), 0);
+    await q.ensureCapacity();
+    await q.record(server: server, loginName: 'me', appPassword: 'pw5');
+    expect(await q.pendingCount(), 1);
   });
 
   test(

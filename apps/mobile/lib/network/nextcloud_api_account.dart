@@ -245,15 +245,11 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
     );
   }
 
-  Future<LoginPollResult> pollLogin(
-    PendingLogin pending, {
-    Future<void>? abortTrigger,
-  }) async {
-    final request =
-        _request('POST', pending.initialization.pollEndpoint, abortTrigger)
-          ..headers['Content-Type'] = 'application/x-www-form-urlencoded'
-          ..headers['User-Agent'] = loginFlowUserAgent
-          ..body = pending.initialization.pollFormBody;
+  Future<LoginPollResult> pollLogin(PendingLogin pending) async {
+    final request = _request('POST', pending.initialization.pollEndpoint, null)
+      ..headers['Content-Type'] = 'application/x-www-form-urlencoded'
+      ..headers['User-Agent'] = loginFlowUserAgent
+      ..body = pending.initialization.pollFormBody;
     final payload = await _sendJson(
       request,
       allowedStatusCodes: const {200, 404},
@@ -565,14 +561,12 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
     required ServerBase server,
     required String loginName,
     required String oneTimeToken,
-    Future<void>? abortTrigger,
   }) async {
     final request = _authenticatedOcsRequest(
       'GET',
       _oneTimeAppPasswordUri(server),
       loginName: loginName,
       appPassword: oneTimeToken,
-      abortTrigger: abortTrigger,
     );
     final payload = await _sendJson(
       request,
