@@ -100,28 +100,27 @@ void main() {
       await teardownTree(tester);
     });
 
-    testWidgets('drops a pin whose time has passed', (tester) async {
-      // The server ends the pin from a background job - within seconds where
-      // one runs, never on an instance where none does. Showing a pin the
-      // conversation no longer has is the worse of the two, so an expiry in
-      // the past hides the banner here rather than waiting to be told.
+    testWidgets('expires on time and reschedules when the deadline changes', (
+      tester,
+    ) async {
+      var now = DateTime.utc(2026, 9, 10, 12);
       final conversation = await insertRoom(lastPinnedId: 10);
-      await insertMessage(
-        pinnedUntil: DateTime.now().toUtc().subtract(
-          const Duration(minutes: 1),
-        ),
-      );
+      await insertMessage(pinnedUntil: now.add(const Duration(minutes: 1)));
       await tester.pumpWidget(
-        wrap(
-          api: buildApi(),
-          home: PresenceChatRoomScreen(
-            account: account,
-            conversation: conversation,
-          ),
-        ),
+        pinnedBanner(conversation: conversation, now: () => now),
       );
       await settle(tester);
+      expect(find.byKey(const Key('chat-pinned-banner')), findsOneWidget);
 
+      await insertMessage(pinnedUntil: now.add(const Duration(minutes: 2)));
+      await settle(tester);
+
+      now = now.add(const Duration(minutes: 1, seconds: 1));
+      await tester.pump(const Duration(minutes: 1, seconds: 1));
+      expect(find.byKey(const Key('chat-pinned-banner')), findsOneWidget);
+
+      now = now.add(const Duration(minutes: 1));
+      await tester.pump(const Duration(minutes: 1));
       expect(find.byKey(const Key('chat-pinned-banner')), findsNothing);
 
       await teardownTree(tester);

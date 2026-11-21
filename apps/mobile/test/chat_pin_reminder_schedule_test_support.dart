@@ -243,6 +243,24 @@ Widget wrap({required HttpNextcloudApi api, required Widget home}) {
   );
 }
 
+Widget pinnedBanner({
+  required CachedConversation conversation,
+  required DateTime Function() now,
+}) => wrap(
+  api: buildApi(),
+  home: Scaffold(
+    body: PinnedMessageBanner(
+      account: account,
+      conversation: conversation,
+      pinned: const PinnedMessageState(messageId: 10, hidden: false),
+      canHide: true,
+      onOpen: (_) {},
+      onHide: (_) {},
+      now: now,
+    ),
+  ),
+);
+
 CachedConversation _bareConversation(String rawJson) => CachedConversation(
   accountId: 'account-a',
   token: 'rooma123',

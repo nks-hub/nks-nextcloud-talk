@@ -283,6 +283,68 @@ void main() {
       expect(find.text('user-b@b.example.invalid'), findsOneWidget);
     });
 
+    testWidgets('a stale account load cannot replace the new account', (
+      tester,
+    ) async {
+      final accountAGate = Completer<List<RichChatUpcomingReminder>>();
+      addTearDown(() {
+        if (!accountAGate.isCompleted) {
+          accountAGate.complete(const <RichChatUpcomingReminder>[]);
+        }
+      });
+      var accounts = <StoredAccount>[_accountA];
+      late StateSetter update;
+
+      await tester.pumpWidget(
+        localizedTestApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return ReminderInboxScreen(
+                accounts: accounts,
+                lister: (accountId) {
+                  if (accountId == _accountA.id) {
+                    return accountAGate.future;
+                  }
+                  return Future.value(<RichChatUpcomingReminder>[
+                    _reminder(messageId: 2),
+                  ]);
+                },
+                remover: (_) async {},
+                conversationNames: (accountId, roomTokens) async => {
+                  for (final roomToken in roomTokens)
+                    roomToken: 'Room on $accountId',
+                },
+                onOpen: (_) {},
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+
+      update(() => accounts = <StoredAccount>[_accountB]);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('reminder-inbox-row-account-b|hqowhbbz|2')),
+        findsOneWidget,
+      );
+
+      accountAGate.complete(<RichChatUpcomingReminder>[
+        _reminder(messageId: 1),
+      ]);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('reminder-inbox-row-account-a|hqowhbbz|1')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('reminder-inbox-row-account-b|hqowhbbz|2')),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('a row shows the deadline, author and message text', (
       tester,
     ) async {

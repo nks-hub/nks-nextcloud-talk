@@ -94,7 +94,7 @@ int scheduledMessageCount(CachedConversation conversation) {
 /// which already pages history back until the message appears. Add the
 /// context fetch when a pin far outside the loaded history needs its preview
 /// visible without a tap.
-final class PinnedMessageBanner extends ConsumerWidget {
+final class PinnedMessageBanner extends ConsumerStatefulWidget {
   const PinnedMessageBanner({
     super.key,
     required this.account,
@@ -103,6 +103,7 @@ final class PinnedMessageBanner extends ConsumerWidget {
     required this.canHide,
     required this.onOpen,
     required this.onHide,
+    this.now = DateTime.now,
   });
 
   final StoredAccount account;
@@ -111,10 +112,51 @@ final class PinnedMessageBanner extends ConsumerWidget {
   final bool canHide;
   final void Function(int messageId) onOpen;
   final void Function(int messageId) onHide;
+  final DateTime Function() now;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (!pinned.isVisible) {
+  ConsumerState<PinnedMessageBanner> createState() =>
+      _PinnedMessageBannerState();
+}
+
+final class _PinnedMessageBannerState
+    extends ConsumerState<PinnedMessageBanner> {
+  Timer? _expiryTimer;
+  DateTime? _scheduledExpiry;
+
+  void _scheduleExpiry(DateTime? expiry) {
+    final normalized = expiry?.toUtc();
+    if (_scheduledExpiry == normalized && (_expiryTimer?.isActive ?? false)) {
+      return;
+    }
+    _expiryTimer?.cancel();
+    _expiryTimer = null;
+    _scheduledExpiry = normalized;
+    if (normalized == null) {
+      return;
+    }
+    final remaining = normalized.difference(widget.now().toUtc());
+    if (remaining <= Duration.zero) {
+      return;
+    }
+    _expiryTimer = Timer(remaining, () {
+      _expiryTimer = null;
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _expiryTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.pinned.isVisible) {
+      _scheduleExpiry(null);
       return const SizedBox.shrink();
     }
     final strings = AppLocalizations.of(context);
@@ -122,15 +164,16 @@ final class PinnedMessageBanner extends ConsumerWidget {
     final cached = ref
         .watch(
           chatMessageProvider((
-            accountId: account.id,
-            roomToken: conversation.token,
-            messageId: pinned.messageId,
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            messageId: widget.pinned.messageId,
           )),
         )
         .valueOrNull;
-    final preview = _preview(cached, pinned.messageId);
-    final expiry = _expiry(cached, pinned.messageId);
-    if (expiry != null && !expiry.isAfter(DateTime.now().toUtc())) {
+    final preview = _preview(cached, widget.pinned.messageId);
+    final expiry = _expiry(cached, widget.pinned.messageId);
+    _scheduleExpiry(expiry);
+    if (expiry != null && !expiry.isAfter(widget.now().toUtc())) {
       return const SizedBox.shrink();
     }
 
@@ -141,7 +184,7 @@ final class PinnedMessageBanner extends ConsumerWidget {
         label: strings.pinnedMessageOpen,
         child: InkWell(
           key: const Key('chat-pinned-banner'),
-          onTap: () => onOpen(pinned.messageId),
+          onTap: () => widget.onOpen(widget.pinned.messageId),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
             child: Row(
@@ -181,11 +224,11 @@ final class PinnedMessageBanner extends ConsumerWidget {
                     ),
                   ),
                 ),
-                if (canHide)
+                if (widget.canHide)
                   IconButton(
                     key: const Key('chat-pinned-banner-hide'),
                     tooltip: strings.pinnedMessageHide,
-                    onPressed: () => onHide(pinned.messageId),
+                    onPressed: () => widget.onHide(widget.pinned.messageId),
                     icon: Icon(
                       Icons.close_rounded,
                       color: scheme.onSecondaryContainer,

@@ -222,6 +222,29 @@ class _ReminderInboxScreenState extends State<ReminderInboxScreen> {
     unawaited(_load());
   }
 
+  @override
+  void didUpdateWidget(covariant ReminderInboxScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_sameAccountScope(oldWidget.accounts, widget.accounts)) {
+      unawaited(_load());
+    }
+  }
+
+  static bool _sameAccountScope(
+    List<StoredAccount> before,
+    List<StoredAccount> after,
+  ) {
+    if (before.length != after.length) {
+      return false;
+    }
+    for (var index = 0; index < before.length; index++) {
+      if (before[index].id != after[index].id) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   Future<void> _load() async {
     final generation = ++_generation;
     // The first load starts from `initState`, which runs inside a build: the
