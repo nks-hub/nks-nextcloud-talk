@@ -710,6 +710,62 @@ void main() {
       expect(await cache.read('account-b', sha), isNotNull);
     });
 
+    test('starts every appearance cleanup before waiting for one', () async {
+      final releaseStores = Completer<void>();
+      addTearDown(() {
+        if (!releaseStores.isCompleted) {
+          releaseStores.complete();
+        }
+      });
+      final started = <String>[];
+      final allStarted = Completer<void>();
+
+      Future<T> gatedStore<T>(String name, T store) async {
+        started.add(name);
+        if (started.length == 3) {
+          allStarted.complete();
+        }
+        await releaseStores.future;
+        return store;
+      }
+
+      final container = ProviderContainer(
+        overrides: [
+          chatBackgroundStoreProvider.overrideWith(
+            (ref) => gatedStore(
+              'backgrounds',
+              ChatBackgroundStore.forTesting(
+                Directory('${root.path}/backgrounds'),
+              ),
+            ),
+          ),
+          ownTalkSettingsStoreProvider.overrideWith(
+            (ref) => gatedStore(
+              'settings',
+              OwnTalkSettingsStore.forTesting(
+                Directory('${root.path}/settings'),
+              ),
+            ),
+          ),
+          ownTalkImageCacheProvider.overrideWith(
+            (ref) => gatedStore(
+              'images',
+              OwnTalkImageCache.forTesting(Directory('${root.path}/images')),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final cleanup = container.read(accountAppearanceCleanupProvider)(
+        _account,
+      );
+      await allStarted.future.timeout(const Duration(seconds: 2));
+      expect(started, ['backgrounds', 'settings', 'images']);
+      releaseStores.complete();
+      await cleanup;
+    });
+
     test(
       'clears the colours and the shared settings of the account too',
       () async {

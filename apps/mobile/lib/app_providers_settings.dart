@@ -22,8 +22,7 @@ final accountAppearanceCleanupProvider = Provider<AccountBackgroundCleanup>((
   ref,
 ) {
   return (accountId) async {
-    Object? failure;
-    for (final clear in <Future<void> Function()>[
+    final clears = <Future<void> Function()>[
       () async => (await ref.read(
         chatBackgroundStoreProvider.future,
       )).removeAccount(accountId),
@@ -33,15 +32,22 @@ final accountAppearanceCleanupProvider = Provider<AccountBackgroundCleanup>((
       () async => (await ref.read(
         ownTalkImageCacheProvider.future,
       )).removeAccount(accountId),
-    ]) {
-      try {
-        await clear();
-      } on Object catch (error) {
-        failure ??= error;
+    ];
+    final failures = List<Object?>.filled(clears.length, null);
+    await Future.wait<void>([
+      for (final (index, clear) in clears.indexed)
+        () async {
+          try {
+            await clear();
+          } on Object catch (error) {
+            failures[index] = error;
+          }
+        }(),
+    ]);
+    for (final failure in failures) {
+      if (failure != null) {
+        throw failure;
       }
-    }
-    if (failure != null) {
-      throw failure;
     }
   };
 });
