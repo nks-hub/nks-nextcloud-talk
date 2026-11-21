@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -239,6 +240,63 @@ void main() {
     expect(_tile('broom00'), findsOneWidget);
   });
 
+  testWidgets('switching account releases a pending pull-to-refresh', (
+    tester,
+  ) async {
+    final account = ValueNotifier<StoredAccount>(_account());
+    addTearDown(account.dispose);
+    final firstRefresh = Completer<void>();
+    final secondRefresh = Completer<void>();
+    addTearDown(() {
+      if (!firstRefresh.isCompleted) firstRefresh.complete();
+      if (!secondRefresh.isCompleted) secondRefresh.complete();
+    });
+    final refreshed = <String>[];
+
+    await tester.pumpWidget(
+      _switchableApp(
+        account: account,
+        roomsByAccount: {
+          'account-a': [_conversation(token: 'aroom001')],
+          'account-b': [
+            _conversation(token: 'broom001', accountId: 'account-b'),
+          ],
+        },
+        refreshByAccount: {
+          'account-a': () {
+            refreshed.add('account-a');
+            return firstRefresh.future;
+          },
+          'account-b': () {
+            refreshed.add('account-b');
+            return secondRefresh.future;
+          },
+        },
+      ),
+    );
+
+    final firstIndicator = tester.state<RefreshIndicatorState>(
+      find.byType(RefreshIndicator),
+    );
+    unawaited(firstIndicator.show());
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(refreshed, ['account-a']);
+
+    account.value = _account(id: 'account-b');
+    await tester.pump();
+    final secondIndicator = tester.state<RefreshIndicatorState>(
+      find.byType(RefreshIndicator),
+    );
+    unawaited(secondIndicator.show());
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(refreshed, ['account-a', 'account-b']);
+    secondRefresh.complete();
+    firstRefresh.complete();
+  });
+
   testWidgets('corrupt room payload fails closed for mention filtering', (
     tester,
   ) async {
@@ -282,6 +340,7 @@ Widget _app({
 Widget _switchableApp({
   required ValueNotifier<StoredAccount> account,
   required Map<String, List<CachedConversation>> roomsByAccount,
+  Map<String, Future<void> Function()> refreshByAccount = const {},
 }) {
   return ProviderScope(
     overrides: [
@@ -295,7 +354,7 @@ Widget _switchableApp({
             account: value,
             conversations: roomsByAccount[value.id] ?? const [],
             loading: false,
-            onRefresh: () async {},
+            onRefresh: refreshByAccount[value.id] ?? () async {},
             onSelect: (_) {},
           ),
         ),

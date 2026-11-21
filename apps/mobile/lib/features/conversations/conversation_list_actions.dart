@@ -221,9 +221,9 @@ final class _ConversationListViewState
 
     if (shown.isEmpty) {
       return RefreshIndicator(
+        key: ValueKey<String>('conversation-list-${widget.account.id}'),
         onRefresh: widget.onRefresh,
         child: ListView(
-          key: ValueKey<String>('conversation-list-${widget.account.id}'),
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             filterBar,
@@ -235,9 +235,9 @@ final class _ConversationListViewState
     }
 
     return RefreshIndicator(
+      key: ValueKey<String>('conversation-list-${widget.account.id}'),
       onRefresh: widget.onRefresh,
       child: ListView.separated(
-        key: ValueKey<String>('conversation-list-${widget.account.id}'),
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.only(bottom: widget.bottomInset),
         itemCount: shown.length + 1,
