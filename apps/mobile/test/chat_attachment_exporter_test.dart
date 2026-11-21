@@ -273,6 +273,126 @@ void main() {
     expect(system.sharedTypes.single, 'text/csv');
   });
 
+  test('share streams files beyond the in-memory ceiling', () async {
+    const chunkBytes = 1024 * 1024;
+    const chunks = 65;
+    final root = await Directory.systemTemp.createTemp(
+      'attachment-share-test-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) await root.delete(recursive: true);
+    });
+    final system = _RecordingSystem();
+    final exporter = ChatAttachmentExporter(
+      temporaryDirectory: () async => root,
+      repository: _repository(
+        (_) async => http.StreamedResponse(
+          _zeroChunks(count: chunks, bytesPerChunk: chunkBytes),
+          200,
+          contentLength: chunkBytes * chunks,
+          headers: const {'content-type': 'application/zip'},
+        ),
+      ),
+      system: system,
+    );
+
+    final result = await exporter.share(
+      account: _account,
+      uri: _uri,
+      fileName: 'archive.zip',
+      expectedContentType: 'application/zip',
+    );
+
+    expect(result, ChatAttachmentShareResult.shared);
+    expect(system.sharedFileLengths, [chunkBytes * chunks]);
+    expect(
+      await root.list(recursive: true).where((entry) => entry is File).toList(),
+      isEmpty,
+    );
+  });
+
+  test(
+    'account suspension cancels sharing and removes partial scratch',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'attachment-share-cancel-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) await root.delete(recursive: true);
+      });
+      final body = StreamController<List<int>>();
+      addTearDown(body.close);
+      final repository = _repository(
+        (_) async => http.StreamedResponse(
+          body.stream,
+          200,
+          headers: const {'content-type': 'text/plain'},
+        ),
+      );
+      final system = _RecordingSystem();
+      final received = Completer<void>();
+      final exporter = ChatAttachmentExporter(
+        temporaryDirectory: () async => root,
+        repository: repository,
+        system: system,
+      );
+
+      final pending = exporter.share(
+        account: _account,
+        uri: _uri,
+        fileName: 'report.txt',
+        expectedContentType: 'text/plain',
+        onProgress: (bytes, _) {
+          if (bytes > 0 && !received.isCompleted) received.complete();
+        },
+      );
+      body.add(utf8.encode('partial attachment'));
+      await received.future;
+      await repository.suspendAccount(_account.id);
+
+      expect(await pending, ChatAttachmentShareResult.reauthenticationRequired);
+      expect(system.sharedFileLengths, isEmpty);
+      final accountDirectory = chatAttachmentCacheAccountDirectory(
+        rootDirectory: root,
+        accountId: _account.id,
+      );
+      expect(await accountDirectory.list().toList(), isEmpty);
+    },
+  );
+
+  test(
+    'account suspension before platform handoff stays reauthentication',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'attachment-share-handoff-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) await root.delete(recursive: true);
+      });
+      final repository = _successfulRepository();
+      final system = _RecordingSystem(
+        beforeShareFile: () => repository.suspendAccount(_account.id),
+      );
+      final exporter = ChatAttachmentExporter(
+        temporaryDirectory: () async => root,
+        repository: repository,
+        system: system,
+      );
+
+      final result = await _share(exporter);
+
+      expect(result, ChatAttachmentShareResult.reauthenticationRequired);
+      expect(system.sharedFileLengths, isEmpty);
+      expect(
+        await root
+            .list(recursive: true)
+            .where((entry) => entry is File)
+            .toList(),
+        isEmpty,
+      );
+    },
+  );
+
   test(
     'share keeps cancel, download, permission, and sheet failure distinct',
     () async {
@@ -333,7 +453,7 @@ void main() {
         (_) async => http.StreamedResponse(
           const Stream.empty(),
           200,
-          contentLength: 64 * 1024 * 1024 + 1,
+          contentLength: 2 * 1024 * 1024 * 1024 + 1,
           headers: const {'content-type': 'text/plain'},
         ),
       ),
@@ -483,6 +603,87 @@ void main() {
       system: _RecordingSystem(shareResult: ChatAttachmentSystemResult.offered),
     );
     expect(await _share(exporter), ChatAttachmentShareResult.offered);
+  });
+
+  test('file sharing hands the platform a path-backed XFile', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'attachment-platform-share-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) await root.delete(recursive: true);
+    });
+    final source = File('${root.path}${Platform.pathSeparator}archive.zip');
+    await source.writeAsBytes(const [1, 2, 3, 4]);
+    ShareParams? shared;
+    final system = PlatformChatAttachmentSystem(
+      mobilePlatform: false,
+      shareFile: (params) async {
+        shared = params;
+        return ShareResult('shared', ShareResultStatus.success);
+      },
+    );
+
+    final result = await system.shareFile(
+      source: source,
+      fileName: 'archive.zip',
+      contentType: 'application/zip',
+    );
+
+    expect(result, ChatAttachmentSystemResult.completed);
+    final sharedFile = shared!.files!.single;
+    expect(sharedFile.path, source.path);
+    expect(await sharedFile.readAsBytes(), const [1, 2, 3, 4]);
+  });
+
+  test('a desktop share keeps its path alive for a deferred reader', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'attachment-deferred-share-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) await root.delete(recursive: true);
+    });
+    final system = _RecordingSystem(
+      shareResult: ChatAttachmentSystemResult.offered,
+      retainsSharedFileAfterReturn: true,
+    );
+    final exporter = ChatAttachmentExporter(
+      temporaryDirectory: () async => root,
+      repository: _successfulRepository(),
+      system: system,
+    );
+
+    expect(await _share(exporter), ChatAttachmentShareResult.offered);
+
+    final retained = File(system.sharedPaths.single);
+    expect(await retained.readAsBytes(), utf8.encode('exact bytes'));
+    await evictChatAttachmentFiles(rootDirectory: root, accountId: _account.id);
+    expect(await retained.exists(), isFalse);
+  });
+
+  test('a failed desktop share removes its scratch file', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'attachment-failed-share-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) await root.delete(recursive: true);
+    });
+    final system = _RecordingSystem(
+      shareResult: ChatAttachmentSystemResult.unavailable,
+      retainsSharedFileAfterReturn: true,
+    );
+    final exporter = ChatAttachmentExporter(
+      temporaryDirectory: () async => root,
+      repository: _successfulRepository(),
+      system: system,
+    );
+
+    expect(await _share(exporter), ChatAttachmentShareResult.shareFailed);
+
+    expect(await File(system.sharedPaths.single).exists(), isFalse);
+    expect(
+      await root.list(recursive: true).where((entry) => entry is File).toList(),
+      isEmpty,
+    );
   });
 
   test('a thrown share platform failure is unavailable', () async {
@@ -646,6 +847,15 @@ Future<ChatAttachmentShareResult> _share(ChatAttachmentExporter exporter) {
   );
 }
 
+Stream<List<int>> _zeroChunks({
+  required int count,
+  required int bytesPerChunk,
+}) async* {
+  for (var index = 0; index < count; index++) {
+    yield Uint8List(bytesPerChunk);
+  }
+}
+
 ChatMediaRepository _successfulRepository({String contentType = 'text/plain'}) {
   return _repository(
     (_) async => http.StreamedResponse(
@@ -719,15 +929,22 @@ final class _RecordingSystem implements ChatAttachmentSystem {
   _RecordingSystem({
     this.saveResult = ChatAttachmentSystemResult.completed,
     this.shareResult = ChatAttachmentSystemResult.completed,
+    this.beforeShareFile,
+    this.retainsSharedFileAfterReturn = false,
   });
 
   final ChatAttachmentSystemResult saveResult;
   final ChatAttachmentSystemResult shareResult;
+  final Future<void> Function()? beforeShareFile;
+  @override
+  final bool retainsSharedFileAfterReturn;
   final List<List<int>> savedBytes = [];
   final List<String> savedNames = [];
   final List<String> savedTypes = [];
   final List<String> sharedNames = [];
   final List<String> sharedTypes = [];
+  final List<int> sharedFileLengths = [];
+  final List<String> sharedPaths = [];
 
   @override
   Future<ChatAttachmentSystemResult> save({
@@ -760,6 +977,24 @@ final class _RecordingSystem implements ChatAttachmentSystem {
     required String fileName,
     required String contentType,
   }) async {
+    sharedNames.add(fileName);
+    sharedTypes.add(contentType);
+    return shareResult;
+  }
+
+  @override
+  Future<ChatAttachmentSystemResult> shareFile({
+    required File source,
+    required String fileName,
+    required String contentType,
+    bool Function()? canExport,
+  }) async {
+    await beforeShareFile?.call();
+    if (canExport?.call() == false) {
+      return ChatAttachmentSystemResult.cancelled;
+    }
+    sharedFileLengths.add(await source.length());
+    sharedPaths.add(source.path);
     sharedNames.add(fileName);
     sharedTypes.add(contentType);
     return shareResult;

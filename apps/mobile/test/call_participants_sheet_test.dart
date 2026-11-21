@@ -257,6 +257,9 @@ final class _RecordingExportSystem implements ChatAttachmentSystem {
   String? savedContentType;
 
   @override
+  bool get retainsSharedFileAfterReturn => false;
+
+  @override
   Future<ChatAttachmentSystemResult> save({
     required Uint8List bytes,
     required String fileName,
@@ -282,6 +285,14 @@ final class _RecordingExportSystem implements ChatAttachmentSystem {
     required String fileName,
     required String contentType,
   }) async => throw UnimplementedError();
+
+  @override
+  Future<ChatAttachmentSystemResult> shareFile({
+    required File source,
+    required String fileName,
+    required String contentType,
+    bool Function()? canExport,
+  }) async => throw UnsupportedError('this export never shares a file');
 }
 
 /// Drives the shipped sheet against a real [RoomSettingsService] whose only

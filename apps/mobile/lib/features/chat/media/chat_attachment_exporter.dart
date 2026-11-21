@@ -65,6 +65,9 @@ abstract interface class ChatAttachmentExportAction {
 }
 
 abstract interface class ChatAttachmentSystem {
+  /// True when the platform may read a shared path after [shareFile] returns.
+  bool get retainsSharedFileAfterReturn;
+
   Future<ChatAttachmentSystemResult> save({
     required Uint8List bytes,
     required String fileName,
@@ -87,6 +90,14 @@ abstract interface class ChatAttachmentSystem {
     required Uint8List bytes,
     required String fileName,
     required String contentType,
+  });
+
+  /// Shares an already downloaded file without copying it into the Dart heap.
+  Future<ChatAttachmentSystemResult> shareFile({
+    required File source,
+    required String fileName,
+    required String contentType,
+    bool Function()? canExport,
   });
 }
 
@@ -123,6 +134,9 @@ final class PlatformChatAttachmentSystem implements ChatAttachmentSystem {
   final Future<Directory> Function() _temporaryDirectory;
   final ChatAttachmentSaveLocationPicker _saveLocationPicker;
   final ChatAttachmentShareFile _shareFile;
+
+  @override
+  bool get retainsSharedFileAfterReturn => !_mobilePlatform;
 
   @override
   Future<ChatAttachmentSystemResult> save({
@@ -302,13 +316,46 @@ final class PlatformChatAttachmentSystem implements ChatAttachmentSystem {
     required Uint8List bytes,
     required String fileName,
     required String contentType,
+  }) => _shareXFile(
+    file: XFile.fromData(bytes, mimeType: contentType, name: fileName),
+    fileName: fileName,
+  );
+
+  @override
+  Future<ChatAttachmentSystemResult> shareFile({
+    required File source,
+    required String fileName,
+    required String contentType,
+    bool Function()? canExport,
   }) async {
     try {
+      if (!await source.exists() || await source.length() == 0) {
+        return ChatAttachmentSystemResult.invalid;
+      }
+      if (canExport?.call() == false) {
+        return ChatAttachmentSystemResult.cancelled;
+      }
+      return await _shareXFile(
+        file: XFile(source.path, mimeType: contentType, name: fileName),
+        fileName: fileName,
+        canExport: canExport,
+      );
+    } on FileSystemException catch (error) {
+      return chatAttachmentStorageErrorResult(error);
+    }
+  }
+
+  Future<ChatAttachmentSystemResult> _shareXFile({
+    required XFile file,
+    required String fileName,
+    bool Function()? canExport,
+  }) async {
+    try {
+      if (canExport?.call() == false) {
+        return ChatAttachmentSystemResult.cancelled;
+      }
       final result = await _shareFile(
-        ShareParams(
-          files: [XFile.fromData(bytes, mimeType: contentType, name: fileName)],
-          fileNameOverrides: [fileName],
-        ),
+        ShareParams(files: [file], fileNameOverrides: [fileName]),
       );
       return switch (result.status) {
         ShareResultStatus.success => ChatAttachmentSystemResult.completed,
@@ -444,24 +491,68 @@ final class ChatAttachmentExporter implements ChatAttachmentExportAction {
     required String expectedContentType,
     ChatDownloadProgress? onProgress,
   }) async {
-    final download = await _download(
-      account: account,
-      uri: uri,
-      expectedContentType: expectedContentType,
-      onProgress: onProgress,
-    );
-    if (download case _AttachmentDownloadFailure(:final failure)) {
-      return _shareDownloadFailure(failure);
+    final name = chatAttachmentFileName(fileName);
+    Directory? scratch;
+    var retainScratch = false;
+    final ChatAttachmentSystemResult result;
+    try {
+      final root = await _temporaryDirectory();
+      final accountDirectory = chatAttachmentCacheAccountDirectory(
+        rootDirectory: root,
+        accountId: account.id,
+      );
+      await accountDirectory.create(recursive: true);
+      scratch = await accountDirectory.createTemp('download-');
+      final source = File('${scratch.path}${Platform.pathSeparator}$name');
+      final String contentType;
+      try {
+        contentType = await _repository.downloadOriginalToFile(
+          account: account,
+          uri: uri,
+          expectedContentType: expectedContentType,
+          target: source,
+          onProgress: onProgress,
+        );
+      } on ChatMediaRepositoryException catch (error) {
+        return _shareDownloadFailure(_downloadFailureKind(error));
+      } on FileSystemException {
+        return _repository.isAccountActive(account.id)
+            ? ChatAttachmentShareResult.shareFailed
+            : ChatAttachmentShareResult.reauthenticationRequired;
+      } on Object {
+        return _shareDownloadFailure(
+          _AttachmentDownloadFailureKind.downloadFailed,
+        );
+      }
+      if (!_repository.isAccountActive(account.id)) {
+        return ChatAttachmentShareResult.reauthenticationRequired;
+      }
+      result = await _system.shareFile(
+        source: source,
+        fileName: name,
+        contentType: contentType,
+        canExport: () => _repository.isAccountActive(account.id),
+      );
+      retainScratch =
+          _system.retainsSharedFileAfterReturn &&
+          (result == ChatAttachmentSystemResult.completed ||
+              result == ChatAttachmentSystemResult.offered);
+    } on FileSystemException {
+      return _repository.isAccountActive(account.id)
+          ? ChatAttachmentShareResult.shareFailed
+          : ChatAttachmentShareResult.reauthenticationRequired;
+    } on MissingPlatformDirectoryException {
+      return _repository.isAccountActive(account.id)
+          ? ChatAttachmentShareResult.shareFailed
+          : ChatAttachmentShareResult.reauthenticationRequired;
+    } finally {
+      if (!retainScratch || !_repository.isAccountActive(account.id)) {
+        await _discardScratch(scratch);
+      }
     }
-    final attachment = (download as _AttachmentDownloadSuccess).file;
     if (!_repository.isAccountActive(account.id)) {
       return ChatAttachmentShareResult.reauthenticationRequired;
     }
-    final result = await _system.share(
-      bytes: attachment.body,
-      fileName: chatAttachmentFileName(fileName),
-      contentType: attachment.contentType,
-    );
     return switch (result) {
       ChatAttachmentSystemResult.completed => ChatAttachmentShareResult.shared,
       ChatAttachmentSystemResult.offered => ChatAttachmentShareResult.offered,
@@ -482,7 +573,7 @@ final class ChatAttachmentExporter implements ChatAttachmentExportAction {
     try {
       if (await scratch.exists()) await scratch.delete(recursive: true);
     } on FileSystemException {
-      // The save already reported its outcome; a leftover in the private
+      // The export already reported its outcome; a leftover in the private
       // cache is the OS's to reclaim.
     }
   }
@@ -500,40 +591,6 @@ final class ChatAttachmentExporter implements ChatAttachmentExportAction {
     ChatMediaRepositoryError.unavailable =>
       _AttachmentDownloadFailureKind.downloadFailed,
   };
-
-  Future<_AttachmentDownloadResult> _download({
-    required StoredAccount account,
-    required Uri uri,
-    required String expectedContentType,
-    ChatDownloadProgress? onProgress,
-  }) async {
-    try {
-      final file = await _repository.loadOriginalFile(
-        account: account,
-        uri: uri,
-        expectedContentType: expectedContentType,
-        onProgress: onProgress,
-      );
-      return _AttachmentDownloadSuccess(file);
-    } on ChatMediaRepositoryException catch (error) {
-      return _AttachmentDownloadFailure(switch (error.code) {
-        ChatMediaRepositoryError.credentialMissing =>
-          _AttachmentDownloadFailureKind.reauthenticationRequired,
-        ChatMediaRepositoryError.responseTooLarge =>
-          _AttachmentDownloadFailureKind.tooLarge,
-        ChatMediaRepositoryError.invalidUri ||
-        ChatMediaRepositoryError.invalidResponse =>
-          _AttachmentDownloadFailureKind.invalid,
-        ChatMediaRepositoryError.unavailable =>
-          _AttachmentDownloadFailureKind.downloadFailed,
-      });
-    } on Object {
-      // Credential vault backends surface platform-specific failures here.
-      return const _AttachmentDownloadFailure(
-        _AttachmentDownloadFailureKind.downloadFailed,
-      );
-    }
-  }
 }
 
 enum _AttachmentDownloadFailureKind {
@@ -541,22 +598,6 @@ enum _AttachmentDownloadFailureKind {
   tooLarge,
   invalid,
   downloadFailed,
-}
-
-sealed class _AttachmentDownloadResult {
-  const _AttachmentDownloadResult();
-}
-
-final class _AttachmentDownloadSuccess extends _AttachmentDownloadResult {
-  const _AttachmentDownloadSuccess(this.file);
-
-  final ChatMediaFile file;
-}
-
-final class _AttachmentDownloadFailure extends _AttachmentDownloadResult {
-  const _AttachmentDownloadFailure(this.failure);
-
-  final _AttachmentDownloadFailureKind failure;
 }
 
 ChatAttachmentSaveResult _saveDownloadFailure(

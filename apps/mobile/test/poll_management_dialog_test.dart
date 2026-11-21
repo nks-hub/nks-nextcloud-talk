@@ -252,6 +252,9 @@ final class _ExportSystem implements ChatAttachmentSystem {
   ChatAttachmentSystemResult result = ChatAttachmentSystemResult.completed;
   String? saved;
   Uint8List? bytes;
+
+  @override
+  bool get retainsSharedFileAfterReturn => false;
   @override
   Future<ChatAttachmentSystemResult> save({
     required Uint8List bytes,
@@ -277,4 +280,12 @@ final class _ExportSystem implements ChatAttachmentSystem {
     required String fileName,
     required String contentType,
   }) => throw UnimplementedError();
+
+  @override
+  Future<ChatAttachmentSystemResult> shareFile({
+    required File source,
+    required String fileName,
+    required String contentType,
+    bool Function()? canExport,
+  }) => throw UnsupportedError('this export never shares a file');
 }
