@@ -489,41 +489,55 @@ final class _ChatTimeline extends StatelessWidget {
       'chat-centre-${account.id}-${conversation.token}-$threadId',
     );
     final newerCount = itemCount - 1 - anchorIndex;
-    return CustomScrollView(
-      key: const Key('chat-message-list'),
-      controller: controller,
-      reverse: true,
-      center: centreKey,
-      slivers: [
-        // Always present with the same padding, even with nothing in it:
-        // dropping it would change the slivers list and move which one
-        // `center` refers to, and changing its padding as the first arrival
-        // lands would move the scroll range under the reader at exactly the
-        // wrong moment. A constant extent before the centre costs nothing.
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) => _ChatContentLane(
-                child: buildAt(context, itemCount - 1 - index),
+    return LayoutBuilder(
+      builder: (context, box) {
+        final horizontalInset = math.max(
+          16.0,
+          (box.maxWidth - _chatContentMaxWidth) / 2,
+        );
+        return CustomScrollView(
+          key: const Key('chat-message-list'),
+          controller: controller,
+          reverse: true,
+          center: centreKey,
+          slivers: [
+            // Always present with the same padding, even with nothing in it:
+            // dropping it would change the slivers list and move which one
+            // `center` refers to, and changing its padding as the first arrival
+            // lands would move the scroll range under the reader at exactly the
+            // wrong moment. A constant extent before the centre costs nothing.
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                horizontalInset,
+                0,
+                horizontalInset,
+                12,
               ),
-              childCount: newerCount,
-            ),
-          ),
-        ),
-        SliverPadding(
-          key: centreKey,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) => _ChatContentLane(
-                child: buildAt(context, anchorIndex - index),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => buildAt(context, itemCount - 1 - index),
+                  childCount: newerCount,
+                ),
               ),
-              childCount: anchorIndex + 1,
             ),
-          ),
-        ),
-      ],
+            SliverPadding(
+              key: centreKey,
+              padding: EdgeInsets.fromLTRB(
+                horizontalInset,
+                12,
+                horizontalInset,
+                0,
+              ),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => buildAt(context, anchorIndex - index),
+                  childCount: anchorIndex + 1,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -618,21 +632,6 @@ final class _ChatTimeline extends StatelessWidget {
     final currentBlock = _blockIndexOf(ranges, messages[index].messageId);
     return previousBlock != currentBlock;
   }
-}
-
-final class _ChatContentLane extends StatelessWidget {
-  const _ChatContentLane({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.topCenter,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: _chatContentMaxWidth),
-      child: child,
-    ),
-  );
 }
 
 final class _DaySeparator extends StatelessWidget {
