@@ -1,5 +1,7 @@
 package com.nkshub.nextcloudtalk.push
 
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.flutter.plugin.common.MethodCall
@@ -12,12 +14,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.security.KeyFactory
+import java.security.KeyPairGenerator
 import java.security.KeyStore
-import javax.crypto.Cipher
 import java.security.interfaces.RSAPublicKey
+import java.security.spec.MGF1ParameterSpec
 import java.security.spec.X509EncodedKeySpec
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import javax.crypto.Cipher
+import javax.crypto.spec.OAEPParameterSpec
+import javax.crypto.spec.PSource
 
 /**
  * The device key is what decrypts an incoming push-v2 payload, so these run
@@ -34,9 +40,13 @@ class AndroidPushDeviceKeyStoreTest {
     fun removeTestKeys() {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         for (handle in listOf(handleA, handleB) + extraHandles) {
-            val alias = AndroidPushDeviceKeyStore.aliasFor(handle)
-            if (keyStore.containsAlias(alias)) {
-                keyStore.deleteEntry(alias)
+            for (alias in listOf(
+                AndroidPushDeviceKeyStore.aliasFor(handle),
+                AndroidPushDeviceKeyStore.legacyAliasFor(handle),
+            )) {
+                if (keyStore.containsAlias(alias)) {
+                    keyStore.deleteEntry(alias)
+                }
             }
         }
         store.dispose()
@@ -79,11 +89,13 @@ class AndroidPushDeviceKeyStoreTest {
 
     @Test
     fun destroyingAKeyLeavesNothingBehind() {
+        generateLegacyKey(handleA)
         val first = call("generateDeviceKey", handleA)
         call("destroyDeviceKey", handleA)
 
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         assertTrue(!keyStore.containsAlias(AndroidPushDeviceKeyStore.aliasFor(handleA)))
+        assertTrue(!keyStore.containsAlias(AndroidPushDeviceKeyStore.legacyAliasFor(handleA)))
         assertNotEquals(first, call("generateDeviceKey", handleA))
     }
 
@@ -115,6 +127,68 @@ class AndroidPushDeviceKeyStoreTest {
     }
 
     @Test
+    fun opensAnOaepSha1SubjectEncryptedForOneAccountAndNamesIt() {
+        val accountA = "44444444-4444-4444-8444-444444444444"
+        val accountB = "55555555-5555-4555-8555-555555555555"
+        val handles = listOf(accountA, accountB)
+            .map(AndroidPushDeviceKeyStore::handleFor)
+        extraHandles.addAll(handles)
+        val pems = handles.map { call("generateDeviceKey", it) as String }
+        val plaintext = """{"app":"spreed","type":"chat","subject":"oaep","nid":8}"""
+        val ciphertext = Cipher.getInstance(OAEP_SHA1_TRANSFORMATION).run {
+            init(Cipher.ENCRYPT_MODE, publicKeyOf(pems[1]), OAEP_SHA1_PARAMETERS)
+            doFinal(plaintext.toByteArray())
+        }
+
+        val opened = AndroidPushDeviceKeyStore.decryptSubject(
+            ciphertext,
+            listOf(accountA, accountB),
+        )
+
+        assertNotNull(opened)
+        assertEquals(accountB, opened!!.first)
+        assertEquals(plaintext, String(opened.second))
+    }
+
+    @Test
+    fun replacesALegacyKeyButStillOpensItsPendingPkcsSubject() {
+        val account = "66666666-6666-4666-8666-666666666666"
+        val handle = AndroidPushDeviceKeyStore.handleFor(account)
+        extraHandles.add(handle)
+        val legacyPem = generateLegacyKey(handle)
+        val currentPem = call("generateDeviceKey", handle) as String
+        assertNotEquals(legacyPem, currentPem)
+
+        val plaintext = """{"app":"spreed","type":"chat","subject":"legacy","nid":9}"""
+        val ciphertext = Cipher.getInstance("RSA/ECB/PKCS1Padding").run {
+            init(Cipher.ENCRYPT_MODE, publicKeyOf(legacyPem))
+            doFinal(plaintext.toByteArray())
+        }
+
+        val opened = AndroidPushDeviceKeyStore.decryptSubject(ciphertext, listOf(account))
+
+        assertNotNull(opened)
+        assertEquals(account, opened!!.first)
+        assertEquals(plaintext, String(opened.second))
+    }
+
+    @Test
+    fun skipsAnInvalidDecryptBeforeSelectingTheValidPayload() {
+        val valid = """{"delete-all":true}""".toByteArray()
+
+        val selected = AndroidPushDeviceKeyStore.selectUniqueValidPayload(
+            sequenceOf(
+                "wrong-account" to byteArrayOf(0x00, 0x01, 0x02),
+                "right-account" to valid,
+            ),
+        )
+
+        assertNotNull(selected)
+        assertEquals("right-account", selected!!.first)
+        assertEquals(valid.toList(), selected.second.toList())
+    }
+
+    @Test
     fun refusesASubjectThatNoAccountKeyOpens() {
         val account = "33333333-3333-4333-8333-333333333333"
         extraHandles.add(AndroidPushDeviceKeyStore.handleFor(account))
@@ -141,6 +215,37 @@ class AndroidPushDeviceKeyStoreTest {
             Base64.decode(pem.lines().drop(1).dropLast(2).joinToString(""), Base64.DEFAULT),
         ),
     )
+
+    private fun generateLegacyKey(handle: String): String {
+        val generator = KeyPairGenerator.getInstance(
+            KeyProperties.KEY_ALGORITHM_RSA,
+            "AndroidKeyStore",
+        )
+        generator.initialize(
+            KeyGenParameterSpec.Builder(
+                AndroidPushDeviceKeyStore.legacyAliasFor(handle),
+                KeyProperties.PURPOSE_DECRYPT or KeyProperties.PURPOSE_ENCRYPT,
+            )
+                .setKeySize(2048)
+                .setDigests(KeyProperties.DIGEST_NONE, KeyProperties.DIGEST_SHA256)
+                .setEncryptionPaddings(
+                    KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1,
+                    KeyProperties.ENCRYPTION_PADDING_RSA_OAEP,
+                )
+                .build(),
+        )
+        return AndroidPushDeviceKeyStore.pem(generator.generateKeyPair().public.encoded)
+    }
+
+    private companion object {
+        const val OAEP_SHA1_TRANSFORMATION = "RSA/ECB/OAEPWithSHA-1AndMGF1Padding"
+        val OAEP_SHA1_PARAMETERS = OAEPParameterSpec(
+            "SHA-1",
+            "MGF1",
+            MGF1ParameterSpec.SHA1,
+            PSource.PSpecified.DEFAULT,
+        )
+    }
 
     private fun call(method: String, handle: String): Any? {
         val outcome = callRaw(method, handle)

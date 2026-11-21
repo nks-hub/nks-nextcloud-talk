@@ -7,6 +7,9 @@ import org.gradle.api.tasks.PathSensitivity
 
 // A build installed beside the real app, see `applicationId` below.
 val isCandidate = project.findProperty("candidate") == "true"
+// A debug target for device tests that must not replace either signed app.
+val isIsolatedInstrumentation =
+    project.findProperty("isolatedInstrumentation") == "true"
 
 plugins {
     id("com.android.application")
@@ -22,7 +25,7 @@ plugins {
 // then runs without FCM, which is a state it already handles — a server
 // without push does the same thing — and push itself is tested on the real
 // package.
-if (!isCandidate) {
+if (!isCandidate && !isIsolatedInstrumentation) {
     apply(plugin = "com.google.gms.google-services")
 }
 
@@ -87,10 +90,10 @@ android {
         // the FCM sender is read from the same google-services.json, and a
         // package it does not name simply gets no push, which is exactly what
         // a side-by-side build should get.
-        applicationId = if (isCandidate) {
-            "com.nkshub.nextcloudtalk.candidate"
-        } else {
-            "com.nkshub.nextcloudtalk"
+        applicationId = when {
+            isIsolatedInstrumentation -> "com.nkshub.nextcloudtalk.instrumentation"
+            isCandidate -> "com.nkshub.nextcloudtalk.candidate"
+            else -> "com.nkshub.nextcloudtalk"
         }
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.

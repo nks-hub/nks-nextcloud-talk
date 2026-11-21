@@ -10,8 +10,11 @@ import io.flutter.plugin.common.MethodChannel
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.MessageDigest
+import java.security.spec.MGF1ParameterSpec
 import java.util.concurrent.Executors
 import javax.crypto.Cipher
+import javax.crypto.spec.OAEPParameterSpec
+import javax.crypto.spec.PSource
 
 /**
  * Per-account RSA-2048 push device key, generated inside the Android
@@ -89,11 +92,15 @@ internal class AndroidPushDeviceKeyStore : MethodChannel.MethodCallHandler {
                 KeyProperties.PURPOSE_DECRYPT or KeyProperties.PURPOSE_ENCRYPT,
             )
                 .setKeySize(RSA_KEY_SIZE)
-                .setDigests(KeyProperties.DIGEST_NONE, KeyProperties.DIGEST_SHA256)
+                .setDigests(
+                    KeyProperties.DIGEST_NONE,
+                    KeyProperties.DIGEST_SHA1,
+                    KeyProperties.DIGEST_SHA256,
+                )
                 // Nextcloud encrypts the payload with PHP's openssl_public_encrypt,
                 // whose default padding is PKCS#1 v1.5, so the key has to permit it
                 // or the decrypt that follows a notification is rejected by the
-                // keystore itself. OAEP is allowed alongside for a future server.
+                // keystore itself. Nextcloud also supports OAEP-SHA1.
                 .setEncryptionPaddings(
                     KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1,
                     KeyProperties.ENCRYPTION_PADDING_RSA_OAEP,
@@ -106,9 +113,10 @@ internal class AndroidPushDeviceKeyStore : MethodChannel.MethodCallHandler {
 
     private fun destroyKey(handle: String) {
         val keyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
-        val alias = aliasFor(handle)
-        if (keyStore.containsAlias(alias)) {
-            keyStore.deleteEntry(alias)
+        for (alias in aliasesFor(handle)) {
+            if (keyStore.containsAlias(alias)) {
+                keyStore.deleteEntry(alias)
+            }
         }
     }
 
@@ -116,14 +124,29 @@ internal class AndroidPushDeviceKeyStore : MethodChannel.MethodCallHandler {
         const val CHANNEL_NAME = "com.nkshub.nextcloudtalk/push_device_key"
 
         private const val ANDROID_KEY_STORE = "AndroidKeyStore"
-        private const val ALIAS_PREFIX = "com.nkshub.nextcloudtalk.push.devicekey."
+        private const val ALIAS_PREFIX = "com.nkshub.nextcloudtalk.push.devicekey.v2."
+        private const val LEGACY_ALIAS_PREFIX = "com.nkshub.nextcloudtalk.push.devicekey."
         private const val RSA_KEY_SIZE = 2048
         private const val PEM_LINE_LENGTH = 64
+        private const val PKCS1_TRANSFORMATION = "RSA/ECB/PKCS1Padding"
+        private const val OAEP_SHA1_TRANSFORMATION =
+            "RSA/ECB/OAEPWithSHA-1AndMGF1Padding"
+        private val OAEP_SHA1_PARAMETERS = OAEPParameterSpec(
+            "SHA-1",
+            "MGF1",
+            MGF1ParameterSpec.SHA1,
+            PSource.PSpecified.DEFAULT,
+        )
 
         /** The handle the coordinator derives is a SHA-256 hex digest. */
         private val HANDLE_PATTERN = Regex("^[0-9a-f]{64}$")
 
         fun aliasFor(handle: String): String = ALIAS_PREFIX + handle
+
+        fun legacyAliasFor(handle: String): String = LEGACY_ALIAS_PREFIX + handle
+
+        private fun aliasesFor(handle: String): List<String> =
+            listOf(aliasFor(handle), legacyAliasFor(handle))
 
         /**
          * Decrypts a push-v2 `subject` and says which account it belongs to.
@@ -131,7 +154,7 @@ internal class AndroidPushDeviceKeyStore : MethodChannel.MethodCallHandler {
          * One FCM token addresses the whole device, so the account is whichever
          * one's key opens the ciphertext — the keys are per account. Nextcloud
          * encrypts with PHP's openssl_public_encrypt, whose default padding is
-         * PKCS#1 v1.5.
+         * PKCS#1 v1.5 and whose supported alternative is OAEP-SHA1.
          */
         fun decryptSubject(
             ciphertext: ByteArray,
@@ -141,19 +164,61 @@ internal class AndroidPushDeviceKeyStore : MethodChannel.MethodCallHandler {
                 return null
             }
             val keyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
-            for (accountId in accountIds) {
-                val alias = aliasFor(handleFor(accountId))
-                val key = runCatching { keyStore.getKey(alias, null) }.getOrNull() ?: continue
-                val plaintext = runCatching {
-                    Cipher.getInstance("RSA/ECB/PKCS1Padding")
-                        .apply { init(Cipher.DECRYPT_MODE, key) }
-                        .doFinal(ciphertext)
-                }.getOrNull()
-                if (plaintext != null) {
-                    return accountId to plaintext
+            return selectUniqueValidPayload(
+                sequence {
+                    for (accountId in accountIds) {
+                        val handle = handleFor(accountId)
+                        for (alias in aliasesFor(handle)) {
+                            val key = runCatching { keyStore.getKey(alias, null) }.getOrNull()
+                                ?: continue
+                            val transformations = if (alias == legacyAliasFor(handle)) {
+                                listOf(PKCS1_TRANSFORMATION)
+                            } else {
+                                listOf(PKCS1_TRANSFORMATION, OAEP_SHA1_TRANSFORMATION)
+                            }
+                            for (transformation in transformations) {
+                                val plaintext = runCatching {
+                                    Cipher.getInstance(transformation)
+                                        .apply {
+                                            if (transformation == OAEP_SHA1_TRANSFORMATION) {
+                                                init(
+                                                    Cipher.DECRYPT_MODE,
+                                                    key,
+                                                    OAEP_SHA1_PARAMETERS,
+                                                )
+                                            } else {
+                                                init(Cipher.DECRYPT_MODE, key)
+                                            }
+                                        }
+                                        .doFinal(ciphertext)
+                                }.getOrNull()
+                                yield(accountId to plaintext)
+                            }
+                        }
+                    }
+                },
+            )
+        }
+
+        internal fun selectUniqueValidPayload(
+            candidates: Sequence<Pair<String, ByteArray?>>,
+        ): Pair<String, ByteArray>? {
+            var selected: Pair<String, ByteArray>? = null
+            for ((accountId, plaintext) in candidates) {
+                if (plaintext == null || !isValidWakeUpPayload(plaintext)) {
+                    continue
                 }
+                if (selected != null) {
+                    return null
+                }
+                selected = accountId to plaintext
             }
-            return null
+            return selected
+        }
+
+        private fun isValidWakeUpPayload(plaintext: ByteArray): Boolean {
+            return AndroidWebPushPayloadParser.parse(plaintext, decrypted = true) !=
+                AndroidWebPushPayload.Invalid
         }
 
         /** Mirrors the handle the Dart coordinator derives for an account. */
