@@ -454,6 +454,36 @@ final appleConversationIdentityProvider = Provider<void>((ref) {
   // again. The names go to the keychain, which is slow enough that writing
   // twenty of them on every sync was the larger half of this problem.
   final sent = <String, Map<String, String>>{};
+  // Keychain writes are asynchronous. Serialising them per account prevents a
+  // slower old room list from completing after a newer one, and only a
+  // platform-acknowledged batch advances [sent], so an unchanged later sync
+  // retries a refused write.
+  final pending = <String, Future<void>>{};
+  void schedule(String accountId, Map<String, String> named) {
+    final snapshot = Map<String, String>.unmodifiable(named);
+    final task = (pending[accountId] ?? Future<void>.value()).then((_) async {
+      final previous = sent[accountId] ?? const <String, String>{};
+      final changed = <String, String>{
+        for (final entry in snapshot.entries)
+          if (previous[entry.key] != entry.value) entry.key: entry.value,
+        for (final token in previous.keys)
+          if (!snapshot.containsKey(token)) token: '',
+      };
+      if (changed.isEmpty) {
+        return;
+      }
+      final stored = await coordinator.recordConversationNames(
+        accountId,
+        changed,
+      );
+      if (stored != null) {
+        sent[accountId] = snapshot;
+      }
+    });
+    pending[accountId] = task;
+    unawaited(task);
+  }
+
   for (final account in accounts) {
     ref.listen<AsyncValue<List<CachedConversation>>>(
       conversationsProvider(account.id),
@@ -463,29 +493,12 @@ final appleConversationIdentityProvider = Provider<void>((ref) {
             if (room.displayName.trim().isNotEmpty)
               room.token: room.displayName.trim(),
         };
-        if (named.isEmpty || _sameNames(sent[account.id], named)) {
-          return;
-        }
-        sent[account.id] = named;
-        unawaited(coordinator.recordConversationNames(account.id, named));
+        schedule(account.id, named);
       },
       fireImmediately: true,
     );
   }
 });
-
-/// Whether the extension already knows exactly these names.
-bool _sameNames(Map<String, String>? previous, Map<String, String> named) {
-  if (previous == null || previous.length != named.length) {
-    return false;
-  }
-  for (final entry in named.entries) {
-    if (previous[entry.key] != entry.value) {
-      return false;
-    }
-  }
-  return true;
-}
 
 /// hands every token to [applePushRegistrationCoordinatorProvider] so it can
 /// register (or refresh) push v2.
