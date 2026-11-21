@@ -456,6 +456,8 @@ void main() {
       matchesSemantics(
         label: 'Open contact: Alice Example.vcf',
         isButton: true,
+        hasEnabledState: true,
+        isEnabled: true,
         hasTapAction: true,
       ),
     );
