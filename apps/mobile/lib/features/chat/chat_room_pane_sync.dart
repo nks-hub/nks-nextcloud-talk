@@ -155,7 +155,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     int generation,
   ) async {
     try {
-      await binding.synchronize(abortTrigger: cancellation);
+      await binding.synchronize();
       await _observeAuthoritativeIncomingMessages(generation);
     } on ChatServiceException catch (error) {
       if (_isTerminalLiveError(error.code)) {

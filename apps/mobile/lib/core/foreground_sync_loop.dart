@@ -40,10 +40,11 @@ final class ForegroundSyncLoop {
   final ForegroundSyncWait _wait;
   final double Function() _randomDouble;
 
-  Completer<void>? _cancellation;
+  Completer<void>? _cycleCancellation;
   Future<void>? _runner;
   Completer<void>? _wake;
   bool _wakeRequested = false;
+  bool _stopRequested = false;
 
   bool get isRunning => _runner != null;
 
@@ -53,8 +54,7 @@ final class ForegroundSyncLoop {
   /// Called while a cycle is running, it skips the wait that follows that
   /// cycle instead. Does nothing once the loop is stopped.
   void wake() {
-    final cancellation = _cancellation;
-    if (cancellation == null || cancellation.isCompleted) {
+    if (_cycleCancellation == null || _stopRequested) {
       return;
     }
     _wakeRequested = true;
@@ -69,9 +69,8 @@ final class ForegroundSyncLoop {
       return;
     }
     _wakeRequested = false;
-    final cancellation = Completer<void>();
-    _cancellation = cancellation;
-    final runner = _run(cancellation);
+    _stopRequested = false;
+    final runner = _run();
     _runner = runner;
     // `unawaited` only silences the analyzer; it attaches no error handler, so
     // anything escaping the loop would sit on a future nobody listens to and
@@ -85,7 +84,7 @@ final class ForegroundSyncLoop {
           .whenComplete(() {
             if (identical(_runner, runner)) {
               _runner = null;
-              _cancellation = null;
+              _cycleCancellation = null;
             }
           })
           .catchError((Object _, StackTrace _) {}),
@@ -93,7 +92,8 @@ final class ForegroundSyncLoop {
   }
 
   Future<void> stop() async {
-    final cancellation = _cancellation;
+    _stopRequested = true;
+    final cancellation = _cycleCancellation;
     if (cancellation != null && !cancellation.isCompleted) {
       cancellation.complete();
     }
@@ -103,28 +103,39 @@ final class ForegroundSyncLoop {
     }
   }
 
-  Future<void> _run(Completer<void> cancellation) async {
+  Future<void> _run() async {
     var consecutiveFailures = 0;
-    while (!cancellation.isCompleted) {
+    while (!_stopRequested) {
+      final cancellation = Completer<void>();
+      _cycleCancellation = cancellation;
       final elapsed = Stopwatch()..start();
       try {
-        onCycleStarted?.call();
-        await task(cancellation.future);
-        if (cancellation.isCompleted) {
-          return;
-        }
-        consecutiveFailures = 0;
-        onSuccess?.call();
-        elapsed.stop();
-        await _pause(successInterval - elapsed.elapsed, cancellation);
-      } on Object catch (error) {
-        if (cancellation.isCompleted) {
-          return;
-        }
-        consecutiveFailures++;
-        onError?.call(error);
-        if (await _pause(_retryDelay(consecutiveFailures), cancellation)) {
+        try {
+          onCycleStarted?.call();
+          await task(cancellation.future);
+          if (_stopRequested) {
+            return;
+          }
           consecutiveFailures = 0;
+          onSuccess?.call();
+          elapsed.stop();
+          await _pause(successInterval - elapsed.elapsed, cancellation);
+        } on Object catch (error) {
+          if (_stopRequested) {
+            return;
+          }
+          consecutiveFailures++;
+          onError?.call(error);
+          if (await _pause(_retryDelay(consecutiveFailures), cancellation)) {
+            consecutiveFailures = 0;
+          }
+        }
+      } finally {
+        if (!cancellation.isCompleted) {
+          cancellation.complete();
+        }
+        if (identical(_cycleCancellation, cancellation)) {
+          _cycleCancellation = null;
         }
       }
     }

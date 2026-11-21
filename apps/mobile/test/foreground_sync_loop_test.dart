@@ -4,6 +4,35 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/core/foreground_sync_loop.dart';
 
 void main() {
+  test('completed cycles release their cancellation listeners', () async {
+    final hundredthCycle = Completer<void>();
+    var cycles = 0;
+    var completedCallbacks = 0;
+    final loop = ForegroundSyncLoop(
+      task: (cancellation) async {
+        cancellation.whenComplete(() => completedCallbacks++).ignore();
+        cycles++;
+        if (cycles == 100) {
+          hundredthCycle.complete();
+          await cancellation;
+        }
+      },
+      successInterval: Duration.zero,
+      retryBaseDelay: const Duration(seconds: 1),
+      retryMaximumDelay: const Duration(seconds: 8),
+    );
+
+    loop.start();
+    await hundredthCycle.future.timeout(const Duration(seconds: 2));
+
+    expect(completedCallbacks, 99);
+    await loop.stop();
+    await pumpEventQueue();
+    expect(completedCallbacks, 100);
+    expect(cycles, 100);
+    expect(loop.isRunning, isFalse);
+  });
+
   test(
     'stop cancels an active foreground task and prevents another cycle',
     () async {
