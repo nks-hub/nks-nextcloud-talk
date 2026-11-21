@@ -313,7 +313,9 @@ void main() {
     expect(opened?.value, 'open5678');
   });
 
-  testWidgets('a failed open-conversation join can be retried', (tester) async {
+  testWidgets('a failed open-room join reloads before another join', (
+    tester,
+  ) async {
     service.openRooms = [
       ListedRoom(
         token: ConversationToken.parse('open9012', path: r'$.token'),
@@ -336,17 +338,37 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('open-conversations-error')), findsOneWidget);
+    expect(service.openRoomsCalls, 1);
     expect(service.joinCalls, 1);
     expect(opened, isNull);
 
-    service.joinError = null;
-    await tester.tap(find.text('Try again'));
+    service
+      ..joinError = null
+      ..openRooms = [
+        ListedRoom(
+          token: ConversationToken.parse('open3457', path: r'$.token'),
+          displayName: 'New open room',
+          description: '',
+          lastActivity: null,
+          hasPassword: false,
+        ),
+      ];
+    final retry = find.descendant(
+      of: find.byKey(const Key('open-conversations-error')),
+      matching: find.text('Try again'),
+    );
+    await tester.tap(retry);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('open-conversation-open9012')));
+
+    expect(service.openRoomsCalls, 2);
+    expect(find.byKey(const Key('open-conversation-open9012')), findsNothing);
+    expect(find.byKey(const Key('open-conversation-open3457')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('open-conversation-open3457')));
     await tester.pumpAndSettle();
 
     expect(service.joinCalls, 2);
-    expect(opened?.value, 'open9012');
+    expect(opened?.value, 'open3457');
   });
 
   testWidgets('a server without open conversations says so', (tester) async {
