@@ -29,6 +29,7 @@ final class AppPasswordRevocationQueue {
   static const maximumEntries = 5;
   static const maximumAttempts = 20;
   static const maximumAge = Duration(days: 14);
+  static const _drainConcurrency = 3;
 
   final PendingRevocationStore _store;
   final HttpNextcloudApi _api;
@@ -69,19 +70,31 @@ final class AppPasswordRevocationQueue {
     if (entries.isEmpty) {
       return;
     }
-    final remaining = <_Entry>[];
+    final outcomes = List<_Entry?>.filled(entries.length, null);
     final now = _now();
-    for (final entry in entries) {
-      if (await _revoked(entry)) {
-        continue;
+    var nextEntry = 0;
+
+    Future<void> revokeNext() async {
+      while (nextEntry < entries.length) {
+        final index = nextEntry++;
+        final entry = entries[index];
+        if (await _revoked(entry)) {
+          continue;
+        }
+        final next = entry.afterAttempt();
+        if (next.attempts >= maximumAttempts ||
+            now.difference(next.since) >= maximumAge) {
+          continue;
+        }
+        outcomes[index] = next;
       }
-      final next = entry.afterAttempt();
-      if (next.attempts >= maximumAttempts ||
-          now.difference(next.since) >= maximumAge) {
-        continue;
-      }
-      remaining.add(next);
     }
+
+    final workerCount = entries.length < _drainConcurrency
+        ? entries.length
+        : _drainConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => revokeNext()));
+    final remaining = outcomes.whereType<_Entry>().toList(growable: false);
     await _save(remaining);
   }
 

@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -70,6 +72,72 @@ void main() {
       expect(await q.pendingCount(), 0);
     },
   );
+
+  test('a drain revokes at most three passwords concurrently', () async {
+    const entryCount = AppPasswordRevocationQueue.maximumEntries;
+    final gates = <Completer<void>>[];
+    final firstRequestStarted = Completer<void>();
+    var inFlight = 0;
+    var peakInFlight = 0;
+    final q = queue(
+      MockClient((request) async {
+        final gate = Completer<void>();
+        gates.add(gate);
+        if (!firstRequestStarted.isCompleted) {
+          firstRequestStarted.complete();
+        }
+        inFlight++;
+        peakInFlight = max(peakInFlight, inFlight);
+        await gate.future;
+        inFlight--;
+        return http.Response(_okOcs(), 200);
+      }),
+    );
+    for (var index = 0; index < entryCount; index++) {
+      await q.record(
+        server: server,
+        loginName: 'user-$index',
+        appPassword: 'secret-$index',
+      );
+    }
+    final drain = q.drain();
+
+    Future<void> releaseAll() async {
+      while (gates.length < entryCount) {
+        for (final gate in gates) {
+          if (!gate.isCompleted) {
+            gate.complete();
+          }
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      for (final gate in gates) {
+        if (!gate.isCompleted) {
+          gate.complete();
+        }
+      }
+      await drain;
+    }
+
+    addTearDown(releaseAll);
+    await firstRequestStarted.future;
+    for (var turn = 0; turn < 20 && gates.length < 3; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(gates, hasLength(3));
+    expect(peakInFlight, 3);
+
+    gates.first.complete();
+    for (var turn = 0; turn < 20 && gates.length < 4; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(gates, hasLength(4));
+    expect(peakInFlight, 3);
+
+    await releaseAll();
+    expect(gates, hasLength(entryCount));
+    expect(await q.pendingCount(), 0);
+  });
 
   test('the queue is bounded by count, attempts and age', () async {
     final q = queue(
