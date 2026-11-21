@@ -95,6 +95,11 @@ final class ChatMediaRepository {
   static const int _maximumVoiceBytes = 32 * 1024 * 1024;
   static const int _maximumOriginalBytes = 64 * 1024 * 1024;
   static const int _maximumDrainedBytes = 64 * 1024;
+  static int _nextVoicePartId = DateTime.now().microsecondsSinceEpoch;
+  static final _activeVoicePartPaths = <String>{};
+
+  static bool isVoiceDownloadInProgress(File file) =>
+      _activeVoicePartPaths.contains(file.absolute.path);
 
   /// Ceiling for an attachment streamed to disk. Only a sanity bound: what
   /// really limits this is the free space the write runs into.
@@ -105,7 +110,6 @@ final class ChatMediaRepository {
   final bool _ownsClient;
   final _suspendedAccounts = <String>{};
   final _requests = <String, Set<_MediaRequest>>{};
-  int _temporaryFileNonce = 0;
   bool _closed = false;
 
   bool isAccountActive(String accountId) =>
@@ -247,10 +251,11 @@ final class ChatMediaRepository {
     await directory.create(recursive: true);
     operation.checkActive();
     final file = File('${directory.path}${Platform.pathSeparator}$cacheKey');
-    final temporary = File('${file.path}.part-${_temporaryFileNonce++}');
+    final temporary = File('${file.path}.part-${_nextVoicePartId++}').absolute;
     var length = 0;
     final iterator = StreamIterator<List<int>>(response.stream);
     RandomAccessFile? output;
+    _activeVoicePartPaths.add(temporary.path);
     try {
       output = await temporary.open(mode: FileMode.write);
       await (() async {
@@ -305,6 +310,8 @@ final class ChatMediaRepository {
         }
       } on FileSystemException {
         // A later voice-cache prune removes a partial file still held open.
+      } finally {
+        _activeVoicePartPaths.remove(temporary.path);
       }
     }
   });

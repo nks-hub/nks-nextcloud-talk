@@ -188,7 +188,9 @@ Future<void> pruneAccountVoiceFiles({
   final prefix = _voiceAccountPrefix(accountId);
   final candidates = <File>[];
   await for (final entity in directory.list(followLinks: false)) {
-    if (entity is File && p.basename(entity.path).startsWith(prefix)) {
+    if (entity is File &&
+        p.basename(entity.path).startsWith(prefix) &&
+        !ChatMediaRepository.isVoiceDownloadInProgress(entity)) {
       candidates.add(entity);
     }
   }

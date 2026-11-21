@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/data/chat_media_cache.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 
 import 'test_support.dart';
@@ -33,10 +34,23 @@ void main() {
   });
 
   test(
-    'voice downloads stream into a private file before becoming visible',
+    'voice cache pruning keeps active downloads and removes abandoned files',
     () async {
       final directory = await Directory.systemTemp.createTemp('voice-stream');
       addTearDown(() => directory.delete(recursive: true));
+      final cacheKey = chatVoiceCacheKey(accountId: _account.id, messageId: 2);
+      final target = File.fromUri(directory.uri.resolve(cacheKey));
+      final completed = File.fromUri(
+        directory.uri.resolve(
+          chatVoiceCacheKey(accountId: _account.id, messageId: 1),
+        ),
+      );
+      await completed.writeAsBytes(const [6, 7]);
+      final abandoned = File.fromUri(
+        directory.uri.resolve('$cacheKey.part-99'),
+      );
+      await abandoned.writeAsBytes(const [8]);
+      await abandoned.setLastModified(DateTime.utc(2000));
       final stream = StreamController<List<int>>();
       final requestStarted = Completer<void>();
       final vault = MemoryCredentialVault()
@@ -58,7 +72,7 @@ void main() {
         account: _account,
         uri: _voiceUri,
         directory: directory,
-        cacheKey: 'voice-cache',
+        cacheKey: cacheKey,
       );
       await requestStarted.future;
       stream.add(const <int>[1, 2, 3]);
@@ -69,7 +83,11 @@ void main() {
             ? directory
                   .listSync()
                   .whereType<File>()
-                  .where((file) => file.path.contains('.part-'))
+                  .where(
+                    (file) =>
+                        file.path.contains('.part-') &&
+                        file.path != abandoned.path,
+                  )
                   .toList()
             : const <File>[];
         if (candidates.isNotEmpty && candidates.single.lengthSync() == 3) {
@@ -79,17 +97,19 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 5));
       }
       expect(partial, isNotNull, reason: 'the first chunk should reach disk');
-      expect(
-        File(
-          '${directory.path}${Platform.pathSeparator}voice-cache',
-        ).existsSync(),
-        isFalse,
+      expect(target.existsSync(), isFalse);
+
+      await pruneAccountVoiceFiles(
+        directory: directory,
+        accountId: _account.id,
+        maximumBytes: 2,
       );
 
       stream.add(const <int>[4, 5]);
       await stream.close();
       final voice = await loading;
 
+      expect(await completed.readAsBytes(), const [6, 7]);
       expect(await File(voice.path).readAsBytes(), <int>[1, 2, 3, 4, 5]);
       expect(
         directory.listSync().whereType<File>().where(
