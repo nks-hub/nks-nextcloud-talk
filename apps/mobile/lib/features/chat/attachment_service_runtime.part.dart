@@ -847,6 +847,13 @@ mixin _AttachmentServiceRuntime {
           );
           _metadata[key] = updated;
           await _persistCurrentJob(key, updated);
+          if (released) {
+            final pruned = await _repository.pruneReleasedTerminalJobs(
+              accountId: key.accountId,
+              preserve: <AttachmentPersistenceKey>{key},
+            );
+            _removePrunedTerminalJobs(pruned);
+          }
         });
         return;
       } on Object {
@@ -855,6 +862,33 @@ mixin _AttachmentServiceRuntime {
         }
         await Future<void>.delayed(_localPersistenceRetryDelays[attempt]);
       }
+    }
+  }
+
+  void _removePrunedTerminalJobs(Set<AttachmentPersistenceKey> pruned) {
+    final jobsByAccount = <AccountId, Set<AttachmentJobId>>{};
+    for (final key in pruned) {
+      final accountId = AccountId.parse(key.accountId);
+      jobsByAccount
+          .putIfAbsent(accountId, () => <AttachmentJobId>{})
+          .add(AttachmentJobId.parse(key.jobId));
+      _metadata.remove(key);
+      _credentialRetryCounts.remove(key);
+      _confirmationRetryCounts.remove(key);
+      _heldAuthorizations.remove(key);
+      _deferredConfirmations.remove(key);
+      _confirmationResumeRequests.remove(key);
+      _confirmationRetryTimers.remove(key)?.cancel();
+      _clearInFlightBytes(key.jobId);
+    }
+    for (final entry in jobsByAccount.entries) {
+      final account = _snapshot.accounts[entry.key];
+      if (account == null) {
+        continue;
+      }
+      final jobs = Map<AttachmentJobId, AttachmentJob>.of(account.jobs)
+        ..removeWhere((jobId, _) => entry.value.contains(jobId));
+      _snapshot = _snapshot.replaceAccount(account.copyWith(jobs: jobs));
     }
   }
 

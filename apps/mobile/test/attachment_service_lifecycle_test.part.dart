@@ -51,6 +51,71 @@ void _registerAttachmentServiceLifecycleTests() {
     },
   );
 
+  test('released terminal history is bounded in storage and memory', () async {
+    final fixture = await _Fixture.create(terminalHistoryLimitPerAccount: 2);
+    addTearDown(fixture.close);
+    final oldest = await fixture.seedTerminal(messageId: 201, seed: 1);
+    final newer = await fixture.seedTerminal(messageId: 202, seed: 2);
+    await fixture.database.customStatement(
+      'update attachment_jobs set source_released = 1',
+    );
+    final service = fixture.service(
+      MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+          return http.Response.bytes(_probeSuccess(), 200);
+        }
+        if (request.method == 'PUT') {
+          return http.Response('', 201);
+        }
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/attachment')) {
+          return http.Response.bytes(_finalizeSuccess(), 200);
+        }
+        fail('Unexpected request: ${request.method} ${request.url}');
+      }),
+    );
+    addTearDown(service.close);
+
+    final session = await service.enqueue(fixture.request(normalMaximum: 32));
+    await session.events.firstWhere(
+      (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+    );
+    await fixture.cacheConfirmation(messageId: 203);
+    await session.events.firstWhere(
+      (event) => event.phase == AttachmentJobPhase.completed,
+    );
+
+    await _expectFileRemoved(fixture.sourceFile);
+    final deadline = DateTime.now().add(const Duration(seconds: 1));
+    late List<StoredAttachmentJob> stored;
+    do {
+      stored = await fixture.database
+          .select(fixture.database.attachmentJobs)
+          .get();
+      if (stored.length == 2) {
+        break;
+      }
+      if (DateTime.now().isAfter(deadline)) {
+        fail('Timed out waiting for released terminal history pruning');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    } while (true);
+    expect(stored, hasLength(2));
+    expect(stored.map((row) => row.jobId), contains(newer.value));
+    expect(stored.map((row) => row.jobId), contains(session.jobId.value));
+    expect(stored.map((row) => row.jobId), isNot(contains(oldest.value)));
+    await expectLater(
+      service.cancel(accountId: session.accountId, jobId: oldest),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'Attachment job does not exist',
+        ),
+      ),
+    );
+  });
+
   test('the credential is read once for an upload, not once per request, and '
       'the account row is written only when it changes', () async {
     final fixture = await _Fixture.create();

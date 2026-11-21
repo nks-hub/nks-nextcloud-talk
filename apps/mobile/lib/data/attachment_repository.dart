@@ -9,6 +9,8 @@ import 'attachment_thread_binding.dart';
 
 typedef AttachmentPersistenceKey = ({String accountId, String jobId});
 
+const int attachmentTerminalHistoryLimitPerAccount = 128;
+
 final class AttachmentConfirmationBatch {
   AttachmentConfirmationBatch({
     required this.accountId,
@@ -105,9 +107,88 @@ final class LoadedAttachmentRuntime {
 }
 
 final class AttachmentRepository {
-  const AttachmentRepository(this._database);
+  const AttachmentRepository(
+    this._database, {
+    this.terminalHistoryLimitPerAccount =
+        attachmentTerminalHistoryLimitPerAccount,
+  }) : assert(terminalHistoryLimitPerAccount >= 0);
 
   final AppDatabase _database;
+  final int terminalHistoryLimitPerAccount;
+
+  Future<Set<AttachmentPersistenceKey>> pruneReleasedTerminalJobs({
+    String? accountId,
+    int? retainPerAccount,
+    Set<AttachmentPersistenceKey> preserve = const {},
+  }) async {
+    final retained = retainPerAccount ?? terminalHistoryLimitPerAccount;
+    if (retained < 0) {
+      throw RangeError.range(retained, 0, null, 'retainPerAccount');
+    }
+    final terminalRows =
+        await (_database.select(_database.attachmentJobs)
+              ..where((row) {
+                var predicate =
+                    row.sourceReleased.equals(true) &
+                    row.phase.isIn(<String>[
+                      AttachmentJobPhase.completed.name,
+                      AttachmentJobPhase.cancelled.name,
+                    ]);
+                if (accountId != null) {
+                  predicate &= row.accountId.equals(accountId);
+                }
+                return predicate;
+              })
+              ..orderBy([
+                (row) => OrderingTerm.asc(row.accountId),
+                (row) => OrderingTerm.desc(row.updatedAtMillis),
+                (row) => OrderingTerm.desc(row.jobId),
+              ]))
+            .get();
+    final rowsByAccount = <String, List<StoredAttachmentJob>>{};
+    for (final row in terminalRows) {
+      rowsByAccount.putIfAbsent(row.accountId, () => []).add(row);
+    }
+    final removed = <AttachmentPersistenceKey>{};
+    for (final entry in rowsByAccount.entries) {
+      final preservedRows = entry.value.where(
+        (row) =>
+            preserve.contains((accountId: row.accountId, jobId: row.jobId)),
+      );
+      final preservedKeys = <AttachmentPersistenceKey>{
+        for (final row in preservedRows)
+          (accountId: row.accountId, jobId: row.jobId),
+      };
+      var remaining = retained - preservedKeys.length;
+      if (remaining < 0) {
+        remaining = 0;
+      }
+      for (final row in entry.value) {
+        final key = (accountId: row.accountId, jobId: row.jobId);
+        if (preservedKeys.contains(key)) {
+          continue;
+        }
+        if (remaining > 0) {
+          remaining--;
+          continue;
+        }
+        removed.add(key);
+      }
+    }
+    if (removed.isEmpty) {
+      return const <AttachmentPersistenceKey>{};
+    }
+    await _database.batch((batch) {
+      for (final key in removed) {
+        batch.deleteWhere(
+          _database.attachmentJobs,
+          (row) =>
+              row.accountId.equals(key.accountId) & row.jobId.equals(key.jobId),
+        );
+      }
+    });
+    return Set<AttachmentPersistenceKey>.unmodifiable(removed);
+  }
 
   Stream<List<StoredAttachmentJob>> watchRoomJobs({
     required String accountId,
@@ -267,6 +348,7 @@ final class AttachmentRepository {
   )..where((row) => row.id.equals(accountId))).getSingleOrNull();
 
   Future<LoadedAttachmentRuntime> loadRuntime() async {
+    await pruneReleasedTerminalJobs();
     final accountRows = await _database
         .select(_database.attachmentRuntimeAccounts)
         .get();

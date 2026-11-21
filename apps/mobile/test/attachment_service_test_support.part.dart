@@ -21,7 +21,11 @@ final class _Fixture {
     required this.repository,
   });
 
-  static Future<_Fixture> create({bool fileBacked = false}) async {
+  static Future<_Fixture> create({
+    bool fileBacked = false,
+    int terminalHistoryLimitPerAccount =
+        attachmentTerminalHistoryLimitPerAccount,
+  }) async {
     final directory = await Directory.systemTemp.createTemp(
       'nctalk-attachment-service-',
     );
@@ -58,7 +62,10 @@ final class _Fixture {
       database: database,
       databaseFile: databaseFile,
       credentials: credentials,
-      repository: AttachmentRepository(database),
+      repository: AttachmentRepository(
+        database,
+        terminalHistoryLimitPerAccount: terminalHistoryLimitPerAccount,
+      ),
     );
   }
 
