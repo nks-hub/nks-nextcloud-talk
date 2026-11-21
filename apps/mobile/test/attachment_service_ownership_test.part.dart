@@ -236,6 +236,85 @@ void _registerAttachmentOwnershipTests() {
     },
   );
 
+  test(
+    'headless drain waits for rooms scheduled at the end of startup',
+    () async {
+      final fixture = await _Fixture.create(fileBacked: true);
+      addTearDown(fixture.close);
+      await fixture.seedTerminal(messageId: 101, seed: 1);
+      final jobId = await fixture.seedInFlight(AttachmentRequestStep.normalPut);
+      final accountId = AccountId.parse('account-a');
+      final runtime = await fixture.repository.loadRuntime();
+      final account = runtime.snapshot.accounts[accountId]!;
+      final key = (accountId: accountId.value, jobId: jobId.value);
+      await fixture.repository.persistTransition(
+        account: account,
+        job: account.jobs[jobId]!.copyWith(
+          phase: AttachmentJobPhase.draftResolved,
+          inFlightRequest: null,
+        ),
+        metadata: runtime.metadata[key]!,
+        updatedAt: DateTime.utc(2026, 8, 24),
+      );
+
+      final releaseStarted = Completer<void>();
+      final allowRelease = Completer<void>();
+      final putStarted = Completer<void>();
+      final allowPut = Completer<void>();
+      var finalizations = 0;
+      final service = fixture.service(
+        MockClient((request) async {
+          if (request.method == 'PUT') {
+            expect(request.bodyBytes, fixture.bytes);
+            putStarted.complete();
+            await allowPut.future;
+            return http.Response('', 201);
+          }
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/attachment')) {
+            finalizations++;
+            return http.Response.bytes(_finalizeSuccess(), 200);
+          }
+          fail('Unexpected request: ${request.method} ${request.url}');
+        }),
+        releaseSource: (_) async {
+          releaseStarted.complete();
+          await allowRelease.future;
+        },
+        retryDelays: const [],
+      );
+      addTearDown(() async {
+        if (!allowRelease.isCompleted) allowRelease.complete();
+        if (!allowPut.isCompleted) allowPut.complete();
+        await service.close();
+      });
+
+      const waitLimit = Duration(seconds: 5);
+      await releaseStarted.future.timeout(waitLimit);
+      var finishedWhilePutHeld = false;
+      final finished = service
+          .drainForBackground()
+          .whenComplete(service.close)
+          .then((_) {
+            finishedWhilePutHeld = !allowPut.isCompleted;
+          });
+      await pumpEventQueue();
+      allowRelease.complete();
+      await Future.any<void>([putStarted.future, finished]).timeout(waitLimit);
+      allowPut.complete();
+      await finished.timeout(waitLimit);
+
+      final stored = await fixture.repository.getStoredJob(
+        accountId: key.accountId,
+        jobId: key.jobId,
+      );
+      expect(
+        (finishedWhilePutHeld, finalizations, stored?.phase),
+        (false, 1, AttachmentJobPhase.awaitingConfirmation.name),
+      );
+    },
+  );
+
   test('a replacement waits for the prior admission to commit', () async {
     final fixture = await _Fixture.create(fileBacked: true);
     addTearDown(fixture.close);

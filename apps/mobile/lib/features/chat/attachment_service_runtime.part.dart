@@ -254,14 +254,13 @@ mixin _AttachmentServiceRuntime {
   }
 
   Future<void> _scheduleRoom(_AttachmentRoomKey roomKey) async {
-    await _ready;
     if (_closed || _suspendedAccounts.contains(roomKey.accountId)) {
       _syncTransferActivity();
       return;
     }
-    _roomRerunRequests.add(roomKey);
     final active = _roomRuns[roomKey];
     if (active != null) {
+      _roomRerunRequests.add(roomKey);
       _roomWakeups[roomKey]?.call();
       return active;
     }
@@ -275,6 +274,7 @@ mixin _AttachmentServiceRuntime {
       }
       _syncTransferActivity();
     });
+    // The drain can see this run while it is waiting for initialization.
     _roomRuns[roomKey] = run;
     _syncTransferActivity();
     return run;
@@ -293,6 +293,7 @@ mixin _AttachmentServiceRuntime {
   }
 
   Future<void> _drainRoom(_AttachmentRoomKey roomKey) async {
+    await _ready;
     while (!_closed) {
       _roomRerunRequests.remove(roomKey);
       await _runRoom(roomKey);

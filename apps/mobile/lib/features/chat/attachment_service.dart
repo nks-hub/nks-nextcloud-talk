@@ -801,7 +801,9 @@ final class AttachmentService with _AttachmentServiceRuntime {
   Future<void> drainForBackground() async {
     await resumeRetries();
     await _startupMaintenance;
-    await Future.wait<void>(_roomRuns.values.toList(growable: false));
+    while (_roomRuns.isNotEmpty) {
+      await Future.wait<void>(_roomRuns.values.toList(growable: false));
+    }
   }
 
   /// Gives every upload that ran out of automatic retries, or is still

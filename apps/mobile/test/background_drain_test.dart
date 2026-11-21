@@ -243,6 +243,27 @@ void main() {
 
       expect(platform.calls.single.arguments, <String, Object?>{'retry': true});
     });
+
+    testWidgets('asks for a reschedule at the headless deadline', (
+      tester,
+    ) async {
+      final pending = Completer<void>();
+      final finished = runBackgroundDrainIsolate(
+        drain: () => pending.future,
+        channel: platform.channel,
+      );
+
+      await tester.pump(const Duration(seconds: 24, milliseconds: 999));
+      expect(platform.calls, isEmpty);
+      await tester.pump(const Duration(milliseconds: 1));
+      await finished;
+      expect(platform.calls.single.method, 'finished');
+      expect(platform.calls.single.arguments, <String, Object?>{'retry': true});
+
+      pending.complete();
+      await tester.pump();
+      expect(platform.calls, hasLength(1));
+    });
   });
 
   group('a scheduled wake reaching a running app', () {
