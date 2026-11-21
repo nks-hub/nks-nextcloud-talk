@@ -195,6 +195,61 @@ class _PendingAttachmentBubbleState
     }
   }
 
+  Widget _jobTile(AppLocalizations strings, StoredAttachmentJob job) =>
+      ListTile(
+        key: ValueKey('pending-attachment-job-${job.jobId}'),
+        contentPadding: EdgeInsets.zero,
+        title: Text(
+          job.sourceDisplayName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(_jobStatus(strings, job)),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (attachmentJobCanRetry(job))
+              IconButton(
+                key: ValueKey('retry-attachment-${job.jobId}'),
+                tooltip: strings.retry,
+                onPressed: _busy
+                    ? null
+                    : () => unawaited(_act(retry: true, only: job)),
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            if (attachmentJobCanCancel(job))
+              IconButton(
+                key: ValueKey('cancel-attachment-${job.jobId}'),
+                tooltip: strings.cancel,
+                onPressed: _busy
+                    ? null
+                    : () => unawaited(_act(retry: false, only: job)),
+                icon: const Icon(Icons.close_rounded),
+              ),
+          ],
+        ),
+      );
+
+  Widget _jobDetails(
+    AppLocalizations strings,
+    PendingAttachmentBatch batch,
+    List<StoredAttachmentJob> jobs,
+  ) {
+    if (jobs.length <= 4) {
+      return Column(children: [for (final job in jobs) _jobTile(strings, job)]);
+    }
+    return SizedBox(
+      key: ValueKey('pending-attachment-job-list-${batch.key}'),
+      height: 320,
+      child: ListView.builder(
+        primary: false,
+        padding: EdgeInsets.zero,
+        itemCount: jobs.length,
+        itemBuilder: (context, index) => _jobTile(strings, jobs[index]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final batch = widget.batch;
@@ -353,44 +408,7 @@ class _PendingAttachmentBubbleState
                   strings.attachmentBatchDetails,
                   style: TextStyle(color: scheme.onPrimaryContainer),
                 ),
-                children: [
-                  for (final job in jobs)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        job.sourceDisplayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(_jobStatus(strings, job)),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (attachmentJobCanRetry(job))
-                            IconButton(
-                              key: ValueKey('retry-attachment-${job.jobId}'),
-                              tooltip: strings.retry,
-                              onPressed: _busy
-                                  ? null
-                                  : () =>
-                                        unawaited(_act(retry: true, only: job)),
-                              icon: const Icon(Icons.refresh_rounded),
-                            ),
-                          if (attachmentJobCanCancel(job))
-                            IconButton(
-                              key: ValueKey('cancel-attachment-${job.jobId}'),
-                              tooltip: strings.cancel,
-                              onPressed: _busy
-                                  ? null
-                                  : () => unawaited(
-                                      _act(retry: false, only: job),
-                                    ),
-                              icon: const Icon(Icons.close_rounded),
-                            ),
-                        ],
-                      ),
-                    ),
-                ],
+                children: [_jobDetails(strings, batch, jobs)],
               ),
             ),
             Wrap(

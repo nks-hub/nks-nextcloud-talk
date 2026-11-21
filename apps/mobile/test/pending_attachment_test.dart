@@ -131,58 +131,86 @@ void main() {
   });
 
   for (final scale in [1.0, 2.0]) {
-    testWidgets(
-      'ten pending attachments fit a narrow bubble at text scale $scale',
-      (tester) async {
-        tester.view.physicalSize = const Size(390, 900);
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        final jobs = List.generate(
-          10,
-          (index) => pendingAttachmentFixture(
-            index,
-            count: 10,
-            phase: index < 3
-                ? 'completed'
-                : index == 3
-                ? 'retryable'
-                : 'uploading',
-          ),
-        );
-        await tester.pumpWidget(
-          ProviderScope(
-            overrides: [
-              attachmentSourceProvider.overrideWith(
-                (ref) => throw StateError('No local thumbnail'),
-              ),
-            ],
-            child: localizedTestApp(
-              textScale: scale,
-              home: Scaffold(
-                body: SingleChildScrollView(
-                  child: PendingAttachmentBubble(
-                    batch: PendingAttachmentBatch('batch', jobs),
-                  ),
+    testWidgets('many pending attachments stay lazy at text scale $scale', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final jobs = List.generate(
+        80,
+        (index) => pendingAttachmentFixture(
+          index,
+          count: 80,
+          phase: index < 3
+              ? 'completed'
+              : index == 3
+              ? 'retryable'
+              : 'uploading',
+        ),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            attachmentSourceProvider.overrideWith(
+              (ref) => throw StateError('No local thumbnail'),
+            ),
+          ],
+          child: localizedTestApp(
+            textScale: scale,
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: PendingAttachmentBubble(
+                  batch: PendingAttachmentBatch('batch', jobs),
                 ),
               ),
             ),
           ),
-        );
-        await tester.pump();
-        expect(find.text('3 of 10 sent'), findsOneWidget);
-        expect(find.byType(CircularProgressIndicator), findsOneWidget);
-        expect(find.byType(LinearProgressIndicator), findsOneWidget);
-        expect(
-          find.byKey(const Key('retry-pending-attachments')),
-          findsOneWidget,
-        );
-        await tester.tap(find.byKey(const Key('pending-attachment-details')));
-        await tester.pump(const Duration(milliseconds: 300));
-        expect(find.text('photo-9.png'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-        await tester.pumpWidget(const SizedBox.shrink());
-      },
-    );
+        ),
+      );
+      await tester.pump();
+      expect(find.text('3 of 80 sent'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(
+        find.byKey(const Key('retry-pending-attachments')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('pending-attachment-details')));
+      await tester.pump(const Duration(milliseconds: 300));
+      final list = find.byKey(
+        const ValueKey('pending-attachment-job-list-batch'),
+      );
+      final listView = find.descendant(
+        of: list,
+        matching: find.byType(ListView),
+      );
+      final lastRow = find.byKey(
+        ValueKey('pending-attachment-job-${jobs.last.jobId}'),
+      );
+      expect(
+        tester.widget<ListView>(listView).childrenDelegate,
+        isA<SliverChildBuilderDelegate>(),
+      );
+      expect(lastRow, findsNothing);
+      await tester.ensureVisible(list);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.scrollUntilVisible(
+        lastRow,
+        400,
+        scrollable: find.descendant(
+          of: list,
+          matching: find.byType(Scrollable),
+        ),
+      );
+      expect(find.text('photo-79.png'), findsOneWidget);
+      expect(
+        find.byKey(ValueKey('cancel-attachment-${jobs.last.jobId}')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
   }
 }
