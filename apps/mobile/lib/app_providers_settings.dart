@@ -78,6 +78,31 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
           coordinator.suspendAccount(accountId),
       ]);
     },
+    onRemovalAborted: (accountId) async {
+      final typedAccountId = AccountId.parse(accountId);
+      final repository = ref.read(attachmentRepositoryProvider);
+      try {
+        final runtime = await repository.loadRuntime();
+        final account = runtime.snapshot.accounts[typedAccountId];
+        if (account != null &&
+            account.lane == AttachmentAccountLane.suspended) {
+          await repository.persistAccountState(
+            account: account.copyWith(lane: AttachmentAccountLane.ready),
+            updatedAt: DateTime.now().toUtc(),
+          );
+        }
+      } finally {
+        // Suspension is intentionally one-way inside each service instance.
+        // Recreate those instances after restoring the durable attachment
+        // lane, so the still-valid account can immediately be used again.
+        ref.invalidate(chatMediaRepositoryProvider);
+        ref.invalidate(chatServiceProvider);
+        ref.invalidate(attachmentServiceProvider);
+        ref.invalidate(androidPushCoordinatorProvider);
+        ref.invalidate(androidPushRegistrationCoordinatorProvider);
+        ref.invalidate(nextcloudApiProvider);
+      }
+    },
     revokePush: (accountId) async {
       // Both transports, because either one can hold a live registration for
       // the account being removed. The Web Push side is revoked only here:

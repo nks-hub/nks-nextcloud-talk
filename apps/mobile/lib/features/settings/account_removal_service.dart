@@ -15,6 +15,7 @@ import '../chat/media/chat_attachment_opener.dart';
 import 'app_password_revocation_queue.dart';
 
 typedef AccountRemovalStarted = Future<void> Function(String accountId);
+typedef AccountRemovalAborted = Future<void> Function(String accountId);
 typedef AccountPushRevocation = Future<bool> Function(String accountId);
 typedef AccountBackgroundCleanup = Future<void> Function(String accountId);
 
@@ -50,11 +51,13 @@ final class AccountRemovalOutcome {
 /// Removes one account and everything the device stored for it.
 ///
 /// Ordering follows `docs/architecture/system-design.md` ("Odhlášení"): the
-/// remote cleanup runs while the app password is still valid, and only then
-/// are the secret and the local partition destroyed. Every remote step is
-/// best effort — somebody removing an account is often offline, or is removing
-/// it precisely because the password was already revoked elsewhere — so a
-/// remote failure never blocks the local wipe.
+/// push cleanup runs while the app password is still valid. The local secret
+/// is deleted before the server password is revoked, while its in-memory copy
+/// can still make that final request; this leaves rollback possible when the
+/// credential vault is temporarily unavailable. Every remote step is best
+/// effort — somebody removing an account is often offline, or is removing it
+/// precisely because the password was already revoked elsewhere — so a remote
+/// failure never blocks the local wipe.
 ///
 /// Deleting the local password is the one blocking local step. The account
 /// row stays in place until that succeeds, so a temporarily unavailable vault
@@ -72,6 +75,7 @@ final class AccountRemovalService {
     required Future<Directory> Function() chatAttachmentDirectory,
     required Future<DurableAttachmentSourceStore> Function() attachmentSources,
     AccountRemovalStarted? onRemovalStarted,
+    AccountRemovalAborted? onRemovalAborted,
     AccountPushRevocation? revokePush,
     AppPasswordRevocationQueue? pendingRevocations,
   }) : _accounts = accounts,
@@ -85,6 +89,7 @@ final class AccountRemovalService {
        _chatAttachmentDirectory = chatAttachmentDirectory,
        _attachmentSources = attachmentSources,
        _onRemovalStarted = onRemovalStarted,
+       _onRemovalAborted = onRemovalAborted,
        _revokePush = revokePush,
        _pendingRevocations = pendingRevocations;
 
@@ -99,6 +104,7 @@ final class AccountRemovalService {
   final Future<Directory> Function() _chatAttachmentDirectory;
   final Future<DurableAttachmentSourceStore> Function() _attachmentSources;
   final AccountRemovalStarted? _onRemovalStarted;
+  final AccountRemovalAborted? _onRemovalAborted;
   final AccountPushRevocation? _revokePush;
   final AppPasswordRevocationQueue? _pendingRevocations;
 
@@ -132,27 +138,19 @@ final class AccountRemovalService {
 
     var appPasswordRevoked = false;
     var webPushLeftBehind = false;
+    ServerBase? server;
     if (appPassword != null && appPassword.isNotEmpty) {
-      final server = ServerBase.parse(account.serverUrl);
+      final parsedServer = ServerBase.parse(account.serverUrl);
+      server = parsedServer;
       // Push registration first: revoking the password takes away the only
       // credential that can address it.
       final webPushRevoked = await _bestEffort(
         () => _api.unregisterWebPush(
-          server: server,
+          server: parsedServer,
           loginName: account.loginName,
           appPassword: appPassword,
         ),
       );
-      final passwordRevoked = await _revokeOrRemember(
-        server: server,
-        loginName: account.loginName,
-        appPassword: appPassword,
-      );
-      // Only what the password itself did. Folding the push results in here
-      // told the person to go and revoke a password the server had already
-      // destroyed, whenever the unrelated push cleanup was the part that
-      // failed — and push has its own field on the outcome for exactly that.
-      appPasswordRevoked = passwordRevoked;
       if (!webPushRevoked) {
         webPushLeftBehind = true;
       }
@@ -161,7 +159,24 @@ final class AccountRemovalService {
     // The secret goes first. If the vault is temporarily unavailable the
     // account must remain addressable, or its password could never be deleted
     // by a later retry.
-    await _credentials.deleteAppPassword(accountId);
+    try {
+      await _credentials.deleteAppPassword(accountId);
+    } on Object catch (error, stackTrace) {
+      try {
+        await _onRemovalAborted?.call(accountId);
+      } on Object {
+        // The credential failure is why removal stopped. A rollback failure
+        // must not replace it with a less useful error.
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+    if (server != null) {
+      appPasswordRevoked = await _revokeOrRemember(
+        server: server,
+        loginName: account.loginName,
+        appPassword: appPassword!,
+      );
+    }
     // Only caches: none may keep the account row around after the secret is
     // gone. A locked cache file can be retried by normal cache maintenance.
     await _bestEffort(() => _emojiUsage.delete(AccountId.parse(accountId)));

@@ -15,6 +15,7 @@ import '../diagnostics/diagnostics_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../core/desktop_metrics.dart';
+import 'account_removal_service.dart';
 import 'app_lock/app_lock_controller.dart';
 import 'reply_layout_preference.dart';
 import 'update_check_tile.dart';
@@ -598,13 +599,26 @@ final class _AccountTileState extends ConsumerState<_AccountTile> {
 
     setState(() => _removing = true);
     final messenger = ScaffoldMessenger.maybeOf(context);
-    final outcome = await ref
-        .read(accountRemovalServiceProvider)
-        .removeAccount(account.id);
+    late final AccountRemovalOutcome outcome;
+    try {
+      outcome = await ref
+          .read(accountRemovalServiceProvider)
+          .removeAccount(account.id);
+    } on Object {
+      if (mounted) {
+        messenger?.showSnackBar(
+          SnackBar(content: Text(strings.unexpectedError)),
+        );
+      }
+      return;
+    } finally {
+      if (mounted) {
+        setState(() => _removing = false);
+      }
+    }
     if (!mounted) {
       return;
     }
-    setState(() => _removing = false);
     if (!outcome.accountExisted) {
       return;
     }

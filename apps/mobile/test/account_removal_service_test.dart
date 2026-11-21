@@ -81,6 +81,7 @@ void main() {
   AccountRemovalService buildService(
     HttpNextcloudApi api, {
     AccountRemovalStarted? onRemovalStarted,
+    AccountRemovalAborted? onRemovalAborted,
     AccountPushRevocation? revokePush,
     AccountBackgroundCleanup? clearChatBackgrounds,
     CredentialVault? credentials,
@@ -104,6 +105,7 @@ void main() {
       chatAttachmentDirectory: () async => chatAttachmentRoot,
       attachmentSources: () async => sources,
       onRemovalStarted: onRemovalStarted,
+      onRemovalAborted: onRemovalAborted,
       revokePush: revokePush,
     );
   }
@@ -117,13 +119,18 @@ void main() {
   );
 
   test(
-    'revokes proxy and Nextcloud push before credentials and account data',
+    'revokes push before the local secret and server password after it',
     () async {
       final steps = <String>[];
       final api = HttpNextcloudApi(
         client: MockClient((request) async {
           expect(await accounts.getAccount('account-a'), isNotNull);
-          expect(await vault.readAppPassword('account-a'), isNotNull);
+          final storedPassword = await vault.readAppPassword('account-a');
+          if (request.url.path.endsWith('/core/apppassword')) {
+            expect(storedPassword, isNull);
+          } else {
+            expect(storedPassword, isNotNull);
+          }
           steps.add('${request.method} ${request.url.path}');
           return http.Response(_okOcs(), 200);
         }),
@@ -179,13 +186,25 @@ void main() {
   });
 
   test('a failed password delete keeps the account removable', () async {
+    final requestedPaths = <String>[];
     final api = HttpNextcloudApi(
-      client: MockClient((request) async => http.Response(_okOcs(), 200)),
+      client: MockClient((request) async {
+        requestedPaths.add(request.url.path);
+        return http.Response(_okOcs(), 200);
+      }),
     );
     addTearDown(api.close);
     await _seedAccount(database, accounts, vault, 'account-a', _serverA);
     final credentials = _FailFirstDeleteCredentialVault(vault);
-    final service = buildService(api, credentials: credentials);
+    var aborted = 0;
+    final service = buildService(
+      api,
+      credentials: credentials,
+      onRemovalAborted: (accountId) async {
+        expect(accountId, 'account-a');
+        aborted++;
+      },
+    );
 
     await expectLater(
       service.removeAccount('account-a'),
@@ -194,12 +213,41 @@ void main() {
 
     expect(await accounts.getAccount('account-a'), isNotNull);
     expect(await vault.readAppPassword('account-a'), isNotNull);
+    expect(aborted, 1);
+    expect(requestedPaths, <String>[
+      '/ocs/v2.php/apps/notifications/api/v2/webpush',
+    ]);
 
     final outcome = await service.removeAccount('account-a');
     expect(outcome.accountExisted, isTrue);
     expect(credentials.deleteAttempts, 2);
     expect(await accounts.getAccount('account-a'), isNull);
     expect(await vault.readAppPassword('account-a'), isNull);
+    expect(requestedPaths, <String>[
+      '/ocs/v2.php/apps/notifications/api/v2/webpush',
+      '/ocs/v2.php/apps/notifications/api/v2/webpush',
+      '/ocs/v2.php/core/apppassword',
+    ]);
+  });
+
+  test('a rollback failure does not hide the credential failure', () async {
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async => http.Response(_okOcs(), 200)),
+    );
+    addTearDown(api.close);
+    await _seedAccount(database, accounts, vault, 'account-a', _serverA);
+
+    await expectLater(
+      buildService(
+        api,
+        credentials: _FailFirstDeleteCredentialVault(vault),
+        onRemovalAborted: (_) async => throw StateError('rollback failed'),
+      ).removeAccount('account-a'),
+      throwsA(isA<CredentialVaultTemporarilyUnavailable>()),
+    );
+
+    expect(await accounts.getAccount('account-a'), isNotNull);
+    expect(await vault.readAppPassword('account-a'), isNotNull);
   });
 
   test(

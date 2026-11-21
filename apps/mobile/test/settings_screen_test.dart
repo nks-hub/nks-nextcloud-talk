@@ -11,6 +11,7 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_cache.dart';
+import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
 import 'package:nextcloudtalk/features/settings/account_removal_service.dart';
 import 'package:nextcloudtalk/features/settings/settings_screen.dart';
@@ -143,6 +144,8 @@ _removalService(
   WidgetTester tester,
   AccountRepository accounts, {
   bool serverReachable = true,
+  bool failFirstPasswordDelete = false,
+  AccountRemovalAborted? onRemovalAborted,
 }) {
   final vault = MemoryCredentialVault();
   final calls = <String>[];
@@ -173,10 +176,13 @@ _removalService(
       );
     }),
   );
+  final CredentialVault credentials = failFirstPasswordDelete
+      ? _FailFirstDeleteCredentialVault(vault)
+      : vault;
   return (
     service: AccountRemovalService(
       accounts: accounts,
-      credentials: vault,
+      credentials: credentials,
       api: api,
       mediaCache: ChatMediaCache(),
       mediaDiskCache: ChatMediaDiskCache(
@@ -193,10 +199,35 @@ _removalService(
       attachmentSources: () async => DurableAttachmentSourceStore(
         root: Directory('${root.path}${Platform.pathSeparator}sources'),
       ),
+      onRemovalAborted: onRemovalAborted,
     ),
     vault: vault,
     calls: calls,
   );
+}
+
+final class _FailFirstDeleteCredentialVault implements CredentialVault {
+  _FailFirstDeleteCredentialVault(this._inner);
+
+  final CredentialVault _inner;
+  var _failed = false;
+
+  @override
+  Future<void> deleteAppPassword(String accountId) {
+    if (!_failed) {
+      _failed = true;
+      throw const CredentialVaultTemporarilyUnavailable();
+    }
+    return _inner.deleteAppPassword(accountId);
+  }
+
+  @override
+  Future<String?> readAppPassword(String accountId) =>
+      _inner.readAppPassword(accountId);
+
+  @override
+  Future<void> writeAppPassword(String accountId, String appPassword) =>
+      _inner.writeAppPassword(accountId, appPassword);
 }
 
 void main() {
@@ -335,6 +366,86 @@ void main() {
     expect(removal.vault.values['account-b'], isNotNull);
     expect(find.text('The account was removed.'), findsOneWidget);
   });
+
+  testWidgets(
+    'a vault failure restores the remove action for an immediate retry',
+    (tester) async {
+      final database = openTestDatabase();
+      addTearDown(database.close);
+      final accounts = AccountRepository(database);
+      late List<StoredAccount> initial;
+      await tester.runAsync(() async {
+        await accounts.upsertAccount(
+          accountId: 'account-a',
+          serverUrl: 'https://cloud-a.example.invalid',
+          loginName: 'alice',
+          serverProductName: 'Nextcloud',
+          createdAt: DateTime.utc(2026, 1, 1),
+        );
+        initial = await _allAccounts(database);
+      });
+      var aborted = 0;
+      final removal = _removalService(
+        tester,
+        accounts,
+        failFirstPasswordDelete: true,
+        onRemovalAborted: (_) async {
+          aborted++;
+        },
+      );
+      removal.vault.values['account-a'] = 'fixture-app-password-never-use';
+
+      await tester.pumpWidget(
+        _wrap(
+          accountRepository: accounts,
+          accountsStream: Stream.value(initial),
+          overrides: [
+            accountRemovalServiceProvider.overrideWithValue(removal.service),
+          ],
+        ),
+      );
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('account-remove-account-a')));
+      await _pumpRouteTransition(tester);
+      await tester.tap(find.byKey(const Key('account-remove-confirm')));
+      await _settleUntil(
+        tester,
+        () async =>
+            await accounts.getAccount('account-a') != null &&
+            find
+                .text('Something went wrong. No account data was changed.')
+                .evaluate()
+                .isNotEmpty,
+      );
+
+      expect(aborted, 1);
+      expect(removal.vault.values['account-a'], isNotNull);
+      final removeButton = tester.widget<IconButton>(
+        find.byKey(const Key('account-remove-account-a')),
+      );
+      expect(removeButton.onPressed, isNotNull);
+      // Let the first snackbar leave; otherwise Flutter queues the success
+      // message behind it while this test's fake clock never advances.
+      await tester.pump(const Duration(seconds: 5));
+
+      await tester.tap(find.byKey(const Key('account-remove-account-a')));
+      await _pumpRouteTransition(tester);
+      await tester.tap(find.byKey(const Key('account-remove-confirm')));
+      await _settleUntil(
+        tester,
+        () async => await accounts.getAccount('account-a') == null,
+      );
+
+      expect(aborted, 1);
+      expect(removal.vault.values.containsKey('account-a'), isFalse);
+    },
+  );
 
   testWidgets('an unreachable server still removes the account locally and '
       'says the app password was not revoked', (tester) async {
