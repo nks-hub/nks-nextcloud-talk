@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -109,6 +111,132 @@ void main() {
       maximumBytes: 64 * 1024 * 1024,
     );
     expect(directory.listSync(), hasLength(3));
+  });
+
+  test('reads voice file metadata with bounded concurrency', () async {
+    const fileCount = 12;
+    const bytes = 1024;
+    await seed(accountId: 'account-a', count: fileCount, bytes: bytes);
+    final gates = <Completer<void>>[];
+    final firstReadStarted = Completer<void>();
+    var inFlight = 0;
+    var peakInFlight = 0;
+    final prune = pruneAccountVoiceFiles(
+      directory: directory,
+      accountId: 'account-a',
+      maximumBytes: 8 * bytes,
+      statFile: (file) async {
+        final stat = file.statSync();
+        final gate = Completer<void>();
+        gates.add(gate);
+        if (!firstReadStarted.isCompleted) {
+          firstReadStarted.complete();
+        }
+        inFlight++;
+        peakInFlight = max(peakInFlight, inFlight);
+        await gate.future;
+        inFlight--;
+        return stat;
+      },
+    );
+
+    Future<void> releaseAll() async {
+      while (gates.length < fileCount) {
+        for (final gate in gates) {
+          if (!gate.isCompleted) {
+            gate.complete();
+          }
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      for (final gate in gates) {
+        if (!gate.isCompleted) {
+          gate.complete();
+        }
+      }
+      await prune;
+    }
+
+    addTearDown(releaseAll);
+    await firstReadStarted.future;
+    for (var turn = 0; turn < 20 && gates.length < 8; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(gates, hasLength(8));
+    expect(peakInFlight, 8);
+
+    gates.first.complete();
+    for (var turn = 0; turn < 20 && gates.length < 9; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(gates, hasLength(9));
+    expect(peakInFlight, 8);
+
+    await releaseAll();
+    expect(gates, hasLength(fileCount));
+    expect(directoryBytes(), 8 * bytes);
+  });
+
+  test('deletes old voice files with bounded concurrency', () async {
+    const fileCount = 6;
+    await seed(accountId: 'account-a', count: fileCount, bytes: 1);
+    final gates = <Completer<void>>[];
+    final firstDeleteStarted = Completer<void>();
+    var inFlight = 0;
+    var peakInFlight = 0;
+    final prune = pruneAccountVoiceFiles(
+      directory: directory,
+      accountId: 'account-a',
+      maximumBytes: 0,
+      deleteFile: (file) async {
+        final gate = Completer<void>();
+        gates.add(gate);
+        if (!firstDeleteStarted.isCompleted) {
+          firstDeleteStarted.complete();
+        }
+        inFlight++;
+        peakInFlight = max(peakInFlight, inFlight);
+        await gate.future;
+        inFlight--;
+        await file.delete();
+      },
+    );
+
+    Future<void> releaseAll() async {
+      while (gates.length < fileCount) {
+        for (final gate in gates) {
+          if (!gate.isCompleted) {
+            gate.complete();
+          }
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      for (final gate in gates) {
+        if (!gate.isCompleted) {
+          gate.complete();
+        }
+      }
+      await prune;
+    }
+
+    addTearDown(releaseAll);
+    await firstDeleteStarted.future;
+    for (var turn = 0; turn < 20 && gates.length < 4; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(gates, hasLength(4));
+    expect(peakInFlight, 4);
+
+    gates.first.complete();
+    for (var turn = 0; turn < 20 && gates.length < 5; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(gates, hasLength(5));
+    expect(peakInFlight, 4);
+
+    await releaseAll();
+    expect(gates, hasLength(fileCount));
+    expect(directory.listSync(), isEmpty);
   });
 
   test('playback recovers after a file is pruned away', () async {

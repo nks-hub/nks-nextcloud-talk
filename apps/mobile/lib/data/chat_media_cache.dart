@@ -111,6 +111,8 @@ String chatVoiceCacheKey({required String accountId, required int messageId}) {
 }
 
 final RegExp _voiceUnsafeCharacter = RegExp(r'[^A-Za-z0-9._-]');
+const int _voiceMetadataConcurrency = 8;
+const int _voiceDeletionConcurrency = 4;
 
 String _voiceAccountPrefix(String accountId) =>
     '$accountId-'.replaceAll(_voiceUnsafeCharacter, '_');
@@ -161,38 +163,73 @@ Future<void> pruneAccountVoiceFiles({
   required Directory directory,
   required String accountId,
   int maximumBytes = 64 * 1024 * 1024,
+  Future<FileStat> Function(File file)? statFile,
+  Future<void> Function(File file)? deleteFile,
 }) async {
   if (!directory.existsSync()) {
     return;
   }
   final prefix = _voiceAccountPrefix(accountId);
+  final candidates = <File>[];
+  await for (final entity in directory.list(followLinks: false)) {
+    if (entity is File && p.basename(entity.path).startsWith(prefix)) {
+      candidates.add(entity);
+    }
+  }
   final owned = <({File file, int bytes, DateTime modified})>[];
   var total = 0;
-  await for (final entity in directory.list(followLinks: false)) {
-    if (entity is! File || !p.basename(entity.path).startsWith(prefix)) {
-      continue;
+  var nextCandidate = 0;
+  final readStat = statFile ?? _readVoiceFileStat;
+
+  Future<void> readNextStat() async {
+    while (nextCandidate < candidates.length) {
+      final file = candidates[nextCandidate++];
+      final stat = await readStat(file);
+      owned.add((file: file, bytes: stat.size, modified: stat.modified));
+      total += stat.size;
     }
-    final stat = await entity.stat();
-    owned.add((file: entity, bytes: stat.size, modified: stat.modified));
-    total += stat.size;
   }
+
+  final statWorkerCount = candidates.length < _voiceMetadataConcurrency
+      ? candidates.length
+      : _voiceMetadataConcurrency;
+  await Future.wait(List.generate(statWorkerCount, (_) => readNextStat()));
   if (total <= maximumBytes) {
     return;
   }
   owned.sort((a, b) => a.modified.compareTo(b.modified));
-  for (final entry in owned) {
-    if (total <= maximumBytes) {
-      return;
-    }
-    try {
-      await entry.file.delete();
-      total -= entry.bytes;
-    } on FileSystemException {
-      // Already gone, or the platform is holding it open; either way the next
-      // call sees the real size again.
+  final remove = deleteFile ?? _deleteVoiceFile;
+  var nextOwned = 0;
+  var plannedBytes = 0;
+
+  Future<void> deleteNext() async {
+    while (nextOwned < owned.length && total - plannedBytes > maximumBytes) {
+      final entry = owned[nextOwned++];
+      plannedBytes += entry.bytes;
+      var deleted = false;
+      try {
+        await remove(entry.file);
+        deleted = true;
+      } on FileSystemException {
+        // Already gone, or the platform is holding it open; a later worker
+        // continues with the next-oldest candidate when the bound needs it.
+      }
+      plannedBytes -= entry.bytes;
+      if (deleted) {
+        total -= entry.bytes;
+      }
     }
   }
+
+  final deleteWorkerCount = owned.length < _voiceDeletionConcurrency
+      ? owned.length
+      : _voiceDeletionConcurrency;
+  await Future.wait(List.generate(deleteWorkerCount, (_) => deleteNext()));
 }
+
+Future<FileStat> _readVoiceFileStat(File file) => file.stat();
+
+Future<void> _deleteVoiceFile(File file) => file.delete();
 
 /// Persists chat previews under the private app cache directory so a cold
 /// start does not refetch every picture over the network.
