@@ -57,21 +57,47 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
     Future<Directory> Function()? cacheDirectory,
     ChatAttachmentFileLauncher launcher =
         const PlatformChatAttachmentFileLauncher(),
-  }) => ChatAttachmentOpener._(
-    repository,
-    cacheDirectory ?? getApplicationCacheDirectory,
-    launcher,
-  );
+    int maximumCacheBytes = 256 * 1024 * 1024,
+    int maximumCacheEntries = 16,
+  }) {
+    if (maximumCacheBytes < 1) {
+      throw ArgumentError.value(
+        maximumCacheBytes,
+        'maximumCacheBytes',
+        'must be positive',
+      );
+    }
+    if (maximumCacheEntries < 1) {
+      throw ArgumentError.value(
+        maximumCacheEntries,
+        'maximumCacheEntries',
+        'must be positive',
+      );
+    }
+    return ChatAttachmentOpener._(
+      repository,
+      cacheDirectory ?? getApplicationCacheDirectory,
+      launcher,
+      maximumCacheBytes,
+      maximumCacheEntries,
+    );
+  }
 
   ChatAttachmentOpener._(
     this._repository,
     this._cacheDirectory,
     this._launcher,
+    this._maximumCacheBytes,
+    this._maximumCacheEntries,
   );
+
+  static final Set<String> _activeDownloadPaths = <String>{};
 
   final ChatMediaRepository _repository;
   final Future<Directory> Function() _cacheDirectory;
   final ChatAttachmentFileLauncher _launcher;
+  final int _maximumCacheBytes;
+  final int _maximumCacheEntries;
 
   @override
   Future<ChatAttachmentOpenResult> open({
@@ -92,6 +118,13 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
       );
       await directory.create(recursive: true);
       downloadDirectory = await directory.createTemp('download-');
+      _activeDownloadPaths.add(downloadDirectory.path);
+      await _pruneChatAttachmentOpenCache(
+        accountDirectory: directory,
+        maximumBytes: _maximumCacheBytes,
+        maximumEntries: _maximumCacheEntries,
+        protectedPaths: _activeDownloadPaths,
+      );
       localFile = File(
         '${downloadDirectory.path}${Platform.pathSeparator}'
         '${chatAttachmentFileName(fileName)}',
@@ -116,10 +149,22 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
       if (!_repository.isAccountActive(account.id)) {
         return ChatAttachmentOpenResult.reauthenticationRequired;
       }
+      await File(
+        '${downloadDirectory.path}${Platform.pathSeparator}'
+        '$_completedAttachmentMarkerName',
+      ).writeAsString('', flush: true);
       opened = await _launcher.open(
         path: localFile.path,
         contentType: contentType,
       );
+      if (opened) {
+        await _pruneChatAttachmentOpenCache(
+          accountDirectory: downloadDirectory.parent,
+          maximumBytes: _maximumCacheBytes,
+          maximumEntries: _maximumCacheEntries,
+          protectedPaths: _activeDownloadPaths,
+        );
+      }
       return opened
           ? ChatAttachmentOpenResult.opened
           : ChatAttachmentOpenResult.openFailed;
@@ -148,8 +193,96 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
           // Account removal may have already cleared this directory.
         }
       }
+      _activeDownloadPaths.remove(downloadDirectory.path);
     }
   }
+}
+
+const String _completedAttachmentMarkerName = '.open-complete';
+
+Future<void> _pruneChatAttachmentOpenCache({
+  required Directory accountDirectory,
+  required int maximumBytes,
+  required int maximumEntries,
+  required Set<String> protectedPaths,
+}) async {
+  final entries = <({Directory directory, int bytes, DateTime completedAt})>[];
+  try {
+    await for (final entity in accountDirectory.list(followLinks: false)) {
+      if (entity is! Directory ||
+          !_fileSystemName(entity.path).startsWith('download-')) {
+        continue;
+      }
+      final entry = await _readCompletedAttachmentEntry(entity);
+      if (entry != null) {
+        entries.add(entry);
+      }
+    }
+  } on FileSystemException {
+    return;
+  }
+
+  var totalBytes = entries.fold<int>(0, (sum, entry) => sum + entry.bytes);
+  var retainedEntries = entries.length;
+  if (totalBytes <= maximumBytes && retainedEntries <= maximumEntries) {
+    return;
+  }
+  entries.sort((a, b) => a.completedAt.compareTo(b.completedAt));
+  for (final entry in entries) {
+    if (totalBytes <= maximumBytes && retainedEntries <= maximumEntries) {
+      break;
+    }
+    if (protectedPaths.contains(entry.directory.path)) {
+      continue;
+    }
+    try {
+      await entry.directory.delete(recursive: true);
+      totalBytes -= entry.bytes;
+      retainedEntries--;
+    } on FileSystemException {
+      // Another opener or account removal may already own this path.
+    }
+  }
+}
+
+Future<({Directory directory, int bytes, DateTime completedAt})?>
+_readCompletedAttachmentEntry(Directory directory) async {
+  final marker = File(
+    '${directory.path}${Platform.pathSeparator}$_completedAttachmentMarkerName',
+  );
+  try {
+    if (!await marker.exists()) {
+      return null;
+    }
+    var bytes = 0;
+    var hasAttachment = false;
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File) {
+        return null;
+      }
+      if (entity.path == marker.path) {
+        continue;
+      }
+      bytes += await entity.length();
+      hasAttachment = true;
+    }
+    if (!hasAttachment) {
+      return null;
+    }
+    final markerStat = await marker.stat();
+    return (
+      directory: directory,
+      bytes: bytes,
+      completedAt: markerStat.modified,
+    );
+  } on FileSystemException {
+    return null;
+  }
+}
+
+String _fileSystemName(String path) {
+  final separator = path.lastIndexOf(Platform.pathSeparator);
+  return separator < 0 ? path : path.substring(separator + 1);
 }
 
 Directory chatAttachmentCacheAccountDirectory({

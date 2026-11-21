@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -88,6 +89,172 @@ void main() {
       expect(file.path, startsWith(root.path));
       expect(file.path, endsWith('${Platform.pathSeparator}report_final_.txt'));
       expect(launcher.contentTypes.single, 'text/plain');
+    },
+  );
+
+  test('a cold opener preserves unfinished and foreign cache data', () async {
+    final root = await Directory.systemTemp.createTemp('attachment-prune-');
+    addTearDown(() => root.delete(recursive: true));
+    final launcher = _RecordingLauncher();
+    final repository = _repository(
+      (_) async => http.StreamedResponse(
+        Stream<List<int>>.value(utf8.encode('data')),
+        200,
+        headers: const {'content-type': 'text/plain'},
+      ),
+    );
+    final seed = ChatAttachmentOpener(
+      repository: repository,
+      cacheDirectory: () async => root,
+      launcher: launcher,
+      maximumCacheBytes: 1024,
+      maximumCacheEntries: 10,
+    );
+
+    final oldNames = ['oldest.txt', 'middle.txt', 'newest.txt'];
+    for (var index = 0; index < oldNames.length; index++) {
+      final name = oldNames[index];
+      expect(
+        await seed.open(
+          account: _account,
+          uri: _uri.resolve(name),
+          fileName: name,
+          expectedContentType: 'text/plain',
+        ),
+        ChatAttachmentOpenResult.opened,
+      );
+      await _setCacheCompletionTime(
+        launcher.paths.last,
+        DateTime.utc(2026, 1, 1).add(Duration(minutes: index)),
+      );
+    }
+
+    final accountDirectory = chatAttachmentCacheAccountDirectory(
+      rootDirectory: root,
+      accountId: _account.id,
+    );
+    final unfinished = await accountDirectory.createTemp('download-');
+    final unfinishedFile = File(
+      '${unfinished.path}${Platform.pathSeparator}partial.bin',
+    );
+    await unfinishedFile.writeAsString('partial');
+    final foreignDirectory = chatAttachmentCacheAccountDirectory(
+      rootDirectory: root,
+      accountId: 'account-b',
+    );
+    await foreignDirectory.create(recursive: true);
+    final foreignFile = File(
+      '${foreignDirectory.path}${Platform.pathSeparator}keep.bin',
+    );
+    await foreignFile.writeAsString('foreign');
+
+    final restarted = ChatAttachmentOpener(
+      repository: repository,
+      cacheDirectory: () async => root,
+      launcher: launcher,
+      maximumCacheBytes: 8,
+      maximumCacheEntries: 2,
+    );
+    expect(
+      await restarted.open(
+        account: _account,
+        uri: _uri.resolve('current.txt'),
+        fileName: 'current.txt',
+        expectedContentType: 'text/plain',
+      ),
+      ChatAttachmentOpenResult.opened,
+    );
+
+    expect(await File(launcher.paths[0]).exists(), isFalse);
+    expect(await File(launcher.paths[1]).exists(), isFalse);
+    expect(await File(launcher.paths[2]).exists(), isTrue);
+    expect(await File(launcher.paths[3]).exists(), isTrue);
+    expect(
+      await Future.wait([
+        File(launcher.paths[2]).length(),
+        File(launcher.paths[3]).length(),
+      ]).then((sizes) => sizes.fold<int>(0, (sum, size) => sum + size)),
+      lessThanOrEqualTo(8),
+    );
+    expect(await unfinishedFile.exists(), isTrue);
+    expect(await foreignFile.exists(), isTrue);
+  });
+
+  test(
+    'pruning protects a completed download while its launcher runs',
+    () async {
+      final root = await Directory.systemTemp.createTemp('attachment-active-');
+      addTearDown(() => root.delete(recursive: true));
+      final repository = _repository(
+        (_) async => http.StreamedResponse(
+          Stream<List<int>>.value(utf8.encode('data')),
+          200,
+          headers: const {'content-type': 'text/plain'},
+        ),
+      );
+      final blockedLauncher = _BlockingLauncher();
+      final blockedOpener = ChatAttachmentOpener(
+        repository: repository,
+        cacheDirectory: () async => root,
+        launcher: blockedLauncher,
+        maximumCacheBytes: 4,
+        maximumCacheEntries: 1,
+      );
+      final blockedOpen = blockedOpener.open(
+        account: _account,
+        uri: _uri.resolve('active.txt'),
+        fileName: 'active.txt',
+        expectedContentType: 'text/plain',
+      );
+      addTearDown(() async {
+        blockedLauncher.release();
+        await blockedOpen;
+      });
+      await blockedLauncher.started;
+      final activePath = blockedLauncher.path!;
+
+      final launcher = _RecordingLauncher();
+      final pruningOpener = ChatAttachmentOpener(
+        repository: repository,
+        cacheDirectory: () async => root,
+        launcher: launcher,
+        maximumCacheBytes: 4,
+        maximumCacheEntries: 1,
+      );
+      expect(
+        await pruningOpener.open(
+          account: _account,
+          uri: _uri.resolve('second.txt'),
+          fileName: 'second.txt',
+          expectedContentType: 'text/plain',
+        ),
+        ChatAttachmentOpenResult.opened,
+      );
+      expect(
+        await pruningOpener.open(
+          account: _account,
+          uri: _uri.resolve('third.txt'),
+          fileName: 'third.txt',
+          expectedContentType: 'text/plain',
+        ),
+        ChatAttachmentOpenResult.opened,
+      );
+      expect(await File(activePath).exists(), isTrue);
+
+      blockedLauncher.release();
+      expect(await blockedOpen, ChatAttachmentOpenResult.opened);
+      expect(await File(activePath).exists(), isTrue);
+
+      expect(
+        await pruningOpener.open(
+          account: _account,
+          uri: _uri.resolve('later.txt'),
+          fileName: 'later.txt',
+          expectedContentType: 'text/plain',
+        ),
+        ChatAttachmentOpenResult.opened,
+      );
+      expect(await File(activePath).exists(), isFalse);
     },
   );
 
@@ -239,6 +406,21 @@ Future<ChatAttachmentOpenResult> _open(ChatAttachmentOpener opener) {
   );
 }
 
+Future<void> _setCacheCompletionTime(
+  String attachmentPath,
+  DateTime time,
+) async {
+  final siblings = await File(
+    attachmentPath,
+  ).parent.list(followLinks: false).toList();
+  final markers = siblings
+      .whereType<File>()
+      .where((file) => file.path != attachmentPath)
+      .toList();
+  expect(markers, hasLength(1));
+  await markers.single.setLastModified(time);
+}
+
 ChatMediaRepository _repository(
   Future<http.StreamedResponse> Function(http.BaseRequest request) handler,
 ) {
@@ -259,6 +441,29 @@ final class _RecordingLauncher implements ChatAttachmentFileLauncher {
     paths.add(path);
     contentTypes.add(contentType);
     return opened;
+  }
+}
+
+final class _BlockingLauncher implements ChatAttachmentFileLauncher {
+  final Completer<void> _started = Completer<void>();
+  final Completer<void> _released = Completer<void>();
+
+  String? path;
+
+  Future<void> get started => _started.future;
+
+  void release() {
+    if (!_released.isCompleted) {
+      _released.complete();
+    }
+  }
+
+  @override
+  Future<bool> open({required String path, required String contentType}) async {
+    this.path = path;
+    _started.complete();
+    await _released.future;
+    return true;
   }
 }
 
