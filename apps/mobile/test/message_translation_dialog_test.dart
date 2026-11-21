@@ -100,6 +100,62 @@ void main() {
     expect(find.byKey(const Key('translation-target')), findsOneWidget);
   });
 
+  testWidgets('large language catalog stays lazy and searchable', (
+    tester,
+  ) async {
+    String? translatedTarget;
+    final service = _FakeTranslationService(
+      languagesHandler: () => _manyLanguagesResponse(200),
+      translateHandler: (from, to, text) {
+        expect(from, 'en');
+        expect(text, 'Hello {user}');
+        translatedTarget = to;
+        return _translateResponse(text: 'Translated', from: 'en');
+      },
+    );
+
+    await tester.pumpWidget(_app(service, textScaleFactor: 2));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('translation-target-field')));
+    await tester.pumpAndSettle();
+
+    final listFinder = find.byKey(
+      const Key('translation-language-list-target'),
+    );
+    final list = tester.widget<ListView>(listFinder);
+    expect(list.childrenDelegate, isA<SliverChildBuilderDelegate>());
+    expect(
+      find.byKey(const Key('translation-language-option-target-lang200')),
+      findsNothing,
+      reason: 'off-screen languages must not be built up front',
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('translation-language-search-target')),
+      'Language 200',
+    );
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const Key('translation-language-option-target-lang200')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Language 200'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('translation-source-field')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('translation-language-option-source-en')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('English'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('translation-submit')));
+    await tester.pumpAndSettle();
+    expect(translatedTarget, 'lang200');
+    expect(find.byKey(const Key('translation-result')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('ignores a late language response after disposal', (
     tester,
   ) async {
@@ -205,6 +261,31 @@ TranslationLanguagesResponse _languagesResponse() {
           'to': 'en',
           'toLabel': 'English',
         },
+      ],
+      'languageDetection': true,
+    }),
+  );
+}
+
+TranslationLanguagesResponse _manyLanguagesResponse(int count) {
+  final request = TranslationLanguagesRequest(
+    accountId: AccountId.parse('account-a'),
+    requestId: ChatRequestId.parse('dialog-many-languages'),
+    server: ServerBase.parse(_account.serverUrl),
+    translationAvailable: true,
+  );
+  return decodeTranslationLanguagesResponse(
+    request: request,
+    statusCode: 200,
+    json: _ocs({
+      'languages': [
+        for (var index = 1; index <= count; index++)
+          {
+            'from': 'en',
+            'fromLabel': 'English',
+            'to': 'lang${index.toString().padLeft(3, '0')}',
+            'toLabel': 'Language ${index.toString().padLeft(3, '0')}',
+          },
       ],
       'languageDetection': true,
     }),

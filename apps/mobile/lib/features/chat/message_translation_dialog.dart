@@ -242,6 +242,40 @@ final class _MessageTranslationDialogState
     });
   }
 
+  Future<void> _pickSource(AppLocalizations strings) async {
+    final choice = await showDialog<_LanguageOption>(
+      context: context,
+      builder: (dialogContext) => _LanguagePickerDialog(
+        kind: 'source',
+        title: strings.translationFrom,
+        choices: [
+          if (_languageDetection)
+            _LanguageOption(null, strings.translationDetectLanguage),
+          ..._sourceOptions,
+        ],
+        selectedId: _selectedSource,
+      ),
+    );
+    if (choice != null && mounted) {
+      _changeSource(choice.id);
+    }
+  }
+
+  Future<void> _pickTarget(AppLocalizations strings) async {
+    final choice = await showDialog<_LanguageOption>(
+      context: context,
+      builder: (dialogContext) => _LanguagePickerDialog(
+        kind: 'target',
+        title: strings.translationTo,
+        choices: _targetOptions,
+        selectedId: _selectedTarget,
+      ),
+    );
+    if (choice != null && mounted) {
+      _changeTarget(choice.id);
+    }
+  }
+
   Future<void> _copyTranslation() async {
     final text = _translatedText;
     if (text == null) {
@@ -387,46 +421,31 @@ final class _MessageTranslationDialogState
   Widget _selectors(AppLocalizations strings) {
     final sources = _sourceOptions;
     final targets = _targetOptions;
+    final sourceLabel = _selectedSource == null
+        ? _languageDetection
+              ? strings.translationDetectLanguage
+              : null
+        : _optionLabel(sources, _selectedSource);
+    final targetLabel = _optionLabel(targets, _selectedTarget);
     return Column(
       children: [
         KeyedSubtree(
           key: const Key('translation-source'),
-          child: DropdownButtonFormField<String?>(
-            key: ValueKey((_selectedSource, _selectedTarget)),
-            initialValue: _selectedSource,
-            isExpanded: true,
-            decoration: InputDecoration(labelText: strings.translationFrom),
-            items: [
-              if (_languageDetection)
-                DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text(strings.translationDetectLanguage),
-                ),
-              for (final source in sources)
-                DropdownMenuItem<String?>(
-                  value: source.id,
-                  child: Text(source.label, overflow: TextOverflow.ellipsis),
-                ),
-            ],
-            onChanged: _translating ? null : _changeSource,
+          child: _LanguagePickerField(
+            fieldKey: const Key('translation-source-field'),
+            label: strings.translationFrom,
+            value: sourceLabel,
+            onTap: _translating ? null : () => _pickSource(strings),
           ),
         ),
         const SizedBox(height: 12),
         KeyedSubtree(
           key: const Key('translation-target'),
-          child: DropdownButtonFormField<String>(
-            key: ValueKey((_selectedSource, _selectedTarget)),
-            initialValue: _selectedTarget,
-            isExpanded: true,
-            decoration: InputDecoration(labelText: strings.translationTo),
-            items: [
-              for (final target in targets)
-                DropdownMenuItem<String>(
-                  value: target.id,
-                  child: Text(target.label, overflow: TextOverflow.ellipsis),
-                ),
-            ],
-            onChanged: _translating ? null : _changeTarget,
+          child: _LanguagePickerField(
+            fieldKey: const Key('translation-target-field'),
+            label: strings.translationTo,
+            value: targetLabel,
+            onTap: _translating ? null : () => _pickTarget(strings),
           ),
         ),
       ],
@@ -475,8 +494,155 @@ final class _TranslationOperation {
 final class _LanguageOption {
   const _LanguageOption(this.id, this.label);
 
-  final String id;
+  final String? id;
   final String label;
+}
+
+String? _optionLabel(List<_LanguageOption> options, String? id) =>
+    options.where((option) => option.id == id).firstOrNull?.label;
+
+final class _LanguagePickerField extends StatelessWidget {
+  const _LanguagePickerField({
+    required this.fieldKey,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final Key fieldKey;
+  final String label;
+  final String? value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      child: InkWell(
+        key: fieldKey,
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: InputDecorator(
+          isEmpty: value == null,
+          decoration: InputDecoration(labelText: label, enabled: onTap != null),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  value ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Icon(Icons.arrow_drop_down),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _LanguagePickerDialog extends StatefulWidget {
+  const _LanguagePickerDialog({
+    required this.kind,
+    required this.title,
+    required this.choices,
+    required this.selectedId,
+  });
+
+  final String kind;
+  final String title;
+  final List<_LanguageOption> choices;
+  final String? selectedId;
+
+  @override
+  State<_LanguagePickerDialog> createState() => _LanguagePickerDialogState();
+}
+
+final class _LanguagePickerDialogState extends State<_LanguagePickerDialog> {
+  var _query = '';
+
+  List<_LanguageOption> get _visibleChoices {
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) {
+      return widget.choices;
+    }
+    return widget.choices
+        .where(
+          (choice) =>
+              choice.label.toLowerCase().contains(query) ||
+              (choice.id?.toLowerCase().contains(query) ?? false),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final choices = _visibleChoices;
+    final material = MaterialLocalizations.of(context);
+    return Dialog(
+      key: Key('translation-language-dialog-${widget.kind}'),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 560),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: material.closeButtonLabel,
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: Key('translation-language-search-${widget.kind}'),
+                autofocus: widget.choices.length > 12,
+                decoration: InputDecoration(
+                  labelText: material.searchFieldLabel,
+                  prefixIcon: const Icon(Icons.search),
+                ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.builder(
+                  key: Key('translation-language-list-${widget.kind}'),
+                  itemCount: choices.length,
+                  itemBuilder: (context, index) {
+                    final choice = choices[index];
+                    final id = choice.id ?? 'detect';
+                    return ListTile(
+                      key: Key(
+                        'translation-language-option-${widget.kind}-$id',
+                      ),
+                      title: Text(choice.label),
+                      trailing: choice.id == widget.selectedId
+                          ? const Icon(Icons.check)
+                          : null,
+                      onTap: () => Navigator.of(context).pop(choice),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 String _errorMessage(AppLocalizations strings, MessageTranslationError error) =>
