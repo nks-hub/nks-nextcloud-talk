@@ -52,6 +52,54 @@ void _registerAndroidPushTransportHandoverTests() {
     );
   });
 
+  test('transport switch revokes different accounts concurrently', () async {
+    final fixture = await _createAccounts(const <String>[
+      'account-a',
+      'account-b',
+    ]);
+    final releaseRequests = Completer<void>();
+    final bothStarted = Completer<void>();
+    var started = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.method == 'DELETE' &&
+            request.url.path.endsWith('/webpush')) {
+          started++;
+          if (started == 2) {
+            bothStarted.complete();
+          }
+          await releaseRequests.future;
+          return http.Response(jsonEncode(_ocs(const <Object>[], 200)), 200);
+        }
+        fail('Unexpected request: ${request.method} ${request.url.path}');
+      }),
+    );
+    addTearDown(api.close);
+    final platform = _FakeAndroidWebPushPlatform()
+      ..phase = AndroidWebPushRegistrationPhase.active
+      ..generation = 1;
+    final coordinator = AndroidPushCoordinator(
+      accounts: fixture.accounts,
+      credentials: fixture.credentials,
+      api: api,
+      platform: platform,
+      onWakeUp: (_) async {},
+    );
+    addTearDown(coordinator.close);
+    addTearDown(() {
+      if (!releaseRequests.isCompleted) {
+        releaseRequests.complete();
+      }
+    });
+
+    final revoking = coordinator.revokeAllRegistrations();
+    await bothStarted.future.timeout(const Duration(seconds: 2));
+    expect(started, 2);
+    releaseRequests.complete();
+    await revoking;
+    expect(platform.retiredServerRevocations, hasLength(2));
+  });
+
   test('a revoked account does not register itself again', () async {
     final fixture = await _createAccounts(const <String>['account-a']);
     final api = HttpNextcloudApi(
