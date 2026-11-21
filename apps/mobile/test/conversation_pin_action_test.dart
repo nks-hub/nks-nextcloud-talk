@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,7 +16,11 @@ import 'test_support.dart';
 /// The real publisher talks to the platform channel, so the fake goes in at the
 /// channel and the Dart side under test is the shipped one.
 final class _FakeLauncher {
-  _FakeLauncher({required this.supported, this.accepts = true});
+  _FakeLauncher({
+    required this.supported,
+    this.accepts = true,
+    this.requestGate,
+  });
 
   static const _channel = MethodChannel(
     ConversationShortcutPublisher.channelName,
@@ -22,6 +28,8 @@ final class _FakeLauncher {
 
   final bool supported;
   final bool accepts;
+  final Completer<void>? requestGate;
+  PlatformException? requestError;
   final requested = <Map<Object?, Object?>>[];
 
   void install() {
@@ -35,6 +43,11 @@ final class _FakeLauncher {
                 (call.arguments as Map<Object?, Object?>)['shortcut']
                     as Map<Object?, Object?>,
               );
+              await requestGate?.future;
+              final error = requestError;
+              if (error != null) {
+                throw error;
+              }
               return accepts;
             default:
               return null;
@@ -148,6 +161,43 @@ void main() {
       reason: 'a pin opens through the same link a recent shortcut does',
     );
     expect(find.text('The launcher was asked to pin it.'), findsOneWidget);
+  });
+
+  testWidgets('a pin request is single-flight and retries after an error', (
+    tester,
+  ) async {
+    final requestGate = Completer<void>();
+    final launcher = _FakeLauncher(supported: true, requestGate: requestGate)
+      ..install();
+    addTearDown(() {
+      if (!requestGate.isCompleted) {
+        requestGate.complete();
+      }
+    });
+    await tester.pumpWidget(
+      _host(account: account, conversation: conversation),
+    );
+    await tester.pumpAndSettle();
+
+    final action = find.byKey(const Key('pin-conversation-to-launcher'));
+    await tester.tap(action);
+    await tester.tap(action);
+    await tester.pump();
+
+    expect(launcher.requested, hasLength(1));
+
+    launcher.requestError = PlatformException(code: 'pin-failed');
+    requestGate.complete();
+    await tester.pumpAndSettle();
+    expect(
+      find.text('This launcher did not take the shortcut.'),
+      findsOneWidget,
+    );
+
+    launcher.requestError = null;
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+    expect(launcher.requested, hasLength(2));
   });
 
   testWidgets('a launcher that drops the request says so', (tester) async {

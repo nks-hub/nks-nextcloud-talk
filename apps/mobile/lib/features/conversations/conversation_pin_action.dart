@@ -17,6 +17,18 @@ final launcherPinSupportedProvider = FutureProvider<bool>((ref) {
   return ref.read(conversationShortcutPublisherProvider).pinSupported();
 });
 
+final _conversationPinRequestGuardProvider = Provider<_PinRequestGuard>(
+  (ref) => _PinRequestGuard(),
+);
+
+final class _PinRequestGuard {
+  final _activeShortcutIds = <String>{};
+
+  bool begin(String shortcutId) => _activeShortcutIds.add(shortcutId);
+
+  void end(String shortcutId) => _activeShortcutIds.remove(shortcutId);
+}
+
 /// The "pin to the home screen" action, or nothing where a launcher will not
 /// take one.
 ///
@@ -41,27 +53,37 @@ List<ConversationHeaderAction> conversationPinActions(
   }
   final strings = AppLocalizations.of(context);
   final messenger = ScaffoldMessenger.of(context);
+  final requestGuard = ref.read(_conversationPinRequestGuardProvider);
   return <ConversationHeaderAction>[
     ConversationHeaderAction(
       id: const Key('pin-conversation-to-launcher'),
       icon: Icons.push_pin_outlined,
       label: strings.pinConversationToLauncher,
-      onPressed: () => unawaited(() async {
-        final asked = await ref
-            .read(conversationShortcutPublisherProvider)
-            .requestPin(shortcut);
-        // Whether a pin appears is the launcher's own question to the person;
-        // all this can honestly say is whether it was asked.
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              asked
-                  ? strings.pinConversationRequested
-                  : strings.pinConversationRefused,
-            ),
-          ),
-        );
-      }()),
+      onPressed: () {
+        if (!requestGuard.begin(shortcut.id)) {
+          return;
+        }
+        unawaited(() async {
+          try {
+            final asked = await ref
+                .read(conversationShortcutPublisherProvider)
+                .requestPin(shortcut);
+            // Whether a pin appears is the launcher's own question to the
+            // person; all this can honestly say is whether it was asked.
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(
+                  asked
+                      ? strings.pinConversationRequested
+                      : strings.pinConversationRefused,
+                ),
+              ),
+            );
+          } finally {
+            requestGuard.end(shortcut.id);
+          }
+        }());
+      },
     ),
   ];
 }
