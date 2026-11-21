@@ -52,23 +52,34 @@ void _registerAndroidPushTransportHandoverTests() {
     );
   });
 
-  test('transport switch revokes different accounts concurrently', () async {
+  test('transport switch bounds concurrent account revocations', () async {
     final fixture = await _createAccounts(const <String>[
       'account-a',
       'account-b',
+      'account-c',
+      'account-d',
+      'account-e',
+      'account-f',
     ]);
-    final releaseRequests = Completer<void>();
-    final bothStarted = Completer<void>();
-    var started = 0;
+    final gates = <Completer<void>>[];
+    final firstBatchStarted = Completer<void>();
+    var inFlight = 0;
+    var peakInFlight = 0;
     final api = HttpNextcloudApi(
       client: MockClient((request) async {
         if (request.method == 'DELETE' &&
             request.url.path.endsWith('/webpush')) {
-          started++;
-          if (started == 2) {
-            bothStarted.complete();
+          final gate = Completer<void>();
+          gates.add(gate);
+          inFlight++;
+          if (inFlight > peakInFlight) {
+            peakInFlight = inFlight;
           }
-          await releaseRequests.future;
+          if (gates.length == 4) {
+            firstBatchStarted.complete();
+          }
+          await gate.future;
+          inFlight--;
           return http.Response(jsonEncode(_ocs(const <Object>[], 200)), 200);
         }
         fail('Unexpected request: ${request.method} ${request.url.path}');
@@ -86,18 +97,48 @@ void _registerAndroidPushTransportHandoverTests() {
       onWakeUp: (_) async {},
     );
     addTearDown(coordinator.close);
-    addTearDown(() {
-      if (!releaseRequests.isCompleted) {
-        releaseRequests.complete();
+
+    Future<void> releaseAll() async {
+      for (var turn = 0; turn < 100 && gates.length < 6; turn++) {
+        for (final gate in gates) {
+          if (!gate.isCompleted) {
+            gate.complete();
+          }
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      for (final gate in gates) {
+        if (!gate.isCompleted) {
+          gate.complete();
+        }
+      }
+    }
+
+    Future<void>? pendingRevocation;
+    addTearDown(() async {
+      if (pendingRevocation != null) {
+        await releaseAll();
+        await pendingRevocation;
       }
     });
 
     final revoking = coordinator.revokeAllRegistrations();
-    await bothStarted.future.timeout(const Duration(seconds: 2));
-    expect(started, 2);
-    releaseRequests.complete();
+    pendingRevocation = revoking;
+    await firstBatchStarted.future.timeout(const Duration(seconds: 2));
+    expect(gates, hasLength(4));
+    expect(peakInFlight, 4);
+
+    gates.first.complete();
+    for (var turn = 0; turn < 50 && gates.length < 5; turn++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(gates, hasLength(5));
+    expect(peakInFlight, 4);
+
+    await releaseAll();
     await revoking;
-    expect(platform.retiredServerRevocations, hasLength(2));
+    expect(gates, hasLength(6));
+    expect(platform.retiredServerRevocations, hasLength(6));
   });
 
   test('a revoked account does not register itself again', () async {

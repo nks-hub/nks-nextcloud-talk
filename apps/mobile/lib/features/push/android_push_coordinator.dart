@@ -393,16 +393,23 @@ final class AndroidPushCoordinator {
     // this coordinator keeps serving on the other transport.
     subscribes = false;
     final accounts = await _accounts.listAccounts();
-    await Future.wait<void>([
-      for (final account in accounts)
-        _serialize(account.id, () async {
+    var nextAccount = 0;
+    Future<void> revokeNext() async {
+      while (nextAccount < accounts.length) {
+        final account = accounts[nextAccount++];
+        await _serialize(account.id, () async {
           final context = await _loadContext(account.id);
           if (context == null) {
             return;
           }
           await _revokeWebPush(context, _accountEpochs[account.id] ?? 0);
-        }),
-    ]);
+        });
+      }
+    }
+
+    await Future.wait(
+      List.generate(min(4, accounts.length), (_) => revokeNext()),
+    );
   }
 
   /// Gives up one account's Web Push registration for good: the server's, and
