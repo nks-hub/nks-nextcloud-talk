@@ -113,7 +113,7 @@ final class ChatService {
   /// The pending retry of a send that never left, or the pending check of
   /// one that may have, one per room: only the oldest undelivered send of a
   /// room is ever waiting for either.
-  final Map<String, Timer> _retryTimers = {};
+  final Map<String, ({String? operationId, Timer timer})> _retryTimers = {};
   final Set<_ChatReadAdmission> _readAdmissions = {};
   final _readerWakes =
       StreamController<({String accountId, String roomToken})>.broadcast();
@@ -125,8 +125,8 @@ final class ChatService {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    for (final timer in _retryTimers.values) {
-      timer.cancel();
+    for (final retry in _retryTimers.values) {
+      retry.timer.cancel();
     }
     _retryTimers.clear();
     for (final binding in _liveBindings.toList()) {
@@ -212,8 +212,8 @@ final class ChatService {
         .whereType<Future<void>>()
         .toList(growable: true);
     final prefix = '$accountId\u0000';
-    _retryTimers.removeWhere((key, timer) {
-      if (key.startsWith(prefix)) timer.cancel();
+    _retryTimers.removeWhere((key, retry) {
+      if (key.startsWith(prefix)) retry.timer.cancel();
       return key.startsWith(prefix);
     });
     active.addAll(
@@ -708,19 +708,25 @@ final class ChatService {
   ///
   /// One timer per room. It fires once, and only an attempt that fails again
   /// arms the next one with a longer pause, so it cannot spin.
-  void _armRetry(_PreparedChat prepared, int delaySeconds) {
+  void _armRetry(
+    _PreparedChat prepared,
+    int delaySeconds, {
+    String? operationId,
+  }) {
     if (_closed || _suspendedAccounts.contains(prepared.account.id)) {
       return;
     }
     final key = _roomKey(prepared.account.id, prepared.room.token.value);
-    _retryTimers[key]?.cancel();
-    _retryTimers[key] = Timer(
-      Duration(seconds: delaySeconds < 1 ? 1 : delaySeconds),
-      () {
-        _retryTimers.remove(key);
-        unawaited(_retryDelivery(prepared));
-      },
-    );
+    _retryTimers.remove(key)?.timer.cancel();
+    late final Timer timer;
+    timer = Timer(Duration(seconds: delaySeconds < 1 ? 1 : delaySeconds), () {
+      if (!identical(_retryTimers[key]?.timer, timer)) {
+        return;
+      }
+      _retryTimers.remove(key);
+      unawaited(_retryDelivery(prepared));
+    });
+    _retryTimers[key] = (operationId: operationId, timer: timer);
   }
 
   /// Prepared afresh, because the capabilities or the password may have
@@ -754,14 +760,56 @@ final class ChatService {
     required String accountId,
     required String roomToken,
     required String operationId,
-  }) {
-    final key = _deliveryKey(_roomKey(accountId, roomToken));
-    return _serializeRoom<bool>(key, () {
-      return _chat.cancelTextSend(
-        accountId: accountId,
-        operationId: operationId,
+  }) async {
+    final roomKey = _roomKey(accountId, roomToken);
+    final cancelled = await _serializeRoom<bool>(
+      _deliveryKey(roomKey),
+      () async {
+        final cancelled = await _chat.cancelTextSend(
+          accountId: accountId,
+          operationId: operationId,
+        );
+        final retry = _retryTimers[roomKey];
+        if (cancelled && retry?.operationId == operationId) {
+          _retryTimers.remove(roomKey);
+          retry!.timer.cancel();
+        }
+        return cancelled;
+      },
+    );
+    if (cancelled) {
+      _sendActivity(1);
+      unawaited(
+        _resumePendingAfterCancel(
+          accountId,
+          roomToken,
+        ).whenComplete(() => _sendActivity(-1)),
       );
-    });
+    }
+    return cancelled;
+  }
+
+  Future<void> _resumePendingAfterCancel(
+    String accountId,
+    String roomToken,
+  ) async {
+    try {
+      final pending = await _chat.roomsWithPendingTextSends();
+      if (!pending.any(
+        (room) => room.accountId == accountId && room.roomToken == roomToken,
+      )) {
+        return;
+      }
+      final prepared = await _prepare(
+        accountId,
+        roomToken,
+        allowPersistedCapabilitiesForSend: true,
+        preferPersistedCapabilities: true,
+      );
+      await _deliverPending(prepared, clearsRoomError: false);
+    } on Object {
+      // The durable row remains for its ordinary retry or the next wake.
+    }
   }
 
   Future<bool?> _validatedCachedRootIsNamedThread({
@@ -1164,7 +1212,11 @@ final class ChatService {
         absenceGraceSeconds: _absenceGraceSeconds,
       );
       if (error.requestNotSent) {
-        _armRetry(prepared, retryDelay);
+        _armRetry(
+          prepared,
+          retryDelay,
+          operationId: claim.operation.operationId.value,
+        );
       } else {
         await _armAbsenceVerification(prepared);
       }
@@ -1217,6 +1269,7 @@ final class ChatService {
         prepared,
         response.retryAfterSeconds ??
             _unsentRetryDelaySeconds(claim.operation.attemptCount),
+        operationId: claim.operation.operationId.value,
       );
     }
     if (outcome == ChatOutboxOutcome.reauthenticationRequired) {

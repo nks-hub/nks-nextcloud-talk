@@ -275,6 +275,85 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       expect(delivered.map((row) => row.attemptCount), [2, 1]);
     });
 
+    test(
+      'cancelling a retry-delayed head immediately resumes the next send',
+      () async {
+        var posts = 0;
+        final api = HttpNextcloudApi(
+          client: _sendServer((request) {
+            posts++;
+            if (posts == 1) {
+              return http.Response(
+                '<html>Rate limited before the save</html>',
+                429,
+                headers: const <String, String>{'retry-after': '60'},
+              );
+            }
+            return _acceptedSend(request, 121);
+          }),
+        );
+        addTearDown(api.close);
+        final service = ChatService(
+          accounts: accounts,
+          chat: chat,
+          credentials: credentials,
+          api: api,
+        );
+        addTearDown(service.close);
+        await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+
+        final blockedOperationId = await service.sendText(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          message: 'Cancel this delayed send',
+        );
+        await _waitForTextSends(
+          database,
+          (rows) => rows.length == 1 && rows.single.outboxState == 'retryable',
+        );
+        await service.sendText(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          message: 'Send this next',
+        );
+        final blocked = await _waitForTextSends(
+          database,
+          (rows) =>
+              rows.length == 2 &&
+              rows.any(
+                (row) =>
+                    row.message == 'Cancel this delayed send' &&
+                    row.outboxState == 'retryable',
+              ) &&
+              rows.any(
+                (row) =>
+                    row.message == 'Send this next' &&
+                    row.outboxState == 'queued',
+              ),
+        );
+        expect(
+          blocked.map((row) => row.outboxState),
+          containsAll(['retryable', 'queued']),
+        );
+
+        expect(
+          await service.cancelText(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            operationId: blockedOperationId,
+          ),
+          isTrue,
+        );
+        final delivered = await _waitForTextSends(
+          database,
+          (rows) => rows.length == 1 && rows.single.outboxState == 'completed',
+        );
+
+        expect(posts, 2);
+        expect(delivered.single.message, 'Send this next');
+      },
+    );
+
     for (final lost in const ['timed out', 'was reset']) {
       test('a send that $lost after its body left is not repeated inside '
           'its grace period', () async {
