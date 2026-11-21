@@ -148,6 +148,19 @@ final class _MeetingDialogState extends State<_MeetingDialog> {
     super.dispose();
   }
 
+  Future<void> _pickCalendar() async {
+    final selected = await showDialog<CalendarEntry>(
+      context: context,
+      builder: (context) => _MeetingCalendarDialog(
+        calendars: widget.calendars,
+        selectedUri: _calendarUri,
+      ),
+    );
+    if (selected != null && mounted && !_submitted) {
+      setState(() => _calendarUri = selected.uri);
+    }
+  }
+
   Future<void> _pickStart() async {
     final strings = AppLocalizations.of(context);
     final day = await showDatePicker(
@@ -184,22 +197,13 @@ final class _MeetingDialogState extends State<_MeetingDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            DropdownButtonFormField<String>(
+            _MeetingCalendarField(
               key: const Key('room-details-meeting-calendar'),
-              initialValue: _calendarUri,
-              decoration: InputDecoration(
-                labelText: strings.roomDetailsMeetingCalendarLabel,
-              ),
-              items: [
-                for (final calendar in widget.calendars)
-                  DropdownMenuItem<String>(
-                    value: calendar.uri,
-                    child: Text(calendar.displayName),
-                  ),
-              ],
-              onChanged: _submitted
-                  ? null
-                  : (value) => setState(() => _calendarUri = value!),
+              label: strings.roomDetailsMeetingCalendarLabel,
+              value: widget.calendars
+                  .firstWhere((calendar) => calendar.uri == _calendarUri)
+                  .displayName,
+              onTap: _submitted ? null : _pickCalendar,
             ),
             const SizedBox(height: 12),
             TextField(
@@ -225,6 +229,7 @@ final class _MeetingDialogState extends State<_MeetingDialog> {
             DropdownButtonFormField<int>(
               key: const Key('room-details-meeting-duration'),
               initialValue: _duration.inMinutes,
+              isExpanded: true,
               decoration: InputDecoration(
                 labelText: strings.roomDetailsMeetingDurationLabel,
               ),
@@ -278,6 +283,143 @@ final class _MeetingDialogState extends State<_MeetingDialog> {
           child: Text(strings.roomDetailsMeetingConfirm),
         ),
       ],
+    );
+  }
+}
+
+final class _MeetingCalendarField extends StatelessWidget {
+  const _MeetingCalendarField({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: InputDecorator(
+          decoration: InputDecoration(labelText: label, enabled: onTap != null),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Icon(Icons.arrow_drop_down),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _MeetingCalendarDialog extends StatefulWidget {
+  const _MeetingCalendarDialog({
+    required this.calendars,
+    required this.selectedUri,
+  });
+
+  final List<CalendarEntry> calendars;
+  final String selectedUri;
+
+  @override
+  State<_MeetingCalendarDialog> createState() => _MeetingCalendarDialogState();
+}
+
+final class _MeetingCalendarDialogState extends State<_MeetingCalendarDialog> {
+  var _query = '';
+
+  List<CalendarEntry> get _visibleCalendars {
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) {
+      return widget.calendars;
+    }
+    return widget.calendars
+        .where(
+          (calendar) =>
+              calendar.displayName.toLowerCase().contains(query) ||
+              calendar.uri.toLowerCase().contains(query),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final calendars = _visibleCalendars;
+    final material = MaterialLocalizations.of(context);
+    final strings = AppLocalizations.of(context);
+    return Dialog(
+      key: const Key('room-details-meeting-calendar-dialog'),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 560),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      strings.roomDetailsMeetingCalendarLabel,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: material.closeButtonLabel,
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const Key('room-details-meeting-calendar-search'),
+                autofocus: widget.calendars.length > 12,
+                decoration: InputDecoration(
+                  labelText: material.searchFieldLabel,
+                  prefixIcon: const Icon(Icons.search),
+                ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.builder(
+                  key: const Key('room-details-meeting-calendar-list'),
+                  itemCount: calendars.length,
+                  itemBuilder: (context, index) {
+                    final calendar = calendars[index];
+                    return ListTile(
+                      key: Key(
+                        'room-details-meeting-calendar-option-${calendar.uri}',
+                      ),
+                      title: Text(calendar.displayName),
+                      trailing: calendar.uri == widget.selectedUri
+                          ? const Icon(Icons.check)
+                          : null,
+                      onTap: () => Navigator.of(context).pop(calendar),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

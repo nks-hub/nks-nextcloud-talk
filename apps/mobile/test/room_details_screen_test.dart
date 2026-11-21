@@ -41,6 +41,7 @@ part 'room_details_email_invitations_test.part.dart';
 part 'room_details_unbind_test.part.dart';
 part 'room_details_importance_sensitivity_test.part.dart';
 part 'room_details_message_expiration_test.part.dart';
+part 'room_details_meeting_test.part.dart';
 part 'room_details_overview_moderation_test.part.dart';
 part 'room_details_participant_list_test.part.dart';
 part 'room_details_permissions_test.part.dart';
@@ -111,6 +112,7 @@ void main() {
   _registerEmailInvitationTests();
   _registerImportanceSensitivityTests();
   _registerMessageExpirationTests();
+  _registerMeetingTests();
   _registerSipInfoTests();
   _registerSharedItemsTests();
   _registerUnbindTests();
