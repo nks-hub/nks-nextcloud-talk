@@ -112,6 +112,8 @@ void main() {
     );
 
     expect(queryCounter.threadCountSelects, 1);
+    expect(queryCounter.directMessageInserts, 0);
+    expect(queryCounter.messageBatchExecutions, 1);
     final roots =
         await (database.select(database.cachedChatMessages)..where(
               (row) =>
@@ -199,6 +201,8 @@ Map<String, Object?> _messageJson({
 final class _CachedThreadSelectCounter extends QueryInterceptor {
   bool enabled = false;
   int threadCountSelects = 0;
+  int directMessageInserts = 0;
+  int messageBatchExecutions = 0;
 
   @override
   Future<List<Map<String, Object?>>> runSelect(
@@ -215,5 +219,33 @@ final class _CachedThreadSelectCounter extends QueryInterceptor {
       threadCountSelects++;
     }
     return super.runSelect(executor, statement, args);
+  }
+
+  @override
+  Future<void> runBatched(
+    QueryExecutor executor,
+    BatchedStatements statements,
+  ) {
+    if (enabled &&
+        statements.statements.any(
+          (statement) =>
+              statement.toLowerCase().contains('into "cached_chat_messages"'),
+        )) {
+      messageBatchExecutions++;
+    }
+    return super.runBatched(executor, statements);
+  }
+
+  @override
+  Future<int> runInsert(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) {
+    if (enabled &&
+        statement.toLowerCase().contains('into "cached_chat_messages"')) {
+      directMessageInserts++;
+    }
+    return super.runInsert(executor, statement, args);
   }
 }

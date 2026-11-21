@@ -639,10 +639,14 @@ extension _ChatRepositoryProjection on ChatRepository {
       messageList,
     );
     final pendingMessages = <CachedChatMessagesCompanion>[];
+    final pendingMessageKeys = <({String roomToken, int messageId})>{};
     for (final message in messageList) {
-      if (_requiresPriorCachedMessages(message)) {
+      final requiredMessage = _requiredPriorCachedMessage(message);
+      if (requiredMessage != null &&
+          pendingMessageKeys.contains(requiredMessage)) {
         await _flushPendingMessages(pendingMessages);
         pendingMessages.clear();
+        pendingMessageKeys.clear();
       }
       await _refreshThreadOriginalFromNamedSend(account, message);
       await _refreshThreadOriginalFromParent(
@@ -655,6 +659,10 @@ extension _ChatRepositoryProjection on ChatRepository {
       await _applyMutationFromNotice(account, message);
       final prepared = _prepareMessage(account, message);
       pendingMessages.add(prepared.companion);
+      pendingMessageKeys.add((
+        roomToken: message.roomToken.value,
+        messageId: message.messageId,
+      ));
       _trackConversationPreview(
         timestamps: conversationPreviewTimestamps,
         updates: conversationPreviewUpdates,
@@ -794,14 +802,21 @@ extension _ChatRepositoryProjection on ChatRepository {
     return normalizeGiphyReferencePreview(displayText);
   }
 
-  bool _requiresPriorCachedMessages(ChatMessage message) {
-    if (message.parent != null || message.systemMessage.isNotEmpty) {
-      return true;
+  ({String roomToken, int messageId})? _requiredPriorCachedMessage(
+    ChatMessage message,
+  ) {
+    final parent = message.parent;
+    if (parent is ChatFullParent && parent.roomToken == message.roomToken) {
+      return (roomToken: message.roomToken.value, messageId: parent.messageId);
     }
     final threadId = message.threadId;
-    return threadId != null &&
-        message.messageId != threadId &&
-        message.threadReplies != null;
+    if (threadId == null ||
+        message.messageId == threadId ||
+        message.parent != null ||
+        message.threadReplies == null) {
+      return null;
+    }
+    return (roomToken: message.roomToken.value, messageId: threadId);
   }
 
   ({CachedChatMessagesCompanion companion, String displayText}) _prepareMessage(
