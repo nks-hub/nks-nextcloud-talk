@@ -67,6 +67,8 @@ void main() {
     expect(writes.keyedConversationSelects, 1);
     expect(writes.directConversationUpdates, 0);
     expect(writes.conversationBatchExecutions, 1);
+    expect(writes.directMessageInserts, 0);
+    expect(writes.messageBatchExecutions, 1);
     final conversation = await repository.getConversation(
       accountId: 'account-a',
       roomToken: 'rooma123',
@@ -74,6 +76,28 @@ void main() {
     expect(conversation?.lastMessageTimestamp, 1039);
     expect(conversation?.lastMessageText, 'Message 1039');
   });
+
+  test(
+    'a reaction can update a preceding message from the same page',
+    () async {
+      expect(
+        await repository.applyChatGetResponse(_rootAndReactionResponse()),
+        ChatMergeOutcome.applied,
+      );
+
+      final row =
+          await (database.select(database.cachedChatMessages)..where(
+                (message) =>
+                    message.accountId.equals('account-a') &
+                    message.roomToken.equals('rooma123') &
+                    message.messageId.equals(2000),
+              ))
+              .getSingle();
+      final stored = ChatMessage.fromJson(jsonDecode(row.rawJson));
+      expect(stored.reactions, {'thumbs-up': 2});
+      expect(stored.reactionsSelf, ['thumbs-up']);
+    },
+  );
 }
 
 Future<void> _insertConversation(AppDatabase database) async {
@@ -149,6 +173,52 @@ ChatGetResponse _rootFutureResponse() {
   );
 }
 
+ChatGetResponse _rootAndReactionResponse() {
+  final request = ChatFetchRequest(
+    accountId: AccountId.parse('account-a'),
+    requestId: ChatRequestId.parse('message-reaction-order'),
+    server: ServerBase.parse('https://cloud.example.invalid'),
+    roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+    profile: ChatCapabilityProfile.fromTalkFeatures(const <Object?>[
+      'chat-v2',
+    ], federated: false),
+    direction: ChatFetchDirection.future,
+    cursor: ChatCursor.parse('0'),
+    lastCommonRead: ChatCursor.parse('0'),
+    limit: 200,
+    includeLastKnown: false,
+    timeoutSeconds: 0,
+    interactive: true,
+  );
+  final original = _messageJson(2000);
+  final reacted = Map<String, Object?>.of(original)
+    ..['reactions'] = {'thumbs-up': 2}
+    ..['reactionsSelf'] = <String>['thumbs-up'];
+  final notice = _messageJson(2001)
+    ..['systemMessage'] = 'reaction'
+    ..['messageType'] = 'system'
+    ..['message'] = 'thumbs-up'
+    ..['parent'] = reacted;
+  return decodeChatGetResponse(
+    request: request,
+    statusCode: 200,
+    body: Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'ocs': {
+            'meta': {'status': 'ok', 'statuscode': 200, 'message': 'OK'},
+            'data': [original, notice],
+          },
+        }),
+      ),
+    ),
+    headers: ChatResponseHeaders.fromMap(const {
+      'X-Chat-Last-Given': '2001',
+      'X-Chat-Last-Common-Read': '0',
+    }),
+  );
+}
+
 Map<String, Object?> _messageJson(int id) => <String, Object?>{
   'id': id,
   'token': 'rooma123',
@@ -170,6 +240,8 @@ final class _ConversationPreviewCounter extends QueryInterceptor {
   int keyedConversationSelects = 0;
   int directConversationUpdates = 0;
   int conversationBatchExecutions = 0;
+  int directMessageInserts = 0;
+  int messageBatchExecutions = 0;
 
   @override
   Future<List<Map<String, Object?>>> runSelect(
@@ -199,7 +271,27 @@ final class _ConversationPreviewCounter extends QueryInterceptor {
         })) {
       conversationBatchExecutions++;
     }
+    if (enabled &&
+        statements.statements.any(
+          (statement) =>
+              statement.toLowerCase().contains('into "cached_chat_messages"'),
+        )) {
+      messageBatchExecutions++;
+    }
     return super.runBatched(executor, statements);
+  }
+
+  @override
+  Future<int> runInsert(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) {
+    if (enabled &&
+        statement.toLowerCase().contains('into "cached_chat_messages"')) {
+      directMessageInserts++;
+    }
+    return super.runInsert(executor, statement, args);
   }
 
   @override

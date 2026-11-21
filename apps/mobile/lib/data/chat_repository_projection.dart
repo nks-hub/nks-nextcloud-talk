@@ -638,7 +638,12 @@ extension _ChatRepositoryProjection on ChatRepository {
       account,
       messageList,
     );
+    final pendingMessages = <CachedChatMessagesCompanion>[];
     for (final message in messageList) {
+      if (_requiresPriorCachedMessages(message)) {
+        await _flushPendingMessages(pendingMessages);
+        pendingMessages.clear();
+      }
       await _refreshThreadOriginalFromNamedSend(account, message);
       await _refreshThreadOriginalFromParent(
         account,
@@ -648,14 +653,16 @@ extension _ChatRepositoryProjection on ChatRepository {
       );
       await _applyReactionsFromNotice(account, message);
       await _applyMutationFromNotice(account, message);
-      final displayText = await _persistMessage(account, message);
+      final prepared = _prepareMessage(account, message);
+      pendingMessages.add(prepared.companion);
       _trackConversationPreview(
         timestamps: conversationPreviewTimestamps,
         updates: conversationPreviewUpdates,
         message: message,
-        displayText: displayText,
+        displayText: prepared.displayText,
       );
     }
+    await _flushPendingMessages(pendingMessages);
     await _persistConversationPreviews(
       accountId: accountId,
       updates: conversationPreviewUpdates,
@@ -787,32 +794,54 @@ extension _ChatRepositoryProjection on ChatRepository {
     return normalizeGiphyReferencePreview(displayText);
   }
 
-  Future<String> _persistMessage(
+  bool _requiresPriorCachedMessages(ChatMessage message) {
+    if (message.parent != null || message.systemMessage.isNotEmpty) {
+      return true;
+    }
+    final threadId = message.threadId;
+    return threadId != null &&
+        message.messageId != threadId &&
+        message.threadReplies != null;
+  }
+
+  ({CachedChatMessagesCompanion companion, String displayText}) _prepareMessage(
     ChatAccountState account,
     ChatMessage message,
-  ) async {
+  ) {
     final displayText = _displayText(account.server, message);
-    await _database
-        .into(_database.cachedChatMessages)
-        .insertOnConflictUpdate(
-          CachedChatMessagesCompanion.insert(
-            accountId: account.accountId.value,
-            roomToken: message.roomToken.value,
-            messageId: message.messageId,
-            actorType: message.actorType,
-            actorId: message.actorId,
-            actorDisplayName: message.actorDisplayName,
-            timestamp: message.timestamp,
-            systemMessage: message.systemMessage,
-            messageType: message.messageType,
-            referenceId: message.referenceId,
-            displayText: displayText,
-            deleted: message.deleted,
-            threadId: Value(message.threadId),
-            rawJson: jsonEncode(message.wire),
-          ),
-        );
-    return displayText;
+    return (
+      companion: CachedChatMessagesCompanion.insert(
+        accountId: account.accountId.value,
+        roomToken: message.roomToken.value,
+        messageId: message.messageId,
+        actorType: message.actorType,
+        actorId: message.actorId,
+        actorDisplayName: message.actorDisplayName,
+        timestamp: message.timestamp,
+        systemMessage: message.systemMessage,
+        messageType: message.messageType,
+        referenceId: message.referenceId,
+        displayText: displayText,
+        deleted: message.deleted,
+        threadId: Value(message.threadId),
+        rawJson: jsonEncode(message.wire),
+      ),
+      displayText: displayText,
+    );
+  }
+
+  Future<void> _flushPendingMessages(
+    List<CachedChatMessagesCompanion> pendingMessages,
+  ) async {
+    if (pendingMessages.isEmpty) {
+      return;
+    }
+    await _database.batch(
+      (batch) => batch.insertAllOnConflictUpdate(
+        _database.cachedChatMessages,
+        pendingMessages,
+      ),
+    );
   }
 
   Future<StoredChatScope?> _rootScope({
