@@ -102,6 +102,16 @@ final class AccountRepository {
     return query.watch();
   }
 
+  /// Reads one room token without opening a live query or loading room JSON.
+  Future<String?> getAnyConversationToken(String accountId) async {
+    final token = _database.cachedConversations.token;
+    final query = _database.selectOnly(_database.cachedConversations)
+      ..addColumns([token])
+      ..where(_database.cachedConversations.accountId.equals(accountId))
+      ..limit(1);
+    return (await query.getSingleOrNull())?.read(token);
+  }
+
   /// Unread messages per account, summed in the database so the badge does not
   /// load every conversation row (and its JSON) of every account. Accounts
   /// without conversations are absent.

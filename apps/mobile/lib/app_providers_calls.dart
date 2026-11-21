@@ -24,16 +24,15 @@ final callTransportProvider = FutureProvider.autoDispose
 /// The setting is app-wide while the answer is per server, so any server that
 /// offers one keeps the switch. A server that cannot be asked counts as
 /// offering one — see [CallTransportService.offersRelay].
-/// `autoDispose`, and every dependency is READ rather than watched. The room
-/// list is a live database stream whose rows change on every arriving message;
-/// watching it would send a settings request per message for the rest of the
-/// run, long after the settings screen was closed.
+/// `autoDispose`, and every dependency is READ rather than watched. A single
+/// projected room token is enough; loading or watching whole room rows would
+/// also read their JSON and react to every arriving message.
 final callRelayOfferedProvider = FutureProvider.autoDispose<bool>((ref) async {
   final repository = ref.read(accountRepositoryProvider);
   final transport = ref.read(callTransportServiceProvider);
   for (final account in await repository.listAccounts()) {
-    final rooms = await repository.watchConversations(account.id).first;
-    if (rooms.isEmpty) {
+    final roomToken = await repository.getAnyConversationToken(account.id);
+    if (roomToken == null) {
       // Nobody to ask about: a freshly added account before its first sync
       // has no room to name in the request. Unknown counts as offered, the
       // same as a server that cannot be reached — hiding a working switch is
@@ -42,7 +41,7 @@ final callRelayOfferedProvider = FutureProvider.autoDispose<bool>((ref) async {
     }
     if (await transport.offersRelay(
       accountId: account.id,
-      roomToken: rooms.first.token,
+      roomToken: roomToken,
     )) {
       return true;
     }

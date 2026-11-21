@@ -140,6 +140,55 @@ void main() {
     },
   );
 
+  test('reads one room token without loading conversation payloads', () async {
+    final interceptor = _ConversationTokenSelectGuard();
+    await database.close();
+    database = AppDatabase.forTesting(
+      NativeDatabase.memory().interceptWith(interceptor),
+    );
+    await database.customSelect('SELECT 1').get();
+    repository = AccountRepository(database);
+    await repository.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://a.example.invalid',
+      loginName: 'alex',
+      serverProductName: 'Nextcloud A',
+      createdAt: DateTime.utc(2026, 1, 1),
+    );
+    await repository.upsertAccount(
+      accountId: 'account-b',
+      serverUrl: 'https://b.example.invalid',
+      loginName: 'blair',
+      serverProductName: 'Nextcloud B',
+      createdAt: DateTime.utc(2026, 1, 2),
+    );
+
+    Future<void> insert(String accountId, String token) {
+      return database
+          .into(database.cachedConversations)
+          .insert(
+            CachedConversationsCompanion.insert(
+              accountId: accountId,
+              token: token,
+              displayName: 'Room',
+              description: '',
+              lastActivity: 0,
+              unreadMessages: 0,
+              favorite: false,
+              rawJson: '{"large":"payload"}',
+            ),
+          );
+    }
+
+    await insert('account-a', 'room-a');
+    await insert('account-b', 'room-b');
+    interceptor.enabled = true;
+
+    expect(await repository.getAnyConversationToken('account-a'), 'room-a');
+    expect(await repository.getAnyConversationToken('missing'), equals(null));
+    expect(interceptor.tokenSelects, 2);
+  });
+
   test('returns the upserted account before its transaction commits', () async {
     final interceptor = _RejectOutsideTransactionAccountSelects();
     await database.close();
@@ -331,6 +380,27 @@ final class _RejectOutsideTransactionAccountSelects extends QueryInterceptor {
         statement.toLowerCase().contains('from "accounts"')) {
       rejectedSelects++;
       throw StateError('account select escaped the transaction');
+    }
+    return super.runSelect(executor, statement, args);
+  }
+}
+
+final class _ConversationTokenSelectGuard extends QueryInterceptor {
+  bool enabled = false;
+  int tokenSelects = 0;
+
+  @override
+  Future<List<Map<String, Object?>>> runSelect(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) {
+    final sql = statement.toLowerCase();
+    if (enabled && sql.contains('from "cached_conversations"')) {
+      tokenSelects++;
+      if (sql.contains('raw_json') || !sql.contains(' limit ')) {
+        throw StateError('room token lookup loaded full rows');
+      }
     }
     return super.runSelect(executor, statement, args);
   }
