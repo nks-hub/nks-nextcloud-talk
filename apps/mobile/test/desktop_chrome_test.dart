@@ -50,6 +50,25 @@ void main() {
     expect(find.byKey(const Key('account-rail')), findsOneWidget);
   });
 
+  testWidgets('wide layout separates the list from the conversation surface', (
+    tester,
+  ) async {
+    await _pumpWide(tester, accounts: [account('account-a')]);
+
+    final surface = tester.widget<Container>(
+      find.byKey(const Key('conversation-list-pane')),
+    );
+    expect(surface.color, AppTheme.light().colorScheme.surfaceContainerLow);
+  });
+
+  testWidgets('wide list keeps its loading and empty states', (tester) async {
+    await _pumpWide(tester, accounts: [account('account-a')], loading: true);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    await _pumpWide(tester, accounts: [account('account-a')]);
+    expect(find.text('No conversations yet'), findsOneWidget);
+  });
+
   testWidgets('dropping the rail hands its width to the conversation', (
     tester,
   ) async {
@@ -175,6 +194,7 @@ Future<void> _pumpWide(
   WidgetTester tester, {
   required List<StoredAccount> accounts,
   bool listCollapsed = false,
+  bool loading = false,
   ValueChanged<double>? onResizeList,
 }) async {
   tester.view.physicalSize = const Size(1400, 900);
@@ -184,6 +204,7 @@ Future<void> _pumpWide(
     tester,
     accounts: accounts,
     listCollapsed: listCollapsed,
+    loading: loading,
     onResizeList: onResizeList,
   );
 }
@@ -192,6 +213,7 @@ Future<void> _pumpShell(
   WidgetTester tester, {
   required List<StoredAccount> accounts,
   bool listCollapsed = false,
+  bool loading = false,
   ValueChanged<double>? onResizeList,
 }) async {
   await tester.pumpWidget(
@@ -205,7 +227,7 @@ Future<void> _pumpShell(
           accounts: accounts,
           conversations: const [],
           selectedConversationToken: null,
-          loading: false,
+          loading: loading,
           syncing: false,
           onRefresh: () async {},
           onSelectAccount: (_) {},

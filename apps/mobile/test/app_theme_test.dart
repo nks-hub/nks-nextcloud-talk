@@ -29,6 +29,66 @@ void main() {
       );
     }
   });
+
+  test('supporting roles and component edges stay consistent', () {
+    for (final theme in <ThemeData>[AppTheme.light(), AppTheme.dark()]) {
+      final scheme = theme.colorScheme;
+
+      expect(scheme.secondary, isNot(scheme.primary));
+      expect(scheme.tertiary, isNot(scheme.primary));
+      expect(scheme.tertiary, isNot(scheme.secondary));
+      expect(theme.dividerTheme.color, scheme.outlineVariant);
+      expect(theme.chipTheme.backgroundColor, scheme.surfaceContainerLow);
+      expect(theme.chipTheme.selectedColor, scheme.secondaryContainer);
+      expect(theme.chipTheme.checkmarkColor, scheme.onSecondaryContainer);
+      expect(theme.chipTheme.side?.color, scheme.outlineVariant);
+    }
+  });
+
+  testWidgets('filter labels follow selected and disabled states', (
+    tester,
+  ) async {
+    final theme = AppTheme.light();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: Scaffold(
+          body: Wrap(
+            children: [
+              FilterChip(
+                selected: false,
+                label: const Text('Default', key: Key('chip-default')),
+                onSelected: (_) {},
+              ),
+              FilterChip(
+                selected: true,
+                label: const Text('Selected', key: Key('chip-selected')),
+                onSelected: (_) {},
+              ),
+              const FilterChip(
+                selected: false,
+                label: Text('Disabled', key: Key('chip-disabled')),
+                onSelected: null,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    Color? renderedColor(String key) =>
+        DefaultTextStyle.of(tester.element(find.byKey(Key(key)))).style.color;
+
+    expect(renderedColor('chip-default'), theme.colorScheme.onSurfaceVariant);
+    expect(
+      renderedColor('chip-selected'),
+      theme.colorScheme.onSecondaryContainer,
+    );
+    expect(
+      renderedColor('chip-disabled'),
+      theme.colorScheme.onSurface.withValues(alpha: 0.38),
+    );
+  });
 }
 
 double _contrast(Color first, Color second) {

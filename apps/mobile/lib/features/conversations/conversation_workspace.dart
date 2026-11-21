@@ -602,9 +602,10 @@ final class _ExpandedShell extends StatelessWidget {
     return Row(
       children: [
         if (!listCollapsed)
-          SizedBox(
+          Container(
             key: const Key('conversation-list-pane'),
             width: listPaneWidth,
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
             child: Column(
               children: [
                 ConstrainedBox(

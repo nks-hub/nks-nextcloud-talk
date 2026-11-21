@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 abstract final class AppTheme {
   static const Color _seed = Color(0xFF00679E);
+  static const Color _secondarySeed = Color(0xFF65558F);
+  static const Color _tertiarySeed = Color(0xFF006B5E);
   static const Color _lightSurface = Color(0xFFF7F9FC);
   static const Color _darkSurface = Color(0xFF0D1116);
 
@@ -58,7 +60,23 @@ abstract final class AppTheme {
       seedColor: seedColor ?? _seed,
       brightness: brightness,
     );
+    final secondary = ColorScheme.fromSeed(
+      seedColor: _secondarySeed,
+      brightness: brightness,
+    );
+    final tertiary = ColorScheme.fromSeed(
+      seedColor: _tertiarySeed,
+      brightness: brightness,
+    );
     final scheme = generated.copyWith(
+      secondary: secondary.primary,
+      onSecondary: secondary.onPrimary,
+      secondaryContainer: secondary.primaryContainer,
+      onSecondaryContainer: secondary.onPrimaryContainer,
+      tertiary: tertiary.primary,
+      onTertiary: tertiary.onPrimary,
+      tertiaryContainer: tertiary.primaryContainer,
+      onTertiaryContainer: tertiary.onPrimaryContainer,
       surface: isDark ? _darkSurface : _lightSurface,
       surfaceContainerLowest: isDark ? const Color(0xFF080B0F) : Colors.white,
       surfaceContainerLow: isDark
@@ -69,8 +87,8 @@ abstract final class AppTheme {
           : const Color(0xFFE8EEF4),
       outline: isDark ? const Color(0xFF6A7886) : const Color(0xFF66717D),
       outlineVariant: isDark
-          ? const Color(0xFF5B6976)
-          : const Color(0xFF808C98),
+          ? const Color(0xFF34404B)
+          : const Color(0xFFCDD7E1),
     );
     final base = ThemeData(
       useMaterial3: true,
@@ -79,6 +97,15 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: scheme.surface,
       disabledColor: scheme.onSurfaceVariant,
     );
+    final chipLabelColor = WidgetStateColor.resolveWith((states) {
+      if (states.contains(WidgetState.disabled)) {
+        return scheme.onSurface.withValues(alpha: 0.38);
+      }
+      if (states.contains(WidgetState.selected)) {
+        return scheme.onSecondaryContainer;
+      }
+      return scheme.onSurfaceVariant;
+    });
     return base.copyWith(
       textTheme: base.textTheme.copyWith(
         bodyLarge: base.textTheme.bodyLarge?.copyWith(height: 1.5),
@@ -154,6 +181,21 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(cardRadius),
           side: BorderSide(color: scheme.outlineVariant, width: outlineWidth),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: scheme.surfaceContainerLow,
+        disabledColor: scheme.surfaceContainer,
+        selectedColor: scheme.secondaryContainer,
+        secondarySelectedColor: scheme.secondaryContainer,
+        checkmarkColor: scheme.onSecondaryContainer,
+        side: BorderSide(color: scheme.outlineVariant),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(pointer ? 8 : 14),
+        ),
+        labelStyle: base.textTheme.labelLarge?.copyWith(color: chipLabelColor),
+        secondaryLabelStyle: base.textTheme.labelLarge?.copyWith(
+          color: chipLabelColor,
         ),
       ),
       dividerTheme: DividerThemeData(
