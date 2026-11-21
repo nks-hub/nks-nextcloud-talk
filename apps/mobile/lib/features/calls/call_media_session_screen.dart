@@ -113,8 +113,13 @@ extension _CallMediaSessionScreen on CallMediaSession {
         iceServers: _iceServers,
         audio: null,
         video: screen,
-        onIceCandidate: (candidate) =>
-            unawaited(_enqueue(() => _sendCandidate(share, candidate))),
+        onIceCandidate: (candidate) => unawaited(
+          _enqueue(() async {
+            if (identical(_shares[peerId], share)) {
+              await _sendCandidate(share, candidate);
+            }
+          }),
+        ),
         onConnectionState: (state) => unawaited(
           _enqueue(() async {
             if (identical(_shares[peerId], share)) {
@@ -218,6 +223,12 @@ extension _CallMediaSessionScreen on CallMediaSession {
         : _screenShareConnectionConcurrency;
     await Future.wait(List.generate(workerCount, (_) => closeNext()));
   }
+
+  Future<void> _closeShare(String peerId, CallResourceCleanup cleanup) =>
+      cleanup.run(
+        _shares.remove(peerId)?.connection?.close,
+        label: 'outgoing screen peer',
+      );
 
   /// A participant started sharing their screen: a receive-only connection of
   /// its own, answered on the sharer's sid. A second offer on a known screen

@@ -176,9 +176,13 @@ extension _CallMediaSessionSignaling on CallMediaSession {
         via: peer,
       );
     } on CallMediaException {
-      await _closePeer(peer.peerId);
+      await _closeFailedNegotiation(peer);
     }
   }
+
+  Future<void> _closeFailedNegotiation(_MediaPeer peer) => peer.ownScreen
+      ? _closeShare(peer.peerId, CallResourceCleanup())
+      : _closePeer(peer.peerId);
 
   Future<void> _receive({
     required SignalingPeerMessage message,
@@ -376,7 +380,7 @@ extension _CallMediaSessionSignaling on CallMediaSession {
       peer.remoteDescriptionSet = true;
       await _drainRemoteCandidates(peer);
     } on CallMediaException {
-      await _closePeer(senderId);
+      await _closeFailedNegotiation(peer);
     }
   }
 

@@ -82,6 +82,7 @@ final class _FakeEngine implements CallMediaEngine {
   Completer<void>? connectionCloseGate;
   int connectionCloseStarts = 0;
   Future<void> Function()? beforeSetLocalVideo;
+  Future<void> Function(_FakeConnection)? beforeCreateOffer;
   final List<_FakeAudio> audio = <_FakeAudio>[];
   final List<_FakeConnection> connections = <_FakeConnection>[];
 
@@ -170,6 +171,7 @@ final class _FakeEngine implements CallMediaEngine {
       beforeSetLocalVideo: () async {
         await beforeSetLocalVideo?.call();
       },
+      beforeCreateOffer: beforeCreateOffer,
     );
     connections.add(connection);
     return connection;
@@ -259,6 +261,7 @@ final class _FakeConnection implements CallPeerConnection {
     this.closeGate,
     this.onCloseStarted,
     this.beforeSetLocalVideo,
+    this.beforeCreateOffer,
   });
 
   final CallLocalAudio? audio;
@@ -273,6 +276,7 @@ final class _FakeConnection implements CallPeerConnection {
   final Future<void>? closeGate;
   final void Function()? onCloseStarted;
   final Future<void> Function()? beforeSetLocalVideo;
+  final Future<void> Function(_FakeConnection)? beforeCreateOffer;
 
   /// Every `sendStatus` call this connection accepted, in order. Stays empty
   /// when [onStatusMessage] was never given — a screen-share connection,
@@ -307,6 +311,7 @@ final class _FakeConnection implements CallPeerConnection {
   final List<CallSessionDescription> localDescriptions = [];
   final List<CallSessionDescription> remoteDescriptions = [];
   final List<CallIceCandidate> remoteCandidates = [];
+  CallMediaError? remoteDescriptionError;
 
   void emitIceCandidate(CallIceCandidate candidate) =>
       onIceCandidate(candidate);
@@ -319,6 +324,7 @@ final class _FakeConnection implements CallPeerConnection {
   @override
   Future<CallSessionDescription> createOffer({bool iceRestart = false}) async {
     createdOffers++;
+    await beforeCreateOffer?.call(this);
     if (iceRestart) {
       iceRestarts++;
     }
@@ -338,6 +344,9 @@ final class _FakeConnection implements CallPeerConnection {
 
   @override
   Future<void> setRemoteDescription(CallSessionDescription description) async {
+    if (remoteDescriptionError case final error?) {
+      throw CallMediaException(error);
+    }
     remoteDescriptions.add(description);
   }
 

@@ -2,6 +2,60 @@ part of 'call_media_session_test.dart';
 
 extension _ScreenMediaSessionTests on _MediaSessionTests {
   void _registerScreenSharing() {
+    test('a failed screen offer leaves the connected call peer open', () async {
+      engine.beforeCreateOffer = (connection) async {
+        if (connection.video != null) {
+          throw const CallMediaException(CallMediaError.engineFailure);
+        }
+      };
+      final media = session(
+        _update(localPeerId: _local, participants: [_participant(_remote)]),
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      final call = engine.connections.single;
+      call.emitConnectionState(CallMediaConnectionState.connected);
+      await pumpEventQueue();
+
+      await media.setScreenSharing(true);
+
+      expect(call.closed, isFalse);
+      expect(media.state.phase, CallMediaPhase.connected);
+      expect(media.state.connectedPeers, 1);
+      expect(engine.connections.last.closed, isTrue);
+      expect(sent.where((message) => message.roomType == 'screen'), isEmpty);
+    });
+
+    test('a failed screen answer closes only the outgoing screen', () async {
+      final initial = _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+      );
+      final media = session(initial);
+      addTearDown(media.dispose);
+      await media.start();
+      await media.setScreenSharing(true);
+      final [call, share] = engine.connections;
+      share.remoteDescriptionError = CallMediaError.engineFailure;
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: initial.participants,
+          messages: [
+            _message(_remote, 'answer', {
+              'type': 'answer',
+              'sdp': 'failed-screen-answer',
+            }, roomType: 'screen'),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(share.closed, isTrue);
+      expect(call.closed, isFalse);
+      expect(media.state.peers, 1);
+    });
+
     for (final mcu in [false, true]) {
       test(
         'leaving during screen startup never publishes (MCU: $mcu)',

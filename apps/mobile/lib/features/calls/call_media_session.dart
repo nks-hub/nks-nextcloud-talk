@@ -540,11 +540,7 @@ final class CallMediaSession {
     final resources = cleanup ?? CallResourceCleanup();
     _offerRequests.remove(peerId)?.cancel();
     await _closeScreen(peerId, resources);
-    final share = _shares.remove(peerId);
-    await resources.run(
-      share?.connection?.close,
-      label: 'outgoing screen peer',
-    );
+    await _closeShare(peerId, resources);
     final peer = _peers.remove(peerId);
     _raisedHands.remove(peerId);
     _peerAudioMuted.remove(peerId);
