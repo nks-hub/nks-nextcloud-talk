@@ -546,7 +546,7 @@ void main() {
       accounts: AccountRepository(database),
     ).load('account-a');
 
-    expect(diagnostics.database.expectedSchemaVersion, 19);
+    expect(diagnostics.database.expectedSchemaVersion, database.schemaVersion);
     expect(diagnostics.database.storedSchemaVersion, 15);
     expect(
       diagnostics.database.migrationState,
