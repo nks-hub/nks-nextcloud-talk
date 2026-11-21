@@ -177,11 +177,15 @@ final class AccountRemovalService {
     if (sourceHandles.isNotEmpty) {
       await _bestEffort(() async {
         final sources = await _attachmentSources();
+        final handles = <AttachmentSourceHandle>[];
         for (final handle in sourceHandles) {
-          await _bestEffort(
-            () => sources.discard(AttachmentSourceHandle.parse(handle)),
-          );
+          try {
+            handles.add(AttachmentSourceHandle.parse(handle));
+          } on Object {
+            // A corrupt row must not keep later valid sources on the device.
+          }
         }
+        await sources.discardAll(handles);
       });
     }
 

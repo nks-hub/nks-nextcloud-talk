@@ -87,6 +87,7 @@ final class DurableAttachmentSourceStore implements AttachmentSourceProvider {
   static final RegExp _sourceIdPattern = RegExp(r'^[0-9a-f]{32}$');
   static final RegExp _extensionPattern = RegExp(r'^\.[a-z0-9]{1,12}$');
   static const int _readChunkBytes = 64 * 1024;
+  static const int _discardConcurrency = 4;
 
   final Directory _configuredRoot;
   final int maximumSourceBytes;
@@ -333,6 +334,36 @@ final class DurableAttachmentSourceStore implements AttachmentSourceProvider {
     state.deletion = deletion;
     unawaited(_deleteWhenReleased(sourceId, state, deletion));
     return deletion.future;
+  }
+
+  /// Discards several independent sources without opening every file at once.
+  /// Every handle is attempted even when another one fails.
+  Future<void> discardAll(Iterable<AttachmentSourceHandle> handles) async {
+    final pending = handles.toList(growable: false);
+    Object? firstError;
+    StackTrace? firstStackTrace;
+    var nextHandle = 0;
+
+    Future<void> discardNext() async {
+      while (nextHandle < pending.length) {
+        final handle = pending[nextHandle++];
+        try {
+          await discard(handle);
+        } on Object catch (error, stackTrace) {
+          firstError ??= error;
+          firstStackTrace ??= stackTrace;
+        }
+      }
+    }
+
+    final workerCount = pending.length < _discardConcurrency
+        ? pending.length
+        : _discardConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => discardNext()));
+    final error = firstError;
+    if (error != null) {
+      Error.throwWithStackTrace(error, firstStackTrace!);
+    }
   }
 
   /// Deletes committed sources nothing points at any more.

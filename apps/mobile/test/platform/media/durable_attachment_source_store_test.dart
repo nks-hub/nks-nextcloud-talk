@@ -300,6 +300,86 @@ void main() {
         ),
       );
     });
+
+    test('discarding a batch keeps at most four deletions active', () async {
+      final store = DurableAttachmentSourceStore(root: root);
+      final sources = <PreparedAttachmentSource>[];
+      for (var index = 0; index < 6; index++) {
+        sources.add(
+          await store.copyFromStream(
+            stream: Stream<List<int>>.value(<int>[index + 1]),
+            mimeType: 'application/octet-stream',
+            displayName: 'source-$index.bin',
+          ),
+        );
+      }
+      final held = <AttachmentSourceLease>[
+        for (final source in sources.take(4)) await store.open(source.handle),
+      ];
+      final discard = store.discardAll(sources.map((source) => source.handle));
+      addTearDown(() async {
+        for (final lease in held) {
+          await lease.close();
+        }
+        await discard;
+      });
+
+      for (var turn = 0; turn < 20; turn++) {
+        if (await _allUnavailable(store, sources.take(4))) {
+          break;
+        }
+        await pumpEventQueue();
+      }
+      expect(await _allUnavailable(store, sources.take(4)), isTrue);
+
+      final fifth = await store.open(sources[4].handle);
+      final sixth = await store.open(sources[5].handle);
+      await fifth.close();
+      await sixth.close();
+
+      for (final lease in held) {
+        await lease.close();
+      }
+      held.clear();
+      await discard;
+      expect(await _allUnavailable(store, sources), isTrue);
+    });
+
+    test('discarding a batch continues after invalid handles', () async {
+      final store = DurableAttachmentSourceStore(root: root);
+      Future<PreparedAttachmentSource> put(int value) => store.copyFromStream(
+        stream: Stream<List<int>>.value(<int>[value]),
+        mimeType: 'application/octet-stream',
+        displayName: 'source-$value.bin',
+      );
+      final first = await put(1);
+      final second = await put(2);
+      final invalid = AttachmentSourceHandle.parse(
+        'nctalk-media-v1:../../outside',
+      );
+
+      await expectLater(
+        store.discardAll(<AttachmentSourceHandle>[
+          invalid,
+          invalid,
+          invalid,
+          invalid,
+          first.handle,
+          second.handle,
+        ]),
+        throwsA(
+          isA<DurableAttachmentSourceException>().having(
+            (error) => error.code,
+            'code',
+            DurableAttachmentSourceError.invalidHandle,
+          ),
+        ),
+      );
+      expect(
+        await _allUnavailable(store, <PreparedAttachmentSource>[first, second]),
+        isTrue,
+      );
+    });
   });
 }
 
@@ -321,3 +401,21 @@ Future<List<File>> _allStoreFiles(Directory root) async => _filesBelow(root);
 
 String _sourceId(PreparedAttachmentSource source) =>
     source.handle.value.split(':').last;
+
+Future<bool> _allUnavailable(
+  DurableAttachmentSourceStore store,
+  Iterable<PreparedAttachmentSource> sources,
+) async {
+  for (final source in sources) {
+    try {
+      final lease = await store.open(source.handle);
+      await lease.close();
+      return false;
+    } on DurableAttachmentSourceException catch (error) {
+      if (error.code != DurableAttachmentSourceError.sourceUnavailable) {
+        rethrow;
+      }
+    }
+  }
+  return true;
+}
