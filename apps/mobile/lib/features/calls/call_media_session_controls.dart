@@ -24,28 +24,28 @@ extension _CallMediaSessionControls on CallMediaSession {
         _video = null;
       }
       final publisher = _publisher;
-      for (final peer in <_MediaPeer>[
-        ?publisher,
-        if (!_mcu) ..._peers.values,
-      ]) {
-        final connection = peer.connection;
-        if (connection == null) {
-          continue;
-        }
-        try {
-          await connection.setLocalVideo(enabled ? video : null);
-        } on CallMediaException catch (error) {
-          debugPrint(
-            '[call] video line → ${peer.peerId} failed: ${error.code.name}',
-          );
-          continue;
-        }
-        // Glare guard: a peer whose offer of ours is still unanswered gets
-        // the change with the next negotiation instead of a second offer.
-        if (!peer.localOfferPending) {
-          await _offer(peer);
-        }
-      }
+      await _runPeerTasks(
+        <_MediaPeer>[?publisher, if (!_mcu) ..._peers.values],
+        (peer) async {
+          final connection = peer.connection;
+          if (connection == null) {
+            return;
+          }
+          try {
+            await connection.setLocalVideo(enabled ? video : null);
+          } on CallMediaException catch (error) {
+            debugPrint(
+              '[call] video line → ${peer.peerId} failed: ${error.code.name}',
+            );
+            return;
+          }
+          // Glare guard: a peer whose offer of ours is still unanswered gets
+          // the change with the next negotiation instead of a second offer.
+          if (!peer.localOfferPending) {
+            await _offer(peer);
+          }
+        },
+      );
       await _announceMediaToAll();
       if (!enabled) {
         await video?.dispose();
@@ -151,7 +151,7 @@ extension _CallMediaSessionControls on CallMediaSession {
         return;
       }
       _handRaised = raised;
-      await _runPeerMessageTasks(_peers.keys, _sendRaiseHand);
+      await _runPeerTasks(_peers.keys, _sendRaiseHand);
       _publish();
     });
   }
@@ -235,25 +235,24 @@ extension _CallMediaSessionControls on CallMediaSession {
   }
 
   Future<void> _announceMediaToAll() async {
-    await _runPeerMessageTasks(_peers.keys, _announceMedia);
+    await _runPeerTasks(_peers.keys, _announceMedia);
   }
 
-  Future<void> _runPeerMessageTasks(
-    Iterable<String> peerIds,
-    Future<void> Function(String peerId) task,
+  Future<void> _runPeerTasks<T>(
+    Iterable<T> items,
+    Future<void> Function(T item) task,
   ) async {
-    final pending = peerIds.toList(growable: false);
-    var nextPeer = 0;
+    final pending = items.toList(growable: false);
+    var nextItem = 0;
     Future<void> runNext() async {
-      while (nextPeer < pending.length) {
-        await task(pending[nextPeer++]);
+      while (nextItem < pending.length) {
+        await task(pending[nextItem++]);
       }
     }
 
-    final workerCount =
-        pending.length < CallMediaSession._peerMessageConcurrency
+    final workerCount = pending.length < CallMediaSession._peerTaskConcurrency
         ? pending.length
-        : CallMediaSession._peerMessageConcurrency;
+        : CallMediaSession._peerTaskConcurrency;
     await Future.wait(List.generate(workerCount, (_) => runNext()));
   }
 
@@ -281,7 +280,7 @@ extension _CallMediaSessionControls on CallMediaSession {
       if (_disposed || emoji.isEmpty) {
         return;
       }
-      await _runPeerMessageTasks(_peers.keys, (peerId) async {
+      await _runPeerTasks(_peers.keys, (peerId) async {
         try {
           await _send(
             peerId: peerId,

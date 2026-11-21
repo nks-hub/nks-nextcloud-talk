@@ -125,6 +125,74 @@ extension _ControlsMediaSessionTests on _MediaSessionTests {
       expect(sent.where((message) => message.type == 'offer'), hasLength(1));
     });
 
+    test('camera changes update at most four peers concurrently', () async {
+      final peers = List.generate(6, (index) => 'peer-$index');
+      final participants = [for (final peer in peers) _participant(peer)];
+      final media = session(
+        _update(localPeerId: _local, participants: participants),
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: participants,
+          messages: [
+            for (final peer in peers)
+              _message(peer, 'answer', <String, Object?>{
+                'type': 'answer',
+                'sdp': 'sdp-answer-$peer',
+              }),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+
+      final releases = <Completer<void>>[];
+      var active = 0;
+      var maximumActive = 0;
+      engine.beforeSetLocalVideo = () async {
+        active++;
+        maximumActive = active > maximumActive ? active : maximumActive;
+        final release = Completer<void>();
+        releases.add(release);
+        await release.future;
+        active--;
+      };
+
+      final enabling = media.setCameraEnabled(true);
+      await pumpEventQueue();
+      expect(releases, hasLength(4));
+      expect(active, 4);
+      expect(maximumActive, 4);
+
+      releases.first.complete();
+      await pumpEventQueue();
+      expect(
+        releases,
+        hasLength(5),
+        reason: 'the next peer starts when one worker becomes free',
+      );
+      for (var index = 1; index < 4; index++) {
+        releases[index].complete();
+      }
+      await pumpEventQueue();
+      expect(releases, hasLength(6));
+      for (var index = 4; index < releases.length; index++) {
+        releases[index].complete();
+      }
+      await enabling;
+
+      final camera = engine.cameras.single;
+      expect(active, 0);
+      expect(maximumActive, 4);
+      for (final connection in engine.connections) {
+        expect(connection.localVideos, [same(camera)]);
+        expect(connection.createdOffers, 2);
+      }
+      expect(media.state.cameraOn, isTrue);
+    });
+
     test('peer message fan-out keeps four sends in flight', () async {
       final peers = List.generate(6, (index) => 'peer-$index');
       final releases = <Completer<void>>[];

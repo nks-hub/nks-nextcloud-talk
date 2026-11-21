@@ -80,6 +80,7 @@ final class _FakeEngine implements CallMediaEngine {
   int connectionCreateStarts = 0;
   Completer<void>? connectionCloseGate;
   int connectionCloseStarts = 0;
+  Future<void> Function()? beforeSetLocalVideo;
   final List<_FakeAudio> audio = <_FakeAudio>[];
   final List<_FakeConnection> connections = <_FakeConnection>[];
 
@@ -163,6 +164,9 @@ final class _FakeEngine implements CallMediaEngine {
       index: connections.length + 1,
       closeGate: connectionCloseGate?.future,
       onCloseStarted: () => connectionCloseStarts++,
+      beforeSetLocalVideo: () async {
+        await beforeSetLocalVideo?.call();
+      },
     );
     connections.add(connection);
     return connection;
@@ -245,6 +249,7 @@ final class _FakeConnection implements CallPeerConnection {
     required this.index,
     this.closeGate,
     this.onCloseStarted,
+    this.beforeSetLocalVideo,
   });
 
   final CallLocalAudio? audio;
@@ -258,6 +263,7 @@ final class _FakeConnection implements CallPeerConnection {
   final int index;
   final Future<void>? closeGate;
   final void Function()? onCloseStarted;
+  final Future<void> Function()? beforeSetLocalVideo;
 
   /// Every `sendStatus` call this connection accepted, in order. Stays empty
   /// when [onStatusMessage] was never given — a screen-share connection,
@@ -283,8 +289,11 @@ final class _FakeConnection implements CallPeerConnection {
   final List<CallLocalVideo?> localVideos = <CallLocalVideo?>[];
 
   @override
-  Future<void> setLocalVideo(CallLocalVideo? video) async =>
-      localVideos.add(video);
+  Future<void> setLocalVideo(CallLocalVideo? video) async {
+    await beforeSetLocalVideo?.call();
+    localVideos.add(video);
+  }
+
   final List<CallSessionDescription> localDescriptions = [];
   final List<CallSessionDescription> remoteDescriptions = [];
   final List<CallIceCandidate> remoteCandidates = [];
