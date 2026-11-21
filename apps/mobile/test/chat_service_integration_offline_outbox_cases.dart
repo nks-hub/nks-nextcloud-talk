@@ -275,6 +275,84 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       expect(delivered.map((row) => row.attemptCount), [2, 1]);
     });
 
+    test('a completed retry clears its stale retry wake', () async {
+      var capabilityReads = 0;
+      var chatReads = 0;
+      var posts = 0;
+      final api = HttpNextcloudApi(
+        capabilityCacheTtl: const Duration(milliseconds: 100),
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            capabilityReads++;
+            return http.Response(
+              jsonEncode(
+                _chatCapabilities(talkFeatures: _sendFeatures.toList()),
+              ),
+              200,
+            );
+          }
+          if (request.method == 'GET') {
+            chatReads++;
+            return http.Response('', 304);
+          }
+          posts++;
+          if (posts == 1) {
+            return http.Response(
+              '<html>Rate limited before the save</html>',
+              429,
+              headers: const <String, String>{'retry-after': '2'},
+            );
+          }
+          return _acceptedSend(request, 121);
+        }),
+      );
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      addTearDown(service.close);
+      await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'Complete before retry wake',
+      );
+      await _waitForTextSends(
+        database,
+        (rows) => rows.single.outboxState == 'retryable',
+      );
+
+      await (database.update(database.textSendOperations)
+            ..where((row) => row.outboxState.equals('retryable')))
+          .write(const TextSendOperationsCompanion(nextAttemptAt: Value(0)));
+      await service.drainPendingSends();
+      await _waitForTextSends(
+        database,
+        (rows) => rows.single.outboxState == 'completed',
+      );
+      await chat.recordRoomError(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        threadId: null,
+        errorCode: ChatServiceError.serviceUnavailable.name,
+      );
+      final requestsAfterDelivery = (capabilityReads, chatReads, posts);
+
+      await Future<void>.delayed(const Duration(milliseconds: 2500));
+
+      final scope = await chat.getScope(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        threadId: null,
+      );
+      expect(scope?.lastSyncError, ChatServiceError.serviceUnavailable.name);
+      expect((capabilityReads, chatReads, posts), requestsAfterDelivery);
+    });
+
     test(
       'cancelling a retry-delayed head immediately resumes the next send',
       () async {

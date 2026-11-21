@@ -829,6 +829,14 @@ final class ChatService {
     retry.timer.cancel();
   }
 
+  void _cancelRetryWakeForOperation(String roomKey, String operationId) {
+    final retry = _retryTimers[roomKey];
+    if (retry?.operationId != operationId) {
+      return;
+    }
+    _cancelRetryWake(roomKey, retry);
+  }
+
   Future<bool?> _validatedCachedRootIsNamedThread({
     required String accountId,
     required String roomToken,
@@ -1277,6 +1285,16 @@ final class ChatService {
       now: _nowSeconds(),
       absenceGraceSeconds: _absenceGraceSeconds,
     );
+    if (outcome == ChatOutboxOutcome.completed ||
+        outcome == ChatOutboxOutcome.failed ||
+        outcome == ChatOutboxOutcome.reauthenticationRequired ||
+        outcome == ChatOutboxOutcome.unchanged ||
+        outcome == ChatOutboxOutcome.conflictAfterCompletion) {
+      _cancelRetryWakeForOperation(
+        _roomKey(prepared.account.id, prepared.room.token.value),
+        claim.operation.operationId.value,
+      );
+    }
     if (outcome == ChatOutboxOutcome.awaitingConfirmation) {
       await _armAbsenceVerification(prepared);
     }
