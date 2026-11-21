@@ -3,6 +3,7 @@ package com.nkshub.nextcloudtalk.push
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
@@ -18,6 +19,75 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class AndroidWebPushNotificationRoutingTest {
+    @Test
+    fun corruptedEncryptedRoutesRecoverBeforePostingANewNotification() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        grantNotificationPermission(context)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val accountId = "instrumentation-routing-recovery"
+        val staleId = 920020L
+        val recoveredId = 920021L
+        val preferences = context.getSharedPreferences(
+            AndroidNotificationOpenStore.PREFERENCES_NAME,
+            Context.MODE_PRIVATE,
+        )
+        cleanup(context, manager, accountId)
+
+        try {
+            assertEquals(
+                PushDisplayOutcome.POSTED,
+                post(context, accountId, staleId, "routing stale"),
+            )
+            awaitNotificationWithText(manager, "routing stale")
+            assertTrue(
+                preferences.edit()
+                    .putString(AndroidNotificationOpenStore.STATE_KEY, "not-an-envelope")
+                    .commit(),
+            )
+
+            assertEquals(
+                PushDisplayOutcome.POSTED,
+                post(context, accountId, recoveredId, "routing recovered", "roomrecovered"),
+            )
+            val recovered = awaitNotificationWithText(manager, "routing recovered")
+            assertEquals(
+                listOf("routing recovered"),
+                awaitActiveTexts(manager, setOf("routing recovered")),
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                assertTrue(recovered.notification.contentIntent.isActivity)
+            }
+
+            val store = AndroidWebPushStore(context)
+            val openToken = store.storeNotificationOpen(
+                accountId = accountId,
+                notificationId = recoveredId,
+                app = "spreed",
+                type = "chat",
+                objectId = "roomrecovered",
+            )
+            val openIntent = AndroidSystemNotifications.notificationOpenIntent(context, openToken)
+            ActivityScenario.launch<AndroidWebPushActivity>(
+                Intent(context, AndroidWebPushActivity::class.java),
+            ).use { scenario ->
+                scenario.onActivity { activity ->
+                    val route = activity.notificationOpen(openIntent)
+                    assertEquals(accountId, route?.get("accountId"))
+                    assertEquals(recoveredId, route?.get("notificationId"))
+                    assertEquals("roomrecovered", route?.get("objectId"))
+                }
+            }
+        } finally {
+            assertTrue(
+                preferences.edit()
+                    .remove(AndroidNotificationOpenStore.STATE_KEY)
+                    .commit(),
+            )
+            manager.cancelAll()
+            cleanup(context, manager, accountId)
+        }
+    }
+
     @Test
     fun sameServerIdStaysStableAcrossAccountsRestartAndDeletes() {
         val context = ApplicationProvider.getApplicationContext<Context>()

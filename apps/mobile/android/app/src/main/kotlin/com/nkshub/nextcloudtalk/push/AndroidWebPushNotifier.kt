@@ -733,8 +733,11 @@ internal object AndroidSystemNotifications {
         val accountHash = digest.joinToString(separator = "") { byte ->
             "%02x".format(byte.toInt() and 0xff)
         }
-        return "nextcloud-talk-$accountHash"
+        return "$NOTIFICATION_TAG_PREFIX$accountHash"
     }
+
+    internal fun isManagedNotificationTag(tag: String?): Boolean =
+        tag?.startsWith(NOTIFICATION_TAG_PREFIX) == true
 
     private fun notificationTag(groupKey: String, notificationId: Long): String {
         return "$groupKey:$notificationId"
@@ -774,6 +777,7 @@ internal object AndroidSystemNotifications {
     const val MAX_REPLY_LENGTH = 8000
 
     private const val CHANNEL_ID = "nextcloud_talk_messages"
+    private const val NOTIFICATION_TAG_PREFIX = "nextcloud-talk-"
     private const val OPEN_URI_HOST = "notification-open"
     private const val REPLY_URI_HOST = "notification-reply"
     private const val MARK_READ_URI_HOST = "notification-mark-read"

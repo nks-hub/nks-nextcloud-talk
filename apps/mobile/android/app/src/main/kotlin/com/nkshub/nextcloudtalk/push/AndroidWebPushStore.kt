@@ -1,5 +1,6 @@
 package com.nkshub.nextcloudtalk.push
 
+import android.app.NotificationManager
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -7,9 +8,14 @@ import android.util.Base64
 import org.json.JSONObject
 import java.net.URI
 import java.nio.charset.StandardCharsets
+import java.security.InvalidAlgorithmParameterException
+import java.security.InvalidKeyException
 import java.security.KeyStore
 import java.security.SecureRandom
+import java.security.UnrecoverableKeyException
+import javax.crypto.BadPaddingException
 import javax.crypto.Cipher
+import javax.crypto.IllegalBlockSizeException
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
@@ -539,7 +545,7 @@ internal class AndroidNotificationOpenStore(context: Context) {
         validateRecord(accountId, notificationId, app, type, objectId)
         val token = AndroidWebPushStore.newOpaqueOpenToken()
         synchronized(OPEN_STORE_LOCK) {
-            val state = readState()
+            val state = readStateOrRecover()
             stateMachine.storeNotificationOpen(
                 state = state,
                 token = token,
@@ -565,7 +571,7 @@ internal class AndroidNotificationOpenStore(context: Context) {
         validateRecord(accountId, notificationId, app, type, objectId)
         val token = AndroidWebPushStore.newOpaqueOpenToken()
         return synchronized(OPEN_STORE_LOCK) {
-            val state = readState()
+            val state = readStateOrRecover()
             val allocation = notificationIdLedger.allocate(
                 state,
                 accountId,
@@ -607,7 +613,7 @@ internal class AndroidNotificationOpenStore(context: Context) {
         if (!AndroidWebPushStore.isValidNotificationOpenToken(token)) {
             return@synchronized null
         }
-        val state = readState()
+        val state = readStateOrRecover()
         val before = state.notificationOpens.size
         val notification = stateMachine.consumeNotificationOpen(
             state,
@@ -629,7 +635,7 @@ internal class AndroidNotificationOpenStore(context: Context) {
             return emptyList()
         }
         return synchronized(OPEN_STORE_LOCK) {
-            val state = readState()
+            val state = readStateOrRecover()
             val before = state.size()
             stateMachine.revokeNotificationOpens(state, accountId, notificationIds)
             stateMachine.revokeArmedNotificationActions(state, accountId, notificationIds)
@@ -643,7 +649,7 @@ internal class AndroidNotificationOpenStore(context: Context) {
 
     fun revokeAll(accountId: String): List<StoredPlatformNotificationId> {
         return synchronized(OPEN_STORE_LOCK) {
-            val state = readState()
+            val state = readStateOrRecover()
             val before = state.size()
             stateMachine.revokeAllNotificationOpens(state, accountId)
             stateMachine.revokeArmedNotificationActions(state, accountId, null)
@@ -667,7 +673,7 @@ internal class AndroidNotificationOpenStore(context: Context) {
         }
         val token = AndroidWebPushStore.newOpaqueActionToken()
         synchronized(OPEN_STORE_LOCK) {
-            val state = readState()
+            val state = readStateOrRecover()
             stateMachine.armNotificationAction(
                 state = state,
                 token = token,
@@ -690,7 +696,7 @@ internal class AndroidNotificationOpenStore(context: Context) {
         if (!AndroidWebPushStore.isValidNotificationActionToken(token)) {
             return@synchronized null
         }
-        val state = readState()
+        val state = readStateOrRecover()
         val fired = stateMachine.fireNotificationAction(
             state = state,
             token = token,
@@ -705,7 +711,7 @@ internal class AndroidNotificationOpenStore(context: Context) {
     fun claim(accountId: String, limit: Int): NotificationActionClaim = synchronized(
         OPEN_STORE_LOCK,
     ) {
-        val state = readState()
+        val state = readStateOrRecover()
         val claim = stateMachine.claimNotificationActions(
             state = state,
             accountId = accountId,
@@ -725,7 +731,7 @@ internal class AndroidNotificationOpenStore(context: Context) {
         if (!AndroidWebPushStore.isValidNotificationActionToken(token)) {
             return@synchronized null
         }
-        val state = readState()
+        val state = readStateOrRecover()
         val resolved = stateMachine.resolveNotificationAction(state, accountId, token)
             ?: return@synchronized null
         writeState(state)
@@ -734,6 +740,61 @@ internal class AndroidNotificationOpenStore(context: Context) {
 
     private fun AndroidNotificationOpenState.size(): Int {
         return notificationOpens.size + notificationActions.size + platformNotificationIds.size
+    }
+
+    private fun readStateOrRecover(): AndroidNotificationOpenState {
+        return try {
+            readState()
+        } catch (error: PushStoreException) {
+            if (!isUnreadableLocalState(error)) {
+                throw error
+            }
+            resetUnreadableState()
+        } catch (_: ClassCastException) {
+            resetUnreadableState()
+        }
+    }
+
+    private fun isUnreadableLocalState(error: PushStoreException): Boolean {
+        if (error.code in UNREADABLE_STATE_CODES) {
+            return true
+        }
+        if (error.code != "notification_open_store_decryption_failed") {
+            return false
+        }
+        return when (error.cause) {
+            is org.json.JSONException,
+            is IllegalArgumentException,
+            is InvalidAlgorithmParameterException,
+            is InvalidKeyException,
+            is UnrecoverableKeyException,
+            is BadPaddingException,
+            is IllegalBlockSizeException,
+            -> true
+            else -> false
+        }
+    }
+
+    private fun resetUnreadableState(): AndroidNotificationOpenState {
+        try {
+            val manager = applicationContext.getSystemService(NotificationManager::class.java)
+            manager.activeNotifications
+                .filter { AndroidSystemNotifications.isManagedNotificationTag(it.tag) }
+                .forEach { manager.cancel(it.tag, it.id) }
+
+            val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
+            if (keyStore.containsAlias(KEY_ALIAS)) {
+                keyStore.deleteEntry(KEY_ALIAS)
+            }
+            if (!preferences.edit().remove(STATE_KEY).commit()) {
+                throw PushStoreException("notification_open_store_commit_failed")
+            }
+            return AndroidNotificationOpenState().also(::writeState)
+        } catch (error: PushStoreException) {
+            throw error
+        } catch (error: Exception) {
+            throw PushStoreException("notification_open_store_recovery_failed", error)
+        }
     }
 
     private fun readState(): AndroidNotificationOpenState {
@@ -877,6 +938,19 @@ internal class AndroidNotificationOpenStore(context: Context) {
         private const val MAX_ENVELOPE_CHARS = 2 * 1024 * 1024
         private const val MAX_CIPHERTEXT_BYTES = 1024 * 1024
         private const val MAX_PLAINTEXT_BYTES = 1024 * 1024
+        private val UNREADABLE_STATE_CODES = setOf(
+            "notification_open_store_too_large",
+            "unsupported_notification_open_store_version",
+            "notification_open_store_key_missing",
+            "unsupported_notification_open_state_schema",
+            "notification_action_store_too_large",
+            "notification_route_store_too_large",
+            "invalid_notification_open",
+            "invalid_notification_open_state",
+            "invalid_notification_action",
+            "invalid_notification_action_state",
+            "invalid_notification_route_state",
+        )
     }
 }
 
