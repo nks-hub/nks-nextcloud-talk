@@ -74,27 +74,26 @@ extension ChatRepositoryClearHistory on ChatRepository {
 
       final now = DateTime.now().toUtc().millisecondsSinceEpoch;
       final blocks = _encodeBlocks([ChatBlock(start: cursor, end: cursor)]);
-      for (final scopeKey in <String>[_rootScopeKey, _networkRootScopeKey]) {
-        await _database
-            .into(_database.chatScopes)
-            .insert(
-              ChatScopesCompanion.insert(
-                accountId: accountId,
-                roomToken: roomToken,
-                scopeKey: scopeKey,
-                threadId: const Value(null),
-                historyCursor: cursor.value,
-                futureCursor: cursor.value,
-                lastCommonRead: commonRead?.value ?? '0',
-                lastReadMessage: 0,
-                unreadMessages: 1,
-                hasHistory: false,
-                futureConverged: true,
-                blocksJson: blocks,
-                lastSyncedAtMillis: Value(now),
-              ),
-            );
-      }
+      await _database.batch(
+        (batch) => batch.insertAll(_database.chatScopes, [
+          for (final scopeKey in <String>[_rootScopeKey, _networkRootScopeKey])
+            ChatScopesCompanion.insert(
+              accountId: accountId,
+              roomToken: roomToken,
+              scopeKey: scopeKey,
+              threadId: const Value(null),
+              historyCursor: cursor.value,
+              futureCursor: cursor.value,
+              lastCommonRead: commonRead?.value ?? '0',
+              lastReadMessage: 0,
+              unreadMessages: 1,
+              hasHistory: false,
+              futureConverged: true,
+              blocksJson: blocks,
+              lastSyncedAtMillis: Value(now),
+            ),
+        ]),
+      );
     });
   }
 }
