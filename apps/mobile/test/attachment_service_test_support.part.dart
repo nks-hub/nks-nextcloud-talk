@@ -23,6 +23,7 @@ final class _Fixture {
 
   static Future<_Fixture> create({
     bool fileBacked = false,
+    List<String> accountIds = const ['account-a'],
     int terminalHistoryLimitPerAccount =
         attachmentTerminalHistoryLimitPerAccount,
   }) async {
@@ -42,19 +43,21 @@ final class _Fixture {
           ? NativeDatabase.memory()
           : NativeDatabase(databaseFile),
     );
-    await database
-        .into(database.accounts)
-        .insert(
-          AccountsCompanion.insert(
-            id: 'account-a',
-            serverUrl: 'https://cloud.example.invalid',
-            loginName: 'fixture-user',
-            serverProductName: 'Nextcloud',
-            createdAtMillis: 1,
-          ),
-        );
     final credentials = MemoryCredentialVault();
-    await credentials.writeAppPassword('account-a', 'fixture-password');
+    for (final accountId in accountIds) {
+      await database
+          .into(database.accounts)
+          .insert(
+            AccountsCompanion.insert(
+              id: accountId,
+              serverUrl: 'https://cloud.example.invalid',
+              loginName: _loginForAccount(accountId),
+              serverProductName: 'Nextcloud',
+              createdAtMillis: 1,
+            ),
+          );
+      await credentials.writeAppPassword(accountId, 'fixture-password');
+    }
     return _Fixture._(
       directory: directory,
       sourceFile: sourceFile,
@@ -76,6 +79,9 @@ final class _Fixture {
   final File? databaseFile;
   final MemoryCredentialVault credentials;
   AttachmentRepository repository;
+
+  static String _loginForAccount(String accountId) =>
+      accountId == 'account-a' ? 'fixture-user' : accountId;
 
   Future<void> reopenDatabase() async {
     final file = databaseFile;
@@ -148,6 +154,7 @@ final class _Fixture {
 
   AttachmentEnqueueRequest request({
     required int normalMaximum,
+    String accountId = 'account-a',
     String roomToken = 'rooma123',
     AttachmentMessageKind kind = AttachmentMessageKind.file,
     String mimeType = 'image/png',
@@ -156,7 +163,7 @@ final class _Fixture {
     int? replyTo,
     int? threadId,
   }) => AttachmentEnqueueRequest(
-    accountId: AccountId.parse('account-a'),
+    accountId: AccountId.parse(accountId),
     server: ServerBase.parse('https://cloud.example.invalid'),
     roomToken: ConversationToken.parse(
       roomToken,
@@ -183,7 +190,7 @@ final class _Fixture {
       threadTitle: threadId == null ? null : 'Synthetic thread',
       silent: false,
     ),
-    davUserId: DavUserId.parse('fixture-user'),
+    davUserId: DavUserId.parse(_loginForAccount(accountId)),
     profile: _profile(),
     credentialGeneration: 1,
     capabilityGeneration: 1,

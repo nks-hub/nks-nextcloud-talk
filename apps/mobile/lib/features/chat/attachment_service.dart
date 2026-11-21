@@ -360,8 +360,6 @@ final class AttachmentService with _AttachmentServiceRuntime {
   @override
   final Map<_AttachmentRoomKey, void Function()> _roomWakeups = {};
   @override
-  final Map<AttachmentPersistenceKey, Future<void>> _jobRuns = {};
-  @override
   final Map<_AttachmentRoomKey, Timer> _retryTimers = {};
   @override
   final Map<_AttachmentRoomKey, DateTime> _retryDeadlines = {};
@@ -429,6 +427,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
       return existing;
     }
     _suspendedAccounts.add(accountId);
+    _steps.cancelWaiters(accountId);
     final operation = _suspendAccount(accountId);
     _accountSuspensions[accountId] = operation;
     return operation;
@@ -699,7 +698,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
       }
       await _commitTransition(result, key);
     });
-    final active = _jobRuns[key];
+    final active = _steps.running(key);
     if (active != null) {
       await active;
     }
@@ -966,6 +965,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
       return;
     }
     _closed = true;
+    _steps.cancelWaiters();
     Object? activeFailure;
     StackTrace? activeFailureStack;
     Object? cleanupFailure;

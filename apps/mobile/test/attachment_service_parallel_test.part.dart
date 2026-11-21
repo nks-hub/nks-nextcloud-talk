@@ -1,6 +1,94 @@
 part of 'attachment_service_test.dart';
 
 void _registerAttachmentServiceParallelTests() {
+  test('cancel, suspend and close drain rooms waiting for capacity', () async {
+    final fixture = await _Fixture.create(
+      accountIds: const ['account-a', 'account-b'],
+    );
+    addTearDown(fixture.close);
+    final firstFour = Completer<void>();
+    final probedRooms = <String>[];
+    var activeUploads = 0;
+    final service = fixture.service(
+      MockClient.streaming((request, body) async {
+        await body.drain<void>();
+        if (request.url.path.endsWith('/folder')) {
+          probedRooms.add(_attachmentProbeRoom(request.url));
+          return http.StreamedResponse(Stream.value(_probeSuccess()), 200);
+        }
+        if (request.method == 'PUT') {
+          activeUploads++;
+          if (activeUploads == 4) firstFour.complete();
+          await (request as http.Abortable).abortTrigger!;
+          activeUploads--;
+          throw http.RequestAbortedException(request.url);
+        }
+        fail('Unexpected request: ${request.method} ${request.url}');
+      }),
+      identifierFactory: const UuidAttachmentIdentifierFactory(),
+    );
+    addTearDown(service.close);
+
+    for (var index = 0; index < 4; index++) {
+      await service.enqueue(
+        fixture.request(
+          normalMaximum: 32,
+          roomToken: index < 3 ? 'rooma123' : 'roomb123',
+        ),
+      );
+    }
+    await firstFour.future.timeout(const Duration(seconds: 2));
+
+    final source = await _createDistinctAttachmentSource(
+      fixture,
+      name: 'cancelled-before-upload.png',
+    );
+    final cancelled = await service.enqueue(
+      fixture.request(
+        normalMaximum: 32,
+        accountId: 'account-b',
+        roomToken: 'roomc123',
+        source: source.source,
+      ),
+    );
+    final suspended = await service.enqueue(
+      fixture.request(
+        normalMaximum: 32,
+        accountId: 'account-b',
+        roomToken: 'roomd123',
+      ),
+    );
+    await service.enqueue(
+      fixture.request(normalMaximum: 32, roomToken: 'roome123'),
+    );
+    await pumpEventQueue();
+    expect(
+      probedRooms,
+      unorderedEquals(['rooma123', 'rooma123', 'rooma123', 'roomb123']),
+    );
+
+    await cancelled.cancel().timeout(const Duration(seconds: 2));
+    await service
+        .suspendAccount(suspended.accountId)
+        .timeout(const Duration(seconds: 2));
+    final cancelledJob = await fixture.repository.getStoredJob(
+      accountId: cancelled.accountId.value,
+      jobId: cancelled.jobId.value,
+    );
+    final suspendedJob = await fixture.repository.getStoredJob(
+      accountId: suspended.accountId.value,
+      jobId: suspended.jobId.value,
+    );
+    expect(cancelledJob?.phase, AttachmentJobPhase.cancelled.name);
+    expect(suspendedJob?.phase, AttachmentJobPhase.localPrepared.name);
+    expect(suspendedJob?.inFlightStep, isNull);
+    expect(activeUploads, 4);
+
+    await service.close().timeout(const Duration(seconds: 2));
+    expect(activeUploads, 0);
+    expect(probedRooms, hasLength(4));
+  });
+
   test('close releases verified sources with bounded concurrency', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);

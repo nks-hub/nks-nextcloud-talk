@@ -26,7 +26,7 @@ mixin _AttachmentServiceRuntime {
   _AsyncMutex get _stateMutex;
   Map<_AttachmentRoomKey, Future<void>> get _roomRuns;
   Map<_AttachmentRoomKey, void Function()> get _roomWakeups;
-  Map<AttachmentPersistenceKey, Future<void>> get _jobRuns;
+  final _steps = _AttachmentStepQueue();
   Set<_AttachmentRoomKey> get _roomRerunRequests;
   Map<_AttachmentRoomKey, Timer> get _retryTimers;
   Map<_AttachmentRoomKey, DateTime> get _retryDeadlines;
@@ -982,7 +982,7 @@ mixin _AttachmentServiceRuntime {
         if (_credentialRetryCounts.containsKey(key)) continue;
         final next = _metadata[key]?.nextAttemptAt;
         if (next == null ||
-            (_jobRuns.containsKey(key) && !next.isAfter(_clock().toUtc()))) {
+            (_steps.running(key) != null && !next.isAfter(_clock().toUtc()))) {
           continue;
         }
         if (earliest == null || next.isBefore(earliest)) {

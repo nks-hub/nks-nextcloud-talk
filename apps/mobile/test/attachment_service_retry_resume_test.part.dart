@@ -16,8 +16,7 @@ void _registerAttachmentServiceRetryResumeTests() {
     final service = fixture.service(
       MockClient((request) async {
         if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
-          final segments = request.url.pathSegments;
-          final roomToken = segments[segments.length - 3];
+          final roomToken = _attachmentProbeRoom(request.url);
           final probeCount = probeCounts.update(
             roomToken,
             (count) => count + 1,
@@ -97,4 +96,91 @@ void _registerAttachmentServiceRetryResumeTests() {
     ]);
     expect(probeCounts, <String, int>{'rooma123': 3, 'roomb123': 3});
   });
+
+  test('a network hint resumes at most four probes across accounts', () async {
+    final fixture = await _Fixture.create(
+      accountIds: const ['account-a', 'account-b'],
+    );
+    addTearDown(fixture.close);
+    final releaseProbes = Completer<void>();
+    final firstFour = Completer<void>();
+    final fifth = Completer<void>();
+    final probeGates = <String, Completer<void>>{};
+    var connected = false;
+    var inFlight = 0;
+    var peakInFlight = 0;
+    final service = fixture.service(
+      MockClient((request) async {
+        if (request.url.path.endsWith('/folder')) {
+          if (!connected) throw const SocketException('offline');
+          final room = _attachmentProbeRoom(request.url);
+          final gate = probeGates[room] = Completer<void>();
+          inFlight++;
+          peakInFlight = max(peakInFlight, inFlight);
+          if (probeGates.length == 4) firstFour.complete();
+          if (probeGates.length == 5) fifth.complete();
+          await Future.any([gate.future, releaseProbes.future]);
+          inFlight--;
+          return http.Response.bytes(_probeSuccess(), 200);
+        }
+        if (request.method == 'PUT') return http.Response('', 201);
+        if (request.url.path.endsWith('/attachment')) {
+          return http.Response.bytes(_finalizeSuccess(), 200);
+        }
+        fail('Unexpected request: ${request.method} ${request.url}');
+      }),
+      identifierFactory: const UuidAttachmentIdentifierFactory(),
+      retryDelays: const [Duration.zero],
+    );
+    addTearDown(() async {
+      if (!releaseProbes.isCompleted) releaseProbes.complete();
+      await service.close();
+    });
+
+    final sessions = await Future.wait([
+      for (var index = 0; index < 6; index++)
+        service.enqueue(
+          fixture.request(
+            normalMaximum: 32,
+            accountId: index.isEven ? 'account-a' : 'account-b',
+            roomToken: 'room000$index',
+          ),
+        ),
+    ]);
+    await Future.wait(
+      sessions.map(
+        (session) => session.events.firstWhere(
+          (event) =>
+              event.phase == AttachmentJobPhase.retryable &&
+              event.automaticRetryCount == 2,
+        ),
+      ),
+    ).timeout(const Duration(seconds: 5));
+
+    connected = true;
+    final resumed = service.resumeRetries();
+    await firstFour.future.timeout(const Duration(seconds: 2));
+    await pumpEventQueue();
+    expect(probeGates, hasLength(4));
+    expect(inFlight, 4);
+
+    probeGates.values.first.complete();
+    await fifth.future.timeout(const Duration(seconds: 2));
+    expect(inFlight, 4);
+
+    releaseProbes.complete();
+    await resumed.timeout(const Duration(seconds: 5));
+    await Future.wait(
+      sessions.map(
+        (session) => session.events.firstWhere(
+          (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+        ),
+      ),
+    ).timeout(const Duration(seconds: 5));
+    expect(probeGates, hasLength(6));
+    expect(peakInFlight, 4);
+  });
 }
+
+String _attachmentProbeRoom(Uri uri) =>
+    uri.pathSegments[uri.pathSegments.length - 3];
