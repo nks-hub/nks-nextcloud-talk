@@ -13,6 +13,7 @@ part 'chat_repository_conversation_previews.dart';
 part 'chat_repository_mutations.dart';
 part 'chat_repository_projection.dart';
 part 'chat_repository_queries.dart';
+part 'chat_repository_reactions.dart';
 part 'chat_repository_read_markers.dart';
 part 'chat_repository_thread_replies.dart';
 

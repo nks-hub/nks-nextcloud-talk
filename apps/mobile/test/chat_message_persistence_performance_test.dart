@@ -99,6 +99,68 @@ void main() {
     },
   );
 
+  test('a page of cached reactions reads all targets together', () async {
+    const reactionCount = 40;
+    await database.batch((batch) {
+      for (var index = 0; index < reactionCount; index++) {
+        final message = _messageJson(4000 + index);
+        batch.insert(
+          database.cachedChatMessages,
+          _cachedMessageCompanion(message),
+        );
+      }
+    });
+    writes.enabled = true;
+
+    expect(
+      await repository.applyChatGetResponse(
+        _cachedReactionsResponse(reactionCount),
+      ),
+      ChatMergeOutcome.applied,
+    );
+
+    expect(writes.keyedMessageSelects, 0);
+    expect(writes.boundedMessageSelects, 1);
+    final rows = await (database.select(
+      database.cachedChatMessages,
+    )..where((message) => message.messageId.isBetweenValues(4000, 4039))).get();
+    expect(rows, hasLength(reactionCount));
+    expect(
+      rows.every((row) {
+        final stored = ChatMessage.fromJson(jsonDecode(row.rawJson));
+        return stored.reactions['thumbs-up'] == 1;
+      }),
+      isTrue,
+    );
+  });
+
+  test('a concurrent cached edit survives the prefetched reaction', () async {
+    final original = _messageJson(7000);
+    await database
+        .into(database.cachedChatMessages)
+        .insert(_cachedMessageCompanion(original));
+    final concurrentlyEdited = Map<String, Object?>.of(original)
+      ..['message'] = 'Concurrent edit';
+    writes
+      ..enabled = true
+      ..reactionConflictRawJson = jsonEncode(concurrentlyEdited);
+
+    expect(
+      await repository.applyChatGetResponse(
+        _singleCachedReactionResponse(original),
+      ),
+      ChatMergeOutcome.applied,
+    );
+
+    expect(writes.reactionConflictInjected, isTrue);
+    final row = await (database.select(
+      database.cachedChatMessages,
+    )..where((message) => message.messageId.equals(7000))).getSingle();
+    final stored = ChatMessage.fromJson(jsonDecode(row.rawJson));
+    expect(stored.message, 'Concurrent edit');
+    expect(stored.reactions, {'heart': 1});
+  });
+
   test(
     'a mutation updates an earlier quoted parent from the same page',
     () async {
@@ -121,6 +183,27 @@ void main() {
       expect(parent.message.message, 'Edited message');
     },
   );
+
+  test('reaction cache follows a mutation before the next reaction', () async {
+    expect(
+      await repository.applyChatGetResponse(
+        _reactionMutationReactionResponse(),
+      ),
+      ChatMergeOutcome.applied,
+    );
+
+    final row =
+        await (database.select(database.cachedChatMessages)..where(
+              (message) =>
+                  message.accountId.equals('account-a') &
+                  message.roomToken.equals('rooma123') &
+                  message.messageId.equals(6000),
+            ))
+            .getSingle();
+    final stored = ChatMessage.fromJson(jsonDecode(row.rawJson));
+    expect(stored.message, 'Edited message');
+    expect(stored.reactions, {'thumbs-up': 1, 'heart': 2});
+  });
 }
 
 Future<void> _insertConversation(AppDatabase database) async {
@@ -232,6 +315,77 @@ ChatGetResponse _rootQuoteAndMutationResponse() {
   );
 }
 
+ChatGetResponse _cachedReactionsResponse(int count) {
+  final notices = <Map<String, Object?>>[];
+  for (var index = 0; index < count; index++) {
+    final parent = Map<String, Object?>.of(_messageJson(4000 + index))
+      ..['reactions'] = <String, Object?>{'thumbs-up': 1}
+      ..['reactionsSelf'] = const <String>[];
+    notices.add(
+      _messageJson(5000 + index)
+        ..['systemMessage'] = 'reaction'
+        ..['messageType'] = 'system'
+        ..['message'] = 'thumbs-up'
+        ..['parent'] = parent,
+    );
+  }
+  return _futureResponse(
+    requestId: 'cached-reaction-batch',
+    lastGiven: 4999 + count,
+    messages: notices,
+  );
+}
+
+ChatGetResponse _reactionMutationReactionResponse() {
+  final original = _messageJson(6000);
+  final firstReaction = Map<String, Object?>.of(original)
+    ..['reactions'] = <String, Object?>{'thumbs-up': 1}
+    ..['reactionsSelf'] = const <String>[];
+  final edited = Map<String, Object?>.of(firstReaction)
+    ..['message'] = 'Edited message';
+  final finalReaction = Map<String, Object?>.of(edited)
+    ..['reactions'] = <String, Object?>{'thumbs-up': 1, 'heart': 2};
+  return _futureResponse(
+    requestId: 'reaction-mutation-reaction-order',
+    lastGiven: 6003,
+    messages: <Map<String, Object?>>[
+      original,
+      _messageJson(6001)
+        ..['systemMessage'] = 'reaction'
+        ..['messageType'] = 'system'
+        ..['message'] = 'thumbs-up'
+        ..['parent'] = firstReaction,
+      _messageJson(6002)
+        ..['systemMessage'] = 'message_edited'
+        ..['messageType'] = 'system'
+        ..['message'] = '{actor} edited a message'
+        ..['parent'] = edited,
+      _messageJson(6003)
+        ..['systemMessage'] = 'reaction'
+        ..['messageType'] = 'system'
+        ..['message'] = 'heart'
+        ..['parent'] = finalReaction,
+    ],
+  );
+}
+
+ChatGetResponse _singleCachedReactionResponse(Map<String, Object?> original) {
+  final parent = Map<String, Object?>.of(original)
+    ..['reactions'] = <String, Object?>{'heart': 1}
+    ..['reactionsSelf'] = const <String>[];
+  return _futureResponse(
+    requestId: 'cached-reaction-conflict',
+    lastGiven: 7001,
+    messages: <Map<String, Object?>>[
+      _messageJson(7001)
+        ..['systemMessage'] = 'reaction'
+        ..['messageType'] = 'system'
+        ..['message'] = 'heart'
+        ..['parent'] = parent,
+    ],
+  );
+}
+
 ChatGetResponse _futureResponse({
   required String requestId,
   required int lastGiven,
@@ -289,6 +443,25 @@ Map<String, Object?> _messageJson(int id) => <String, Object?>{
   'reactions': <String, Object?>{},
 };
 
+CachedChatMessagesCompanion _cachedMessageCompanion(
+  Map<String, Object?> wire,
+) => CachedChatMessagesCompanion.insert(
+  accountId: 'account-a',
+  roomToken: 'rooma123',
+  messageId: wire['id']! as int,
+  actorType: wire['actorType']! as String,
+  actorId: wire['actorId']! as String,
+  actorDisplayName: wire['actorDisplayName']! as String,
+  timestamp: wire['timestamp']! as int,
+  systemMessage: wire['systemMessage']! as String,
+  messageType: wire['messageType']! as String,
+  referenceId: wire['referenceId']! as String,
+  displayText: wire['message']! as String,
+  deleted: false,
+  threadId: const Value(null),
+  rawJson: jsonEncode(wire),
+);
+
 final class _ConversationPreviewCounter extends QueryInterceptor {
   bool enabled = false;
   int keyedConversationSelects = 0;
@@ -296,6 +469,10 @@ final class _ConversationPreviewCounter extends QueryInterceptor {
   int conversationBatchExecutions = 0;
   int directMessageInserts = 0;
   int messageBatchExecutions = 0;
+  int keyedMessageSelects = 0;
+  int boundedMessageSelects = 0;
+  String? reactionConflictRawJson;
+  bool reactionConflictInjected = false;
 
   @override
   Future<List<Map<String, Object?>>> runSelect(
@@ -308,6 +485,14 @@ final class _ConversationPreviewCounter extends QueryInterceptor {
         sql.contains('from "cached_conversations"') &&
         RegExp(r'"token"\s*=\s*\?').hasMatch(sql)) {
       keyedConversationSelects++;
+    }
+    if (enabled && sql.contains('from "cached_chat_messages"')) {
+      if (RegExp(r'"message_id"\s*=\s*\?').hasMatch(sql)) {
+        keyedMessageSelects++;
+      }
+      if (RegExp(r'"message_id"\s+in\s*\(').hasMatch(sql)) {
+        boundedMessageSelects++;
+      }
     }
     return super.runSelect(executor, statement, args);
   }
@@ -353,12 +538,33 @@ final class _ConversationPreviewCounter extends QueryInterceptor {
     QueryExecutor executor,
     String statement,
     List<Object?> args,
-  ) {
+  ) async {
     final sql = statement.toLowerCase();
     if (enabled &&
         sql.contains('update "cached_conversations"') &&
         sql.contains('"last_message_timestamp"')) {
       directConversationUpdates++;
+    }
+    final conflictRawJson = reactionConflictRawJson;
+    if (enabled &&
+        !reactionConflictInjected &&
+        conflictRawJson != null &&
+        sql.contains('update "cached_chat_messages"') &&
+        sql.contains('"raw_json" = ?')) {
+      reactionConflictInjected = true;
+      await executor.runUpdate(
+        'UPDATE "cached_chat_messages" '
+        'SET "raw_json" = ?, "display_text" = ? '
+        'WHERE "account_id" = ? AND "room_token" = ? AND "message_id" = ?',
+        <Object?>[
+          conflictRawJson,
+          'Concurrent edit',
+          'account-a',
+          'rooma123',
+          7000,
+        ],
+      );
+      return 0;
     }
     return super.runUpdate(executor, statement, args);
   }

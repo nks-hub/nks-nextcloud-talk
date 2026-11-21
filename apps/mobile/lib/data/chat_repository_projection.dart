@@ -638,6 +638,10 @@ extension _ChatRepositoryProjection on ChatRepository {
       account,
       messageList,
     );
+    final reactionMessages = await _loadReactionMessages(
+      accountId: accountId,
+      messages: messageList,
+    );
     final pendingMessages = <CachedChatMessagesCompanion>[];
     final pendingMessageKeys = <_ChatMessageKey>{};
     final pendingThreadRootUpdates =
@@ -682,8 +686,9 @@ extension _ChatRepositoryProjection on ChatRepository {
         pendingThreadRootUpdates[threadRootUpdate.key] =
             threadRootUpdate.companion;
       }
-      await _applyReactionsFromNotice(account, message);
+      await _applyReactionsFromNotice(account, message, reactionMessages);
       await _applyMutationFromNotice(account, message);
+      _forgetChangedReactionTargets(reactionMessages, message);
       final prepared = _prepareMessage(account, message);
       pendingMessages.add(prepared.companion);
       pendingMessageKeys.add(messageKey);
@@ -703,67 +708,6 @@ extension _ChatRepositoryProjection on ChatRepository {
       accountId: accountId,
       updates: conversationPreviewUpdates,
     );
-  }
-
-  /// Carries somebody else's reaction over to the message it is about.
-  ///
-  /// Talk reports a reaction as a system message whose parent is the reacted
-  /// message with a fresh `reactions` map. The notice itself is stored like
-  /// any other message, but nothing used to touch the parent row, so a bubble
-  /// only ever showed the reactions this device had added itself - anyone
-  /// else's arrived on the server and never reached the cache, not even after
-  /// reopening the conversation.
-  Future<void> _applyReactionsFromNotice(
-    ChatAccountState account,
-    ChatMessage message,
-  ) async {
-    const notices = <String>{
-      'reaction',
-      'reaction_deleted',
-      'reaction_revoked',
-    };
-    if (!notices.contains(message.systemMessage)) {
-      return;
-    }
-    final parent = message.parent;
-    if (parent is! ChatFullParent || parent.roomToken != message.roomToken) {
-      return;
-    }
-    final accountId = account.accountId.value;
-    final row =
-        await (_database.select(_database.cachedChatMessages)..where(
-              (candidate) =>
-                  candidate.accountId.equals(accountId) &
-                  candidate.roomToken.equals(message.roomToken.value) &
-                  candidate.messageId.equals(parent.messageId),
-            ))
-            .getSingleOrNull();
-    if (row == null) {
-      return;
-    }
-    final ChatMessage cached;
-    try {
-      cached = ChatMessage.fromJson(jsonDecode(row.rawJson));
-    } on Object {
-      return;
-    }
-    if (cached.messageId != parent.messageId ||
-        cached.roomToken != parent.roomToken) {
-      return;
-    }
-    // Only the two reaction fields are taken across. The notice's parent is
-    // authoritative about who reacted, not about an edit or a deletion that
-    // may have landed on the cached row since.
-    final wire = Map<String, Object?>.of(cached.wire)
-      ..['reactions'] = parent.message.reactions
-      ..['reactionsSelf'] = parent.message.reactionsSelf;
-    await (_database.update(_database.cachedChatMessages)..where(
-          (candidate) =>
-              candidate.accountId.equals(accountId) &
-              candidate.roomToken.equals(message.roomToken.value) &
-              candidate.messageId.equals(parent.messageId),
-        ))
-        .write(CachedChatMessagesCompanion(rawJson: Value(jsonEncode(wire))));
   }
 
   /// Somebody else's edit or deletion arrives the same way a reaction does:
