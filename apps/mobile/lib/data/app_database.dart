@@ -211,6 +211,10 @@ class ChatScopes extends Table {
   name: 'cached_chat_messages_attachment_confirmation',
   columns: {#accountId, #roomToken, #referenceId, #messageId},
 )
+@TableIndex(
+  name: 'cached_chat_messages_thread_window',
+  columns: {#accountId, #roomToken, #threadId, #messageId},
+)
 class CachedChatMessages extends Table {
   TextColumn get accountId =>
       text().references(Accounts, #id, onDelete: KeyAction.cascade)();
@@ -717,7 +721,7 @@ final class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -1079,6 +1083,13 @@ final class AppDatabase extends _$AppDatabase {
         migrator,
         textSendOperations,
         textSendOperations.automaticResendCount,
+      );
+    }
+    if (from < 20) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS cached_chat_messages_thread_window '
+        'ON cached_chat_messages '
+        '(account_id, room_token, thread_id, message_id)',
       );
     }
   }

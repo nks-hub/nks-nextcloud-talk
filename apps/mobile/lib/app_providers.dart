@@ -1122,19 +1122,18 @@ final chatMessageWindowProvider = StateProvider.autoDispose
 
 /// The messages a pane shows, oldest first.
 ///
-/// A room's main timeline is the newest [chatMessageWindowProvider] rows; a
-/// thread is read whole, because its root has to be there however long the
-/// thread is.
+/// A room's main timeline is the newest [chatMessageWindowProvider] rows. A
+/// thread keeps its root plus that many newest replies.
 final chatMessagesProvider = StreamProvider.autoDispose
     .family<List<CachedChatMessage>, ChatRoomProviderKey>((ref, key) {
       final replyLayout = ref.watch(replyLayoutProvider);
       final chat = ref.watch(chatRepositoryProvider);
       if (key.threadId != null) {
-        return chat.watchMessages(
+        return chat.watchRecentThreadMessages(
           accountId: key.accountId,
           roomToken: key.roomToken,
-          threadId: key.threadId,
-          includeThreadReplies: replyLayout == ReplyLayout.inline,
+          threadId: key.threadId!,
+          limit: ref.watch(chatMessageWindowProvider(key)),
         );
       }
       return chat.watchRecentMessages(

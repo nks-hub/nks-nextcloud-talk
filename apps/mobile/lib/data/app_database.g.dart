@@ -12851,6 +12851,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'cached_chat_messages_attachment_confirmation',
     'CREATE INDEX cached_chat_messages_attachment_confirmation ON cached_chat_messages (account_id, room_token, reference_id, message_id)',
   );
+  late final Index cachedChatMessagesThreadWindow = Index(
+    'cached_chat_messages_thread_window',
+    'CREATE INDEX cached_chat_messages_thread_window ON cached_chat_messages (account_id, room_token, thread_id, message_id)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -12872,6 +12876,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     callSessions,
     callLifecycleSessions,
     cachedChatMessagesAttachmentConfirmation,
+    cachedChatMessagesThreadWindow,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([

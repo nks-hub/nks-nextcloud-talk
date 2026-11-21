@@ -485,11 +485,13 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   /// holds everything cached, so only the server has more.
   bool _widenMessageWindow() {
     final key = _key;
-    if (key.threadId != null) {
-      return false;
-    }
     final window = ref.read(chatMessageWindowProvider(key).notifier);
-    final shown = ref.read(chatMessagesProvider(key)).valueOrNull?.length ?? 0;
+    final messages =
+        ref.read(chatMessagesProvider(key)).valueOrNull ??
+        const <CachedChatMessage>[];
+    final shown = key.threadId == null
+        ? messages.length
+        : messages.where((message) => message.messageId != key.threadId).length;
     if (shown < window.state) {
       return false;
     }
@@ -503,18 +505,21 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     int messageId,
     ChatRoomProviderKey key,
   ) async {
-    if (key.threadId != null) {
-      return;
-    }
-    final needed = await ref
-        .read(chatRepositoryProvider)
-        .countMessagesFrom(
-          accountId: key.accountId,
-          roomToken: key.roomToken,
-          messageId: messageId,
-          includeThreadReplies:
-              ref.read(replyLayoutProvider) == ReplyLayout.inline,
-        );
+    final repository = ref.read(chatRepositoryProvider);
+    final needed = key.threadId == null
+        ? await repository.countMessagesFrom(
+            accountId: key.accountId,
+            roomToken: key.roomToken,
+            messageId: messageId,
+            includeThreadReplies:
+                ref.read(replyLayoutProvider) == ReplyLayout.inline,
+          )
+        : await repository.countThreadRepliesFrom(
+            accountId: key.accountId,
+            roomToken: key.roomToken,
+            threadId: key.threadId!,
+            messageId: messageId,
+          );
     if (!mounted || key != _key) {
       return;
     }

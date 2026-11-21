@@ -49,6 +49,73 @@ extension ChatRepositoryMessageWindow on ChatRepository {
     return query.watch().map((rows) => rows.reversed.toList(growable: false));
   }
 
+  /// The thread root and its newest [limit] replies, oldest first.
+  ///
+  /// The root is selected separately so a deep thread cannot push it out of
+  /// the bounded reply window. The inner descending query can walk the thread
+  /// index from its newest edge; only the bounded result is sorted for display.
+  Stream<List<CachedChatMessage>> watchRecentThreadMessages({
+    required String accountId,
+    required String roomToken,
+    required int threadId,
+    required int limit,
+  }) {
+    if (threadId < 1) {
+      throw ArgumentError.value(threadId, 'threadId');
+    }
+    if (limit < 1) {
+      throw ArgumentError.value(limit, 'limit');
+    }
+    final notices = _ChatRepositoryQueries._noticeSystemMessages;
+    final noticeSlots = List.filled(notices.length, '?').join(', ');
+    final table = _database.cachedChatMessages;
+    final query = _database.customSelect(
+      '''
+        SELECT bounded.*
+          FROM (
+            SELECT root.*
+              FROM cached_chat_messages AS root
+             WHERE root.account_id = ?
+               AND root.room_token = ?
+               AND root.message_id = ?
+               AND root.system_message NOT IN ($noticeSlots)
+            UNION ALL
+            SELECT replies.*
+              FROM (
+                SELECT reply.*
+                  FROM cached_chat_messages AS reply
+                 WHERE reply.account_id = ?
+                   AND reply.room_token = ?
+                   AND reply.thread_id = ?
+                   AND reply.message_id <> ?
+                   AND reply.system_message NOT IN ($noticeSlots)
+                 ORDER BY reply.message_id DESC
+                 LIMIT ?
+              ) AS replies
+          ) AS bounded
+         ORDER BY bounded.message_id ASC
+      ''',
+      variables: [
+        Variable.withString(accountId),
+        Variable.withString(roomToken),
+        Variable.withInt(threadId),
+        for (final notice in notices) Variable.withString(notice),
+        Variable.withString(accountId),
+        Variable.withString(roomToken),
+        Variable.withInt(threadId),
+        Variable.withInt(threadId),
+        for (final notice in notices) Variable.withString(notice),
+        Variable.withInt(limit),
+      ],
+      readsFrom: {table},
+    );
+    return query.watch().map(
+      (rows) => <CachedChatMessage>[
+        for (final row in rows) table.map(row.data),
+      ],
+    );
+  }
+
   /// How many main-timeline messages are at or after [messageId]: the window
   /// [watchRecentMessages] needs to reach it.
   Future<int> countMessagesFrom({
@@ -70,6 +137,36 @@ extension ChatRepositoryMessageWindow on ChatRepository {
               includeThreadReplies: includeThreadReplies,
             ) &
             messages.messageId.isBiggerOrEqualValue(messageId),
+      );
+    return (await query.getSingle()).read(count) ?? 0;
+  }
+
+  /// Thread replies at or after [messageId], excluding the always-visible root.
+  Future<int> countThreadRepliesFrom({
+    required String accountId,
+    required String roomToken,
+    required int threadId,
+    required int messageId,
+  }) async {
+    if (threadId < 1) {
+      throw ArgumentError.value(threadId, 'threadId');
+    }
+    if (messageId == threadId) {
+      return 0;
+    }
+    final messages = _database.cachedChatMessages;
+    final count = messages.messageId.count();
+    final query = _database.selectOnly(messages)
+      ..addColumns([count])
+      ..where(
+        messages.accountId.equals(accountId) &
+            messages.roomToken.equals(roomToken) &
+            messages.threadId.equals(threadId) &
+            messages.messageId.equals(threadId).not() &
+            messages.messageId.isBiggerOrEqualValue(messageId) &
+            messages.systemMessage.isNotIn(
+              _ChatRepositoryQueries._noticeSystemMessages,
+            ),
       );
     return (await query.getSingle()).read(count) ?? 0;
   }

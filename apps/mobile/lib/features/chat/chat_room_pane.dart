@@ -1193,11 +1193,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                           // part of what is cached: paging back widens it.
                           hasOlder:
                               (scope?.hasHistory ?? false) ||
-                              (widget.threadId == null &&
-                                  cachedMessages.length >=
-                                      ref.watch(
-                                        chatMessageWindowProvider(_key),
-                                      )),
+                              cachedMessages
+                                      .where(
+                                        (message) =>
+                                            message.messageId !=
+                                            widget.threadId,
+                                      )
+                                      .length >=
+                                  ref.watch(chatMessageWindowProvider(_key)),
                           loadingOlder: _loadingOlder,
                           controller: _scrollController,
                           onLoadOlder: () => unawaited(_loadOlder()),
