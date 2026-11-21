@@ -490,20 +490,27 @@ void main() {
   testWidgets('too many participants keep a readable tile and scroll', (
     tester,
   ) async {
-    // A real phone, not the tall test window: twelve tiles cannot share
+    // A real phone, not the tall test window: hundreds of tiles cannot share
     // 411 x 891 dp and still be worth looking at.
-    await _pumpCallScreen(tester, extraPeers: 10, devicePixelRatio: 2.625);
+    await _pumpCallScreen(tester, extraPeers: 200, devicePixelRatio: 2.625);
     final tile = tester.getRect(find.byKey(const Key('call-tile-peer-a')));
     expect(tile.height, greaterThanOrEqualTo(140));
+    final sliverGrid = tester.widget<SliverGrid>(find.byType(SliverGrid));
+    expect(sliverGrid.delegate, isA<SliverChildBuilderDelegate>());
     // Below the floor the grid keeps its fixed shape, so the last row sits
     // past the bottom of the body and is only reachable by scrolling.
-    expect(find.byKey(const Key('call-tile-peer-extra-9')), findsNothing);
-    await tester.drag(
-      find.byKey(const PageStorageKey('call-grid')),
-      const Offset(0, -2000),
+    const lastTile = Key('call-tile-peer-extra-199');
+    expect(find.byKey(lastTile), findsNothing);
+    await tester.scrollUntilVisible(
+      find.byKey(lastTile),
+      2000,
+      scrollable: find.descendant(
+        of: find.byKey(const PageStorageKey('call-grid')),
+        matching: find.byType(Scrollable),
+      ),
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('call-tile-peer-extra-9')), findsOneWidget);
+    expect(find.byKey(lastTile), findsOneWidget);
   });
 
   testWidgets('the call screen shows one tile per participant and the controls', (

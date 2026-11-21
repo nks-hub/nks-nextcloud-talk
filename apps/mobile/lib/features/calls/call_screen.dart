@@ -286,7 +286,6 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
         ? strings.callParticipantsYou
         : _PeerTile.nameOf(peers[id] ?? shares[id]!, names);
     final tileIds = ['self', ...peers.keys];
-    final tiles = [for (final id in tileIds) tileOf(id, contain: false)!];
     final selected = _expandedTile == null
         ? null
         : tileOf(_expandedTile!, contain: true);
@@ -296,31 +295,42 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
         if (mounted && _expandedTile == missing) _tileHistory?.remove();
       });
     }
-    final columns = tiles.length <= 1 ? 1 : 2;
+    final columns = tileIds.length <= 1 ? 1 : 2;
     final gap = _inPictureInPicture ? 2.0 : 8.0;
     if (_inPictureInPicture) {
       // The window is small: the tiles share it exactly, whatever its shape.
-      final rows = (tiles.length + columns - 1) ~/ columns;
+      final rows = (tileIds.length + columns - 1) ~/ columns;
       return Scaffold(
         key: const Key('call-screen-pip'),
         backgroundColor: Colors.black,
         body: LayoutBuilder(
-          builder: (context, constraints) => GridView.count(
+          builder: (context, constraints) => GridView.builder(
             key: const PageStorageKey('call-grid'),
             padding: EdgeInsets.all(gap),
-            crossAxisCount: columns,
-            mainAxisSpacing: gap,
-            crossAxisSpacing: gap,
             physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio:
-                ((constraints.maxWidth - gap * (columns + 1)) / columns) /
-                ((constraints.maxHeight - gap * (rows + 1)) / rows),
-            children: tiles,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              mainAxisSpacing: gap,
+              crossAxisSpacing: gap,
+              childAspectRatio:
+                  ((constraints.maxWidth - gap * (columns + 1)) / columns) /
+                  ((constraints.maxHeight - gap * (rows + 1)) / rows),
+            ),
+            itemCount: tileIds.length,
+            itemBuilder: (context, index) {
+              final id = tileIds[index];
+              return _expandable(
+                id,
+                tileOf(id, contain: false)!,
+                strings,
+                nameOf(id),
+              );
+            },
           ),
         ),
       );
     }
-    final rows = (tiles.length + columns - 1) ~/ columns;
+    final rows = (tileIds.length + columns - 1) ~/ columns;
     final grid = LayoutBuilder(
       builder: (context, constraints) {
         // Whatever the shared screen and the padding leave over belongs to
@@ -358,20 +368,23 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
               ),
             SliverPadding(
               padding: EdgeInsets.all(gap),
-              sliver: SliverGrid.count(
-                crossAxisCount: columns,
-                mainAxisSpacing: gap,
-                crossAxisSpacing: gap,
-                childAspectRatio: fills ? tileWidth / tileHeight : 3 / 4,
-                children: [
-                  for (var i = 0; i < tileIds.length; i++)
-                    _expandable(
-                      tileIds[i],
-                      tiles[i],
-                      strings,
-                      nameOf(tileIds[i]),
-                    ),
-                ],
+              sliver: SliverGrid.builder(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  mainAxisSpacing: gap,
+                  crossAxisSpacing: gap,
+                  childAspectRatio: fills ? tileWidth / tileHeight : 3 / 4,
+                ),
+                itemCount: tileIds.length,
+                itemBuilder: (context, index) {
+                  final id = tileIds[index];
+                  return _expandable(
+                    id,
+                    tileOf(id, contain: false)!,
+                    strings,
+                    nameOf(id),
+                  );
+                },
               ),
             ),
           ],
@@ -392,7 +405,7 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
           appBar: AppBar(
             backgroundColor: Colors.black,
             foregroundColor: Colors.white,
-            title: Text(strings.callScreenTitle(tiles.length)),
+            title: Text(strings.callScreenTitle(tileIds.length)),
             actions: [
               if (selected != null)
                 IconButton(
