@@ -72,6 +72,27 @@ void main() {
     expect(thread30.map((message) => message.messageId), [30, 31]);
   });
 
+  test('one-shot message reads keep timeline scope and order', () async {
+    final root = await repository.listMessages(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+    final thread20 = await repository.listMessages(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      threadId: 20,
+    );
+    final inline = await repository.listMessages(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      includeThreadReplies: true,
+    );
+
+    expect(root.map((message) => message.messageId), [10, 20, 30]);
+    expect(thread20.map((message) => message.messageId), [20, 21]);
+    expect(inline.map((message) => message.messageId), [10, 20, 21, 30, 31]);
+  });
+
   test(
     'the inline reply layout keeps every reply in the room stream',
     () async {

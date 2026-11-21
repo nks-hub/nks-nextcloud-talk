@@ -184,13 +184,11 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       return;
     }
     final repository = ref.read(chatRepositoryProvider);
-    final messages = await repository
-        .watchMessages(
-          accountId: key.accountId,
-          roomToken: key.roomToken,
-          threadId: key.threadId,
-        )
-        .first;
+    final messages = await repository.listMessages(
+      accountId: key.accountId,
+      roomToken: key.roomToken,
+      threadId: key.threadId,
+    );
     final threadContext = _currentThreadContext;
     final networkThreadId = threadContext == null
         ? key.threadId

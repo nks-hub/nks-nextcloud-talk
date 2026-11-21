@@ -132,7 +132,8 @@ extension _ChatRepositoryQueries on ChatRepository {
     'thread_created',
   ];
 
-  Stream<List<CachedChatMessage>> _watchMessagesQuery({
+  SimpleSelectStatement<$CachedChatMessagesTable, CachedChatMessage>
+  _messagesQuery({
     required String accountId,
     required String roomToken,
     int? threadId,
@@ -149,7 +150,7 @@ extension _ChatRepositoryQueries on ChatRepository {
         ),
       )
       ..orderBy([(message) => OrderingTerm.asc(message.messageId)]);
-    return query.watch();
+    return query;
   }
 
   Future<bool?> _cachedRootIsNamedThreadQuery({

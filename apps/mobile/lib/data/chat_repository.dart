@@ -62,12 +62,25 @@ final class ChatRepository {
     required String roomToken,
     int? threadId,
     bool includeThreadReplies = false,
-  }) => _watchMessagesQuery(
+  }) => _messagesQuery(
     accountId: accountId,
     roomToken: roomToken,
     threadId: threadId,
     includeThreadReplies: includeThreadReplies,
-  );
+  ).watch();
+
+  /// One cached timeline snapshot without opening a live Drift query.
+  Future<List<CachedChatMessage>> listMessages({
+    required String accountId,
+    required String roomToken,
+    int? threadId,
+    bool includeThreadReplies = false,
+  }) => _messagesQuery(
+    accountId: accountId,
+    roomToken: roomToken,
+    threadId: threadId,
+    includeThreadReplies: includeThreadReplies,
+  ).get();
 
   Future<bool?> cachedRootIsNamedThread({
     required String accountId,
