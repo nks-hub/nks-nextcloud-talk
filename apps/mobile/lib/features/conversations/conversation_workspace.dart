@@ -300,9 +300,12 @@ final class _CompactShell extends StatelessWidget {
     BuildContext context,
     AppLocalizations strings,
   ) {
+    final listColor = Theme.of(context).colorScheme.surfaceContainerLow;
     return Scaffold(
       key: const Key('conversation-shell-compact'),
+      backgroundColor: listColor,
       appBar: AppBar(
+        backgroundColor: listColor,
         titleSpacing: 16,
         title: Row(
           children: [

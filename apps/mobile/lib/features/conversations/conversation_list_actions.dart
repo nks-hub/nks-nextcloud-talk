@@ -348,11 +348,11 @@ final class _ConversationFilterBar extends StatelessWidget {
       padding: EdgeInsets.zero,
       labelPadding: const EdgeInsets.symmetric(horizontal: 2),
       side: BorderSide(
-        color: selected ? scheme.secondary : scheme.outlineVariant,
+        color: selected ? scheme.tertiary : scheme.outlineVariant,
       ),
-      selectedColor: scheme.secondaryContainer,
+      selectedColor: scheme.tertiaryContainer,
       labelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant,
+        color: selected ? scheme.onTertiaryContainer : scheme.onSurfaceVariant,
         fontWeight: FontWeight.w600,
       ),
     );

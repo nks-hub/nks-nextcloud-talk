@@ -483,7 +483,7 @@ final class _ChatComposer extends ConsumerWidget {
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: scheme.surfaceContainerLow,
+      color: scheme.surface,
       shape: Border(
         top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.7)),
       ),
@@ -570,7 +570,11 @@ final class _ChatComposer extends ConsumerWidget {
                           listenable: focusNode,
                           builder: (context, _) => Container(
                             decoration: BoxDecoration(
-                              color: scheme.surfaceContainerHighest,
+                              color: Color.lerp(
+                                scheme.surface,
+                                scheme.surfaceContainerHighest,
+                                0.45,
+                              ),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
                                 color: focusNode.hasFocus
@@ -641,6 +645,7 @@ final class _ChatComposer extends ConsumerWidget {
                                         ),
                                     decoration: InputDecoration(
                                       hintText: strings.messageHint,
+                                      filled: false,
                                       border: InputBorder.none,
                                       enabledBorder: InputBorder.none,
                                       focusedBorder: InputBorder.none,

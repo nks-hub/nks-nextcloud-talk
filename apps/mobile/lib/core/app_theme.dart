@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 abstract final class AppTheme {
   static const Color _seed = Color(0xFF00679E);
   static const Color _secondarySeed = Color(0xFF65558F);
-  static const Color _tertiarySeed = Color(0xFF006B5E);
-  static const Color _lightSurface = Color(0xFFF7F9FC);
-  static const Color _darkSurface = Color(0xFF0D1116);
+  static const Color _tertiarySeed = Color(0xFF17616D);
+  static const Color _lightSurface = Color(0xFFFAF8F5);
+  static const Color _darkSurface = Color(0xFF151419);
 
   /// Mouse and keyboard do not need the touch target minimum, and Nextcloud's
   /// own clients size their controls around `--default-clickable-area: 34px`.
@@ -80,11 +80,11 @@ abstract final class AppTheme {
       surface: isDark ? _darkSurface : _lightSurface,
       surfaceContainerLowest: isDark ? const Color(0xFF080B0F) : Colors.white,
       surfaceContainerLow: isDark
-          ? const Color(0xFF141A21)
-          : const Color(0xFFF0F4F8),
+          ? const Color(0xFF172331)
+          : const Color(0xFFECF3FA),
       surfaceContainer: isDark
-          ? const Color(0xFF19212A)
-          : const Color(0xFFE8EEF4),
+          ? const Color(0xFF202C39)
+          : const Color(0xFFE3EBF5),
       outline: isDark ? const Color(0xFF6A7886) : const Color(0xFF66717D),
       outlineVariant: isDark
           ? const Color(0xFF34404B)

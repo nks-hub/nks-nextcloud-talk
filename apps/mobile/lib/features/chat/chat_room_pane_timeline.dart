@@ -14,7 +14,7 @@ final class _ChatHeader extends StatelessWidget {
       decoration: BoxDecoration(
         color:
             ChatBackgroundChip.colorOf(context) ??
-            Theme.of(context).colorScheme.surfaceContainerLow,
+            Theme.of(context).colorScheme.surface,
         border: Border(
           bottom: BorderSide(
             color: Theme.of(context).colorScheme.outlineVariant,

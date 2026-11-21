@@ -341,9 +341,7 @@ final class PresenceChatRoomPane extends ConsumerWidget {
         key: const Key('chat-room-header'),
         constraints: BoxConstraints(minHeight: context.paneHeaderHeight),
         decoration: BoxDecoration(
-          color: tinted
-              ? null
-              : Theme.of(context).colorScheme.surfaceContainerLow,
+          color: tinted ? null : Theme.of(context).colorScheme.surface,
           border: Border(
             bottom: BorderSide(
               color: Theme.of(context).colorScheme.outlineVariant,
