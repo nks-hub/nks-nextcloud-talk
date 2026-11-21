@@ -58,61 +58,58 @@ final class _ChatAttachment extends ConsumerWidget {
     final fullScreenPreviewUri = previewUri == null
         ? null
         : _fullScreenPreviewUri(previewUri);
-    final VoidCallback? openImage =
+    final Future<void> Function()? openImage =
         fullScreenPreviewUri == null || originalUri == null || mimeType == null
         ? null
-        : () => unawaited(
-            showAuthenticatedImageViewer(
-              context,
-              account: account,
-              previewUri: fullScreenPreviewUri,
-              smallerPreviewUri: previewUri,
-              originalUri: originalUri,
-              originalContentType: mimeType,
-              imageName: name,
-              repository: ref.read(chatMediaRepositoryProvider),
-              openAppSettings: () => ref.read(appSettingsOpenerProvider).open(),
-            ),
+        : () => showAuthenticatedImageViewer(
+            context,
+            account: account,
+            previewUri: fullScreenPreviewUri,
+            smallerPreviewUri: previewUri,
+            originalUri: originalUri,
+            originalContentType: mimeType,
+            imageName: name,
+            repository: ref.read(chatMediaRepositoryProvider),
+            openAppSettings: () => ref.read(appSettingsOpenerProvider).open(),
           );
-    void openExternally() => unawaited(
-      _openDownloadedAttachment(
-        context,
+    Future<void> openExternally() => _openDownloadedAttachment(
+      context,
+      ref,
+      account: account,
+      uri: originalUri!,
+      fileName: name,
+      contentType: mimeType!,
+      expectedBytes: _attachmentExpectedBytes(parameter),
+      repairUri: () => _repairedAttachmentUri(
         ref,
         account: account,
-        uri: originalUri!,
-        fileName: name,
-        contentType: mimeType!,
-        expectedBytes: _attachmentExpectedBytes(parameter),
-        repairUri: () => _repairedAttachmentUri(
-          ref,
-          account: account,
-          roomToken: roomToken,
-          messageId: messageId,
-          index: index,
-          failedUri: originalUri,
-        ),
+        roomToken: roomToken,
+        messageId: messageId,
+        index: index,
+        failedUri: originalUri,
       ),
     );
     // Text and Markdown are read in place; everything else still goes to the
     // platform's own handler, which is also what a device without a text app
     // used to fall back to and no longer needs to.
-    final VoidCallback? openFile =
+    final Future<void> Function()? openFile =
         originalUri == null || mimeType == null || voiceUri != null
         ? null
         : isReadableText(mimeType)
-        ? () => unawaited(
-            showTextAttachmentViewer(
-              context,
-              account: account,
-              uri: originalUri,
-              fileName: name,
-              contentType: mimeType,
-              repository: ref.read(chatMediaRepositoryProvider),
-              onOpenExternally: openExternally,
-            ),
+        ? () => showTextAttachmentViewer(
+            context,
+            account: account,
+            uri: originalUri,
+            fileName: name,
+            contentType: mimeType,
+            repository: ref.read(chatMediaRepositoryProvider),
+            onOpenExternally: () => unawaited(openExternally()),
           )
         : openExternally;
-    final openAttachment = onOpenImage ?? openImage ?? openFile;
+    final providedOpenImage = onOpenImage;
+    final Future<void> Function()? openAttachment = onOpenImage != null
+        ? () async => providedOpenImage!()
+        : openImage ?? openFile;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -141,8 +138,10 @@ final class _ChatAttachment extends ConsumerWidget {
             messageId: messageId,
             index: index,
             compact: compact,
-            onOpen: onOpenImage ?? openImage,
-            onOpenFile: openFile,
+            onOpen:
+                onOpenImage ??
+                (openImage == null ? null : () => unawaited(openImage())),
+            onOpenFile: openFile == null ? null : () => unawaited(openFile()),
             onCopy:
                 fullScreenPreviewUri == null ||
                     originalUri == null ||
@@ -229,67 +228,39 @@ final class _ChatAttachment extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _attachmentAction(
-                        key: Key(
-                          'chat-attachment-open-action-$messageId-$index',
-                        ),
-                        semanticsKey: Key(
-                          contact
-                              ? 'chat-open-contact-$messageId-$index'
-                              : 'chat-open-attachment-$messageId-$index',
-                        ),
-                        icon: Icons.open_in_new_rounded,
-                        label: strings.openAttachment,
-                        semanticsLabel: contact
-                            ? strings.openContact(name)
-                            : '${strings.openAttachment}: $name',
-                        onTap: openAttachment,
-                      ),
-                      _attachmentAction(
-                        key: Key(
-                          'chat-attachment-save-action-$messageId-$index',
-                        ),
-                        icon: Icons.save_alt_rounded,
-                        label: strings.saveAttachment,
-                        semanticsLabel: '${strings.saveAttachment}: $name',
-                        onTap: () => unawaited(
-                          _exportDownloadedAttachment(
-                            context,
-                            ref,
-                            action: _ChatAttachmentMenuAction.save,
-                            account: account,
-                            uri: originalUri!,
-                            fileName: name,
-                            contentType: mimeType!,
-                            expectedBytes: _attachmentExpectedBytes(parameter),
-                          ),
-                        ),
-                      ),
-                      _attachmentAction(
-                        key: Key(
-                          'chat-attachment-share-action-$messageId-$index',
-                        ),
-                        icon: Icons.share_rounded,
-                        label: strings.shareAttachment,
-                        semanticsLabel: '${strings.shareAttachment}: $name',
-                        onTap: () => unawaited(
-                          _exportDownloadedAttachment(
-                            context,
-                            ref,
-                            action: _ChatAttachmentMenuAction.share,
-                            account: account,
-                            uri: originalUri!,
-                            fileName: name,
-                            contentType: mimeType!,
-                            expectedBytes: _attachmentExpectedBytes(parameter),
-                          ),
-                        ),
-                      ),
-                    ],
+                  _ChatAttachmentActions(
+                    key: ValueKey('${account.id}-$messageId-$index-actions'),
+                    messageId: messageId,
+                    index: index,
+                    contact: contact,
+                    name: name,
+                    openLabel: strings.openAttachment,
+                    saveLabel: strings.saveAttachment,
+                    shareLabel: strings.shareAttachment,
+                    openSemanticsLabel: contact
+                        ? strings.openContact(name)
+                        : '${strings.openAttachment}: $name',
+                    open: openAttachment,
+                    save: () => _exportDownloadedAttachment(
+                      context,
+                      ref,
+                      action: _ChatAttachmentMenuAction.save,
+                      account: account,
+                      uri: originalUri!,
+                      fileName: name,
+                      contentType: mimeType!,
+                      expectedBytes: _attachmentExpectedBytes(parameter),
+                    ),
+                    share: () => _exportDownloadedAttachment(
+                      context,
+                      ref,
+                      action: _ChatAttachmentMenuAction.share,
+                      account: account,
+                      uri: originalUri!,
+                      fileName: name,
+                      contentType: mimeType!,
+                      expectedBytes: _attachmentExpectedBytes(parameter),
+                    ),
                   ),
                 ],
               ),
@@ -302,13 +273,108 @@ final class _ChatAttachment extends ConsumerWidget {
 
 enum _ChatAttachmentMenuAction { save, share }
 
+final class _ChatAttachmentActions extends StatefulWidget {
+  const _ChatAttachmentActions({
+    super.key,
+    required this.messageId,
+    required this.index,
+    required this.contact,
+    required this.name,
+    required this.openLabel,
+    required this.saveLabel,
+    required this.shareLabel,
+    required this.openSemanticsLabel,
+    required this.open,
+    required this.save,
+    required this.share,
+  });
+
+  final int messageId;
+  final int index;
+  final bool contact;
+  final String name;
+  final String openLabel;
+  final String saveLabel;
+  final String shareLabel;
+  final String openSemanticsLabel;
+  final Future<void> Function() open;
+  final Future<void> Function() save;
+  final Future<void> Function() share;
+
+  @override
+  State<_ChatAttachmentActions> createState() => _ChatAttachmentActionsState();
+}
+
+final class _ChatAttachmentActionsState extends State<_ChatAttachmentActions> {
+  bool _running = false;
+
+  void _run(Future<void> Function() action) {
+    if (_running) return;
+    setState(() => _running = true);
+    unawaited(_finish(action));
+  }
+
+  Future<void> _finish(Future<void> Function() action) async {
+    try {
+      await action();
+    } finally {
+      if (mounted) setState(() => _running = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    VoidCallback? run(Future<void> Function() action) =>
+        _running ? null : () => _run(action);
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _attachmentAction(
+          key: Key(
+            'chat-attachment-open-action-${widget.messageId}-${widget.index}',
+          ),
+          semanticsKey: Key(
+            widget.contact
+                ? 'chat-open-contact-${widget.messageId}-${widget.index}'
+                : 'chat-open-attachment-${widget.messageId}-${widget.index}',
+          ),
+          icon: Icons.open_in_new_rounded,
+          label: widget.openLabel,
+          semanticsLabel: widget.openSemanticsLabel,
+          onTap: run(widget.open),
+        ),
+        _attachmentAction(
+          key: Key(
+            'chat-attachment-save-action-${widget.messageId}-${widget.index}',
+          ),
+          icon: Icons.save_alt_rounded,
+          label: widget.saveLabel,
+          semanticsLabel: '${widget.saveLabel}: ${widget.name}',
+          onTap: run(widget.save),
+        ),
+        _attachmentAction(
+          key: Key(
+            'chat-attachment-share-action-${widget.messageId}-${widget.index}',
+          ),
+          icon: Icons.share_rounded,
+          label: widget.shareLabel,
+          semanticsLabel: '${widget.shareLabel}: ${widget.name}',
+          onTap: run(widget.share),
+        ),
+      ],
+    );
+  }
+}
+
 Widget _attachmentAction({
   required Key key,
   Key? semanticsKey,
   required IconData icon,
   required String label,
   required String semanticsLabel,
-  required VoidCallback onTap,
+  required VoidCallback? onTap,
 }) {
   return SizedBox.square(
     key: key,
@@ -318,6 +384,7 @@ Widget _attachmentAction({
       child: Semantics(
         key: semanticsKey,
         button: true,
+        enabled: onTap != null,
         label: semanticsLabel,
         onTap: onTap,
         child: ExcludeSemantics(

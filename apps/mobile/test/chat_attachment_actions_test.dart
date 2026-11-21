@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -79,6 +80,67 @@ void main() {
     opener.release();
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('chat-attachment-downloading')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('one attachment action runs at a time', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final exporter = _RecordingExporter();
+    final opener = _RecordingOpener()..heldProgress = (received: 1, total: 2);
+    await tester.pumpWidget(_app(exporter: exporter, opener: opener));
+
+    final open = find.byKey(const Key('chat-attachment-open-action-81-0'));
+    final save = find.byKey(const Key('chat-attachment-save-action-81-0'));
+    final share = find.byKey(const Key('chat-attachment-share-action-81-0'));
+    await tester.tap(open);
+    await tester.tap(open);
+    await tester.tap(save);
+    await tester.tap(share);
+    await tester.pump();
+
+    expect(opener.openedNames, ['report.pdf']);
+    expect(exporter.savedNames, isEmpty);
+    expect(exporter.sharedNames, isEmpty);
+    for (final label in const [
+      'Save attachment: report.pdf',
+      'Share attachment: report.pdf',
+    ]) {
+      final data = tester
+          .getSemantics(find.bySemanticsLabel(label))
+          .getSemanticsData();
+      expect(data.flagsCollection.isEnabled, ui.Tristate.isFalse);
+      expect(data.hasAction(ui.SemanticsAction.tap), isFalse);
+    }
+
+    opener.release();
+    await tester.pumpAndSettle();
+    await tester.tap(share);
+    await tester.pumpAndSettle();
+
+    expect(exporter.sharedNames, ['report.pdf']);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets('different attachments keep independent actions', (tester) async {
+    final opener = _RecordingOpener()..heldProgress = (received: 1, total: 2);
+    await tester.pumpWidget(
+      _app(
+        exporter: _RecordingExporter(),
+        opener: opener,
+        message: _twoFileMessage,
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('chat-attachment-open-action-83-0')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('chat-attachment-open-action-83-1')));
+    await tester.pump();
+
+    expect(opener.openedNames, ['report.pdf', 'minutes.pdf']);
+
+    opener.release();
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 
@@ -528,6 +590,29 @@ final ChatMessage _voiceMessage = ChatMessage.fromJson({
       'name': 'voice.m4a',
       'path': 'Talk/voice.m4a',
       'mimetype': 'audio/mp4',
+    },
+  },
+});
+
+final ChatMessage _twoFileMessage = ChatMessage.fromJson({
+  ..._fileMessage.wire,
+  'id': 83,
+  'referenceId': 'reference-83',
+  'message': '{first} {second}',
+  'messageParameters': {
+    'first': {
+      'type': 'file',
+      'id': '83-1',
+      'name': 'report.pdf',
+      'path': 'Talk/report.pdf',
+      'mimetype': 'application/pdf',
+    },
+    'second': {
+      'type': 'file',
+      'id': '83-2',
+      'name': 'minutes.pdf',
+      'path': 'Talk/minutes.pdf',
+      'mimetype': 'application/pdf',
     },
   },
 });
