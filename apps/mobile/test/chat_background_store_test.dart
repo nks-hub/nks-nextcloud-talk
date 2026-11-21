@@ -102,6 +102,79 @@ void main() {
     },
   );
 
+  test('blocked watcher does not delay another account', () async {
+    await store.close();
+    final snapshotReached = Completer<void>();
+    final releaseSnapshot = Completer<void>();
+    addTearDown(() {
+      if (!releaseSnapshot.isCompleted) {
+        releaseSnapshot.complete();
+      }
+    });
+    store = ChatBackgroundStore.forTesting(
+      directory,
+      beforeWatchSnapshot: () {
+        if (!snapshotReached.isCompleted) {
+          snapshotReached.complete();
+        }
+        return releaseSnapshot.future;
+      },
+    );
+    const blocked = (accountId: 'account-a', roomToken: 'rooma123');
+    const independent = (accountId: 'account-b', roomToken: 'rooma123');
+    await store.write(independent, '#445566');
+    final subscription = store.watch(blocked).listen((_) {});
+    addTearDown(subscription.cancel);
+
+    await snapshotReached.future;
+
+    expect(
+      await store.read(independent).timeout(const Duration(seconds: 1)),
+      '#445566',
+    );
+    releaseSnapshot.complete();
+  });
+
+  test('close waits for active work and prevents watcher revival', () async {
+    await store.close();
+    final snapshotReached = Completer<void>();
+    final releaseSnapshot = Completer<void>();
+    addTearDown(() {
+      if (!releaseSnapshot.isCompleted) {
+        releaseSnapshot.complete();
+      }
+    });
+    store = ChatBackgroundStore.forTesting(
+      directory,
+      beforeWatchSnapshot: () {
+        if (!snapshotReached.isCompleted) {
+          snapshotReached.complete();
+        }
+        return releaseSnapshot.future;
+      },
+    );
+    const key = (accountId: 'account-a', roomToken: 'rooma123');
+    final lateStream = store.watch(key);
+    final subscription = store.watch(key).listen((_) {});
+    addTearDown(subscription.cancel);
+    await snapshotReached.future;
+    var closed = false;
+
+    final closing = store.close().then((_) => closed = true);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(closed, isFalse);
+    await expectLater(store.read(key), throwsA(isA<StateError>()));
+    releaseSnapshot.complete();
+    await closing;
+    expect(store.activeWatcherCount, 0);
+    await expectLater(
+      lateStream,
+      emitsInOrder(<Object>[emitsError(isA<StateError>()), emitsDone]),
+    );
+    expect(store.activeWatcherCount, 0);
+  });
+
   test('cancelled watchers are removed from the store', () async {
     const key = (accountId: 'account-a', roomToken: 'rooma123');
     final initial = Completer<void>();

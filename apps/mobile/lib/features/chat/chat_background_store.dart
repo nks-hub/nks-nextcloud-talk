@@ -34,8 +34,9 @@ final class ChatBackgroundStore {
 
   final Directory _directory;
   final Future<void> Function()? _beforeWatchSnapshot;
-  final _SerialExecutor _writes = _SerialExecutor();
+  final _KeyedSerialExecutor<String> _writes = _KeyedSerialExecutor<String>();
   final Map<ChatBackgroundKey, Set<StreamController<String?>>> _watchers = {};
+  Future<void>? _closeFuture;
 
   @visibleForTesting
   int get activeWatcherCount => _watchers.values.fold<int>(
@@ -45,7 +46,7 @@ final class ChatBackgroundStore {
 
   Future<String?> read(ChatBackgroundKey key) async {
     _validateKey(key);
-    return _writes.run(() async {
+    return _run(key.accountId, () async {
       final rooms = await _readAccount(key.accountId);
       return rooms[_roomHash(key.roomToken)];
     });
@@ -59,7 +60,7 @@ final class ChatBackgroundStore {
 
     Future<void> register() async {
       try {
-        await _writes.run(() async {
+        await _run(key.accountId, () async {
           if (cancelled) {
             return;
           }
@@ -76,6 +77,7 @@ final class ChatBackgroundStore {
       } on Object catch (error, stackTrace) {
         if (!cancelled) {
           output.addError(error, stackTrace);
+          unawaited(output.close());
         }
       }
     }
@@ -102,7 +104,7 @@ final class ChatBackgroundStore {
   Future<void> write(ChatBackgroundKey key, String color) {
     _validateKey(key);
     final normalized = _normalizeColor(color);
-    return _writes.run(() async {
+    return _run(key.accountId, () async {
       final rooms = await _readAccount(key.accountId);
       rooms[_roomHash(key.roomToken)] = normalized;
       if (rooms.length > _maximumRooms) {
@@ -115,7 +117,7 @@ final class ChatBackgroundStore {
 
   Future<void> remove(ChatBackgroundKey key) {
     _validateKey(key);
-    return _writes.run(() async {
+    return _run(key.accountId, () async {
       final rooms = await _readAccount(key.accountId);
       if (rooms.remove(_roomHash(key.roomToken)) == null) {
         return;
@@ -131,7 +133,7 @@ final class ChatBackgroundStore {
 
   Future<void> removeAccount(String accountId) {
     AccountId.parse(accountId);
-    return _writes.run(() async {
+    return _run(accountId, () async {
       await _deleteAccountFiles(accountId);
       for (final entry in _watchers.entries.toList(growable: false)) {
         if (entry.key.accountId == accountId) {
@@ -141,16 +143,30 @@ final class ChatBackgroundStore {
     });
   }
 
-  Future<void> close() async {
-    await _writes.run(() async {
-      final controllers = <StreamController<String?>>[
-        for (final watchers in _watchers.values) ...watchers,
-      ];
-      _watchers.clear();
-      for (final controller in controllers) {
-        unawaited(controller.close());
-      }
-    });
+  Future<void> close() {
+    final existing = _closeFuture;
+    if (existing != null) {
+      return existing;
+    }
+    _writes.close();
+    final closing = _closeWatchers();
+    _closeFuture = closing;
+    return closing;
+  }
+
+  Future<void> _closeWatchers() async {
+    await _writes.idle;
+    final controllers = <StreamController<String?>>[
+      for (final watchers in _watchers.values) ...watchers,
+    ];
+    _watchers.clear();
+    for (final controller in controllers) {
+      unawaited(controller.close());
+    }
+  }
+
+  Future<T> _run<T>(String accountId, Future<T> Function() operation) {
+    return _writes.run(accountId, operation);
   }
 
   void _emit(ChatBackgroundKey key, String? value) {
@@ -276,20 +292,38 @@ final class ChatBackgroundStore {
       sha256.convert(utf8.encode(value)).toString();
 }
 
-final class _SerialExecutor {
-  Future<void> _tail = Future<void>.value();
+final class _KeyedSerialExecutor<K> {
+  final Map<K, Future<void>> _tails = <K, Future<void>>{};
+  bool _closed = false;
 
-  Future<void> get idle => _tail;
+  Future<void> get idle =>
+      Future.wait<void>(_tails.values.toList(growable: false));
 
-  Future<T> run<T>(Future<T> Function() operation) {
+  void close() {
+    _closed = true;
+  }
+
+  Future<T> run<T>(K key, Future<T> Function() operation) {
+    if (_closed) {
+      return Future<T>.error(StateError('Chat background store is closed'));
+    }
     final completer = Completer<T>();
-    _tail = _tail.then((_) async {
-      try {
-        completer.complete(await operation());
-      } on Object catch (error, stackTrace) {
-        completer.completeError(error, stackTrace);
-      }
-    });
+    final previous = _tails[key] ?? Future<void>.value();
+    late final Future<void> tail;
+    tail = previous
+        .then((_) async {
+          try {
+            completer.complete(await operation());
+          } on Object catch (error, stackTrace) {
+            completer.completeError(error, stackTrace);
+          }
+        })
+        .whenComplete(() {
+          if (identical(_tails[key], tail)) {
+            _tails.remove(key);
+          }
+        });
+    _tails[key] = tail;
     return completer.future;
   }
 }
