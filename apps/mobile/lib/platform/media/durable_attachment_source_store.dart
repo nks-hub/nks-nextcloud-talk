@@ -379,7 +379,7 @@ final class DurableAttachmentSourceStore implements AttachmentSourceProvider {
   }) async {
     await initialize();
     final cutoff = DateTime.now().subtract(olderThan);
-    var removed = 0;
+    final candidates = <File>[];
     await for (final entity in Directory(
       _sourcesPath,
     ).list(followLinks: false)) {
@@ -391,17 +391,46 @@ final class DurableAttachmentSourceStore implements AttachmentSourceProvider {
           referenced.contains('$_handlePrefix$sourceId')) {
         continue;
       }
-      final FileStat stat;
-      try {
-        stat = await entity.stat();
-      } on FileSystemException {
-        continue;
+      candidates.add(entity);
+    }
+
+    var removed = 0;
+    Object? firstError;
+    StackTrace? firstStackTrace;
+    var nextCandidate = 0;
+
+    Future<void> discardNext() async {
+      while (nextCandidate < candidates.length) {
+        final entity = candidates[nextCandidate++];
+        final sourceId = p.basenameWithoutExtension(entity.path);
+        final FileStat stat;
+        try {
+          stat = await entity.stat();
+        } on FileSystemException {
+          continue;
+        }
+        if (stat.modified.isAfter(cutoff)) {
+          continue;
+        }
+        try {
+          await discard(
+            AttachmentSourceHandle.parse('$_handlePrefix$sourceId'),
+          );
+          removed++;
+        } on Object catch (error, stackTrace) {
+          firstError ??= error;
+          firstStackTrace ??= stackTrace;
+        }
       }
-      if (stat.modified.isAfter(cutoff)) {
-        continue;
-      }
-      await discard(AttachmentSourceHandle.parse('$_handlePrefix$sourceId'));
-      removed++;
+    }
+
+    final workerCount = candidates.length < _discardConcurrency
+        ? candidates.length
+        : _discardConcurrency;
+    await Future.wait(List.generate(workerCount, (_) => discardNext()));
+    final error = firstError;
+    if (error != null) {
+      Error.throwWithStackTrace(error, firstStackTrace!);
     }
     return removed;
   }

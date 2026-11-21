@@ -247,6 +247,53 @@ void main() {
       expect(remaining, contains('${_sourceId(fresh)}.source'));
     });
 
+    test('the orphan sweep keeps at most four deletions active', () async {
+      final store = DurableAttachmentSourceStore(root: root);
+      final sources = <PreparedAttachmentSource>[];
+      for (var index = 0; index < 6; index++) {
+        sources.add(
+          await store.copyFromStream(
+            stream: Stream<List<int>>.value(<int>[index + 1]),
+            mimeType: 'application/octet-stream',
+            displayName: 'orphan-$index.bin',
+          ),
+        );
+      }
+      final sourceDirectory = Directory(
+        '${root.path}${Platform.pathSeparator}sources',
+      );
+      final old = DateTime.now().subtract(const Duration(hours: 1));
+      for (final file in await _filesBelow(sourceDirectory)) {
+        await file.setLastModified(old);
+      }
+      final held = <AttachmentSourceLease>[
+        for (final source in sources) await store.open(source.handle),
+      ];
+      final sweep = store.discardUnreferenced(referenced: <String>{});
+      addTearDown(() async {
+        for (final lease in held) {
+          await lease.close();
+        }
+        held.clear();
+        await sweep;
+      });
+
+      for (var turn = 0; turn < 20; turn++) {
+        if (await _unavailableCount(store, sources) == 4) {
+          break;
+        }
+        await pumpEventQueue();
+      }
+      expect(await _unavailableCount(store, sources), 4);
+
+      for (final lease in held) {
+        await lease.close();
+      }
+      held.clear();
+      expect(await sweep, 6);
+      expect(await _allUnavailable(store, sources), isTrue);
+    });
+
     test('verified resolution detects changed bytes', () async {
       final store = DurableAttachmentSourceStore(root: root);
       final source = await store.copyFromStream(
@@ -406,16 +453,25 @@ Future<bool> _allUnavailable(
   DurableAttachmentSourceStore store,
   Iterable<PreparedAttachmentSource> sources,
 ) async {
+  final pending = sources.toList(growable: false);
+  return await _unavailableCount(store, pending) == pending.length;
+}
+
+Future<int> _unavailableCount(
+  DurableAttachmentSourceStore store,
+  Iterable<PreparedAttachmentSource> sources,
+) async {
+  var unavailable = 0;
   for (final source in sources) {
     try {
       final lease = await store.open(source.handle);
       await lease.close();
-      return false;
     } on DurableAttachmentSourceException catch (error) {
       if (error.code != DurableAttachmentSourceError.sourceUnavailable) {
         rethrow;
       }
+      unavailable++;
     }
   }
-  return true;
+  return unavailable;
 }
