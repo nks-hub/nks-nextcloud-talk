@@ -184,6 +184,68 @@ void _registerAttachmentServiceSchedulerTests() {
     },
   );
 
+  test('close always releases verified sources and closes transport', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final transitionStarted = Completer<void>();
+    final releaseTransition = Completer<void>();
+    final sourceProvider = _GatedCloseSourceProvider(Future<void>.value());
+    final client = _CloseRecordingClient(
+      MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+          return http.Response.bytes(_probeSuccess(), 200);
+        }
+        fail('Blocked upload transition must stop before HTTP: ${request.url}');
+      }),
+    );
+    final service = fixture.service(
+      client,
+      sourceProvider: sourceProvider,
+      persistTransition:
+          ({
+            required account,
+            required job,
+            required metadata,
+            required updatedAt,
+          }) async {
+            if (job.phase == AttachmentJobPhase.uploading) {
+              if (!transitionStarted.isCompleted) {
+                transitionStarted.complete();
+                await releaseTransition.future;
+              }
+              throw StateError('Synthetic persistent transition failure');
+            }
+            await fixture.repository.persistTransition(
+              account: account,
+              job: job,
+              metadata: metadata,
+              updatedAt: updatedAt,
+            );
+          },
+      identifierFactory: _SequentialIdentifierFactory(),
+    );
+
+    await service.enqueue(fixture.request(normalMaximum: 32));
+    await transitionStarted.future.timeout(const Duration(seconds: 2));
+    final closing = service.close();
+    await pumpEventQueue();
+    releaseTransition.complete();
+
+    await expectLater(
+      closing.timeout(const Duration(seconds: 5)),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'Synthetic persistent transition failure',
+        ),
+      ),
+    );
+    expect(client.closed, isTrue);
+    expect(sourceProvider.closeStarts, 1);
+    expect(sourceProvider.closeFinishes, 1);
+  });
+
   test('later retry cannot replace an earlier room retry timer', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);
@@ -852,6 +914,23 @@ final class _BlockingSecondCredentialVault implements CredentialVault {
 
   @override
   Future<void> deleteAppPassword(String accountId) async {}
+}
+
+final class _CloseRecordingClient extends http.BaseClient {
+  _CloseRecordingClient(this._inner);
+
+  final http.Client _inner;
+  bool closed = false;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      _inner.send(request);
+
+  @override
+  void close() {
+    closed = true;
+    _inner.close();
+  }
 }
 
 Future<({File file, PreparedAttachmentSource source})>

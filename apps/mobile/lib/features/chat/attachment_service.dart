@@ -987,14 +987,47 @@ final class AttachmentService with _AttachmentServiceRuntime {
     for (final cancellation in _cancellations.values) {
       cancellation.cancel();
     }
-    await Future.wait<void>(_roomRuns.values.toList(growable: false));
-    await Future.wait<void>(
-      _confirmationCatchUps.values.toList(growable: false),
-    );
-    _confirmationRetryCounts.clear();
-    _deferredConfirmations.clear();
-    _confirmationResumeRequests.clear();
-    await _releaseVerifiedAttachmentSources(this);
-    await _transport.close();
+    Object? activeFailure;
+    StackTrace? activeFailureStack;
+    Object? cleanupFailure;
+    StackTrace? cleanupFailureStack;
+    try {
+      try {
+        await Future.wait<void>(_roomRuns.values.toList(growable: false));
+      } on Object catch (error, stackTrace) {
+        activeFailure = error;
+        activeFailureStack = stackTrace;
+      }
+      try {
+        await Future.wait<void>(
+          _confirmationCatchUps.values.toList(growable: false),
+        );
+      } on Object catch (error, stackTrace) {
+        activeFailure ??= error;
+        activeFailureStack ??= stackTrace;
+      }
+    } finally {
+      _confirmationRetryCounts.clear();
+      _deferredConfirmations.clear();
+      _confirmationResumeRequests.clear();
+      try {
+        await _releaseVerifiedAttachmentSources(this);
+      } on Object catch (error, stackTrace) {
+        cleanupFailure = error;
+        cleanupFailureStack = stackTrace;
+      }
+      try {
+        await _transport.close();
+      } on Object catch (error, stackTrace) {
+        cleanupFailure ??= error;
+        cleanupFailureStack ??= stackTrace;
+      }
+    }
+    if (activeFailure != null) {
+      Error.throwWithStackTrace(activeFailure, activeFailureStack!);
+    }
+    if (cleanupFailure != null) {
+      Error.throwWithStackTrace(cleanupFailure, cleanupFailureStack!);
+    }
   }
 }
