@@ -317,8 +317,11 @@ final class DurableImageAttachmentPicker {
     );
     final error = firstError;
     if (error != null) {
-      for (final source in sources.nonNulls) {
-        await store.discard(source.handle);
+      try {
+        await store.discardAll(sources.nonNulls.map((source) => source.handle));
+      } on Object {
+        // The picker failure is the useful error; cleanup was attempted for
+        // every completed copy and must not replace it.
       }
       Error.throwWithStackTrace(error, firstStack!);
     }

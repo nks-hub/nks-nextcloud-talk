@@ -177,9 +177,9 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
         }
         if (_disposed || image.disposed || cancellation.isCancelled) {
           dropExtras();
-          for (final prepared in sources) {
-            await image.store.discard(prepared.handle);
-          }
+          await image.store.discardAll(
+            sources.map((prepared) => prepared.handle),
+          );
           return null;
         }
         source = sources.isEmpty ? null : sources.first;
