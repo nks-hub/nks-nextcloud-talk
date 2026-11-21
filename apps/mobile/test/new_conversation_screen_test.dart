@@ -54,6 +54,47 @@ void main() {
     expect(find.text('Engineering'), findsOneWidget);
   });
 
+  testWidgets('submitting an active search reuses it and can retry', (
+    tester,
+  ) async {
+    final searchGate = Completer<void>();
+    service
+      ..searchGate = searchGate
+      ..searchError = const NewConversationException(
+        NewConversationError.network,
+      );
+    addTearDown(() {
+      if (!searchGate.isCompleted) {
+        searchGate.complete();
+      }
+    });
+    await tester.pumpWidget(app(onCreated: (_) {}));
+
+    await tester.enterText(find.byType(TextField), 'ali');
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(service.searchCalls, 1);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(service.searchCalls, 1);
+
+    searchGate.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Could not reach the server.'), findsOneWidget);
+
+    service
+      ..searchError = null
+      ..searchResult = [_syntheticUser()];
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(service.searchCalls, 2);
+    expect(find.text('Alice Example'), findsOneWidget);
+  });
+
   testWidgets('shows an empty state when nothing matches', (tester) async {
     service.searchResult = const [];
 
@@ -545,6 +586,8 @@ final class _FakeNewConversationService implements NewConversationService {
 
   List<ConversationRecipient> searchResult = const [];
   NewConversationException? searchError;
+  int searchCalls = 0;
+  Completer<void>? searchGate;
   String? lastAccountId;
   String? lastSearchTerm;
 
@@ -602,8 +645,10 @@ final class _FakeNewConversationService implements NewConversationService {
     required String accountId,
     required String searchTerm,
   }) async {
+    searchCalls++;
     lastAccountId = accountId;
     lastSearchTerm = searchTerm;
+    await searchGate?.future;
     final error = searchError;
     if (error != null) {
       throw error;

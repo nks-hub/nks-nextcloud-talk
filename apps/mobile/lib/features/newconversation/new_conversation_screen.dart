@@ -13,6 +13,8 @@ import 'open_conversations_sheet.dart';
 
 const Duration _searchDebounce = Duration(milliseconds: 300);
 
+typedef _SearchKey = ({String accountId, String term});
+
 sealed class _SearchState {
   const _SearchState();
 }
@@ -61,6 +63,8 @@ final class _NewConversationScreenState
   final _searchController = TextEditingController();
   Timer? _debounce;
   int _searchGeneration = 0;
+  final Map<_SearchKey, Future<List<ConversationRecipient>>> _searchesInFlight =
+      {};
   _SearchState _state = const _SearchIdle();
   bool _creating = false;
   var _lifetime = 0;
@@ -109,11 +113,14 @@ final class _NewConversationScreenState
     final generation = ++_searchGeneration;
     setState(() => _state = const _SearchLoading());
     final service = ref.read(newConversationServiceProvider);
+    final accountId = widget.accountId;
+    final key = (accountId: accountId, term: term);
+    final request = _searchesInFlight.putIfAbsent(
+      key,
+      () => service.searchRecipients(accountId: accountId, searchTerm: term),
+    );
     try {
-      final recipients = await service.searchRecipients(
-        accountId: widget.accountId,
-        searchTerm: term,
-      );
+      final recipients = await request;
       if (!mounted || generation != _searchGeneration) {
         return;
       }
@@ -123,6 +130,10 @@ final class _NewConversationScreenState
         return;
       }
       setState(() => _state = _SearchFailed(error.code));
+    } finally {
+      if (identical(_searchesInFlight[key], request)) {
+        _searchesInFlight.remove(key);
+      }
     }
   }
 
