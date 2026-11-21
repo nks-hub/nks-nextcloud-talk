@@ -691,24 +691,26 @@ final class _BansDialogState extends ConsumerState<_BansDialog> {
             if (bans.isEmpty) {
               return Text(strings.roomDetailsBansEmpty);
             }
-            return ListView(
+            return ListView.builder(
+              key: const Key('room-details-bans-list'),
               shrinkWrap: true,
-              children: [
-                for (final ban in bans)
-                  ListTile(
-                    key: Key('room-ban-${ban.id}'),
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(ban.bannedDisplayName),
-                    subtitle: ban.internalNote.isEmpty
-                        ? null
-                        : Text(ban.internalNote),
-                    trailing: TextButton(
-                      key: Key('room-ban-${ban.id}-lift'),
-                      onPressed: _busy ? null : () => _unban(ban),
-                      child: Text(strings.roomDetailsUnbanAction),
-                    ),
+              itemCount: bans.length,
+              itemBuilder: (context, index) {
+                final ban = bans[index];
+                return ListTile(
+                  key: Key('room-ban-${ban.id}'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(ban.bannedDisplayName),
+                  subtitle: ban.internalNote.isEmpty
+                      ? null
+                      : Text(ban.internalNote),
+                  trailing: TextButton(
+                    key: Key('room-ban-${ban.id}-lift'),
+                    onPressed: _busy ? null : () => _unban(ban),
+                    child: Text(strings.roomDetailsUnbanAction),
                   ),
-              ],
+                );
+              },
             );
           },
         ),

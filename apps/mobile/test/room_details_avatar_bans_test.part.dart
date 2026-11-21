@@ -509,6 +509,79 @@ void _registerAvatarAndBanTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('a large ban list builds rows lazily and lifts the last ban', (
+    tester,
+  ) async {
+    final capable = await withCapabilities({'ban-v1'});
+    final bans = <Map<String, Object?>>[
+      for (var index = 1; index <= 80; index++)
+        <String, Object?>{
+          'id': index,
+          'moderatorActorType': 'users',
+          'moderatorActorId': 'fixture-user',
+          'moderatorDisplayName': 'Signed-in Moderator',
+          'bannedActorType': 'users',
+          'bannedActorId': 'synthetic-member-$index',
+          'bannedDisplayName': 'Synthetic Member $index',
+          'bannedTime': 1724300100 + index,
+          'internalNote': '',
+        },
+    ];
+    int? liftedId;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'GET' && request.url.path.contains('/ban/')) {
+        return _ocsSuccess(
+          bans.where((ban) => ban['id'] != liftedId).toList(growable: false),
+        );
+      }
+      if (request.method == 'DELETE' && request.url.path.contains('/ban/')) {
+        liftedId = int.parse(request.url.pathSegments.last);
+        return _ocsSuccess();
+      }
+      return http.Response('', 404);
+    });
+
+    await openDetails(
+      tester,
+      forAccount: capable,
+      forConversation: conversation,
+      client: client,
+    );
+
+    await tester.tap(find.byKey(const Key('room-details-bans')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final listFinder = find.byKey(const Key('room-details-bans-list'));
+    await _pumpUntil(tester, () => listFinder.evaluate().isNotEmpty);
+    final list = tester.widget<ListView>(listFinder);
+    expect(list.childrenDelegate, isA<SliverChildBuilderDelegate>());
+    expect(
+      find.byKey(const Key('room-ban-80')),
+      findsNothing,
+      reason: 'off-screen ban rows must not be built up front',
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('room-ban-80')),
+      500,
+      scrollable: find.descendant(
+        of: listFinder,
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(find.text('Synthetic Member 80'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('room-ban-80-lift')));
+    await _pumpUntil(tester, () => liftedId == 80);
+    expect(liftedId, 80);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('a plain participant sees no administration action at all', (
     tester,
   ) async {
