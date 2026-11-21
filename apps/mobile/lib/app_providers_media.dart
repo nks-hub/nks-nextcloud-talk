@@ -1,5 +1,25 @@
 part of 'app_providers.dart';
 
+final chatAttachmentCacheMaintenanceFactoryProvider =
+    Provider<ChatAttachmentCacheMaintenanceFactory>((ref) {
+      return ChatAttachmentCacheHousekeeper.new;
+    });
+
+/// Starts attachment-cache cleanup once for the process and on every resume.
+final chatAttachmentCacheMaintenanceProvider = Provider<void>((ref) {
+  final maintenance = ref.watch(
+    chatAttachmentCacheMaintenanceFactoryProvider,
+  )();
+  final resumes = ref
+      .watch(appLifecycleResumeEventsProvider)
+      .listen((_) => unawaited(maintenance.run()));
+  ref.onDispose(() {
+    unawaited(resumes.cancel());
+    maintenance.dispose();
+  });
+  unawaited(maintenance.run());
+});
+
 typedef ChatVoiceProviderKey = ({
   StoredAccount account,
   Uri uri,

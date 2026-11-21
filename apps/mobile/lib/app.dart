@@ -60,6 +60,7 @@ final class _NextcloudTalkAppState extends ConsumerState<NextcloudTalkApp> {
   @override
   Widget build(BuildContext context) {
     ref.watch(callKitChannelProvider);
+    ref.watch(chatAttachmentCacheMaintenanceProvider);
     // Started here, next to the theme query that already opens the database,
     // so the shell does not add a loading frame of its own. Not the account
     // list: that one starts the outbox, which stays behind the lock gate.

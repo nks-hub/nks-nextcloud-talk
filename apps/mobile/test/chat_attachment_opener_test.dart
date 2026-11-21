@@ -112,6 +112,7 @@ void main() {
       maximumCacheBytes: 1024,
       maximumCacheEntries: 10,
       leaseScheduler: leases.schedule,
+      now: leases.now,
     );
 
     final oldNames = ['oldest.txt', 'middle.txt', 'newest.txt'];
@@ -159,6 +160,7 @@ void main() {
       maximumCacheBytes: 8,
       maximumCacheEntries: 2,
       leaseScheduler: leases.schedule,
+      now: leases.now,
     );
     expect(
       await restarted.open(
@@ -209,6 +211,7 @@ void main() {
         maximumCacheBytes: 4,
         maximumCacheEntries: 1,
         leaseScheduler: blockedLeases.schedule,
+        now: blockedLeases.now,
       );
       final blockedOpen = blockedOpener.open(
         account: _account,
@@ -231,6 +234,7 @@ void main() {
         maximumCacheBytes: 4,
         maximumCacheEntries: 1,
         leaseScheduler: pruningLeases.schedule,
+        now: pruningLeases.now,
       );
       expect(
         await pruningOpener.open(
@@ -272,6 +276,59 @@ void main() {
     },
   );
 
+  test('a persisted future lease survives process restart', () async {
+    final root = await Directory.systemTemp.createTemp('attachment-restart-');
+    addTearDown(() => root.delete(recursive: true));
+    final clock = _ManualLeaseScheduler();
+    final leaseUntil = clock.now().add(const Duration(minutes: 10));
+    final path = await _seedCompletedAttachment(
+      root: root,
+      leaseUntil: leaseUntil,
+      bytes: 4,
+    );
+    final housekeeper = ChatAttachmentCacheHousekeeper(
+      cacheDirectory: () async => root,
+      maximumCacheBytes: 3,
+      maximumCacheEntries: 1,
+      scheduler: clock.schedule,
+      now: clock.now,
+    );
+    addTearDown(housekeeper.dispose);
+
+    await housekeeper.run();
+
+    expect(await File(path).exists(), isTrue);
+    expect(clock.durations, [const Duration(minutes: 10)]);
+
+    await clock.expireNext();
+
+    expect(await File(path).exists(), isFalse);
+  });
+
+  test('startup housekeeping removes an expired oversized entry', () async {
+    final root = await Directory.systemTemp.createTemp('attachment-expired-');
+    addTearDown(() => root.delete(recursive: true));
+    final clock = _ManualLeaseScheduler();
+    final path = await _seedCompletedAttachment(
+      root: root,
+      leaseUntil: clock.now().subtract(const Duration(minutes: 1)),
+      bytes: 4,
+    );
+    final housekeeper = ChatAttachmentCacheHousekeeper(
+      cacheDirectory: () async => root,
+      maximumCacheBytes: 3,
+      maximumCacheEntries: 1,
+      scheduler: clock.schedule,
+      now: clock.now,
+    );
+    addTearDown(housekeeper.dispose);
+
+    await housekeeper.run();
+
+    expect(await File(path).exists(), isFalse);
+    expect(clock.durations, isEmpty);
+  });
+
   test(
     'an oversized download is pruned automatically after its lease',
     () async {
@@ -293,6 +350,7 @@ void main() {
         maximumCacheBytes: 3,
         maximumCacheEntries: 1,
         leaseScheduler: leases.schedule,
+        now: leases.now,
       );
 
       expect(await _open(opener), ChatAttachmentOpenResult.opened);
@@ -326,6 +384,7 @@ void main() {
       maximumCacheBytes: 1024,
       maximumCacheEntries: 10,
       leaseScheduler: seedLeases.schedule,
+      now: seedLeases.now,
     );
     for (var index = 0; index < 2; index++) {
       expect(
@@ -344,8 +403,6 @@ void main() {
       await seedLeases.expireNext();
     }
 
-    final concurrentLeases = _ManualLeaseScheduler();
-    addTearDown(concurrentLeases.expireAll);
     final firstLauncher = _BlockingLauncher();
     final secondLauncher = _BlockingLauncher();
     final first = ChatAttachmentOpener(
@@ -354,7 +411,8 @@ void main() {
       launcher: firstLauncher,
       maximumCacheBytes: 1024,
       maximumCacheEntries: 1,
-      leaseScheduler: concurrentLeases.schedule,
+      leaseScheduler: seedLeases.schedule,
+      now: seedLeases.now,
     );
     final second = ChatAttachmentOpener(
       repository: repository,
@@ -362,7 +420,8 @@ void main() {
       launcher: secondLauncher,
       maximumCacheBytes: 1024,
       maximumCacheEntries: 1,
-      leaseScheduler: concurrentLeases.schedule,
+      leaseScheduler: seedLeases.schedule,
+      now: seedLeases.now,
     );
     final firstOpen = _open(first);
     final secondOpen = _open(second);
@@ -384,7 +443,7 @@ void main() {
       await Future.wait([firstOpen, secondOpen]),
       everyElement(ChatAttachmentOpenResult.opened),
     );
-    await concurrentLeases.expireAll();
+    await seedLeases.expireAll();
   });
 
   test(
@@ -550,6 +609,30 @@ Future<void> _setCacheCompletionTime(
   await markers.single.setLastModified(time);
 }
 
+Future<String> _seedCompletedAttachment({
+  required Directory root,
+  required DateTime leaseUntil,
+  required int bytes,
+}) async {
+  final accountDirectory = chatAttachmentCacheAccountDirectory(
+    rootDirectory: root,
+    accountId: _account.id,
+  );
+  await accountDirectory.create(recursive: true);
+  final download = await accountDirectory.createTemp('download-');
+  final attachment = File(
+    '${download.path}${Platform.pathSeparator}fixture.bin',
+  );
+  await attachment.writeAsBytes(List<int>.filled(bytes, 1));
+  await File(
+    '${download.path}${Platform.pathSeparator}.open-complete',
+  ).writeAsString(
+    'leaseUntil=${leaseUntil.millisecondsSinceEpoch}\n',
+    flush: true,
+  );
+  return attachment.path;
+}
+
 ChatMediaRepository _repository(
   Future<http.StreamedResponse> Function(http.BaseRequest request) handler,
 ) {
@@ -598,17 +681,22 @@ final class _BlockingLauncher implements ChatAttachmentFileLauncher {
 
 final class _ManualLeaseScheduler {
   final List<Duration> durations = <Duration>[];
-  final List<Future<void> Function()> _expirations =
-      <Future<void> Function()>[];
+  final List<({Duration duration, Future<void> Function() expire})>
+  _expirations = <({Duration duration, Future<void> Function() expire})>[];
+  DateTime _time = DateTime.utc(2026, 11, 21, 12);
+
+  DateTime now() => _time;
 
   void schedule(Duration duration, Future<void> Function() onExpired) {
     durations.add(duration);
-    _expirations.add(onExpired);
+    _expirations.add((duration: duration, expire: onExpired));
   }
 
   Future<void> expireNext() async {
     expect(_expirations, isNotEmpty);
-    await _expirations.removeAt(0)();
+    final expiration = _expirations.removeAt(0);
+    _time = _time.add(expiration.duration);
+    await expiration.expire();
   }
 
   Future<void> expireAll() async {

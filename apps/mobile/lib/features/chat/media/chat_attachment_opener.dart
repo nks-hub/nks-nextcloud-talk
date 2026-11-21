@@ -38,6 +38,15 @@ abstract interface class ChatAttachmentFileLauncher {
 typedef ChatAttachmentLeaseScheduler =
     void Function(Duration duration, Future<void> Function() onExpired);
 
+abstract interface class ChatAttachmentCacheMaintenance {
+  Future<void> run();
+
+  void dispose();
+}
+
+typedef ChatAttachmentCacheMaintenanceFactory =
+    ChatAttachmentCacheMaintenance Function();
+
 final class PlatformChatAttachmentFileLauncher
     implements ChatAttachmentFileLauncher {
   const PlatformChatAttachmentFileLauncher();
@@ -61,10 +70,11 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
     Future<Directory> Function()? cacheDirectory,
     ChatAttachmentFileLauncher launcher =
         const PlatformChatAttachmentFileLauncher(),
-    int maximumCacheBytes = 256 * 1024 * 1024,
-    int maximumCacheEntries = 16,
-    Duration postLaunchLease = const Duration(minutes: 15),
+    int maximumCacheBytes = _defaultAttachmentCacheBytes,
+    int maximumCacheEntries = _defaultAttachmentCacheEntries,
+    Duration postLaunchLease = _defaultPostLaunchLease,
     ChatAttachmentLeaseScheduler leaseScheduler = _scheduleChatAttachmentLease,
+    DateTime Function() now = DateTime.now,
   }) {
     if (maximumCacheBytes < 1) {
       throw ArgumentError.value(
@@ -95,6 +105,7 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
       maximumCacheEntries,
       postLaunchLease,
       leaseScheduler,
+      now,
     );
   }
 
@@ -106,6 +117,7 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
     this._maximumCacheEntries,
     this._postLaunchLease,
     this._leaseScheduler,
+    this._now,
   );
 
   static final Map<String, _ChatAttachmentCacheCoordinator> _cacheCoordinators =
@@ -118,6 +130,7 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
   final int _maximumCacheEntries;
   final Duration _postLaunchLease;
   final ChatAttachmentLeaseScheduler _leaseScheduler;
+  final DateTime Function() _now;
 
   @override
   Future<ChatAttachmentOpenResult> open({
@@ -139,16 +152,14 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
         accountId: account.id,
       );
       await accountDirectory.create(recursive: true);
-      cacheCoordinator = _cacheCoordinators.putIfAbsent(
-        accountDirectory.path,
-        _ChatAttachmentCacheCoordinator.new,
-      );
+      cacheCoordinator = _chatAttachmentCacheCoordinator(accountDirectory);
       downloadDirectory = await accountDirectory.createTemp('download-');
       cacheCoordinator.protect(downloadDirectory.path);
       await cacheCoordinator.prune(
         accountDirectory: accountDirectory,
         maximumBytes: _maximumCacheBytes,
         maximumEntries: _maximumCacheEntries,
+        now: _now,
       );
       localFile = File(
         '${downloadDirectory.path}${Platform.pathSeparator}'
@@ -175,27 +186,31 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
       if (!_repository.isAccountActive(account.id)) {
         return ChatAttachmentOpenResult.reauthenticationRequired;
       }
-      await File(
-        '${downloadDirectory.path}${Platform.pathSeparator}'
-        '$_completedAttachmentMarkerName',
-      ).writeAsString('', flush: true);
+      await _writeCompletedAttachmentMarker(
+        downloadDirectory,
+        _now().add(_postLaunchLease),
+      );
       opened = await _launcher.open(
         path: localFile.path,
         contentType: contentType,
       );
       if (opened) {
+        final leaseUntil = _now().add(_postLaunchLease);
+        await _writeCompletedAttachmentMarker(downloadDirectory, leaseUntil);
         leaseScheduled = cacheCoordinator.retainForLease(
           path: downloadDirectory.path,
-          duration: _postLaunchLease,
+          leaseUntil: leaseUntil,
           scheduler: _leaseScheduler,
           accountDirectory: accountDirectory,
           maximumBytes: _maximumCacheBytes,
           maximumEntries: _maximumCacheEntries,
+          now: _now,
         );
         await cacheCoordinator.prune(
           accountDirectory: accountDirectory,
           maximumBytes: _maximumCacheBytes,
           maximumEntries: _maximumCacheEntries,
+          now: _now,
         );
       }
       return opened
@@ -233,7 +248,33 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
   }
 }
 
+const int _defaultAttachmentCacheBytes = 256 * 1024 * 1024;
+const int _defaultAttachmentCacheEntries = 16;
+const Duration _defaultPostLaunchLease = Duration(minutes: 15);
 const String _completedAttachmentMarkerName = '.open-complete';
+
+Future<void> _writeCompletedAttachmentMarker(
+  Directory directory,
+  DateTime leaseUntil,
+) {
+  final leaseMillis = leaseUntil.toUtc().millisecondsSinceEpoch;
+  return File(
+    '${directory.path}${Platform.pathSeparator}$_completedAttachmentMarkerName',
+  ).writeAsString(
+    'leaseUntil=$leaseMillis\n',
+    mode: FileMode.append,
+    flush: true,
+  );
+}
+
+_ChatAttachmentCacheCoordinator _chatAttachmentCacheCoordinator(
+  Directory accountDirectory,
+) {
+  return ChatAttachmentOpener._cacheCoordinators.putIfAbsent(
+    accountDirectory.path,
+    _ChatAttachmentCacheCoordinator.new,
+  );
+}
 
 final class _ChatAttachmentCacheCoordinator {
   final Set<String> _protectedPaths = <String>{};
@@ -245,21 +286,34 @@ final class _ChatAttachmentCacheCoordinator {
 
   bool retainForLease({
     required String path,
-    required Duration duration,
+    required DateTime leaseUntil,
     required ChatAttachmentLeaseScheduler scheduler,
     required Directory accountDirectory,
     required int maximumBytes,
     required int maximumEntries,
+    required DateTime Function() now,
   }) {
+    Future<void> expire() async {
+      final remaining = leaseUntil.difference(now());
+      if (remaining > Duration.zero) {
+        try {
+          scheduler(remaining, expire);
+          return;
+        } on Object {
+          // Fall through and release a lease that cannot be rescheduled.
+        }
+      }
+      unprotect(path);
+      await prune(
+        accountDirectory: accountDirectory,
+        maximumBytes: maximumBytes,
+        maximumEntries: maximumEntries,
+        now: now,
+      );
+    }
+
     try {
-      scheduler(duration, () async {
-        unprotect(path);
-        await prune(
-          accountDirectory: accountDirectory,
-          maximumBytes: maximumBytes,
-          maximumEntries: maximumEntries,
-        );
-      });
+      scheduler(leaseUntil.difference(now()), expire);
       return true;
     } on Object {
       unprotect(path);
@@ -267,24 +321,27 @@ final class _ChatAttachmentCacheCoordinator {
     }
   }
 
-  Future<void> prune({
+  Future<DateTime?> prune({
     required Directory accountDirectory,
     required int maximumBytes,
     required int maximumEntries,
+    required DateTime Function() now,
   }) {
-    final result = _pruneTail.then((_) async {
+    final result = _pruneTail.then<DateTime?>((_) async {
       try {
-        await _pruneChatAttachmentOpenCache(
+        return await _pruneChatAttachmentOpenCache(
           accountDirectory: accountDirectory,
           maximumBytes: maximumBytes,
           maximumEntries: maximumEntries,
           protectedPaths: _protectedPaths,
+          now: now,
         );
       } on Object {
         // Cache cleanup must not prevent opening an attachment.
+        return null;
       }
     });
-    _pruneTail = result;
+    _pruneTail = result.then<void>((_) {});
     return result;
   }
 }
@@ -308,13 +365,123 @@ Future<void> _runChatAttachmentLeaseExpiry(
   }
 }
 
-Future<void> _pruneChatAttachmentOpenCache({
+final class ChatAttachmentCacheHousekeeper
+    implements ChatAttachmentCacheMaintenance {
+  factory ChatAttachmentCacheHousekeeper({
+    Future<Directory> Function()? cacheDirectory,
+    int maximumCacheBytes = _defaultAttachmentCacheBytes,
+    int maximumCacheEntries = _defaultAttachmentCacheEntries,
+    ChatAttachmentLeaseScheduler scheduler = _scheduleChatAttachmentLease,
+    DateTime Function() now = DateTime.now,
+  }) {
+    return ChatAttachmentCacheHousekeeper._(
+      cacheDirectory: cacheDirectory ?? getApplicationCacheDirectory,
+      maximumCacheBytes: maximumCacheBytes,
+      maximumCacheEntries: maximumCacheEntries,
+      scheduler: scheduler,
+      now: now,
+    );
+  }
+
+  ChatAttachmentCacheHousekeeper._({
+    required this._cacheDirectory,
+    required this.maximumCacheBytes,
+    required this.maximumCacheEntries,
+    required this._scheduler,
+    required this._now,
+  });
+
+  final Future<Directory> Function() _cacheDirectory;
+  final int maximumCacheBytes;
+  final int maximumCacheEntries;
+  final ChatAttachmentLeaseScheduler _scheduler;
+  final DateTime Function() _now;
+
+  Future<void> _runTail = Future<void>.value();
+  var _generation = 0;
+  var _disposed = false;
+
+  @override
+  Future<void> run() {
+    if (_disposed) {
+      return Future<void>.value();
+    }
+    final generation = ++_generation;
+    final result = _runTail.then((_) async {
+      try {
+        await _runOnce(generation);
+      } on Object {
+        // Cache maintenance is best effort and must not affect app startup.
+      }
+    });
+    _runTail = result;
+    return result;
+  }
+
+  Future<void> _runOnce(int generation) async {
+    final root = chatAttachmentCacheRootDirectory(await _cacheDirectory());
+    if (!await root.exists()) {
+      return;
+    }
+    final accountDirectories = <Directory>[];
+    await for (final entity in root.list(followLinks: false)) {
+      if (entity is Directory) {
+        accountDirectories.add(entity);
+      }
+    }
+    DateTime? nextLease;
+    for (final directory in accountDirectories) {
+      final lease = await _chatAttachmentCacheCoordinator(directory).prune(
+        accountDirectory: directory,
+        maximumBytes: maximumCacheBytes,
+        maximumEntries: maximumCacheEntries,
+        now: _now,
+      );
+      if (lease != null && (nextLease == null || lease.isBefore(nextLease))) {
+        nextLease = lease;
+      }
+    }
+    if (_disposed || generation != _generation || nextLease == null) {
+      return;
+    }
+    final delay = nextLease.difference(_now());
+    try {
+      _scheduler(
+        delay > Duration.zero ? delay : const Duration(milliseconds: 1),
+        () async {
+          if (!_disposed && generation == _generation) {
+            await run();
+          }
+        },
+      );
+    } on Object {
+      // Resume housekeeping is still available if a timer cannot be created.
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _generation++;
+  }
+}
+
+Future<DateTime?> _pruneChatAttachmentOpenCache({
   required Directory accountDirectory,
   required int maximumBytes,
   required int maximumEntries,
   required Set<String> protectedPaths,
+  required DateTime Function() now,
 }) async {
-  final entries = <({Directory directory, int bytes, DateTime completedAt})>[];
+  final entries =
+      <
+        ({
+          Directory directory,
+          int bytes,
+          DateTime completedAt,
+          DateTime leaseUntil,
+        })
+      >[];
   try {
     await for (final entity in accountDirectory.list(followLinks: false)) {
       if (entity is! Directory ||
@@ -327,20 +494,19 @@ Future<void> _pruneChatAttachmentOpenCache({
       }
     }
   } on FileSystemException {
-    return;
+    return null;
   }
 
+  final currentTime = now();
   var totalBytes = entries.fold<int>(0, (sum, entry) => sum + entry.bytes);
   var retainedEntries = entries.length;
-  if (totalBytes <= maximumBytes && retainedEntries <= maximumEntries) {
-    return;
-  }
   entries.sort((a, b) => a.completedAt.compareTo(b.completedAt));
   for (final entry in entries) {
     if (totalBytes <= maximumBytes && retainedEntries <= maximumEntries) {
       break;
     }
-    if (protectedPaths.contains(entry.directory.path)) {
+    if (protectedPaths.contains(entry.directory.path) ||
+        entry.leaseUntil.isAfter(currentTime)) {
       continue;
     }
     try {
@@ -351,9 +517,19 @@ Future<void> _pruneChatAttachmentOpenCache({
       // Another opener or account removal may already own this path.
     }
   }
+  DateTime? nextLease;
+  for (final entry in entries) {
+    if (entry.leaseUntil.isAfter(currentTime) &&
+        (nextLease == null || entry.leaseUntil.isBefore(nextLease))) {
+      nextLease = entry.leaseUntil;
+    }
+  }
+  return nextLease;
 }
 
-Future<({Directory directory, int bytes, DateTime completedAt})?>
+Future<
+  ({Directory directory, int bytes, DateTime completedAt, DateTime leaseUntil})?
+>
 _readCompletedAttachmentEntry(Directory directory) async {
   final marker = File(
     '${directory.path}${Platform.pathSeparator}$_completedAttachmentMarkerName',
@@ -378,19 +554,50 @@ _readCompletedAttachmentEntry(Directory directory) async {
       return null;
     }
     final markerStat = await marker.stat();
+    final storedLease = _storedAttachmentLease(await marker.readAsString());
+    final leaseUntil = storedLease == null
+        ? markerStat.modified.add(_defaultPostLaunchLease)
+        : DateTime.fromMillisecondsSinceEpoch(storedLease, isUtc: true);
     return (
       directory: directory,
       bytes: bytes,
       completedAt: markerStat.modified,
+      leaseUntil: leaseUntil,
     );
   } on FileSystemException {
     return null;
   }
 }
 
+int? _storedAttachmentLease(String marker) {
+  int? stored;
+  for (final match in RegExp(
+    r'^leaseUntil=(-?\d{1,16})$',
+    multiLine: true,
+  ).allMatches(marker)) {
+    final value = int.tryParse(match.group(1)!);
+    if (value != null &&
+        value.abs() <= 8640000000000000 &&
+        (stored == null || value > stored)) {
+      stored = value;
+    }
+  }
+  final legacy = int.tryParse(marker.trim());
+  if (legacy != null && legacy.abs() <= 8640000000000000) {
+    return legacy;
+  }
+  return stored;
+}
+
 String _fileSystemName(String path) {
   final separator = path.lastIndexOf(Platform.pathSeparator);
   return separator < 0 ? path : path.substring(separator + 1);
+}
+
+Directory chatAttachmentCacheRootDirectory(Directory rootDirectory) {
+  return Directory(
+    '${rootDirectory.path}${Platform.pathSeparator}chat-attachments',
+  );
 }
 
 Directory chatAttachmentCacheAccountDirectory({
@@ -399,7 +606,7 @@ Directory chatAttachmentCacheAccountDirectory({
 }) {
   final accountKey = sha256.convert(utf8.encode(accountId)).toString();
   return Directory(
-    '${rootDirectory.path}${Platform.pathSeparator}chat-attachments'
+    '${chatAttachmentCacheRootDirectory(rootDirectory).path}'
     '${Platform.pathSeparator}$accountKey',
   );
 }
