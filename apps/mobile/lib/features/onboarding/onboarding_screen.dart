@@ -71,6 +71,8 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (_busy) {
       return;
     }
+    final cancellation = CancellationSignal();
+    _cancellation = cancellation;
     _serverFocus.unfocus();
     setState(() {
       _error = null;
@@ -78,7 +80,11 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     });
     try {
       final coordinator = ref.read(onboardingCoordinatorProvider);
-      final pending = await coordinator.start(_serverController.text);
+      final pending = await coordinator.start(
+        _serverController.text,
+        cancellation: cancellation,
+      );
+      cancellation.throwIfCancelled();
       if (!mounted) {
         return;
       }
@@ -86,17 +92,15 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         _pending = pending;
         _phase = _OnboardingPhase.openingLogin;
       });
-      await coordinator.openLoginPage(pending);
-      if (!mounted) {
-        return;
-      }
-      final cancellation = CancellationSignal();
-      _cancellation = cancellation;
-      setState(() => _phase = _OnboardingPhase.waitingForLogin);
-      final account = await coordinator.waitForAccount(
+      final account = await coordinator.completeLogin(
         pending,
         cancellation,
         expectedAccountId: widget.reauthenticateAccount?.id,
+        onLoginPageOpened: () {
+          if (mounted && !cancellation.isCancelled) {
+            setState(() => _phase = _OnboardingPhase.waitingForLogin);
+          }
+        },
       );
       if (!mounted) {
         return;
@@ -139,6 +143,10 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           _pending = null;
           _cancellation = null;
         });
+      }
+    } finally {
+      if (identical(_cancellation, cancellation)) {
+        _cancellation = null;
       }
     }
   }
@@ -298,20 +306,13 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   void _cancel() {
     _cancellation?.cancel();
-    if (_phase == _OnboardingPhase.checking ||
-        _phase == _OnboardingPhase.openingLogin) {
-      setState(() {
-        _phase = _OnboardingPhase.entry;
-        _pending = null;
-      });
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     return PopScope(
-      canPop: _phase != _OnboardingPhase.waitingForLogin,
+      canPop: !_busy,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
           _cancel();
@@ -590,6 +591,7 @@ final class _ServerCard extends StatelessWidget {
             ],
             const SizedBox(height: 20),
             FilledButton.icon(
+              key: const Key('onboarding-connect'),
               onPressed: busy ? null : onConnect,
               icon: busy
                   ? const SizedBox.square(

@@ -297,6 +297,7 @@ final onboardingCoordinatorProvider = Provider<OnboardingCoordinator>((ref) {
     accounts: ref.watch(accountRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
     launcher: ref.watch(loginPageLauncherProvider),
+    pendingRevocations: ref.watch(appPasswordRevocationQueueProvider),
     trust: ref.watch(certificateTrustGateProvider),
     inBackground: () =>
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.paused,

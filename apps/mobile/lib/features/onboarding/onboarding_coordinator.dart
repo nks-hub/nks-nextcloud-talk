@@ -12,6 +12,7 @@ import '../../data/app_database.dart';
 import '../../data/credential_vault.dart';
 import '../../network/account_http_client.dart';
 import '../../network/nextcloud_api.dart';
+import '../settings/app_password_revocation_queue.dart';
 import 'server_address_input.dart';
 
 enum OnboardingFailureCode {
@@ -37,6 +38,7 @@ final class OnboardingFailure implements Exception {
     this.code, {
     this.serverBlockers = const {},
     this.certificate,
+    this.cleanupIncomplete = false,
   });
 
   final OnboardingFailureCode code;
@@ -46,13 +48,21 @@ final class OnboardingFailure implements Exception {
   /// presented, so the confirmation can name the exact fingerprint.
   final CertificateEncounter? certificate;
 
+  /// True when onboarding could not prove that every local and remote secret
+  /// created by the failed operation was cleaned up or durably queued.
+  final bool cleanupIncomplete;
+
   @override
-  String toString() => 'OnboardingFailure(${code.name})';
+  String toString() =>
+      'OnboardingFailure(${code.name}, '
+      'cleanupIncomplete: $cleanupIncomplete)';
 }
 
 final class OnboardingCancelled implements Exception {
   const OnboardingCancelled();
 }
+
+enum _CredentialSource { generated, sharedQr }
 
 final class CancellationSignal {
   final Completer<void> _cancelled = Completer<void>();
@@ -128,6 +138,7 @@ final class OnboardingCoordinator {
     required AccountRepository accounts,
     required CredentialVault credentials,
     required LoginPageLauncher launcher,
+    AppPasswordRevocationQueue? pendingRevocations,
     CertificateTrustGate? trust,
     Uuid? uuid,
     this.pollInterval = const Duration(seconds: 2),
@@ -138,6 +149,7 @@ final class OnboardingCoordinator {
        _accounts = accounts,
        _credentials = credentials,
        _launcher = launcher,
+       _pendingRevocations = pendingRevocations,
        _trust = trust,
        _uuid = uuid ?? const Uuid();
 
@@ -145,6 +157,7 @@ final class OnboardingCoordinator {
   final AccountRepository _accounts;
   final CredentialVault _credentials;
   final LoginPageLauncher _launcher;
+  final AppPasswordRevocationQueue? _pendingRevocations;
   final CertificateTrustGate? _trust;
   final Uuid _uuid;
   final Duration pollInterval;
@@ -159,15 +172,33 @@ final class OnboardingCoordinator {
 
   static bool _never() => false;
 
-  Future<PendingLogin> start(String serverAddress) async {
+  Future<PendingLogin> start(
+    String serverAddress, {
+    CancellationSignal? cancellation,
+  }) async {
+    cancellation?.throwIfCancelled();
     final ServerBase server;
     try {
       server = ServerBase.parse(normalizeServerAddressInput(serverAddress));
     } on TalkProtocolException {
       throw const OnboardingFailure(OnboardingFailureCode.invalidServer);
     }
-    final status = await _requireReadyServer(server);
-    final initialization = await _api.initializeLogin(server);
+    final status = await _requireReadyServer(
+      server,
+      cancellation: cancellation,
+    );
+    cancellation?.throwIfCancelled();
+    final LoginFlowInitialization initialization;
+    try {
+      initialization = await _api.initializeLogin(
+        server,
+        abortTrigger: cancellation?.whenCancelled,
+      );
+    } on Object {
+      cancellation?.throwIfCancelled();
+      rethrow;
+    }
+    cancellation?.throwIfCancelled();
     return PendingLogin(
       server: server,
       serverStatus: status,
@@ -175,11 +206,18 @@ final class OnboardingCoordinator {
     );
   }
 
-  Future<ServerStatus> _requireReadyServer(ServerBase server) async {
+  Future<ServerStatus> _requireReadyServer(
+    ServerBase server, {
+    CancellationSignal? cancellation,
+  }) async {
     final ServerStatus status;
     try {
-      status = await _api.getServerStatus(server);
+      status = await _api.getServerStatus(
+        server,
+        abortTrigger: cancellation?.whenCancelled,
+      );
     } on Object {
+      cancellation?.throwIfCancelled();
       // A refused certificate reaches here as a plain transport failure, so
       // the gate is what says whether the server is unreachable or merely
       // unconfirmed.
@@ -192,6 +230,7 @@ final class OnboardingCoordinator {
         certificate: encounter,
       );
     }
+    cancellation?.throwIfCancelled();
     if (!status.isReady) {
       throw OnboardingFailure(
         OnboardingFailureCode.serverNotReady,
@@ -206,14 +245,17 @@ final class OnboardingCoordinator {
   /// The secret was minted by the server before the QR code was drawn, so
   /// there is no Login Flow v2 token to poll for: the server is still checked
   /// for readiness and the credentials still have to authenticate against it,
-  /// but [waitForAccount]'s polling loop is skipped entirely.
+  /// but [completeLogin]'s polling loop is skipped entirely.
   Future<StoredAccount> commitScannedLogin(
     QrLoginCredentials payload,
     CancellationSignal cancellation, {
     String? expectedAccountId,
   }) async {
     final server = payload.server;
-    final status = await _requireReadyServer(server);
+    final status = await _requireReadyServer(
+      server,
+      cancellation: cancellation,
+    );
     cancellation.throwIfCancelled();
 
     var credentials = payload.toLoginFlowCredentials();
@@ -224,10 +266,12 @@ final class OnboardingCoordinator {
           server: server,
           loginName: payload.loginName,
           oneTimeToken: payload.secret,
+          abortTrigger: cancellation.whenCancelled,
         );
       } on OnboardingFailure {
         rethrow;
       } on Object {
+        cancellation.throwIfCancelled();
         // A single-use token is spent on first use and expires on its own, so
         // a failure here is nothing the user can retry with the same code.
         throw const OnboardingFailure(
@@ -240,13 +284,14 @@ final class OnboardingCoordinator {
         appPassword: appPassword,
       );
     }
-    cancellation.throwIfCancelled();
-
     try {
       return await _commitAccount(
         server: server,
         serverStatus: status,
         loginCredentials: credentials,
+        credentialSource: payload.isOneTime
+            ? _CredentialSource.generated
+            : _CredentialSource.sharedQr,
         cancellation: cancellation,
         expectedAccountId: expectedAccountId,
       );
@@ -280,21 +325,24 @@ final class OnboardingCoordinator {
     _trust?.confirm(host: encounter.host, fingerprint: encounter.fingerprint);
   }
 
-  Future<void> openLoginPage(PendingLogin pending) async {
-    final opened = await _launcher.open(pending.initialization.loginUri);
-    if (!opened) {
-      throw const OnboardingFailure(OnboardingFailureCode.browserUnavailable);
-    }
-  }
-
-  /// Polls until the login finishes, fails or is cancelled, and dismisses an
-  /// in-app login page whichever of those happens.
-  Future<StoredAccount> waitForAccount(
+  /// Opens the login page, polls for its one-time result and closes the page.
+  ///
+  /// Owning all three steps here keeps a screen disappearing while [open]
+  /// waits from escaping the matching [close].
+  Future<StoredAccount> completeLogin(
     PendingLogin pending,
     CancellationSignal cancellation, {
     String? expectedAccountId,
+    VoidCallback? onLoginPageOpened,
   }) async {
     try {
+      cancellation.throwIfCancelled();
+      final opened = await _launcher.open(pending.initialization.loginUri);
+      cancellation.throwIfCancelled();
+      if (!opened) {
+        throw const OnboardingFailure(OnboardingFailureCode.browserUnavailable);
+      }
+      onLoginPageOpened?.call();
       return await _pollForAccount(
         pending,
         cancellation,
@@ -330,8 +378,12 @@ final class OnboardingCoordinator {
       }
       final LoginPollResult? result;
       try {
-        result = await _api.pollLogin(pending);
+        result = await _api.pollLogin(
+          pending,
+          abortTrigger: cancellation.whenCancelled,
+        );
       } on NextcloudApiException catch (error) {
+        cancellation.throwIfCancelled();
         // iOS suspends the app's sockets while the browser is in front, so the
         // first polls after returning can fail on a connection that is fine.
         if (error.code != NextcloudApiError.network &&
@@ -345,17 +397,17 @@ final class OnboardingCoordinator {
         ]);
         continue;
       }
-      cancellation.throwIfCancelled();
       if (result case LoginPollSucceeded(:final credentials)) {
-        await _closeLoginPage();
         return _commitAccount(
           server: pending.server,
           serverStatus: pending.serverStatus,
           loginCredentials: credentials,
+          credentialSource: _CredentialSource.generated,
           cancellation: cancellation,
           expectedAccountId: expectedAccountId,
         );
       }
+      cancellation.throwIfCancelled();
       await Future.any<void>([
         Future<void>.delayed(pollInterval),
         cancellation.whenCancelled,
@@ -369,9 +421,46 @@ final class OnboardingCoordinator {
     required ServerBase server,
     required ServerStatus serverStatus,
     required LoginFlowCredentials loginCredentials,
+    required _CredentialSource credentialSource,
     required CancellationSignal cancellation,
     required String? expectedAccountId,
   }) async {
+    try {
+      return await _commitAccountWithoutCredentialCleanup(
+        server: server,
+        serverStatus: serverStatus,
+        loginCredentials: loginCredentials,
+        cancellation: cancellation,
+        expectedAccountId: expectedAccountId,
+      );
+    } on Object catch (error, stackTrace) {
+      if (credentialSource == _CredentialSource.sharedQr) {
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+      final cleanedUp = await _revokeOrRememberGeneratedCredential(
+        server: server,
+        loginName: loginCredentials.loginName,
+        appPassword: loginCredentials.appPassword,
+        preferQueue: error is OnboardingCancelled,
+      );
+      if (!cleanedUp) {
+        throw const OnboardingFailure(
+          OnboardingFailureCode.localPersistence,
+          cleanupIncomplete: true,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  Future<StoredAccount> _commitAccountWithoutCredentialCleanup({
+    required ServerBase server,
+    required ServerStatus serverStatus,
+    required LoginFlowCredentials loginCredentials,
+    required CancellationSignal cancellation,
+    required String? expectedAccountId,
+  }) async {
+    cancellation.throwIfCancelled();
     final expected = expectedAccountId == null
         ? null
         : await _accounts.getAccount(expectedAccountId);
@@ -379,26 +468,23 @@ final class OnboardingCoordinator {
         (expected == null ||
             expected.serverUrl != server.value ||
             expected.loginName != loginCredentials.loginName)) {
-      try {
-        await _api.revokeAppPassword(
-          server: server,
-          loginName: loginCredentials.loginName,
-          appPassword: loginCredentials.appPassword,
-        );
-      } on Object {
-        // The identity mismatch remains authoritative and no credential is
-        // persisted even when the server cannot confirm cleanup.
-      }
       throw const OnboardingFailure(
         OnboardingFailureCode.accountIdentityMismatch,
       );
     }
 
-    final capabilities = await _api.getAuthenticatedCapabilities(
-      server: server,
-      loginName: loginCredentials.loginName,
-      appPassword: loginCredentials.appPassword,
-    );
+    final CapabilitySnapshot capabilities;
+    try {
+      capabilities = await _api.getAuthenticatedCapabilities(
+        server: server,
+        loginName: loginCredentials.loginName,
+        appPassword: loginCredentials.appPassword,
+        abortTrigger: cancellation.whenCancelled,
+      );
+    } on Object {
+      cancellation.throwIfCancelled();
+      rethrow;
+    }
     cancellation.throwIfCancelled();
     if (!capabilities.hasTalk) {
       throw const OnboardingFailure(OnboardingFailureCode.talkUnavailable);
@@ -454,6 +540,7 @@ final class OnboardingCoordinator {
       }
       return stored;
     } on Object {
+      var cleanupIncomplete = false;
       if (credentialWritten) {
         try {
           if (previousPassword == null) {
@@ -462,11 +549,65 @@ final class OnboardingCoordinator {
             await _credentials.writeAppPassword(accountId, previousPassword);
           }
         } on Object {
-          // The original persistence failure remains authoritative. No secret
-          // is exposed to the UI or logs.
+          cleanupIncomplete = true;
         }
       }
-      throw const OnboardingFailure(OnboardingFailureCode.localPersistence);
+      throw OnboardingFailure(
+        OnboardingFailureCode.localPersistence,
+        cleanupIncomplete: cleanupIncomplete,
+      );
+    }
+  }
+
+  Future<bool> _revokeOrRememberGeneratedCredential({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+    bool preferQueue = false,
+  }) async {
+    final queue = _pendingRevocations;
+    if (preferQueue &&
+        await _rememberGeneratedCredential(
+          queue,
+          server,
+          loginName,
+          appPassword,
+        )) {
+      return true;
+    }
+    try {
+      await _api.revokeAppPassword(
+        server: server,
+        loginName: loginName,
+        appPassword: appPassword,
+      );
+      return true;
+    } on NextcloudApiException catch (error) {
+      if (error.statusCode == 401) {
+        return true;
+      }
+    } on Object {
+      // The bounded durable queue below owns the retry.
+    }
+    return _rememberGeneratedCredential(queue, server, loginName, appPassword);
+  }
+
+  Future<bool> _rememberGeneratedCredential(
+    AppPasswordRevocationQueue? queue,
+    ServerBase server,
+    String loginName,
+    String appPassword,
+  ) async {
+    if (queue == null) return false;
+    try {
+      await queue.record(
+        server: server,
+        loginName: loginName,
+        appPassword: appPassword,
+      );
+      return true;
+    } on Object {
+      return false;
     }
   }
 }

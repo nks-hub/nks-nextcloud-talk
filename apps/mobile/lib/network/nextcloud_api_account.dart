@@ -213,17 +213,23 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
     );
   }
 
-  Future<ServerStatus> getServerStatus(ServerBase server) async {
+  Future<ServerStatus> getServerStatus(
+    ServerBase server, {
+    Future<void>? abortTrigger,
+  }) async {
     final payload = await _sendJson(
-      http.Request('GET', server.statusUri),
+      _request('GET', server.statusUri, abortTrigger),
       allowedStatusCodes: const {200},
       maximumBytes: _statusMaximumBytes,
     );
     return ServerStatus.fromJson(payload.json);
   }
 
-  Future<LoginFlowInitialization> initializeLogin(ServerBase server) async {
-    final request = http.Request('POST', server.loginFlowV2Uri)
+  Future<LoginFlowInitialization> initializeLogin(
+    ServerBase server, {
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('POST', server.loginFlowV2Uri, abortTrigger)
       ..headers['Content-Type'] = 'application/x-www-form-urlencoded'
       ..headers['User-Agent'] = loginFlowUserAgent
       ..body = '';
@@ -239,11 +245,15 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
     );
   }
 
-  Future<LoginPollResult> pollLogin(PendingLogin pending) async {
-    final request = http.Request('POST', pending.initialization.pollEndpoint)
-      ..headers['Content-Type'] = 'application/x-www-form-urlencoded'
-      ..headers['User-Agent'] = loginFlowUserAgent
-      ..body = pending.initialization.pollFormBody;
+  Future<LoginPollResult> pollLogin(
+    PendingLogin pending, {
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request('POST', pending.initialization.pollEndpoint, abortTrigger)
+          ..headers['Content-Type'] = 'application/x-www-form-urlencoded'
+          ..headers['User-Agent'] = loginFlowUserAgent
+          ..body = pending.initialization.pollFormBody;
     final payload = await _sendJson(
       request,
       allowedStatusCodes: const {200, 404},

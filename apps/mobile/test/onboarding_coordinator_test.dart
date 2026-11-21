@@ -13,6 +13,7 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/onboarding/onboarding_coordinator.dart';
+import 'package:nextcloudtalk/features/settings/app_password_revocation_queue.dart';
 import 'package:nextcloudtalk/network/account_http_client.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
@@ -33,6 +34,17 @@ void main() {
   });
 
   tearDown(() => database.close());
+
+  Future<void> failNextAccountCommit() async {
+    final interceptor = _FailNextCommitInterceptor();
+    await database.close();
+    database = AppDatabase.forTesting(
+      NativeDatabase.memory().interceptWith(interceptor),
+    );
+    await database.customSelect('SELECT 1').get();
+    interceptor.failNextCommit = true;
+    repository = AccountRepository(database);
+  }
 
   test('external login polls without the app ever being hidden', () async {
     var polls = 0;
@@ -55,8 +67,7 @@ void main() {
     );
 
     final pending = await coordinator.start('https://cloud.example.invalid');
-    await coordinator.openLoginPage(pending);
-    final account = await coordinator.waitForAccount(
+    final account = await coordinator.completeLogin(
       pending,
       CancellationSignal(),
     );
@@ -64,6 +75,36 @@ void main() {
     expect(account.loginName, 'fixture-user');
     expect(polls, 2);
   });
+
+  for (final heldPhase in const ['status', 'initialize']) {
+    test('cancellation aborts held $heldPhase request', () async {
+      final client = _HeldOnboardingRequestClient(heldPhase);
+      final api = HttpNextcloudApi(
+        client: client,
+        requestTimeout: const Duration(seconds: 20),
+      );
+      addTearDown(api.close);
+      final coordinator = OnboardingCoordinator(
+        api: api,
+        accounts: repository,
+        credentials: vault,
+        launcher: launcher,
+      );
+      final cancellation = CancellationSignal();
+
+      final result = coordinator.start(
+        'https://cloud.example.invalid',
+        cancellation: cancellation,
+      );
+      await client.requestStarted.future;
+      cancellation.cancel();
+
+      await expectLater(
+        result.timeout(const Duration(seconds: 1)),
+        throwsA(isA<OnboardingCancelled>()),
+      );
+    });
+  }
 
   test(
     'persists credentials and account only after Talk is confirmed',
@@ -79,8 +120,7 @@ void main() {
       );
 
       final pending = await coordinator.start('https://cloud.example.invalid');
-      await coordinator.openLoginPage(pending);
-      final account = await coordinator.waitForAccount(
+      final account = await coordinator.completeLogin(
         pending,
         CancellationSignal(),
       );
@@ -107,8 +147,7 @@ void main() {
       inBackground: () => background,
     );
     final pending = await coordinator.start('https://cloud.example.invalid');
-    await coordinator.openLoginPage(pending);
-    final waiting = coordinator.waitForAccount(pending, CancellationSignal());
+    final waiting = coordinator.completeLogin(pending, CancellationSignal());
 
     await Future<void>.delayed(const Duration(milliseconds: 60));
     expect(polls, 0, reason: 'the one-time answer must not be asked for yet');
@@ -130,15 +169,42 @@ void main() {
       pollInterval: Duration.zero,
     );
     final pending = await coordinator.start('https://cloud.example.invalid');
-    await coordinator.openLoginPage(pending);
     final cancellation = CancellationSignal()..cancel();
 
     await expectLater(
-      coordinator.waitForAccount(pending, cancellation),
+      coordinator.completeLogin(pending, cancellation),
       throwsA(isA<OnboardingCancelled>()),
     );
     expect(launcher.closeCount, 1);
   });
+
+  test(
+    'late browser open after cancellation closes once without polling',
+    () async {
+      var polls = 0;
+      final api = _onboardingApi(withTalk: true, onPoll: () => polls++);
+      addTearDown(api.close);
+      final blockedLauncher = _BlockedLoginPageLauncher();
+      final coordinator = OnboardingCoordinator(
+        api: api,
+        accounts: repository,
+        credentials: vault,
+        launcher: blockedLauncher,
+        pollInterval: Duration.zero,
+      );
+      final pending = await coordinator.start('https://cloud.example.invalid');
+      final cancellation = CancellationSignal();
+
+      final result = coordinator.completeLogin(pending, cancellation);
+      await blockedLauncher.openStarted.future;
+      cancellation.cancel();
+      blockedLauncher.releaseOpen.complete(true);
+
+      await expectLater(result, throwsA(isA<OnboardingCancelled>()));
+      expect(blockedLauncher.closeCount, 1);
+      expect(polls, 0);
+    },
+  );
 
   test('the external launcher delegates opening and closing', () async {
     final calls = <String>[];
@@ -219,7 +285,7 @@ void main() {
       );
 
       final pending = await coordinator.start('https://cloud.example.invalid');
-      final account = await coordinator.waitForAccount(
+      final account = await coordinator.completeLogin(
         pending,
         CancellationSignal(),
       );
@@ -260,7 +326,7 @@ void main() {
     );
 
     final pending = await coordinator.start('https://cloud.example.invalid');
-    final account = await coordinator.waitForAccount(
+    final account = await coordinator.completeLogin(
       pending,
       CancellationSignal(),
       expectedAccountId: 'existing-account',
@@ -300,7 +366,7 @@ void main() {
 
       final pending = await coordinator.start('https://cloud.example.invalid');
       await expectLater(
-        coordinator.waitForAccount(
+        coordinator.completeLogin(
           pending,
           CancellationSignal(),
           expectedAccountId: 'existing-account',
@@ -341,7 +407,7 @@ void main() {
     final pending = await coordinator.start('https://cloud.example.invalid');
     final cancellation = CancellationSignal();
 
-    final result = coordinator.waitForAccount(pending, cancellation);
+    final result = coordinator.completeLogin(pending, cancellation);
     await pollStarted.future;
     cancellation.cancel();
     releasePoll.complete();
@@ -349,6 +415,35 @@ void main() {
     await expectLater(result, throwsA(isA<OnboardingCancelled>()));
     expect(vault.values, isEmpty);
     expect(await repository.watchAccounts().first, isEmpty);
+  });
+
+  test('cancellation aborts a held login poll immediately', () async {
+    final client = _HeldLoginPollClient();
+    final api = HttpNextcloudApi(
+      client: client,
+      requestTimeout: const Duration(seconds: 20),
+    );
+    addTearDown(api.close);
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pollInterval: Duration.zero,
+    );
+    final pending = await coordinator.start('https://cloud.example.invalid');
+    final cancellation = CancellationSignal();
+
+    final result = coordinator.completeLogin(pending, cancellation);
+    await client.pollStarted.future;
+    cancellation.cancel();
+
+    await expectLater(
+      result.timeout(const Duration(seconds: 1)),
+      throwsA(isA<OnboardingCancelled>()),
+    );
+    expect(launcher.closeCount, 1);
+    expect(vault.values, isEmpty);
   });
 
   test(
@@ -372,7 +467,7 @@ void main() {
       final pending = await coordinator.start('https://cloud.example.invalid');
       final cancellation = CancellationSignal();
 
-      final result = coordinator.waitForAccount(pending, cancellation);
+      final result = coordinator.completeLogin(pending, cancellation);
       await capabilitiesStarted.future;
       cancellation.cancel();
       releaseCapabilities.complete();
@@ -398,7 +493,7 @@ void main() {
 
       final pending = await coordinator.start('https://cloud.example.invalid');
       await expectLater(
-        coordinator.waitForAccount(pending, CancellationSignal()),
+        coordinator.completeLogin(pending, CancellationSignal()),
         throwsA(
           isA<OnboardingFailure>().having(
             (error) => error.code,
@@ -439,7 +534,7 @@ void main() {
 
       final pending = await coordinator.start('https://cloud.example.invalid');
       await expectLater(
-        coordinator.waitForAccount(pending, CancellationSignal()),
+        coordinator.completeLogin(pending, CancellationSignal()),
         throwsA(
           isA<OnboardingFailure>().having(
             (error) => error.code,
@@ -469,7 +564,7 @@ void main() {
 
     final pending = await coordinator.start('https://cloud.example.invalid');
     await expectLater(
-      coordinator.waitForAccount(pending, CancellationSignal()),
+      coordinator.completeLogin(pending, CancellationSignal()),
       throwsA(
         isA<OnboardingFailure>().having(
           (error) => error.code,
@@ -485,46 +580,156 @@ void main() {
     expect(await repository.watchAccounts().first, isEmpty);
   });
 
-  test(
-    'rolls back a written credential when the database commit fails',
-    () async {
-      final interceptor = _FailNextCommitInterceptor();
-      await database.close();
-      database = AppDatabase.forTesting(
-        NativeDatabase.memory().interceptWith(interceptor),
-      );
-      await database.customSelect('SELECT 1').get();
-      interceptor.failNextCommit = true;
-      repository = AccountRepository(database);
-      final faultingVault = _FaultingCredentialVault();
-      final api = _onboardingApi(withTalk: true);
-      addTearDown(api.close);
-      final coordinator = OnboardingCoordinator(
-        api: api,
-        accounts: repository,
-        credentials: faultingVault,
-        launcher: launcher,
-        pollInterval: Duration.zero,
-      );
+  test('revokes a new login password when the database commit fails', () async {
+    await failNextAccountCommit();
+    final faultingVault = _FaultingCredentialVault();
+    var revokeCalls = 0;
+    final api = _onboardingApi(withTalk: true, onRevoke: () => revokeCalls++);
+    addTearDown(api.close);
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: faultingVault,
+      launcher: launcher,
+      pollInterval: Duration.zero,
+    );
 
-      final pending = await coordinator.start('https://cloud.example.invalid');
-      await expectLater(
-        coordinator.waitForAccount(pending, CancellationSignal()),
-        throwsA(
-          isA<OnboardingFailure>().having(
-            (error) => error.code,
-            'code',
-            OnboardingFailureCode.localPersistence,
-          ),
+    final pending = await coordinator.start('https://cloud.example.invalid');
+    await expectLater(
+      coordinator.completeLogin(pending, CancellationSignal()),
+      throwsA(
+        isA<OnboardingFailure>().having(
+          (error) => error.code,
+          'code',
+          OnboardingFailureCode.localPersistence,
         ),
-      );
+      ),
+    );
 
-      expect(faultingVault.writeCalls, 1);
-      expect(faultingVault.deleteCalls, 1);
-      expect(faultingVault.values, isEmpty);
-      expect(await repository.watchAccounts().first, isEmpty);
-    },
-  );
+    expect(faultingVault.writeCalls, 1);
+    expect(faultingVault.deleteCalls, 1);
+    expect(faultingVault.values, isEmpty);
+    expect(revokeCalls, 1);
+    expect(await repository.watchAccounts().first, isEmpty);
+  });
+
+  test('revokes a one-time QR password after a database failure', () async {
+    await failNextAccountCommit();
+    var revokeCalls = 0;
+    final api = _onboardingApi(
+      withTalk: true,
+      oneTimeAppPassword: 'exchanged-app-password-never-use',
+      onRevoke: () => revokeCalls++,
+    );
+    addTearDown(api.close);
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pollInterval: Duration.zero,
+    );
+    final payload =
+        parseQrLoginPayload(
+              'nc://onetime-login/user:fixture-user'
+              '&server:https%3A//cloud.example.invalid'
+              '&password:single-use-token',
+            )!
+            as QrLoginCredentials;
+
+    await expectLater(
+      coordinator.commitScannedLogin(payload, CancellationSignal()),
+      throwsA(isA<OnboardingFailure>()),
+    );
+
+    expect(revokeCalls, 1);
+    expect(vault.values, isEmpty);
+  });
+
+  test('never revokes a shared QR password after a database failure', () async {
+    await failNextAccountCommit();
+    var revokeCalls = 0;
+    final api = _onboardingApi(withTalk: true, onRevoke: () => revokeCalls++);
+    addTearDown(api.close);
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pollInterval: Duration.zero,
+    );
+    final payload =
+        parseQrLoginPayload(
+              'nc://login/user:fixture-user'
+              '&server:https%3A//cloud.example.invalid'
+              '&password:shared-app-password-never-use',
+            )!
+            as QrLoginCredentials;
+
+    await expectLater(
+      coordinator.commitScannedLogin(payload, CancellationSignal()),
+      throwsA(isA<OnboardingFailure>()),
+    );
+
+    expect(revokeCalls, 0);
+    expect(vault.values, isEmpty);
+  });
+
+  test('queues a new password when immediate revocation fails', () async {
+    await failNextAccountCommit();
+    final api = _onboardingApi(
+      withTalk: true,
+      revokeFailure: http.ClientException('offline'),
+    );
+    addTearDown(api.close);
+    final pendingStore = MemoryCredentialVault();
+    final queue = AppPasswordRevocationQueue(store: pendingStore, api: api);
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pendingRevocations: queue,
+      pollInterval: Duration.zero,
+    );
+    final pending = await coordinator.start('https://cloud.example.invalid');
+
+    await expectLater(
+      coordinator.completeLogin(pending, CancellationSignal()),
+      throwsA(isA<OnboardingFailure>()),
+    );
+
+    expect(await queue.pendingCount(), 1);
+    expect(vault.values, isEmpty);
+  });
+
+  test('reports an incomplete local rollback instead of hiding it', () async {
+    await failNextAccountCommit();
+    final faultingVault = _FaultingCredentialVault(deleteFailuresRemaining: 1);
+    final api = _onboardingApi(withTalk: true);
+    addTearDown(api.close);
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: faultingVault,
+      launcher: launcher,
+      pollInterval: Duration.zero,
+    );
+    final pending = await coordinator.start('https://cloud.example.invalid');
+
+    await expectLater(
+      coordinator.completeLogin(pending, CancellationSignal()),
+      throwsA(
+        isA<OnboardingFailure>().having(
+          (error) => error.cleanupIncomplete,
+          'cleanupIncomplete',
+          isTrue,
+        ),
+      ),
+    );
+
+    expect(faultingVault.values, isNotEmpty);
+  });
 
   test(
     'a scanned app password creates the account without any polling',
@@ -713,6 +918,7 @@ HttpNextcloudApi _onboardingApi({
   VoidCallback? onCapabilities,
   Future<void>? capabilitiesGate,
   VoidCallback? onRevoke,
+  Object? revokeFailure,
   VoidCallback? onOneTimeExchange,
   String? oneTimeAppPassword,
 }) {
@@ -761,6 +967,9 @@ HttpNextcloudApi _onboardingApi({
       if (request.method == 'DELETE' &&
           request.url.path.endsWith('/core/apppassword')) {
         onRevoke?.call();
+        if (revokeFailure != null) {
+          throw revokeFailure;
+        }
         return http.Response(
           jsonEncode(<String, Object?>{
             'ocs': <String, Object?>{
@@ -785,17 +994,23 @@ final class _FaultingCredentialVault implements CredentialVault {
     Map<String, String> values = const {},
     this.readFailure,
     this.writeFailuresRemaining = 0,
+    this.deleteFailuresRemaining = 0,
   }) : values = Map.of(values);
 
   final Map<String, String> values;
   final Object? readFailure;
   int writeFailuresRemaining;
+  int deleteFailuresRemaining;
   int writeCalls = 0;
   int deleteCalls = 0;
 
   @override
   Future<void> deleteAppPassword(String accountId) async {
     deleteCalls++;
+    if (deleteFailuresRemaining > 0) {
+      deleteFailuresRemaining--;
+      throw StateError('credential delete failed');
+    }
     values.remove(accountId);
   }
 
@@ -816,6 +1031,83 @@ final class _FaultingCredentialVault implements CredentialVault {
       throw StateError('credential write failed');
     }
     values[accountId] = appPassword;
+  }
+}
+
+final class _HeldLoginPollClient extends http.BaseClient {
+  final Completer<void> pollStarted = Completer<void>();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (request.url.path == '/status.php') {
+      return _streamedResponse(readyStatusJson());
+    }
+    if (request.url.path.endsWith('/login/v2')) {
+      return _streamedResponse(loginInitializationJson());
+    }
+    if (request.url.path.endsWith('/login/v2/poll')) {
+      expect(request, isA<http.Abortable>());
+      pollStarted.complete();
+      await (request as http.Abortable).abortTrigger;
+      throw http.RequestAbortedException(request.url);
+    }
+    return http.StreamedResponse(const Stream<List<int>>.empty(), 404);
+  }
+
+  http.StreamedResponse _streamedResponse(Object body) {
+    return http.StreamedResponse(
+      Stream<List<int>>.value(utf8.encode(jsonEncode(body))),
+      200,
+    );
+  }
+}
+
+final class _BlockedLoginPageLauncher implements LoginPageLauncher {
+  final Completer<void> openStarted = Completer<void>();
+  final Completer<bool> releaseOpen = Completer<bool>();
+  int closeCount = 0;
+
+  @override
+  Future<bool> open(Uri uri) {
+    openStarted.complete();
+    return releaseOpen.future;
+  }
+
+  @override
+  Future<void> close() async => closeCount++;
+}
+
+final class _HeldOnboardingRequestClient extends http.BaseClient {
+  _HeldOnboardingRequestClient(this.heldPhase);
+
+  final String heldPhase;
+  final Completer<void> requestStarted = Completer<void>();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final held = heldPhase == 'status'
+        ? request.url.path == '/status.php'
+        : request.url.path.endsWith('/login/v2');
+    if (held) {
+      expect(request, isA<http.Abortable>());
+      requestStarted.complete();
+      await (request as http.Abortable).abortTrigger;
+      throw http.RequestAbortedException(request.url);
+    }
+    if (request.url.path == '/status.php') {
+      return _streamedResponse(readyStatusJson());
+    }
+    if (request.url.path.endsWith('/login/v2')) {
+      return _streamedResponse(loginInitializationJson());
+    }
+    return http.StreamedResponse(const Stream<List<int>>.empty(), 404);
+  }
+
+  http.StreamedResponse _streamedResponse(Object body) {
+    return http.StreamedResponse(
+      Stream<List<int>>.value(utf8.encode(jsonEncode(body))),
+      200,
+    );
   }
 }
 
