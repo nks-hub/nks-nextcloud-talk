@@ -1276,13 +1276,7 @@ final class ChatService {
     try {
       return await _sendClaim(prepared, claim);
     } finally {
-      try {
-        await claim.reservation?.release();
-      } on Object catch (error) {
-        debugPrint(
-          'Text send reservation release failed: ${error.runtimeType}',
-        );
-      }
+      await claim.reservation?.release();
     }
   }
 

@@ -241,14 +241,15 @@ extension _BackgroundReaderCases on _ChatServiceIntegrationSuite {
         message: 'queued text',
       );
       final ownership = LocalTextSendOwnership();
-      Future<ClaimedTextSend?> claim() => chat.claimNextTextSend(
-        accountId: id,
-        roomToken: token,
-        authority: authority,
-        requestId: ChatRequestId.parse('claim-audit'),
-        now: 10,
-        ownership: ownership,
-      );
+      Future<ClaimedTextSend?> claim(TextSendOwnership liveOwnership) =>
+          chat.claimNextTextSend(
+            accountId: id,
+            roomToken: token,
+            authority: authority,
+            requestId: ChatRequestId.parse('claim-audit'),
+            now: 10,
+            ownership: liveOwnership,
+          );
       Future<StoredTextSendOperation> row() =>
           database.select(database.textSendOperations).getSingle();
 
@@ -257,17 +258,19 @@ extension _BackgroundReaderCases on _ChatServiceIntegrationSuite {
         WHEN NEW.outbox_state = 'sending'
         BEGIN SELECT RAISE(ABORT, 'reject audit claim'); END
       ''');
+      final failingRelease = _LosesTextSendReleaseReply(ownership);
       await expectLater(
-        claim(),
+        claim(failingRelease),
         throwsA(
           predicate((Object? error) => '$error'.contains('reject audit claim')),
         ),
       );
+      expect(failingRelease.releases, 1);
       expect(await ownership.active(id), isEmpty);
       expect((await row()).outboxState, 'queued');
       await database.customStatement('DROP TRIGGER reject_audit_claim');
 
-      final owned = (await claim())!;
+      final owned = (await claim(ownership))!;
       final recovering = ChatRepository(database);
       await recovering.recoverInterruptedTextSends(id, ownership: ownership);
       expect((await row()).outboxState, 'sending');

@@ -14,9 +14,17 @@ abstract interface class TextSendOwnership {
 }
 
 final class TextSendReservation {
-  const TextSendReservation(this.release);
+  const TextSendReservation(this._release);
 
-  final Future<void> Function() release;
+  final Future<void> Function() _release;
+
+  Future<void> release() async {
+    try {
+      await _release();
+    } on Object catch (error) {
+      debugPrint('Text send reservation release failed: ${error.runtimeType}');
+    }
+  }
 }
 
 final _localOwnership = LocalTextSendOwnership();
