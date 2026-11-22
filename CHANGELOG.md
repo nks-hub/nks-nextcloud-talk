@@ -12,8 +12,11 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 - Moderators can set the default participant permissions of a conversation, choose who may mention everyone and give one participant individual permissions in the conversation details.
 - Diagnostics show when push last arrived, when it was last decrypted for the account, what happened to the notification and the last delivery error. No message content or token is stored.
-- A browser login that was cancelled, or cut off by closing the app, no longer blocks adding the account. After a restart the app finishes or expires the unfinished attempt and revokes an app password it can no longer use.
-- Removing an account revokes its app password on the server even when the app closes halfway through. A removal that fails keeps the account and its attachments usable.
+- A browser login that was cancelled, or cut off by closing the app, is finished or expired after a restart, and an app password the app can no longer use is revoked. While earlier sign-ins or removed accounts are still being cleaned up, adding or removing an account says so instead of reporting a storage error.
+- Removing an account revokes its app password on the server even when the app closes halfway through. A removal that fails keeps the account and its attachments usable. A revocation that a server gone for good keeps refusing is given up after 20 attempts and 14 days, so it no longer blocks adding or removing accounts.
+- A file shared a moment before the server could resolve it for the recipient appears as the file once the server can, instead of staying as "a file which is no longer available".
+- Joining a call while Android asks for the microphone no longer leaves the other person stuck at "Connecting…".
+- On Android, the other person's video keeps playing after you turn on your own camera in a call. It used to freeze on the phone that started the connection.
 - In a call, a screen share the other side rejected is offered again without dropping the call. The camera and the connections are released when the call setup fails, and leaving stops all media work.
 - At most four attachments transfer at once, three per conversation. On Android, an upload cut off in the background is finished by the app in the foreground.
 - Inline code formatting no longer drops the characters at its edges. Recognising 10 MiB of pasted text takes 12 ms instead of 1.9 s on a Galaxy S9+.
