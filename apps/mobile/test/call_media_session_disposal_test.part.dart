@@ -137,6 +137,62 @@ extension _MediaDisposalTests on _MediaSessionTests {
       expect(status.map((frame) => frame.type), ['audioOff']);
     });
 
+    test('an obsolete MCU answer cannot close a replacement share', () async {
+      final participants = [_participant(_remote)];
+      final media = session(
+        _update(
+          localPeerId: _local,
+          topology: SignalingTopology.externalMcu,
+          participants: participants,
+        ),
+        withControl: true,
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      await media.setScreenSharing(true);
+      final original = sent.lastWhere((message) => message.type == 'offer');
+      await media.setScreenSharing(false);
+      await media.setScreenSharing(true);
+      final replacement = sent.lastWhere((message) => message.type == 'offer');
+      final share = engine.connections.last;
+      expect(replacement.sid, isNot(original.sid));
+
+      void answer(String sender, String? sid) {
+        updates.add(
+          _update(
+            localPeerId: _local,
+            topology: SignalingTopology.externalMcu,
+            participants: participants,
+            messages: [
+              _message(
+                sender,
+                'answer',
+                {'type': 'answer', 'sdp': 'screen-answer'},
+                sid: sid,
+                roomType: 'screen',
+              ),
+            ],
+          ),
+        );
+      }
+
+      share.remoteDescriptionError = CallMediaError.engineFailure;
+      answer(_local, original.sid);
+      answer(_local, null);
+      answer(_remote, replacement.sid);
+      await pumpEventQueue();
+
+      expect(share.closed, isFalse);
+      expect(media.state.screenSharing, isTrue);
+      expect(engine.screens.last.disposed, isFalse);
+      expect(share.remoteDescriptions, isEmpty);
+
+      share.remoteDescriptionError = null;
+      answer(_local, replacement.sid);
+      await pumpEventQueue();
+      expect(share.remoteDescriptions.single.sdp, 'screen-answer');
+    });
+
     test(
       'dispose releases the MCU publisher after a peer close fails',
       () async {
