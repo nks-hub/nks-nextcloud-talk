@@ -274,7 +274,17 @@ void main() {
     await replacing;
     if (stampCount > 1) await newTouchCompleted.future;
 
-    final restarted = open(maximumBytes: 25);
+    final pendingTouches = <Future<void>>[];
+    // A successful read can leave a timestamp write running during teardown.
+    addTearDown(() => Future.wait(pendingTouches));
+    final restarted = open(
+      maximumBytes: 25,
+      touchFile: (file, touchedAt) {
+        final touch = file.setLastModified(touchedAt);
+        pendingTouches.add(touch);
+        return touch;
+      },
+    );
     expect(
       (await restarted.read(accountId: 'account-a', uri: uriFor(1)))?.body.last,
       3,
