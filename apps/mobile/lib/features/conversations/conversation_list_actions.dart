@@ -398,10 +398,12 @@ final class _ConversationTile extends StatelessWidget {
         : unread
         ? scheme.onTertiaryContainer
         : scheme.onSurface;
+    // Opaque: at 0.72 and 0.74 alpha the light theme measured 4.01:1 and
+    // 3.92:1 against the row, under the 4.5:1 small text needs.
     final supportingColor = selected
-        ? scheme.onSecondaryContainer.withValues(alpha: 0.74)
+        ? scheme.onSecondaryContainer
         : unread
-        ? scheme.onTertiaryContainer.withValues(alpha: 0.72)
+        ? scheme.onTertiaryContainer
         : scheme.onSurfaceVariant;
     final semanticsValue = [
       if (hasCall) strings.callBannerTitle,
