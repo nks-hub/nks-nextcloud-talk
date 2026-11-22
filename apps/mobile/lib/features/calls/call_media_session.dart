@@ -422,6 +422,7 @@ final class CallMediaSession {
         iceServers: iceServers,
       );
     }
+    if (!_mcu) await _retryMeshCameraOffers();
     _publish();
   }
 
@@ -717,6 +718,8 @@ final class _MediaPeer {
   CallPeerConnection? connection;
   CallRemoteVideo? video;
   bool localOfferPending = false;
+  ({CallSessionDescription description, bool videoOn, bool sent})?
+  deferredCameraOffer;
   bool remoteDescriptionSet = false;
   CallMediaConnectionState state = CallMediaConnectionState.connecting;
   final List<CallIceCandidate> pendingRemoteCandidates = [];

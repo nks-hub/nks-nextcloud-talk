@@ -188,7 +188,11 @@ extension _CallMediaSessionSignaling on CallMediaSession {
   /// Creates and sends an offer on an existing connection — the first one,
   /// a renegotiation after the video line changed, or an ICE restart after
   /// the transport failed.
-  Future<bool> _offer(_MediaPeer peer, {bool iceRestart = false}) async {
+  Future<bool> _offer(
+    _MediaPeer peer, {
+    bool iceRestart = false,
+    bool retryCameraOffer = false,
+  }) async {
     final connection = peer.connection;
     if (_disposed || connection == null) {
       return false;
@@ -198,26 +202,60 @@ extension _CallMediaSessionSignaling on CallMediaSession {
       if (_disposed) return false;
       await connection.setLocalDescription(offer);
       peer.localOfferPending = true;
+      peer.deferredCameraOffer = null;
       debugPrint(
         '[call] offer → ${peer.peerId} sid=${peer.sid} '
         'video=${_video != null} iceRestart=$iceRestart '
         'lines=${_mediaLines(offer.sdp)}',
       );
-      final sent = await _send(
-        peerId: peer.peerId,
-        type: 'offer',
-        payload: _sdpPayload(offer),
-        // The connection this offer belongs to decides its room type and
-        // sid: a share and the call itself both offer to the same peer.
-        via: peer,
-      );
-      if (!sent && peer.publisher) await _closeFailedNegotiation(peer);
+      final sent = await _sendOffer(peer, offer);
+      if (!sent) {
+        if (peer.publisher) {
+          await _closeFailedNegotiation(peer);
+        } else if (retryCameraOffer &&
+            peer.remoteDescriptionSet &&
+            !_disposed) {
+          peer.deferredCameraOffer = (
+            description: offer,
+            videoOn: _video != null,
+            sent: false,
+          );
+        }
+      }
       return sent;
     } on CallMediaException {
       await _closeFailedNegotiation(peer);
       return false;
     }
   }
+
+  Future<bool> _sendOffer(_MediaPeer peer, CallSessionDescription offer) =>
+      _send(
+        peerId: peer.peerId,
+        type: 'offer',
+        payload: _sdpPayload(offer),
+        // A share and the call itself can offer to the same peer.
+        via: peer,
+      );
+
+  Future<void> _retryMeshCameraOffers() => _runPeerTasks(
+    _peers.values.where((peer) => peer.deferredCameraOffer?.sent == false),
+    (peer) async {
+      final pending = peer.deferredCameraOffer!;
+      // WebRTC is already waiting for the answer to this exact SDP.
+      try {
+        if (await _sendOffer(peer, pending.description)) {
+          peer.deferredCameraOffer = (
+            description: pending.description,
+            videoOn: pending.videoOn,
+            sent: true,
+          );
+        }
+      } on CallMediaException {
+        await _closeFailedNegotiation(peer);
+      }
+    },
+  );
 
   Future<void> _closeFailedNegotiation(_MediaPeer peer) async {
     if (_disposed) return;
@@ -427,9 +465,14 @@ extension _CallMediaSessionSignaling on CallMediaSession {
     try {
       await connection.setRemoteDescription(sdp);
       peer.localOfferPending = false;
+      final deferred = peer.deferredCameraOffer;
+      peer.deferredCameraOffer = null;
       peer.remoteDescriptionSet = true;
       if (_isCurrentMcuScreenPublisher(peer)) _cancelScreenAnswerTimer();
       await _drainRemoteCandidates(peer);
+      if (!_mcu && deferred != null && deferred.videoOn != (_video != null)) {
+        await _offer(peer, retryCameraOffer: true);
+      }
     } on CallMediaException {
       if (!_disposed && _mcu && peer.ownScreen) {
         await _stopSharing();

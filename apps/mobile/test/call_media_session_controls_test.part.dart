@@ -112,6 +112,103 @@ extension _ControlsMediaSessionTests on _MediaSessionTests {
       },
     );
 
+    for (final cameraOffBeforeResume in [false, true]) {
+      test(
+        cameraOffBeforeResume
+            ? 'a resumed mesh renegotiates a later camera change after the retried answer'
+            : 'a resumed mesh retries the camera offer already set locally',
+        () async {
+          final participants = [_participant(_remote)];
+          final ready = _update(
+            localPeerId: _local,
+            participants: participants,
+          );
+          CallSignalingUpdate answer(String sdp) => _update(
+            localPeerId: _local,
+            participants: participants,
+            messages: [
+              _message(_remote, 'answer', {'type': 'answer', 'sdp': sdp}),
+            ],
+          );
+          var signalingReady = true;
+          final refusedOffers = <SignalingPeerMessage>[];
+          final media = session(
+            ready,
+            sendMessage: (message, {required expectedRoomEpoch}) async {
+              expect(expectedRoomEpoch, ready.roomEpoch);
+              if (!signalingReady) {
+                if (message.type == 'offer') refusedOffers.add(message);
+                return false;
+              }
+              sent.add(message);
+              return true;
+            },
+          );
+          addTearDown(media.dispose);
+          await media.start();
+          final connection = engine.connections.single;
+          updates.add(answer('sdp-initial-answer'));
+          connection.onConnectionState(CallMediaConnectionState.connected);
+          await pumpEventQueue();
+          expect(
+            connection.remoteDescriptions.single.sdp,
+            'sdp-initial-answer',
+          );
+
+          signalingReady = false;
+          updates.add(
+            _update(
+              localPeerId: _local,
+              participants: participants,
+              phase: SignalingAccountPhase.reconnectWaiting,
+            ),
+          );
+          await pumpEventQueue();
+          await media.setCameraEnabled(true);
+          final camera = engine.cameras.single;
+          final refused = refusedOffers.single;
+          expect(connection.localVideos, [same(camera)]);
+          expect(connection.localDescriptions, hasLength(2));
+
+          if (cameraOffBeforeResume) {
+            await media.setCameraEnabled(false);
+            expect(refusedOffers, hasLength(1));
+            expect(connection.localVideos.last, isNull);
+          }
+
+          signalingReady = true;
+          updates.add(ready);
+          await pumpEventQueue();
+          final offers = sent.where((message) => message.type == 'offer');
+          expect(offers, hasLength(2));
+          expect(offers.last.sid, refused.sid);
+          expect(offers.last.payload?.wire, refused.payload?.wire);
+          expect(connection.createdOffers, 2);
+          expect(connection.localDescriptions, hasLength(2));
+          expect(engine.connections.single, same(connection));
+          expect(connection.closed, isFalse);
+          expect(engine.microphoneOpens, 1);
+          expect(
+            media.state.localVideo,
+            cameraOffBeforeResume ? isNull : same(camera),
+          );
+          updates.add(ready);
+          await pumpEventQueue();
+          expect(offers, hasLength(2));
+
+          updates.add(answer('sdp-camera-answer'));
+          await pumpEventQueue();
+          expect(connection.remoteDescriptions.last.sdp, 'sdp-camera-answer');
+          if (!cameraOffBeforeResume) {
+            await media.setCameraEnabled(false);
+          }
+          expect(offers, hasLength(3));
+          expect(camera.disposed, isTrue);
+          expect(connection.closed, isFalse);
+        },
+      );
+    }
+
     test('a camera that cannot be opened leaves the call audio-only', () async {
       engine.cameraError = CallMediaError.cameraPermissionDenied;
       final media = session(
