@@ -284,7 +284,7 @@ void main() {
       );
       expect(sampleFills(tester), [
         scheme.surfaceContainerHigh,
-        scheme.primaryContainer,
+        scheme.primary,
       ]);
       await unmount(tester);
       semantics.dispose();
@@ -798,13 +798,34 @@ void main() {
 
     test('are the theme pairing when nothing is shared', () {
       final own = resolveBubbleColors(outgoing: true, scheme: scheme);
-      expect(own.background, scheme.primaryContainer);
-      expect(own.foreground, scheme.onPrimaryContainer);
+      expect(own.background, scheme.primary);
+      expect(own.foreground, scheme.onPrimary);
       expect(own.shared, isFalse);
       final other = resolveBubbleColors(outgoing: false, scheme: scheme);
       expect(other.background, scheme.surfaceContainerHigh);
       expect(other.foreground, scheme.onSurface);
       expect(other.meta, scheme.onSurfaceVariant);
+    });
+
+    test('the default bubbles read at 4.5:1 in both themes', () {
+      for (final theme in [AppTheme.light(), AppTheme.dark()]) {
+        for (final outgoing in [true, false]) {
+          final colors = resolveBubbleColors(
+            outgoing: outgoing,
+            scheme: theme.colorScheme,
+          );
+          expect(
+            chatBackgroundContrast(colors.foreground, colors.background),
+            greaterThanOrEqualTo(4.5),
+            reason: '${outgoing ? 'own' : 'other'} ${theme.brightness.name}',
+          );
+          expect(
+            chatBackgroundContrast(colors.meta, colors.background),
+            greaterThanOrEqualTo(4.5),
+            reason: 'meta ${outgoing ? 'own' : 'other'}',
+          );
+        }
+      }
     });
 
     test('keep a shared text colour that reads on the bubble', () {

@@ -83,14 +83,10 @@ BubbleColors resolveBubbleColors({
   String? sharedText,
 }) {
   final defaultBackground = outgoing
-      ? scheme.primaryContainer
+      ? scheme.primary
       : scheme.surfaceContainerHigh;
-  final defaultForeground = outgoing
-      ? scheme.onPrimaryContainer
-      : scheme.onSurface;
-  final defaultMeta = outgoing
-      ? scheme.onPrimaryContainer
-      : scheme.onSurfaceVariant;
+  final defaultForeground = outgoing ? scheme.onPrimary : scheme.onSurface;
+  final defaultMeta = outgoing ? scheme.onPrimary : scheme.onSurfaceVariant;
   final bubble = parseChatBackgroundColor(sharedBubble);
   final text = parseChatBackgroundColor(sharedText);
   if (bubble == null && text == null) {

@@ -508,7 +508,7 @@ void _registerChatRoomPaneInteractionTests() {
     expect(
       decorated.any(
         (box) =>
-            (box.decoration as BoxDecoration).color == scheme.primaryContainer,
+            (box.decoration as BoxDecoration).color == scheme.primary,
       ),
       isTrue,
     );
