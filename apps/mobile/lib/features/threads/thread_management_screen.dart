@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app_providers.dart';
 import '../../core/desktop_metrics.dart';
 import '../../core/text_prompt_dialog.dart';
+import '../../core/tonal_state_icon.dart';
 import '../../data/app_database.dart';
 import '../../data/thread_repository.dart';
 import '../../l10n/generated/app_localizations.dart';
@@ -1062,33 +1063,6 @@ final class _ThreadErrorBanner extends StatelessWidget {
   }
 }
 
-/// Icon on a tonal disc, shared by the empty and the failed full-screen state.
-final class _ThreadStateIcon extends StatelessWidget {
-  const _ThreadStateIcon({required this.icon, this.error = false});
-
-  final IconData icon;
-  final bool error;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: error ? scheme.errorContainer : scheme.primaryContainer,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(22),
-        child: Icon(
-          icon,
-          size: 40,
-          color: error ? scheme.onErrorContainer : scheme.onPrimaryContainer,
-        ),
-      ),
-    );
-  }
-}
-
 final class _ThreadFullErrorState extends StatelessWidget {
   const _ThreadFullErrorState({required this.error, required this.onRetry});
 
@@ -1106,10 +1080,7 @@ final class _ThreadFullErrorState extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const _ThreadStateIcon(
-                icon: Icons.cloud_off_outlined,
-                error: true,
-              ),
+              const TonalStateIcon(icon: Icons.cloud_off_outlined, error: true),
               const SizedBox(height: 20),
               Text(
                 _threadErrorMessage(strings, error),
@@ -1149,7 +1120,7 @@ final class _ThreadEmptyState extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const _ThreadStateIcon(icon: Icons.forum_outlined),
+              const TonalStateIcon(icon: Icons.forum_outlined),
               const SizedBox(height: 20),
               Text(
                 title,

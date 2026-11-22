@@ -8,6 +8,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
 import '../../core/giphy_reference.dart';
+import '../../core/tonal_state_icon.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../calls/call_state.dart';
@@ -254,11 +255,10 @@ final class _ConversationListViewState
     return RefreshIndicator(
       key: ValueKey<String>('conversation-list-${widget.account.id}'),
       onRefresh: widget.onRefresh,
-      child: ListView.separated(
+      child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.only(bottom: widget.bottomInset),
         itemCount: shown.length + 1,
-        separatorBuilder: (_, _) => const Divider(indent: 84),
         itemBuilder: (context, index) {
           if (index == 0) {
             return filterBar;
@@ -344,9 +344,9 @@ final class _ConversationFilterBar extends StatelessWidget {
       onSelected: onSelected,
       showCheckmark: false,
       materialTapTargetSize: MaterialTapTargetSize.padded,
-      visualDensity: const VisualDensity(horizontal: -4),
-      padding: EdgeInsets.zero,
-      labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+      visualDensity: const VisualDensity(horizontal: -2, vertical: -1),
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 6),
       side: BorderSide(
         color: selected ? scheme.tertiary : scheme.outlineVariant,
       ),
@@ -391,7 +391,7 @@ final class _ConversationTile extends StatelessWidget {
     final tileColor = selected
         ? scheme.secondaryContainer
         : unread
-        ? scheme.tertiaryContainer.withValues(alpha: 0.42)
+        ? scheme.tertiaryContainer.withValues(alpha: 0.3)
         : Colors.transparent;
     final titleColor = selected
         ? scheme.onSecondaryContainer
@@ -455,82 +455,87 @@ final class _ConversationTile extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  if (conversation.favorite) ...[
-                                    Icon(
-                                      Icons.star_rounded,
-                                      size: 18,
-                                      color: scheme.primary,
-                                    ),
-                                    const SizedBox(width: 4),
-                                  ],
-                                  if (conversation.isArchived) ...[
-                                    Icon(
-                                      Icons.archive_outlined,
-                                      size: 18,
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                                    const SizedBox(width: 4),
-                                  ],
-                                  if (hasCall) ...[
-                                    // Announced through the tile's semantics
-                                    // value, which this subtree is excluded from.
-                                    Icon(
-                                      Icons.videocam_rounded,
-                                      key: Key(
-                                        'conversation-call-'
-                                        '${conversation.token}',
+                              LayoutBuilder(
+                                builder: (context, box) => Row(
+                                  children: [
+                                    if (conversation.favorite) ...[
+                                      Icon(
+                                        Icons.star_rounded,
+                                        size: 18,
+                                        color: scheme.primary,
                                       ),
-                                      size: 18,
-                                      color: scheme.primary,
-                                    ),
-                                    const SizedBox(width: 4),
-                                  ],
-                                  Expanded(
-                                    child: Text(
-                                      conversation.displayName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                            color: titleColor,
-                                            fontWeight: unread || selected
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
-                                          ),
-                                    ),
-                                  ),
-                                  if (presence != null) ...[
-                                    const SizedBox(width: 7),
-                                    ConversationPresenceBadge(
-                                      conversation: conversation,
-                                    ),
-                                  ],
-                                  const SizedBox(width: 8),
-                                  // Flexible because the name beside it can
-                                  // already shrink and this cannot: at 200 %
-                                  // text an absolute date is wider than the
-                                  // 240 px the list may be dragged to, and the
-                                  // row overflowed by 65 px rather than trim
-                                  // the one part of it nobody reads twice.
-                                  Flexible(
-                                    child: Text(
-                                      _formatActivity(
-                                        context,
-                                        conversation.lastActivity,
+                                      const SizedBox(width: 4),
+                                    ],
+                                    if (conversation.isArchived) ...[
+                                      Icon(
+                                        Icons.archive_outlined,
+                                        size: 18,
+                                        color: scheme.onSurfaceVariant,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.copyWith(color: supportingColor),
+                                      const SizedBox(width: 4),
+                                    ],
+                                    if (hasCall) ...[
+                                      // Announced through the tile's semantics
+                                      // value, which this subtree is excluded from.
+                                      Icon(
+                                        Icons.videocam_rounded,
+                                        key: Key(
+                                          'conversation-call-'
+                                          '${conversation.token}',
+                                        ),
+                                        size: 18,
+                                        color: scheme.primary,
+                                      ),
+                                      const SizedBox(width: 4),
+                                    ],
+                                    Expanded(
+                                      child: Text(
+                                        conversation.displayName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              color: titleColor,
+                                              fontWeight: unread || selected
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                            ),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                    if (presence != null) ...[
+                                      const SizedBox(width: 7),
+                                      ConversationPresenceBadge(
+                                        conversation: conversation,
+                                      ),
+                                    ],
+                                    const SizedBox(width: 8),
+                                    // Flexible because the name beside it can
+                                    // already shrink and this cannot: at 200 %
+                                    // text an absolute date is wider than the
+                                    // 240 px the list may be dragged to, and the
+                                    // row overflowed by 65 px rather than trim
+                                    // the one part of it nobody reads twice.
+                                    ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxWidth: box.maxWidth / 2,
+                                      ),
+                                      child: Text(
+                                        _formatActivity(
+                                          context,
+                                          conversation.lastActivity,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelSmall
+                                            ?.copyWith(color: supportingColor),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                               if (statusMessage != null) ...[
                                 const SizedBox(height: 2),
@@ -652,18 +657,16 @@ final class _EmptyConversations extends StatelessWidget {
       padding: const EdgeInsets.all(28),
       child: Column(
         children: [
-          Icon(
-            Icons.chat_bubble_outline_rounded,
-            size: 52,
-            color: scheme.primary,
-          ),
-          const SizedBox(height: 16),
+          const TonalStateIcon(icon: Icons.chat_bubble_outline_rounded),
+          const SizedBox(height: 20),
           Text(
             filtered
                 ? strings.conversationFilterNoResults
                 : strings.noConversations,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Text(
