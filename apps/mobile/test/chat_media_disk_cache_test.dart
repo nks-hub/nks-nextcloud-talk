@@ -880,12 +880,19 @@ void main() {
 final class _NativeFiles extends IOOverrides {}
 
 final class _PreviewIoFile implements File {
-  _PreviewIoFile(this.file, {this.openFile, this.readBytes, this.renameFile});
+  _PreviewIoFile(
+    this.file, {
+    this.openFile,
+    this.readBytes,
+    this.renameFile,
+    this.fileExists,
+  });
 
   final File file;
   final Future<RandomAccessFile> Function(FileMode)? openFile;
   final Future<Uint8List> Function()? readBytes;
   final Future<File> Function(String newPath)? renameFile;
+  final Future<bool> Function()? fileExists;
 
   @override
   Future<Uint8List> readAsBytes() => readBytes?.call() ?? file.readAsBytes();
@@ -899,7 +906,7 @@ final class _PreviewIoFile implements File {
       renameFile?.call(newPath) ?? file.rename(newPath);
 
   @override
-  Future<bool> exists() => file.exists();
+  Future<bool> exists() => fileExists?.call() ?? file.exists();
 
   @override
   Future<FileSystemEntity> delete({bool recursive = false}) =>

@@ -4,6 +4,7 @@ void _previewMutationTests(
   ChatMediaDiskCache Function({
     int maximumBytes,
     Future<void> Function(File file)? deleteFile,
+    Future<void> Function(File file, DateTime touchedAt)? touchFile,
   })
   open,
   ChatMediaImage Function(int, [int]) image,
@@ -383,6 +384,148 @@ void _previewMutationTests(
       },
     );
   }
+
+  for (final enoughSpace in [true, false]) {
+    test(
+      enoughSpace
+          ? 'a write prunes an idle path while four older renames wait'
+          : 'a write falls back when idle older files cannot cover the excess',
+      () async {
+        const otherAccount = 'account-b';
+        const incomingAccount = 'account-c';
+        const replacementCount = 4;
+        const previewBytes = 20;
+        final uris = List.generate(6, (index) => uriFor(index + 1));
+        final seed = open();
+        for (var index = 0; index < replacementCount; index++) {
+          final size = !enoughSpace && index == 0 ? 30 : 10;
+          await seed.write(
+            accountId: account,
+            uri: uris[index],
+            image: image(size, 10 + index),
+          );
+        }
+        await seed.write(
+          accountId: otherAccount,
+          uri: uris[4],
+          image: image(enoughSpace ? 10 : 4, 14),
+        );
+        final budget = seed.byteLength;
+        final originals = {
+          for (final file in storedPreviews())
+            file.readAsBytesSync().last: file,
+        };
+        for (var index = 0; index < 5; index++) {
+          await originals[10 + index]!.setLastModified(
+            DateTime.utc(2020, 1, 1, 0, index),
+          );
+        }
+        final eligible = originals[14]!;
+        final deleteStarted = Completer<void>();
+        final releaseDelete = Completer<void>();
+        final deleted = <String>[];
+        final cache = open(
+          maximumBytes: budget,
+          touchFile: (_, _) async {},
+          deleteFile: (file) async {
+            deleted.add(p.normalize(file.path));
+            if (!deleteStarted.isCompleted) deleteStarted.complete();
+            await releaseDelete.future;
+            await file.delete();
+          },
+        );
+        await cache.read(accountId: account, uri: uriFor(99));
+
+        final entered = List.generate(
+          replacementCount,
+          (_) => Completer<void>(),
+        );
+        final release = List.generate(
+          replacementCount,
+          (_) => Completer<void>(),
+        );
+        final replacements = [
+          for (var index = 0; index < replacementCount; index++)
+            _writeObservedPreview(
+              cache,
+              account: account,
+              uri: uris[index],
+              image: image(10, 20 + index),
+              rename: (file, destination) async {
+                entered[index].complete();
+                await release[index].future;
+                return file.rename(destination);
+              },
+            ),
+        ];
+        Future<void>? writing;
+        try {
+          await Future.wait(
+            entered.map((event) => event.future),
+          ).timeout(deadline);
+          final staged = Completer<void>();
+          var finished = false;
+          final incoming = _writeObservedPreview(
+            cache,
+            account: incomingAccount,
+            uri: uris[5],
+            image: image(10, 30),
+            rename: (file, destination) => file.rename(destination),
+            afterCleanup: staged.complete,
+          ).then<void>((_) => finished = true);
+          writing = incoming;
+          await staged.future.timeout(deadline);
+
+          if (enoughSpace) {
+            await deleteStarted.future.timeout(deadline);
+            expect(deleted, [p.normalize(eligible.path)]);
+            expect(eligible.existsSync(), isTrue);
+            expect(finished, isFalse);
+            releaseDelete.complete();
+            await incoming.timeout(deadline);
+            expect(cache.byteLength, budget);
+            expect(eligible.existsSync(), isFalse);
+          } else {
+            expect(deleted, isEmpty);
+            expect(cache.byteLength, budget + previewBytes);
+            expect(finished, isFalse);
+            // The first replacement shrinks enough to make deletion unnecessary.
+            release.first.complete();
+            await replacements.first.timeout(deadline);
+          }
+        } finally {
+          if (!releaseDelete.isCompleted) releaseDelete.complete();
+          for (final gate in release) {
+            if (!gate.isCompleted) gate.complete();
+          }
+          await Future.wait([...replacements, ?writing]).timeout(deadline);
+        }
+
+        final reopened = open(maximumBytes: budget, touchFile: (_, _) async {});
+        for (var index = 0; index < replacementCount; index++) {
+          final replacement = await reopened.read(
+            accountId: account,
+            uri: uris[index],
+          );
+          expect(replacement?.body.last, 20 + index);
+        }
+        final incoming = await reopened.read(
+          accountId: incomingAccount,
+          uri: uris[5],
+        );
+        final remaining = await reopened.read(
+          accountId: otherAccount,
+          uri: uris[4],
+        );
+        expect(incoming?.body.last, 30);
+        expect(remaining?.body.last, enoughSpace ? null : 14);
+        expect(deleted, enoughSpace ? [p.normalize(eligible.path)] : isEmpty);
+        expect(cache.byteLength, budget);
+        expect(reopened.byteLength, budget);
+        expect(storedPreviews(), hasLength(enoughSpace ? 5 : 6));
+      },
+    );
+  }
 }
 
 Future<void> _writeObservedPreview(
@@ -392,6 +535,7 @@ Future<void> _writeObservedPreview(
   required ChatMediaImage image,
   required Future<File> Function(File file, String destination) rename,
   void Function()? afterClose,
+  void Function()? afterCleanup,
 }) {
   final nativeFiles = _NativeFiles();
   return IOOverrides.runZoned(
@@ -406,6 +550,14 @@ Future<void> _writeObservedPreview(
             : (mode) async =>
                   _PreviewOutput(await file.open(mode: mode), afterClose),
         renameFile: (destination) => rename(file, destination),
+        fileExists: afterCleanup == null
+            ? null
+            : () async {
+                final exists = await file.exists();
+                // Let the writer resume into pruning before observing it.
+                if (!exists) Timer.run(afterCleanup);
+                return exists;
+              },
       );
     },
   );

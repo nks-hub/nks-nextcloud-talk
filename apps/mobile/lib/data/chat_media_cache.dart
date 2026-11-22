@@ -425,9 +425,9 @@ final class ChatMediaDiskCache {
       () => <Future<void>>{},
     );
     pending.add(settled.future);
-    final bool stored;
+    final String? publishedPath;
     try {
-      stored = await _store(
+      publishedPath = await _store(
         accountId: accountId,
         uri: uri,
         body: image.body,
@@ -440,10 +440,12 @@ final class ChatMediaDiskCache {
       settled.complete();
     }
 
-    if (stored) await _prune();
+    if (publishedPath != null) {
+      await _prune(publishedPath: publishedPath);
+    }
   }
 
-  Future<bool> _store({
+  Future<String?> _store({
     required String accountId,
     required Uri uri,
     required Uint8List body,
@@ -454,7 +456,7 @@ final class ChatMediaDiskCache {
     try {
       root = await _open(waitForInitialPrune: false);
     } on FileSystemException {
-      return false;
+      return null;
     }
     final file = File(_pathFor(root, accountId: accountId, uri: uri));
     final temporary = File('${file.path}.part-${_temporaryFileNonce++}');
@@ -485,7 +487,7 @@ final class ChatMediaDiskCache {
         }
       });
     } on FileSystemException {
-      return false;
+      return null;
     } finally {
       try {
         await output?.close();
@@ -500,7 +502,7 @@ final class ChatMediaDiskCache {
         // A later scan removes any incomplete file left by a stopped process.
       }
     }
-    return true;
+    return file.path;
   }
 
   /// Drops an account's disk previews after its admitted writes settle.
@@ -584,18 +586,45 @@ final class ChatMediaDiskCache {
     return root;
   }
 
-  Future<void> _prune() async {
+  Future<void> _prune({String? publishedPath}) async {
     if (_bytes <= maximumBytes) {
       return;
     }
-    // ponytail: full sort of the in-memory index, which holds a few hundred
-    // previews at this bound. A heap is worth it only if the bound grows a lot.
-    final candidates = _index.entries.toList()
-      ..sort((a, b) => a.value.touchedAt.compareTo(b.value.touchedAt));
+    var candidates = _oldestFirst();
+    final published = _index[publishedPath];
+    if (published != null && _pendingMutations.isNotEmpty) {
+      final ready = <MapEntry<String, _ChatMediaDiskEntry>>[];
+      var readyBytes = 0;
+      for (final entry in candidates) {
+        if (!entry.value.touchedAt.isBefore(published.touchedAt)) break;
+        if (_pendingMutations.containsKey(entry.key)) continue;
+        ready.add(entry);
+        readyBytes += entry.value.bytes;
+      }
+      // Use idle older paths when they can cover the entire excess.
+      if (readyBytes >= _bytes - maximumBytes) {
+        await _pruneCandidates(ready, skipPending: true);
+        if (_bytes <= maximumBytes) return;
+        candidates = _oldestFirst();
+      }
+    }
+    await _pruneCandidates(candidates);
+  }
+
+  // The cache holds a few hundred entries at its current bound.
+  List<MapEntry<String, _ChatMediaDiskEntry>> _oldestFirst() =>
+      _index.entries.toList()
+        ..sort((a, b) => a.value.touchedAt.compareTo(b.value.touchedAt));
+
+  Future<void> _pruneCandidates(
+    List<MapEntry<String, _ChatMediaDiskEntry>> candidates, {
+    bool skipPending = false,
+  }) async {
     var nextCandidate = 0;
     Future<void> deleteNext() async {
       while (_bytes > maximumBytes && nextCandidate < candidates.length) {
         final entry = candidates[nextCandidate++];
+        if (skipPending && _pendingMutations.containsKey(entry.key)) continue;
         await _delete(
           entry.key,
           shouldDelete: () =>
