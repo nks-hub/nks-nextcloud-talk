@@ -510,6 +510,113 @@ extension _MediaDisposalTests on _MediaSessionTests {
       );
     }
 
+    for (final failCreation in [false, true]) {
+      final failure = failCreation ? 'connection creation' : 'SDP';
+      test(
+        'failed MCU subscriber replacement $failure leaves the incoming screen active',
+        () => _withCapturedTimers(const Duration(seconds: 10), (timers) async {
+          final media = session(_mcuScreenUpdate(), withControl: true);
+          addTearDown(media.dispose);
+          await media.start();
+          updates.add(
+            _mcuScreenUpdate(
+              messages: [
+                _message(_remote, 'offer', {
+                  'type': 'offer',
+                  'sdp': 'remote-video',
+                }, sid: 'old-subscriber'),
+                _message(
+                  _remote,
+                  'offer',
+                  {'type': 'offer', 'sdp': 'remote-screen'},
+                  sid: 'incoming-screen',
+                  roomType: 'screen',
+                ),
+              ],
+            ),
+          );
+          await media.setMicrophoneMuted(false);
+          final [publisher, subscriber, screen] = engine.connections;
+          final renderer = _FakeRemoteVideo();
+          screen.onRemoteVideo(renderer);
+          screen.emitConnectionState(CallMediaConnectionState.connected);
+          await media.setMicrophoneMuted(false);
+          expect(screen.remoteDescriptions.single.sdp, 'remote-screen');
+          expect(media.state.participants.single.screen, same(renderer));
+
+          sent.clear();
+          subscriber.emitConnectionState(CallMediaConnectionState.failed);
+          await media.setMicrophoneMuted(false);
+          expect(subscriber.closed, isTrue);
+          expect(screen.closed, isFalse);
+          expect(
+            sent.singleWhere((message) => message.type == 'requestoffer').sid,
+            isNot('old-subscriber'),
+          );
+          final oldTimer = timers.singleWhere((entry) => entry.timer.isActive);
+
+          const rejectedSid = 'replacement-subscriber';
+          final replacementOffer = _mcuScreenUpdate(
+            messages: [
+              _message(_remote, 'offer', {
+                'type': 'offer',
+                'sdp': 'rejected-replacement',
+              }, sid: rejectedSid),
+            ],
+          );
+          if (failCreation) {
+            engine.connectionError = CallMediaError.engineFailure;
+          } else {
+            engine.connectionRemoteDescriptionError =
+                CallMediaError.engineFailure;
+          }
+          final opensBefore = engine.connectionCreateStarts;
+          sent.clear();
+          updates.add(replacementOffer);
+          await media.setMicrophoneMuted(false);
+          expect(engine.connectionCreateStarts, opensBefore + 1);
+          expect(engine.connections, hasLength(failCreation ? 3 : 4));
+          if (!failCreation) {
+            final rejectedSubscriber = engine.connections.last;
+            expect(rejectedSubscriber.remoteDescriptions, isEmpty);
+            expect(rejectedSubscriber.closed, isTrue);
+          }
+          expect(publisher.closed, isFalse);
+          expect(
+            (closed: screen.closed, disposed: renderer.disposed),
+            (closed: false, disposed: false),
+          );
+          expect(media.state.participants.single.screen, same(renderer));
+          expect(sent, isEmpty);
+          expect(oldTimer.timer.isActive, isFalse);
+
+          engine.connectionError = null;
+          engine.connectionRemoteDescriptionError = null;
+          updates.add(replacementOffer);
+          await media.setMicrophoneMuted(false);
+          expect(engine.connectionCreateStarts, opensBefore + 1);
+          expect(sent, isEmpty);
+
+          final retry = timers.singleWhere((entry) => entry.timer.isActive);
+          retry.expire();
+          await media.setMicrophoneMuted(false);
+          final request = sent.single;
+          expect(request.type, 'requestoffer');
+          expect(request.roomType, 'video');
+          expect(request.recipient?.value, _remote);
+          expect(request.sid, isNotNull);
+          expect(request.sid, isNot(rejectedSid));
+          expect(request.sid, isNot('old-subscriber'));
+
+          updates.add(_mcuScreenUpdate(peers: const []));
+          await media.setMicrophoneMuted(false);
+          expect(screen.closed, isTrue);
+          expect(renderer.disposed, isTrue);
+          expect(retry.timer.isActive, isFalse);
+        }, includePeriodic: true),
+      );
+    }
+
     test('dispose closes an incoming screen without a call peer', () async {
       engine.audioConnectionError = CallMediaError.engineFailure;
       final media = session(

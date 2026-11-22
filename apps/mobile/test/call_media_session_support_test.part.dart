@@ -4,8 +4,9 @@ typedef _CapturedTimer = ({Timer timer, VoidCallback expire});
 
 Future<void> _withCapturedTimers(
   Duration delay,
-  Future<void> Function(List<_CapturedTimer>) testBody,
-) {
+  Future<void> Function(List<_CapturedTimer>) testBody, {
+  bool includePeriodic = false,
+}) {
   final timers = <_CapturedTimer>[];
   return runZoned(
     () => testBody(timers),
@@ -19,6 +20,18 @@ Future<void> _withCapturedTimers(
               if (!timer.isActive) return;
               timer.cancel();
               callback();
+            },
+          ));
+        }
+        return timer;
+      },
+      createPeriodicTimer: (self, parent, zone, duration, callback) {
+        final timer = parent.createPeriodicTimer(zone, duration, callback);
+        if (includePeriodic && duration == delay) {
+          timers.add((
+            timer: timer,
+            expire: () {
+              if (timer.isActive) callback(timer);
             },
           ));
         }
@@ -102,6 +115,7 @@ final class _FakeInterruptions implements CallAudioInterruptions {
 final class _FakeEngine implements CallMediaEngine {
   int microphoneOpens = 0;
   CallMediaError? connectionError;
+  CallMediaError? connectionRemoteDescriptionError;
   CallMediaError? audioConnectionError;
   CallMediaError? microphoneError;
   Completer<void>? microphoneStartup;
@@ -202,7 +216,7 @@ final class _FakeEngine implements CallMediaEngine {
         await beforeSetLocalVideo?.call();
       },
       beforeCreateOffer: beforeCreateOffer,
-    );
+    )..remoteDescriptionError = connectionRemoteDescriptionError;
     connections.add(connection);
     return connection;
   }

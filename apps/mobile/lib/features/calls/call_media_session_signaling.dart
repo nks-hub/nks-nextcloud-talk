@@ -100,22 +100,28 @@ extension _CallMediaSessionSignaling on CallMediaSession {
   /// then takes; until it does, the request is repeated every ten seconds,
   /// the way the web client does, because a participant who has not
   /// published yet is simply not there to be offered.
-  Future<void> _subscribe(String peerId) async {
+  Future<void> _subscribe(String peerId, {bool deferRequest = false}) async {
     if (_disposed || _peers.containsKey(peerId)) {
       return;
     }
-    _peers[peerId] = _MediaPeer(peerId, roomEpoch: _boundRoomEpoch!);
-    await _requestOffer(peerId);
-    if (_disposed) return;
+    final peer = _MediaPeer(peerId, roomEpoch: _boundRoomEpoch!);
+    _peers[peerId] = peer;
+    if (!deferRequest) {
+      await _requestOffer(peerId);
+      if (_disposed) return;
+    }
     _offerRequests[peerId]?.cancel();
     _offerRequests[peerId] = Timer.periodic(
       CallMediaSession._mcuOfferRetryDelay,
-      (_) {
+      (timer) {
         unawaited(
           _enqueue(() async {
-            final peer = _peers[peerId];
-            if (_disposed || peer == null || peer.connection != null) {
-              _offerRequests.remove(peerId)?.cancel();
+            if (!identical(_offerRequests[peerId], timer)) return;
+            if (_disposed ||
+                !identical(_peers[peerId], peer) ||
+                peer.connection != null) {
+              _offerRequests.remove(peerId);
+              timer.cancel();
               return;
             }
             await _requestOffer(peerId);
@@ -123,6 +129,19 @@ extension _CallMediaSessionSignaling on CallMediaSession {
         );
       },
     );
+  }
+
+  Future<void> _recoverMcuSubscriber(
+    _MediaPeer peer, {
+    bool deferRequest = false,
+  }) async {
+    final peerId = peer.peerId;
+    if (_disposed || !identical(_peers[peerId], peer)) return;
+    (_retiredSubscriberSids[peerId] ??= {}).add(peer.sid);
+    _offerRequests.remove(peerId)?.cancel();
+    _peers.remove(peerId);
+    await _closeMediaPeer('MCU subscriber', peer, CallResourceCleanup());
+    await _subscribe(peerId, deferRequest: deferRequest);
   }
 
   /// Asks the MCU for a participant's stream.
@@ -437,7 +456,12 @@ extension _CallMediaSessionSignaling on CallMediaSession {
         payload: _sdpPayload(answer),
       );
     } on CallMediaException {
-      await _closePeer(senderId);
+      if (_mcu) {
+        // Repeated rejected offers must wait for the normal request timer.
+        await _recoverMcuSubscriber(peer, deferRequest: true);
+      } else {
+        await _closePeer(senderId);
+      }
     }
   }
 
@@ -587,10 +611,7 @@ extension _CallMediaSessionSignaling on CallMediaSession {
       if (_mcu) {
         // HPB treats an offer as a publication, including a recv-only offer.
         // A subscriber must request a new server offer instead.
-        (_retiredSubscriberSids[peer.peerId] ??= {}).add(peer.sid);
-        _peers.remove(peer.peerId);
-        await _closeMediaPeer('MCU subscriber', peer, CallResourceCleanup());
-        await _subscribe(peer.peerId);
+        await _recoverMcuSubscriber(peer);
       } else {
         await _offer(peer, iceRestart: true);
       }

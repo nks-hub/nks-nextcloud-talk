@@ -503,7 +503,11 @@ final class CallMediaSession {
       peer.connection = connection;
       return _disposed ? null : connection;
     } on CallMediaException {
-      await _closePeer(peer.peerId);
+      if (_mcu) {
+        await _recoverMcuSubscriber(peer, deferRequest: true);
+      } else {
+        await _closePeer(peer.peerId);
+      }
       return null;
     }
   }
