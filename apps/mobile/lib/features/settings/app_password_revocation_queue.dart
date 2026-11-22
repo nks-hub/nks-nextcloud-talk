@@ -1,5 +1,6 @@
 // ignore_for_file: prefer_initializing_formals
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:talk_protocol/talk_protocol.dart';
@@ -490,6 +491,7 @@ final class AppPasswordRevocationQueue {
     } on TalkProtocolException {
       return false;
     }
+    final abort = Completer<void>();
     HttpNextcloudApi? pinnedApi;
     try {
       final fingerprint = entry.certificateFingerprint;
@@ -506,9 +508,13 @@ final class AppPasswordRevocationQueue {
         server: server,
         loginName: entry.loginName,
         appPassword: entry.appPassword,
+        abortTrigger: abort.future,
       );
       return true;
     } on NextcloudApiException catch (error) {
+      if (error.code == NextcloudApiError.timeout) {
+        abort.complete();
+      }
       return error.statusCode == 401;
     } on Object {
       return false;

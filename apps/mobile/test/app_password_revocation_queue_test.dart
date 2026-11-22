@@ -73,6 +73,50 @@ void main() {
     },
   );
 
+  test('a timed-out revocation aborts its request and is retried', () async {
+    final stalled = Completer<http.StreamedResponse>();
+    var requests = 0;
+    var aborted = false;
+    final api = HttpNextcloudApi(
+      requestTimeout: const Duration(milliseconds: 20),
+      client: MockClient.streaming((request, _) async {
+        if (++requests > 1) {
+          return http.StreamedResponse(const Stream.empty(), 401);
+        }
+        if (request case http.AbortableRequest(:final abortTrigger?)) {
+          unawaited(
+            abortTrigger.then((_) {
+              aborted = true;
+              stalled.completeError(http.RequestAbortedException(request.url));
+            }),
+          );
+        }
+        return stalled.future;
+      }),
+    );
+    addTearDown(() {
+      if (!stalled.isCompleted) {
+        stalled.complete(http.StreamedResponse(const Stream.empty(), 503));
+      }
+      api.close();
+    });
+    final q = AppPasswordRevocationQueue(store: vault, api: api);
+    await q.record(
+      server: server,
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+
+    await q.drain();
+    expect(aborted, isTrue);
+    expect(await q.pendingCount(), 1);
+    expect(vault.pendingRevocations, contains('"attempts":1'));
+
+    await q.drain();
+    expect(requests, 2);
+    expect(await q.pendingCount(), 0);
+  });
+
   test('a drain revokes at most three passwords concurrently', () async {
     const entryCount = AppPasswordRevocationQueue.maximumEntries;
     final gates = <Completer<void>>[];
