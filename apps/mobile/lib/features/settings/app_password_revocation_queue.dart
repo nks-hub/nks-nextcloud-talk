@@ -19,7 +19,8 @@ part 'app_password_browser_recovery.dart';
 /// first stores a reservation, then atomically replaces it with either a held
 /// credential or a pending revocation. Held credentials are ignored by
 /// [drain] while onboarding commits their account. Entries leave the queue
-/// only after a successful request, a `401`, or a safe owner handoff.
+/// only after a successful request, a `401`, a safe owner handoff, or once a
+/// revocation failed [maximumAttempts] times and is older than [maximumAge].
 final class AppPasswordRevocationQueue {
   AppPasswordRevocationQueue({
     required PendingRevocationStore store,
@@ -36,6 +37,11 @@ final class AppPasswordRevocationQueue {
        _reservationId = reservationId ?? const Uuid().v4;
 
   static const maximumEntries = 5;
+
+  /// A failing revocation is given up only once both limits are reached, so
+  /// an outage keeps it while a server gone for good cannot fill the queue.
+  static const maximumAttempts = 20;
+  static const maximumAge = Duration(days: 14);
   static const _drainConcurrency = 3;
   static final _localClaims = Expando<Map<String, String>>();
 
@@ -384,10 +390,11 @@ final class AppPasswordRevocationQueue {
         final entry = revocations[nextEntry++];
         if (entry.fromBrowserLogin) {
           await _attemptBrowserRevocation(entry);
+        } else if (await _revoked(entry)) {
+          outcomes[entry.identity] = null;
         } else {
-          outcomes[entry.identity] = await _revoked(entry)
-              ? null
-              : entry.afterAttempt();
+          final next = entry.afterAttempt();
+          outcomes[entry.identity] = _givenUp(next) ? null : next;
         }
       }
     }
@@ -544,6 +551,10 @@ final class AppPasswordRevocationQueue {
       pinnedApi?.close();
     }
   }
+
+  bool _givenUp(_RevocationEntry entry) =>
+      entry.attempts >= maximumAttempts &&
+      _now().difference(entry.since) >= maximumAge;
 
   Future<List<_QueueEntry>> _load() async =>
       _decode(await _store.readPendingRevocations());

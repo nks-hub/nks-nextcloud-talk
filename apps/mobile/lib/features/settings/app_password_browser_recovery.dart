@@ -287,7 +287,7 @@ extension BrowserLoginRecovery on AppPasswordRevocationQueue {
       // credential out of onboarding until the pending attempt is resolved.
       final dispatched = entry.afterAttempt();
       if (await _replaceBrowserRevocation(entry, dispatched) &&
-          await _revoked(dispatched)) {
+          (await _revoked(dispatched) || _givenUp(dispatched))) {
         await _replaceBrowserRevocation(dispatched, null);
       }
     } on Object {

@@ -338,12 +338,12 @@ void main() {
     );
     expect(vault.pendingRevocations, contains('"attempts":25'));
 
-    clock = clock.add(const Duration(days: 30));
+    clock = clock.add(const Duration(days: 13));
     await q.drain();
     expect(
       await q.pendingCount(),
       AppPasswordRevocationQueue.maximumEntries,
-      reason: 'age does not prove that a server password was revoked',
+      reason: 'two weeks of failures are kept even after many attempts',
     );
 
     reachable = true;
@@ -351,6 +351,45 @@ void main() {
     expect(await q.pendingCount(), 0);
     await q.record(server: server, loginName: 'me', appPassword: 'pw5');
     expect(await q.pendingCount(), 1);
+  });
+
+  test('revocations a gone server keeps failing stop blocking the queue '
+      'once they are both old and retried', () async {
+    final q = queue(
+      MockClient((request) async => throw const SocketException('gone')),
+    );
+    for (
+      var index = 0;
+      index < AppPasswordRevocationQueue.maximumEntries;
+      index++
+    ) {
+      await q.record(server: server, loginName: 'me', appPassword: 'pw$index');
+    }
+    await expectLater(
+      q.reserve(),
+      throwsA(isA<AppPasswordRevocationQueueFull>()),
+    );
+
+    clock = clock.add(const Duration(days: 30));
+    await q.drain();
+    expect(
+      await q.pendingCount(),
+      AppPasswordRevocationQueue.maximumEntries,
+      reason: 'one failed attempt after a month is not enough to give up',
+    );
+
+    for (
+      var attempt = 1;
+      attempt < AppPasswordRevocationQueue.maximumAttempts;
+      attempt++
+    ) {
+      await q.drain();
+    }
+    expect(await q.pendingCount(), 0);
+    expect(vault.pendingRevocations, isNull);
+    await q.record(server: server, loginName: 'me', appPassword: 'pw5');
+    await q.reserve();
+    expect(await q.pendingCount(), 2);
   });
 
   test('reservations occupy capacity and resolve in place when full', () async {

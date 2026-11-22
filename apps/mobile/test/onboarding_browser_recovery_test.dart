@@ -423,6 +423,32 @@ void main() {
     },
   );
 
+  test('a browser revocation a gone server keeps failing is given up only '
+      'once it is both old and retried', () async {
+    final f = _RecoveryFixture();
+    addTearDown(f.close);
+    await f.queueLateBrowserCredential();
+    f.onRevoke = () async => throw const SocketException('gone');
+    for (
+      var attempt = 0;
+      attempt < AppPasswordRevocationQueue.maximumAttempts + 5;
+      attempt++
+    ) {
+      await f.queue.drain();
+    }
+    expect(
+      await f.queue.pendingRevocationCount(),
+      1,
+      reason: 'many failures within a short outage keep the revocation',
+    );
+
+    f.now = f.now.add(AppPasswordRevocationQueue.maximumAge);
+    await f.queue.drain();
+    expect(await f.queue.pendingRevocationCount(), 0);
+    expect(f.revokes, AppPasswordRevocationQueue.maximumAttempts + 6);
+    expect(f.vault.pendingRevocations, isNull);
+  });
+
   for (final cancel in [true, false]) {
     test('adopted browser credential remains recoverable after '
         '${cancel ? 'cancel' : 'database write failure'}', () async {
