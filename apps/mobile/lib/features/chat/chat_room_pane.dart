@@ -207,6 +207,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   bool _silentSend = false;
   OwnTalkAppearanceMarkerWatch _appearanceMarkers =
       OwnTalkAppearanceMarkerWatch();
+  final Set<int> _fileSharesChecked = <int>{};
   final Object _typingSource = Object();
   ChatTypingRoomKey? _activeTypingKey;
   bool _typingCanPost = false;
@@ -403,6 +404,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _emojiPickerPending = false;
     _incomingAnnouncements.reset();
     _appearanceMarkers = OwnTalkAppearanceMarkerWatch();
+    _fileSharesChecked.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_restoreDraft(_key));
       unawaited(_restartLiveSync(roomChanged: true));
@@ -730,6 +732,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final interactionKey = _key;
     final messagesValue = ref.watch(chatMessagesProvider(_key));
     _refreshOnAppearanceMarkers(messagesValue.valueOrNull);
+    _refreshUnresolvedFileShares(messagesValue.valueOrNull);
     final operationsValue = ref.watch(textSendOperationsProvider(_key));
     final attachmentJobs =
         ref.watch(attachmentRoomJobsProvider(_key)).asData?.value ??

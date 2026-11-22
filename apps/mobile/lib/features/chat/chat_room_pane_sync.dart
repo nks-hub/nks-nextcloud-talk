@@ -882,6 +882,49 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     return widget.conversation;
   }
 
+  /// Re-reads, once per row while this room shows it, a file share the server
+  /// rendered before it could resolve the share for this reader.
+  ///
+  /// The cursors never read a cached id again, so that stand-in stayed for
+  /// good. Seen on Talk 35 (2026-11-22): the recipient got "shared a file
+  /// which is no longer available" 3 s after the send, and a later read of the
+  /// same id returned the file. One still unresolved waits for the next
+  /// opening of the room.
+  void _refreshUnresolvedFileShares(List<CachedChatMessage>? messages) {
+    if (messages == null) {
+      return;
+    }
+    final stale = [
+      for (final message in messages)
+        if (_fileSharesChecked.add(message.messageId) &&
+            _isUnresolvedFileShare(message))
+          message.messageId,
+    ];
+    if (stale.isEmpty) {
+      return;
+    }
+    final accountId = widget.account.id;
+    final roomToken = widget.conversation.token;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      for (final messageId in stale) {
+        if (!mounted) {
+          return;
+        }
+        try {
+          await ref
+              .read(chatServiceProvider)
+              .refreshMessage(
+                accountId: accountId,
+                roomToken: roomToken,
+                messageId: messageId,
+              );
+        } on Object {
+          // Offline or refused: the next opening of the room asks again.
+        }
+      }
+    });
+  }
+
   bool _isReadOnlyNow() => _readLiveConversation().readOnly != 0;
 
   bool _isCurrentJump(ChatRoomProviderKey key, int generation) =>
@@ -909,5 +952,26 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       ChatServiceError.serviceUnavailable ||
       ChatServiceError.network => false,
     };
+  }
+}
+
+/// Talk's stand-in for a file share it cannot resolve: a comment that still
+/// names the sharing `{actor}` but carries neither `{file}` nor `{object}`.
+bool _isUnresolvedFileShare(CachedChatMessage message) {
+  if (message.deleted ||
+      message.messageType != 'comment' ||
+      message.systemMessage.isNotEmpty ||
+      !message.rawJson.contains('"actor":')) {
+    return false;
+  }
+  try {
+    final parameters = ChatMessage.fromJson(
+      jsonDecode(message.rawJson),
+    ).messageParameters;
+    return parameters.containsKey('actor') &&
+        !parameters.containsKey('file') &&
+        !parameters.containsKey('object');
+  } on Object {
+    return false;
   }
 }
