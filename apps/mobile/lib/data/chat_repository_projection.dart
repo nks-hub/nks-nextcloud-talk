@@ -646,10 +646,11 @@ extension _ChatRepositoryProjection on ChatRepository {
     final pendingMessageKeys = <_ChatMessageKey>{};
     final pendingThreadRootUpdates =
         <_ChatMessageKey, CachedChatMessagesCompanion>{};
-    final pendingMutations = <_ChatMessageKey, ChatMessage>{};
+    final pendingMutations = <_ChatMessageKey, _ParentMutation>{};
+    final lastReplacementPositions = <_ChatMessageKey, int>{};
     final pendingMutationTargetUpdates =
         <_ChatMessageKey, CachedChatMessagesCompanion>{};
-    for (final message in messageList) {
+    for (final (position, message) in messageList.indexed) {
       final messageKey = (
         roomToken: message.roomToken.value,
         messageId: message.messageId,
@@ -706,8 +707,15 @@ extension _ChatRepositoryProjection on ChatRepository {
           roomToken: mutation.message.roomToken.value,
           messageId: mutation.message.messageId,
         );
-        pendingMutations[key] = mutation.message;
+        pendingMutations[key] = (message: mutation.message, position: position);
         pendingMutationTargetUpdates[key] = mutation.companion;
+        lastReplacementPositions[key] = position;
+      }
+      if (pendingMutations.isNotEmpty) {
+        lastReplacementPositions[messageKey] = position;
+        if (threadRootUpdate != null) {
+          lastReplacementPositions[threadRootUpdate.key] = position;
+        }
       }
       _forgetChangedReactionTargets(reactionMessages, message);
       final prepared = _prepareMessage(account, message);
@@ -731,7 +739,8 @@ extension _ChatRepositoryProjection on ChatRepository {
     );
     await _projectMutationsIntoCachedParents(
       accountId: accountId,
-      messages: pendingMutations.values,
+      mutations: pendingMutations.values,
+      lastReplacementPositions: lastReplacementPositions,
     );
     await _persistConversationPreviews(
       accountId: accountId,

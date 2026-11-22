@@ -158,6 +158,62 @@ void main() {
     expect((parent! as ChatFullParent).message.message, 'Second edit');
   });
 
+  test(
+    'a later quote in the same page keeps the parent it arrived with',
+    () async {
+      final original = _messageWire(id: 20, message: 'Original');
+      final cachedQuote = _messageWire(id: 21, message: 'Cached quote')
+        ..['parent'] = original;
+      await database.batch((batch) {
+        batch
+          ..insert(database.cachedChatMessages, _messageCompanion(original))
+          ..insert(database.cachedChatMessages, _messageCompanion(cachedQuote));
+      });
+      writes.enabled = true;
+
+      expect(
+        await repository.applyChatGetResponse(
+          _futureResponse(
+            requestId: 'ordered-quote-projection',
+            lastGiven: 41,
+            messages: [
+              _messageWire(id: 30, message: '{actor} edited a message')
+                ..['systemMessage'] = 'message_edited'
+                ..['messageType'] = 'system'
+                ..['parent'] = _messageWire(id: 20, message: 'First edit'),
+              _messageWire(id: 31, message: 'Quote between edits')
+                ..['parent'] = _messageWire(id: 20, message: 'Newer snapshot'),
+              _messageWire(id: 40, message: '{actor} edited a message')
+                ..['systemMessage'] = 'message_edited'
+                ..['messageType'] = 'system'
+                ..['parent'] = _messageWire(id: 20, message: 'Second edit'),
+              _messageWire(id: 41, message: 'Quote after both edits')
+                ..['parent'] = _messageWire(id: 20, message: 'Latest snapshot'),
+            ],
+          ),
+        ),
+        ChatMergeOutcome.applied,
+      );
+
+      expect(writes.mutationProjectionSelects, 1);
+      expect(writes.directParentUpdates, 0);
+      final rows = await (database.select(
+        database.cachedChatMessages,
+      )..where((row) => row.messageId.isIn([21, 31, 41]))).get();
+      final parents = <int, String>{};
+      for (final row in rows) {
+        final message = ChatMessage.fromJson(jsonDecode(row.rawJson));
+        parents[row.messageId] =
+            (message.parent as ChatFullParent).message.message;
+      }
+      expect(parents, {
+        21: 'Second edit',
+        31: 'Second edit',
+        41: 'Latest snapshot',
+      });
+    },
+  );
+
   test('a mutation reaches a quote whose original is not cached', () async {
     final original = _messageWire(id: 5000, message: 'Original');
     final quote = _messageWire(id: 5001, message: 'Quote')

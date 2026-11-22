@@ -1,5 +1,7 @@
 part of 'chat_repository.dart';
 
+typedef _ParentMutation = ({ChatMessage message, int position});
+
 extension _ChatRepositoryMutations on ChatRepository {
   Future<void> _flushMutationTargetUpdates({
     required String accountId,
@@ -66,18 +68,22 @@ extension _ChatRepositoryMutations on ChatRepository {
     required ChatMessage message,
   }) => _projectMutationsIntoCachedParents(
     accountId: accountId,
-    messages: <ChatMessage>[message],
+    mutations: [(message: message, position: 0)],
   );
 
   Future<void> _projectMutationsIntoCachedParents({
     required String accountId,
-    required Iterable<ChatMessage> messages,
+    required Iterable<_ParentMutation> mutations,
+    Map<_ChatMessageKey, int> lastReplacementPositions = const {},
   }) async {
-    final mutationsByRoom = <String, Map<int, ChatMessage>>{};
-    for (final message in messages) {
-      (mutationsByRoom[message.roomToken.value] ??=
-              <int, ChatMessage>{})[message.messageId] =
-          message;
+    final mutationsByRoom = <String, Map<int, _ParentMutation>>{};
+    for (final mutation in mutations) {
+      final message = mutation.message;
+      final roomMutations = mutationsByRoom.putIfAbsent(
+        message.roomToken.value,
+        () => {},
+      );
+      roomMutations[message.messageId] = mutation;
     }
     if (mutationsByRoom.isEmpty) {
       return;
@@ -97,7 +103,7 @@ extension _ChatRepositoryMutations on ChatRepository {
             ? offset + targetChunkSize
             : targetIds.length;
         final chunk = targetIds.sublist(offset, end);
-        final chunkMutations = <int, ChatMessage>{
+        final chunkMutations = <int, _ParentMutation>{
           for (final targetId in chunk) targetId: mutations[targetId]!,
         };
         final minimumTargetId = chunk.reduce(
@@ -135,10 +141,20 @@ extension _ChatRepositoryMutations on ChatRepository {
             continue;
           }
           final mutation = chunkMutations[parent.messageId];
-          if (mutation == null) {
+          final replacementPosition =
+              lastReplacementPositions[(
+                roomToken: roomToken,
+                messageId: row.messageId,
+              )];
+          // A later full row brought its own parent snapshot.
+          if (mutation == null ||
+              (replacementPosition != null &&
+                  replacementPosition >= mutation.position)) {
             continue;
           }
-          final updated = cached.replaceParentMessageIfMatching(mutation);
+          final updated = cached.replaceParentMessageIfMatching(
+            mutation.message,
+          );
           if (identical(updated, cached)) {
             continue;
           }
