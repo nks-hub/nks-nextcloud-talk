@@ -126,8 +126,8 @@ void main() {
     }
 
     // 1400 wide viewport, so the touch width is the >= 1100 variant.
-    expect(await metrics(TargetPlatform.android), [80, 24, 72, 72, 56, 390]);
-    expect(await metrics(TargetPlatform.iOS), [80, 24, 72, 72, 56, 390]);
+    expect(await metrics(TargetPlatform.android), [80, 28, 72, 72, 56, 390]);
+    expect(await metrics(TargetPlatform.iOS), [80, 28, 72, 72, 56, 390]);
     for (final platform in const [
       TargetPlatform.windows,
       TargetPlatform.macOS,

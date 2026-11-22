@@ -468,9 +468,33 @@ final class _ConversationTile extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        ConversationAvatar(
-                          account: account,
-                          conversation: conversation,
+                        // The presence mark sits on the avatar's corner, ringed
+                        // in the row colour so it reads against any picture.
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            ConversationAvatar(
+                              account: account,
+                              conversation: conversation,
+                            ),
+                            if (presence != null)
+                              Positioned(
+                                right: -2,
+                                bottom: -2,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: scheme.surface,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(2),
+                                    child: ConversationPresenceBadge(
+                                      conversation: conversation,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -527,12 +551,6 @@ final class _ConversationTile extends StatelessWidget {
                                               ),
                                         ),
                                       ),
-                                      if (presence != null) ...[
-                                        const SizedBox(width: 7),
-                                        ConversationPresenceBadge(
-                                          conversation: conversation,
-                                        ),
-                                      ],
                                       const SizedBox(width: 8),
                                       // At 200 % text an absolute date is wider
                                       // than the 240 dp the list may be dragged

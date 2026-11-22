@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/core/tonal_state_icon.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/features/conversations/conversation_avatar_widget.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_list_actions.dart';
 
 import 'test_support.dart';
@@ -79,6 +80,23 @@ void main() {
       await pump(tester, rows, width: 357, locale: locale);
       expect(labelSize(), 14, reason: '341 dp bar, $locale');
     }
+  });
+
+  testWidgets('the presence mark sits on the avatar corner, not in the title', (
+    tester,
+  ) async {
+    await pump(tester, [
+      _conversation('room-a', 'Synthetic peer', status: 'away', type: 1),
+    ]);
+
+    final avatar = tester.getRect(find.byType(ConversationAvatar));
+    final badge = tester.getRect(
+      find.byKey(const Key('conversation-presence-badge-room-a')),
+    );
+    expect(avatar.width, 56, reason: 'large round avatar on touch');
+    expect(badge.center.dx, greaterThan(avatar.center.dx));
+    expect(badge.center.dy, greaterThan(avatar.center.dy));
+    expect(badge.right, lessThanOrEqualTo(avatar.right + 4));
   });
 
   testWidgets('rows are separated by space, not by divider lines', (
