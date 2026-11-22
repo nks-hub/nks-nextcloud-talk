@@ -20,6 +20,7 @@ final class _MessageBubble extends StatelessWidget {
     required this.onReactionTap,
     required this.deliveryState,
     this.content,
+    this.isThreadRoot = false,
   });
 
   final StoredAccount account;
@@ -48,6 +49,10 @@ final class _MessageBubble extends StatelessWidget {
   onReactionTap;
   final OutgoingMessageDeliveryState? deliveryState;
   final Widget? content;
+
+  /// The message a thread opened on. It gets an outline so it stands apart
+  /// from the replies below it.
+  final bool isThreadRoot;
 
   @override
   Widget build(BuildContext context) {
@@ -193,6 +198,8 @@ final class _MessageBubble extends StatelessWidget {
                               ),
                               border: highlighted
                                   ? Border.all(color: scheme.tertiary, width: 2)
+                                  : isThreadRoot
+                                  ? Border.all(color: scheme.outlineVariant)
                                   : null,
                             ),
                             child: Padding(

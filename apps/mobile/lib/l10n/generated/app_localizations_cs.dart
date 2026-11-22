@@ -533,6 +533,9 @@ class AppLocalizationsCs extends AppLocalizations {
   }
 
   @override
+  String get threadNoReplies => 'Zatím bez odpovědí';
+
+  @override
   String get openThread => 'Otevřít vlákno';
 
   @override

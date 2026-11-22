@@ -107,6 +107,105 @@ void _registerChatRoomPaneThreadContextTests() {
       await tester.pump(const Duration(milliseconds: 1));
     });
 
+    for (final replyCount in [0, 2]) {
+      testWidgets('a thread with $replyCount replies is closed off under its '
+          'root and names its room', (tester) async {
+        const rootId = 81;
+        await _insertCachedMessage(
+          database,
+          _messageJson(
+            id: rootId,
+            actorId: 'thread-author',
+            actorDisplayName: 'Thread author',
+            timestamp: 1724300181,
+            message: 'Root of the thread',
+            threadId: rootId,
+            isThread: true,
+          ),
+          displayText: 'Root of the thread',
+        );
+        for (var reply = 1; reply <= replyCount; reply++) {
+          await _insertCachedMessage(
+            database,
+            _messageJson(
+              id: rootId + reply,
+              actorId: 'thread-author',
+              actorDisplayName: 'Thread author',
+              timestamp: 1724300181 + reply,
+              message: 'Reply $reply',
+              threadId: rootId,
+            ),
+            displayText: 'Reply $reply',
+          );
+        }
+
+        await tester.pumpWidget(app(home: roomScreen()));
+        await tester.pump();
+        await tester.ensureVisible(
+          find.byKey(const Key('chat-open-thread-$rootId')),
+        );
+        await tester.tap(find.byKey(const Key('chat-open-thread-$rootId')));
+        await tester.pumpAndSettle();
+
+        final divider = find.byKey(const Key('chat-thread-replies-divider'));
+        expect(divider, findsOneWidget);
+        expect(
+          find.descendant(
+            of: divider,
+            matching: find.text(
+              replyCount == 0 ? 'No replies yet' : '2 replies',
+            ),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          tester
+              .widget<Text>(find.byKey(const Key('chat-thread-room-$rootId')))
+              .data,
+          conversation.displayName,
+        );
+        // The divider closes the root, so it sits below it and above replies.
+        final rootBottom = tester
+            .getBottomLeft(find.text('Root of the thread'))
+            .dy;
+        expect(tester.getTopLeft(divider).dy, greaterThan(rootBottom));
+        if (replyCount > 0) {
+          expect(
+            tester.getBottomLeft(divider).dy,
+            lessThanOrEqualTo(tester.getTopLeft(find.text('Reply 1')).dy),
+          );
+        }
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(milliseconds: 1));
+      });
+    }
+
+    testWidgets('a room timeline has no thread divider', (tester) async {
+      await _insertCachedMessage(
+        database,
+        _messageJson(
+          id: 91,
+          actorId: 'thread-author',
+          actorDisplayName: 'Thread author',
+          timestamp: 1724300191,
+          message: 'Plain message',
+          threadId: 91,
+          isThread: true,
+        ),
+        displayText: 'Plain message',
+      );
+      await tester.pumpWidget(app(home: roomScreen()));
+      await tester.pump();
+      expect(find.text('Plain message'), findsOneWidget);
+      expect(
+        find.byKey(const Key('chat-thread-replies-divider')),
+        findsNothing,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    });
+
     testWidgets('the replies chip on a reply opens the thread of its root', (
       tester,
     ) async {

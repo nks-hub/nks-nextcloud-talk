@@ -528,6 +528,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get threadNoReplies => 'No replies yet';
+
+  @override
   String get openThread => 'Open thread';
 
   @override

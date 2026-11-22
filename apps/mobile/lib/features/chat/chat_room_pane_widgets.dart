@@ -31,13 +31,37 @@ final class ChatThreadScreen extends ConsumerWidget {
             roomToken: threadContext.roomToken,
             root: root,
           );
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return Scaffold(
       key: Key('chat-thread-screen-$threadId'),
       appBar: AppBar(
-        title: Text(
-          liveThreadContext?.isNamed == true
-              ? liveThreadContext!.title!
-              : AppLocalizations.of(context).thread,
+        // Two lines of text outgrow the stock 56 dp bar as soon as the text
+        // is scaled, so the bar grows with it.
+        toolbarHeight: math.max(
+          kToolbarHeight,
+          MediaQuery.textScalerOf(context).scale(48),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              liveThreadContext?.isNamed == true
+                  ? liveThreadContext!.title!
+                  : AppLocalizations.of(context).thread,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              conversation.displayName,
+              key: Key('chat-thread-room-$threadId'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.labelMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
       ),
       body: SafeArea(

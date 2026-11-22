@@ -164,6 +164,7 @@
   "chatInvalidResponse": "Saved messages are kept, but the latest chat response was rejected.",
   "thread": "Thread",
   "threadReplies": "{count, plural, =1{1 reply} other{{count} replies}}",
+  "threadNoReplies": "No replies yet",
   "openThread": "Open thread",
   "threadManagementTitle": "Threads",
   "threadManagementOpenTooltip": "Manage threads",

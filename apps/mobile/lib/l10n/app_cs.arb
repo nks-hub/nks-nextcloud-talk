@@ -164,6 +164,7 @@
   "chatInvalidResponse": "Uložené zprávy zůstaly zachované, ale nová odpověď chatu byla odmítnuta.",
   "thread": "Vlákno",
   "threadReplies": "{count, plural, =1{1 odpověď} few{{count} odpovědi} other{{count} odpovědí}}",
+  "threadNoReplies": "Zatím bez odpovědí",
   "openThread": "Otevřít vlákno",
   "threadManagementTitle": "Vlákna",
   "threadManagementOpenTooltip": "Spravovat vlákna",

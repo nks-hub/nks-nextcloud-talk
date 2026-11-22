@@ -322,6 +322,7 @@ final class _ChatTimeline extends StatelessWidget {
             _messagesShareGroup(previous, message);
         final groupedWithNext =
             next != null && _messagesShareGroup(lastMessage, next);
+        final isRoot = threadId != null && message.messageId == threadId;
         final startsDay =
             gapBeforeThis ||
             previous == null ||
@@ -399,7 +400,17 @@ final class _ChatTimeline extends StatelessWidget {
                         lastMessage.messageId,
                         lastCommonRead,
                       ),
+                  isThreadRoot: isRoot,
                 ),
+                if (isRoot)
+                  _ThreadRepliesDivider(
+                    // A named thread's root reports no replies of its own, so
+                    // the rows below it in this timeline are the fallback.
+                    count: math.max(
+                      parsed?.threadReplies ?? 0,
+                      messages.length - firstIndex - 1,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -631,6 +642,51 @@ final class _ChatTimeline extends StatelessWidget {
     final previousBlock = _blockIndexOf(ranges, messages[index - 1].messageId);
     final currentBlock = _blockIndexOf(ranges, messages[index].messageId);
     return previousBlock != currentBlock;
+  }
+}
+
+/// Closes the root message of a thread and says how many replies follow it.
+final class _ThreadRepliesDivider extends StatelessWidget {
+  const _ThreadRepliesDivider({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    final label = count == 0
+        ? strings.threadNoReplies
+        : strings.threadReplies(count);
+    return Semantics(
+      key: const Key('chat-thread-replies-divider'),
+      container: true,
+      excludeSemantics: true,
+      header: true,
+      label: label,
+      child: SelectionContainer.disabled(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
+          child: Row(
+            children: [
+              const Expanded(child: Divider()),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: ChatBackgroundChip(
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const Expanded(child: Divider()),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

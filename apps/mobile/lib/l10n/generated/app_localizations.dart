@@ -1028,6 +1028,12 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 reply} other{{count} replies}}'**
   String threadReplies(num count);
 
+  /// No description provided for @threadNoReplies.
+  ///
+  /// In en, this message translates to:
+  /// **'No replies yet'**
+  String get threadNoReplies;
+
   /// No description provided for @openThread.
   ///
   /// In en, this message translates to:
