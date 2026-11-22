@@ -368,7 +368,11 @@ final class _InlineChatImagePreviewState
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall,
+                  // The bubble sets its text colour; an outgoing bubble is
+                  // filled, so the theme's surface colour would be unreadable.
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: DefaultTextStyle.of(context).style.color,
+                  ),
                 ),
               ),
             ],

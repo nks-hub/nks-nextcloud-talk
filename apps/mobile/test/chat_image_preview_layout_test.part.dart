@@ -48,7 +48,14 @@ Future<void> _showImageContent(
   Future<ChatMediaImage?>? image,
   double maxWidth = 620,
   List<Override> overrides = const [],
+  Color? bubbleForeground,
 }) async {
+  final content = ChatMessageContent(
+    account: account,
+    message: ChatMessage.fromJson(wire),
+    fallbackText: '',
+    foregroundColor: bubbleForeground ?? Colors.black,
+  );
   await tester.pumpWidget(
     app(
       home: Scaffold(
@@ -57,12 +64,12 @@ Future<void> _showImageContent(
             alignment: Alignment.topLeft,
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxWidth),
-              child: ChatMessageContent(
-                account: account,
-                message: ChatMessage.fromJson(wire),
-                fallbackText: '',
-                foregroundColor: Colors.black,
-              ),
+              child: bubbleForeground == null
+                  ? content
+                  : DefaultTextStyle.merge(
+                      style: TextStyle(color: bubbleForeground),
+                      child: content,
+                    ),
             ),
           ),
         ),
@@ -498,6 +505,28 @@ void _registerChatImagePreviewLayoutTests() {
       tester.getSize(find.byKey(const Key('chat-image-loading-81-0'))),
       const Size(260, 130),
     );
+  });
+
+  testWidgets('the filename takes the bubble text colour', (tester) async {
+    final preview = await _solidPreview(tester, 640, 320);
+    const bubbleText = Color(0xFFFAFAFA);
+    await _showImageContent(
+      tester,
+      _layoutImageWire(83, width: 640, height: 320),
+      image: Future.value(preview),
+      bubbleForeground: bubbleText,
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-image-loading-83-0')).evaluate().isEmpty,
+    );
+    final name = tester.widget<RichText>(
+      find.descendant(
+        of: find.byKey(const Key('chat-image-name-83-0')),
+        matching: find.byType(RichText),
+      ),
+    );
+    expect(name.text.style?.color, bubbleText);
   });
 
   for (final caption in [false, true]) {
