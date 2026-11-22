@@ -283,6 +283,73 @@ extension _MediaDisposalTests on _MediaSessionTests {
       }),
     );
 
+    for (final legacy in [false, true]) {
+      test(
+        'a replacement mesh share ignores an obsolete answer (legacy: $legacy)',
+        () async {
+          final participants = [_participant(_remote)];
+          final media = session(
+            _update(localPeerId: _local, participants: participants),
+          );
+          addTearDown(media.dispose);
+          await media.start();
+          final call = engine.connections.single;
+          await media.setScreenSharing(true);
+          final firstShare = engine.connections.last;
+          final original = sent.lastWhere((message) => message.type == 'offer');
+          await media.setScreenSharing(false);
+
+          await media.setScreenSharing(true);
+          final share = engine.connections.last;
+          final replacement = sent.lastWhere(
+            (message) => message.type == 'offer',
+          );
+          expect(replacement.sid, isNotNull);
+          expect(replacement.sid, isNot(original.sid));
+
+          void answer(String? sid, String sdp) {
+            updates.add(
+              _update(
+                localPeerId: _local,
+                participants: participants,
+                messages: [
+                  _message(
+                    _remote,
+                    'answer',
+                    {'type': 'answer', 'sdp': sdp},
+                    sid: sid,
+                    roomType: 'screen',
+                  ),
+                ],
+              ),
+            );
+          }
+
+          answer(original.sid, 'obsolete-screen-answer');
+          await pumpEventQueue();
+          expect(share.remoteDescriptions, isEmpty);
+
+          answer(legacy ? null : replacement.sid, 'replacement-screen-answer');
+          await pumpEventQueue();
+          expect(
+            share.remoteDescriptions.single.sdp,
+            'replacement-screen-answer',
+          );
+          expect(firstShare.closed, isTrue);
+          expect(share.closed, isFalse);
+          expect(call.closed, isFalse);
+          expect(media.state.screenSharing, isTrue);
+          expect(engine.screens.first.disposeCalls, 1);
+          expect(engine.screens.last.disposeCalls, 0);
+
+          await media.setScreenSharing(false);
+          expect(engine.screens.last.disposeCalls, 1);
+          expect(share.closed, isTrue);
+          expect(call.closed, isFalse);
+        },
+      );
+    }
+
     test('an obsolete MCU answer cannot close a replacement share', () async {
       final participants = [_participant(_remote)];
       final media = session(

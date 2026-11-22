@@ -19,8 +19,10 @@ extension _CallMediaSessionScreen on CallMediaSession {
           iceServers: iceServers,
         );
       case 'answer':
-        // Only this side's own share is ever answered.
-        await _receiveAnswerOn(share, message.payload);
+        // Older peers may omit the sid. An explicit sid identifies the offer.
+        if (share != null && (sid == null || sid == share.sid)) {
+          await _receiveAnswerOn(share, message.payload);
+        }
       case 'candidate':
         // Two screen connections to one peer are told apart by sid: ours
         // carries the one this side named when it offered.
