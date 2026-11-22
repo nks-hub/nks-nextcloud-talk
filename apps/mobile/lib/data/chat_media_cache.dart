@@ -249,6 +249,13 @@ Future<FileStat> _readVoiceFileStat(File file) => file.stat();
 
 Future<void> _deleteVoiceFile(File file) => file.delete();
 
+final class _ChatMediaDiskEntry {
+  _ChatMediaDiskEntry({required this.bytes, required this.touchedAt});
+
+  final int bytes;
+  final DateTime touchedAt;
+}
+
 /// Persists chat previews under the private app cache directory so a cold
 /// start does not refetch every picture over the network.
 ///
@@ -281,7 +288,7 @@ final class ChatMediaDiskCache {
   final Future<FileStat> Function(File file) _statFile;
   final Future<void> Function(File file) _deleteFile;
   final Future<void> Function(File file, DateTime touchedAt) _touchFile;
-  final Map<String, ({int bytes, DateTime touchedAt})> _index = {};
+  final Map<String, _ChatMediaDiskEntry> _index = {};
 
   Directory? _root;
   Future<Directory>? _opening;
@@ -340,7 +347,10 @@ final class ChatMediaDiskCache {
       return null;
     }
     final touchedAt = DateTime.now();
-    _index[path] = (bytes: entry.bytes, touchedAt: touchedAt);
+    _index[path] = _ChatMediaDiskEntry(
+      bytes: entry.bytes,
+      touchedAt: touchedAt,
+    );
     try {
       unawaited(
         _touchFile(File(path), touchedAt).onError((_, _) {
@@ -413,7 +423,10 @@ final class ChatMediaDiskCache {
       }
     }
     _drop(file.path);
-    _index[file.path] = (bytes: total, touchedAt: DateTime.now());
+    _index[file.path] = _ChatMediaDiskEntry(
+      bytes: total,
+      touchedAt: DateTime.now(),
+    );
     _bytes += total;
     await _prune();
   }
@@ -476,7 +489,10 @@ final class ChatMediaDiskCache {
       while (nextFile < files.length) {
         final file = files[nextFile++];
         final stat = await _statFile(file);
-        _index[file.path] = (bytes: stat.size, touchedAt: stat.modified);
+        _index[file.path] = _ChatMediaDiskEntry(
+          bytes: stat.size,
+          touchedAt: stat.modified,
+        );
         _bytes += stat.size;
       }
     }
@@ -498,26 +514,21 @@ final class ChatMediaDiskCache {
     }
     // ponytail: full sort of the in-memory index, which holds a few hundred
     // previews at this bound. A heap is worth it only if the bound grows a lot.
-    final ordered = _index.entries.toList()
+    final candidates = _index.entries.toList()
       ..sort((a, b) => a.value.touchedAt.compareTo(b.value.touchedAt));
-    final pending = <String>[];
-    var remainingBytes = _bytes;
-    for (final entry in ordered) {
-      if (remainingBytes <= maximumBytes) {
-        break;
-      }
-      pending.add(entry.key);
-      remainingBytes -= entry.value.bytes;
-    }
-    var nextPath = 0;
+    var nextCandidate = 0;
     Future<void> deleteNext() async {
-      while (nextPath < pending.length) {
-        await _delete(pending[nextPath++]);
+      while (_bytes > maximumBytes && nextCandidate < candidates.length) {
+        final entry = candidates[nextCandidate++];
+        if (!identical(_index[entry.key], entry.value)) {
+          continue;
+        }
+        await _delete(entry.key);
       }
     }
 
-    final workerCount = pending.length < _deleteConcurrency
-        ? pending.length
+    final workerCount = candidates.length < _deleteConcurrency
+        ? candidates.length
         : _deleteConcurrency;
     await Future.wait(List.generate(workerCount, (_) => deleteNext()));
   }

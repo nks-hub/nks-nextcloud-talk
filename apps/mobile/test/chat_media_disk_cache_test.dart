@@ -376,6 +376,161 @@ void main() {
     expect(cache.byteLength, 0);
   });
 
+  test('account eviction stops an in-flight stale prune plan', () async {
+    const storedBytes = 20;
+    final seed = open();
+    for (var fileId = 1; fileId <= 6; fileId++) {
+      await seed.write(
+        accountId: 'account-a',
+        uri: uriFor(fileId),
+        image: image(10),
+      );
+    }
+    final previews = Directory('${root.path}/previews');
+    final accountADirectory = previews.listSync().whereType<Directory>().single;
+    for (var fileId = 7; fileId <= 8; fileId++) {
+      await seed.write(
+        accountId: 'account-b',
+        uri: uriFor(fileId),
+        image: image(10),
+      );
+    }
+
+    final oldest = DateTime.utc(2020);
+    final accountAFiles = accountADirectory.listSync().whereType<File>().toList(
+      growable: false,
+    );
+    for (final file in accountAFiles) {
+      await file.setLastModified(oldest);
+    }
+    final accountBDirectory = previews
+        .listSync()
+        .whereType<Directory>()
+        .singleWhere((directory) => directory.path != accountADirectory.path);
+    for (final file in accountBDirectory.listSync().whereType<File>()) {
+      await file.setLastModified(DateTime.utc(2021));
+    }
+
+    final firstBatchGate = Completer<void>();
+    final firstBatchStarted = Completer<void>();
+    final deleteAttempts = <String>[];
+    var inFlight = 0;
+    var peakInFlight = 0;
+    final cache = open(
+      maximumBytes: storedBytes * 2,
+      deleteFile: (file) async {
+        deleteAttempts.add(file.path);
+        inFlight++;
+        if (inFlight > peakInFlight) peakInFlight = inFlight;
+        if (deleteAttempts.length == 4) firstBatchStarted.complete();
+        if (deleteAttempts.length <= 4) await firstBatchGate.future;
+        inFlight--;
+        await file.delete();
+      },
+    );
+    final pruning = cache.read(accountId: 'account-a', uri: uriFor(99));
+    addTearDown(() async {
+      if (!firstBatchGate.isCompleted) firstBatchGate.complete();
+      await pruning;
+    });
+
+    await firstBatchStarted.future.timeout(const Duration(seconds: 2));
+    expect(deleteAttempts, hasLength(4));
+    expect(peakInFlight, 4);
+    expect(
+      deleteAttempts.every((path) => p.isWithin(accountADirectory.path, path)),
+      isTrue,
+    );
+
+    await cache.evictAccount('account-b');
+    expect(cache.byteLength, storedBytes * 2);
+    firstBatchGate.complete();
+    await pruning;
+
+    expect(deleteAttempts, hasLength(4));
+    expect(cache.length, 2);
+    expect(cache.byteLength, storedBytes * 2);
+    final survivors = <ChatMediaImage>[];
+    for (var fileId = 1; fileId <= 6; fileId++) {
+      final survivor = await cache.read(
+        accountId: 'account-a',
+        uri: uriFor(fileId),
+      );
+      if (survivor != null) survivors.add(survivor);
+    }
+    expect(survivors, hasLength(2));
+  });
+
+  test(
+    'pruning replaces a refreshed candidate and still reaches its bound',
+    () async {
+      const storedBytes = 20;
+      final seed = open();
+      for (var fileId = 1; fileId <= 7; fileId++) {
+        await seed.write(
+          accountId: 'account-a',
+          uri: uriFor(fileId),
+          image: image(10, fileId),
+        );
+      }
+      final files = Directory(
+        '${root.path}/previews',
+      ).listSync(recursive: true).whereType<File>();
+      final oldest = DateTime.utc(2020);
+      for (final file in files) {
+        await file.setLastModified(
+          oldest.add(Duration(minutes: file.readAsBytesSync().last)),
+        );
+      }
+
+      final firstBatchGate = Completer<void>();
+      final firstBatchStarted = Completer<void>();
+      final deletedFileIds = <int>[];
+      var inFlight = 0;
+      var peakInFlight = 0;
+      final cache = open(
+        maximumBytes: storedBytes * 2,
+        deleteFile: (file) async {
+          deletedFileIds.add(file.readAsBytesSync().last);
+          inFlight++;
+          if (inFlight > peakInFlight) peakInFlight = inFlight;
+          if (deletedFileIds.length == 4) firstBatchStarted.complete();
+          if (deletedFileIds.length <= 4) await firstBatchGate.future;
+          inFlight--;
+          await file.delete();
+        },
+      );
+      final pruning = cache.read(accountId: 'account-a', uri: uriFor(99));
+      addTearDown(() async {
+        if (!firstBatchGate.isCompleted) firstBatchGate.complete();
+        await pruning;
+      });
+
+      await firstBatchStarted.future.timeout(const Duration(seconds: 2));
+      expect(deletedFileIds, unorderedEquals(<int>[1, 2, 3, 4]));
+      expect(peakInFlight, 4);
+
+      expect(
+        await cache.read(accountId: 'account-a', uri: uriFor(5)),
+        isNotNull,
+      );
+      firstBatchGate.complete();
+      await pruning;
+
+      expect(deletedFileIds, unorderedEquals(<int>[1, 2, 3, 4, 6]));
+      expect(cache.length, 2);
+      expect(cache.byteLength, storedBytes * 2);
+      expect(
+        await cache.read(accountId: 'account-a', uri: uriFor(5)),
+        isNotNull,
+      );
+      expect(
+        await cache.read(accountId: 'account-a', uri: uriFor(7)),
+        isNotNull,
+      );
+    },
+  );
+
   test('evicting an account erases its bytes from disk only', () async {
     final cache = open();
     await cache.write(accountId: 'account-a', uri: uriFor(1), image: image(50));
