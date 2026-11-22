@@ -209,6 +209,153 @@ extension _ControlsMediaSessionTests on _MediaSessionTests {
       );
     }
 
+    test(
+      'a colliding mesh offer keeps the SID of the deferred camera offer',
+      () async {
+        const competingSid = 'competing-sid';
+        final participants = [_participant(_remote)];
+        CallSignalingUpdate update({
+          SignalingAccountPhase phase = SignalingAccountPhase.signalingReady,
+          List<SignalingPeerMessage> messages = const [],
+        }) => _update(
+          localPeerId: _local,
+          participants: participants,
+          phase: phase,
+          messages: messages,
+        );
+        var ready = true;
+        final refused = <SignalingPeerMessage>[];
+        final media = session(
+          update(),
+          sendMessage: (message, {required expectedRoomEpoch}) async {
+            if (!ready) {
+              if (message.type == 'offer') refused.add(message);
+              return false;
+            }
+            sent.add(message);
+            return true;
+          },
+        );
+        addTearDown(media.dispose);
+        await media.start();
+        final connection = engine.connections.single;
+        final offers = sent.where((message) => message.type == 'offer');
+        final originalSid = offers.single.sid!;
+        SignalingPeerMessage answer(String sdp) => _message(_remote, 'answer', {
+          'type': 'answer',
+          'sdp': sdp,
+        }, sid: originalSid);
+
+        updates.add(update(messages: [answer('sdp-initial-answer')]));
+        await pumpEventQueue();
+        ready = false;
+        updates.add(update(phase: SignalingAccountPhase.reconnectWaiting));
+        await pumpEventQueue();
+        await media.setCameraEnabled(true);
+        expect(refused.single.sid, originalSid);
+
+        ready = true;
+        updates.add(
+          update(
+            messages: [
+              _message(_remote, 'offer', {
+                'type': 'offer',
+                'sdp': 'sdp-competing-offer',
+              }, sid: competingSid),
+            ],
+          ),
+        );
+        await pumpEventQueue();
+        expect(connection.remoteDescriptions, hasLength(1));
+        expect(offers, hasLength(2));
+        expect(offers.last.sid, originalSid);
+        expect(offers.last.payload?.wire, refused.single.payload?.wire);
+
+        connection.onIceCandidate(
+          const CallIceCandidate(
+            candidate: 'candidate:local',
+            sdpMid: 'video',
+            sdpMLineIndex: 1,
+          ),
+        );
+        await pumpEventQueue();
+        expect(
+          sent.where((message) => message.type == 'candidate').single.sid,
+          originalSid,
+        );
+
+        updates.add(update(messages: [answer('sdp-camera-answer')]));
+        await pumpEventQueue();
+        expect(connection.remoteDescriptions.last.sdp, 'sdp-camera-answer');
+
+        updates.add(
+          update(
+            messages: [
+              _message(_remote, 'offer', {
+                'type': 'offer',
+                'sdp': 'sdp-next-offer',
+              }, sid: competingSid),
+            ],
+          ),
+        );
+        await pumpEventQueue();
+        expect(connection.remoteDescriptions.last.sdp, 'sdp-next-offer');
+        expect(
+          sent.where((message) => message.type == 'answer').single.sid,
+          competingSid,
+        );
+        expect(offers, hasLength(2));
+        expect(engine.connections.single, same(connection));
+        expect(connection.closed, isFalse);
+      },
+    );
+
+    test('an ICE restart supersedes the deferred mesh camera offer', () async {
+      final participants = [_participant(_remote)];
+      final resumed = _update(localPeerId: _local, participants: participants);
+      var acceptOffers = true;
+      final media = session(
+        resumed,
+        sendMessage: (message, {required expectedRoomEpoch}) async {
+          if (!acceptOffers && message.type == 'offer') return false;
+          sent.add(message);
+          return true;
+        },
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      final connection = engine.connections.single;
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: participants,
+          messages: [
+            _message(_remote, 'answer', {
+              'type': 'answer',
+              'sdp': 'sdp-initial-answer',
+            }),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+      expect(connection.remoteDescriptions, hasLength(1));
+
+      acceptOffers = false;
+      await media.setCameraEnabled(true);
+      final offers = sent.where((message) => message.type == 'offer');
+      expect(connection.createdOffers, 2);
+      expect(offers, hasLength(1));
+
+      acceptOffers = true;
+      connection.onConnectionState(CallMediaConnectionState.failed);
+      updates.add(resumed);
+      await pumpEventQueue();
+      expect(connection.createdOffers, 3);
+      expect(connection.iceRestarts, 1);
+      expect(offers, hasLength(2));
+      expect(connection.closed, isFalse);
+    });
+
     test('a camera that cannot be opened leaves the call audio-only', () async {
       engine.cameraError = CallMediaError.cameraPermissionDenied;
       final media = session(

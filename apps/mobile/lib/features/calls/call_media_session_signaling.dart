@@ -378,14 +378,14 @@ extension _CallMediaSessionSignaling on CallMediaSession {
       '[call] offer ← $senderId sid=$sid known=${peer != null} '
       'pending=${peer?.localOfferPending} lines=${_mediaLines(sdp.sdp)}',
     );
-    if (peer != null && sid != null && sid.isNotEmpty) {
-      peer.sid = sid;
-    }
     // Our own offer is still unanswered: only one side of a pair offers, so an
     // offer arriving here would be a role collision. Answering it as well
-    // would leave both sides waiting.
+    // would leave both sides waiting. Keep our SID for the pending SDP and ICE.
     if (peer != null && peer.localOfferPending) {
       return;
+    }
+    if (peer != null && sid != null && sid.isNotEmpty) {
+      peer.sid = sid;
     }
     if (peer != null && peer.connection == null) {
       // A subscriber the MCU is now offering: the connection is built for
