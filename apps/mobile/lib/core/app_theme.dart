@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 abstract final class AppTheme {
   static const Color _seed = Color(0xFF00679E);
-  static const Color _secondarySeed = Color(0xFF65558F);
+  static const Color _secondarySeed = Color(0xFF4F6A7D);
   static const Color _tertiarySeed = Color(0xFF17616D);
   static const Color _lightSurface = Color(0xFFFAF8F5);
   static const Color _darkSurface = Color(0xFF151419);

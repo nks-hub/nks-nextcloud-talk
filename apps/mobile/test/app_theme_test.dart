@@ -59,6 +59,32 @@ void main() {
     }
   });
 
+  test('the default theme has no pink or violet role', () {
+    for (final theme in <ThemeData>[AppTheme.light(), AppTheme.dark()]) {
+      final s = theme.colorScheme;
+      final roles = {
+        'primary': s.primary,
+        'primaryContainer': s.primaryContainer,
+        'secondary': s.secondary,
+        'secondaryContainer': s.secondaryContainer,
+        'tertiary': s.tertiary,
+        'tertiaryContainer': s.tertiaryContainer,
+        'surfaceContainerLow': s.surfaceContainerLow,
+        'surfaceContainer': s.surfaceContainer,
+      };
+      for (final entry in roles.entries) {
+        final hsl = HSLColor.fromColor(entry.value);
+        // Violet to magenta to pink is 250 to 345 degrees; a grey has no hue.
+        final tinted = hsl.saturation > 0.08;
+        expect(
+          tinted && hsl.hue >= 250 && hsl.hue <= 345,
+          isFalse,
+          reason: '${entry.key} in ${s.brightness.name}: hue ${hsl.hue}',
+        );
+      }
+    }
+  });
+
   test('a server colour carries its secondary and tertiary roles with it', () {
     const server = Color(0xFFE65100);
     for (final brightness in Brightness.values) {
