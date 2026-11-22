@@ -79,6 +79,81 @@ void _registerCallForegroundLifecycleTests() {
   );
 
   test(
+    'an offer sent while the microphone permission is pending is answered',
+    () async {
+      const local = 'session-rooma123';
+      // Sorts after the local id, so the peer is the side that offers.
+      const peer = 'zz-peer-session';
+      final permission = Completer<void>();
+      final foreground = _ForegroundCalls(startGate: permission.future);
+      final engine = _AnsweringEngine();
+      final signaling = _ScriptedInternalSignaling(local: local);
+      final fixture = await _ForegroundJoinFixture.create(
+        foreground,
+        engine,
+        signaling: signaling.handle,
+      );
+      addTearDown(() async {
+        if (!permission.isCompleted) permission.complete();
+        await fixture.close();
+        await signaling.close();
+      });
+      signaling.deliver(peerInCall: peer, localInCall: 0);
+      await signaling.pullStarted(2);
+
+      final joining = fixture.controller.join();
+      await foreground.firstStart.future;
+      // The peer offers as soon as the REST join lists this side in the call,
+      // while Android still shows the permission prompt. Its ICE candidate
+      // follows on the next pull and replaces the lane's current state.
+      signaling.deliver(
+        peerInCall: peer,
+        localInCall: 7,
+        message: <String, Object?>{
+          'type': 'offer',
+          'sid': 'peer-sid-1',
+          'payload': <String, Object?>{'type': 'offer', 'sdp': 'v=0 offer'},
+        },
+      );
+      signaling.deliver(
+        peerInCall: peer,
+        localInCall: 7,
+        message: <String, Object?>{
+          'type': 'candidate',
+          'sid': 'peer-sid-1',
+          'payload': <String, Object?>{
+            'candidate': <String, Object?>{
+              'candidate': 'candidate:1 1 udp 1 192.0.2.10 9 typ host',
+              'sdpMid': '0',
+              'sdpMLineIndex': 0,
+            },
+          },
+        },
+      );
+      await signaling.pullStarted(4);
+      permission.complete();
+      await joining;
+      await pumpEventQueue();
+
+      expect(
+        fixture.container
+            .read(callJoinControllerProvider(_ForegroundJoinFixture.key))
+            .phase,
+        CallJoinPhase.joined,
+      );
+      final connection = engine.connections.single;
+      expect(connection.remoteDescriptions, ['offer']);
+      expect(connection.candidates, hasLength(1));
+      expect(
+        signaling.sent.where(
+          (message) => message['type'] == 'answer' && message['to'] == peer,
+        ),
+        hasLength(1),
+      );
+    },
+  );
+
+  test(
     'duplicate camera enable shares admission and camera off cancels it',
     () async {
       final ready = Completer<void>();
@@ -635,6 +710,150 @@ final class _CameraForegroundVideo implements CallLocalVideo {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// Internal signalling for one room, answered one scripted pull at a time.
+/// A pull with nothing scripted waits for the next [deliver].
+final class _ScriptedInternalSignaling {
+  _ScriptedInternalSignaling({required this.local});
+
+  final String local;
+  final _pulls = StreamController<List<Object?>>();
+  late final _next = StreamIterator<List<Object?>>(_pulls.stream);
+  final sent = <Map<String, Object?>>[];
+  int _pullCount = 0;
+  final _pullWaiters = <int, Completer<void>>{};
+
+  /// Queues one pull: an optional message from [peerInCall], then the roster.
+  void deliver({
+    required String peerInCall,
+    required int localInCall,
+    Map<String, Object?>? message,
+  }) {
+    Map<String, Object?> session(String id, int inCall) => <String, Object?>{
+      'sessionId': id,
+      'roomId': 42,
+      'lastPing': 1,
+      'userId': 'user-$id',
+      'inCall': inCall,
+      'participantPermissions': 255,
+      'actorType': 'users',
+      'actorId': 'user-$id',
+    };
+    _pulls.add(<Object?>[
+      if (message != null)
+        <String, Object?>{
+          'type': 'message',
+          'data': jsonEncode(<String, Object?>{
+            'to': local,
+            'from': peerInCall,
+            'roomType': 'video',
+            ...message,
+          }),
+        },
+      <String, Object?>{
+        'type': 'usersInRoom',
+        'data': <Object?>[session(local, localInCall), session(peerInCall, 7)],
+      },
+    ]);
+  }
+
+  /// Completes once the lane has asked for its [count]th pull.
+  Future<void> pullStarted(int count) {
+    if (_pullCount >= count) return Future<void>.value();
+    return _pullWaiters
+        .putIfAbsent(count, Completer<void>.new)
+        .future
+        .timeout(const Duration(seconds: 5));
+  }
+
+  Future<void> close() => _pulls.close();
+
+  Future<http.Response> handle(http.Request request) async {
+    if (request.url.path.endsWith('/signaling/settings')) {
+      return _ocsResponse(200, <String, Object?>{
+        'signalingMode': 'internal',
+        'userId': 'fixture-user',
+        'hideWarning': true,
+        'server': '',
+        'federation': null,
+        'stunservers': <Object?>[],
+        'turnservers': <Object?>[],
+        'sipDialinInfo': '',
+      });
+    }
+    if (request.method == 'POST') {
+      final batch = jsonDecode(request.bodyFields['messages']!) as List<Object?>;
+      for (final entry in batch.cast<Map<String, Object?>>()) {
+        sent.add(jsonDecode(entry['fn']! as String) as Map<String, Object?>);
+      }
+      return _ocsResponse(200, const <Object?>[]);
+    }
+    _pullCount++;
+    _pullWaiters.remove(_pullCount)?.complete();
+    if (!await _next.moveNext()) {
+      throw http.ClientException('signalling closed');
+    }
+    return _ocsResponse(200, _next.current);
+  }
+}
+
+/// Records what a mesh peer connection was told and answers every offer.
+final class _AnsweringEngine implements CallMediaEngine {
+  final connections = <_AnsweringConnection>[];
+
+  @override
+  Future<CallLocalAudio> openMicrophone() async => _CameraForegroundAudio();
+
+  @override
+  Future<CallPeerConnection> createPeerConnection({
+    required List<CallIceServer> iceServers,
+    required CallLocalAudio? audio,
+    CallLocalVideo? video,
+    bool sendOnly = false,
+    required void Function(CallIceCandidate candidate) onIceCandidate,
+    required void Function(CallMediaConnectionState state) onConnectionState,
+    required void Function(CallRemoteVideo? video) onRemoteVideo,
+    void Function(String type, Object? payload)? onStatusMessage,
+  }) async {
+    final connection = _AnsweringConnection();
+    connections.add(connection);
+    return connection;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _AnsweringConnection implements CallPeerConnection {
+  final remoteDescriptions = <String>[];
+  final candidates = <CallIceCandidate>[];
+
+  @override
+  Future<void> setRemoteDescription(CallSessionDescription description) async {
+    remoteDescriptions.add(description.type);
+  }
+
+  @override
+  Future<CallSessionDescription> createAnswer() async =>
+      (type: 'answer', sdp: 'v=0 answer');
+
+  @override
+  Future<void> setLocalDescription(CallSessionDescription description) async {}
+
+  @override
+  Future<void> addIceCandidate(CallIceCandidate candidate) async {
+    candidates.add(candidate);
+  }
+
+  @override
+  bool sendStatus(String type, {Object? payload}) => false;
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 final class _DelayedMicrophone implements CallMediaEngine {
   _DelayedMicrophone(this.onOpen);
   final Future<void> Function() onOpen;
@@ -670,6 +889,7 @@ final class _ForegroundJoinFixture {
     CallTelecom telecom = const NoCallTelecom(),
     CallScreenShareService? screenShare,
     _CallHandler? onCall,
+    Future<http.Response> Function(http.Request request)? signaling,
   }) async {
     final rest = await _CallHarness.create(
       onCall:
@@ -684,6 +904,7 @@ final class _ForegroundJoinFixture {
           ),
     );
     rest.server.signalingEnabled = true;
+    rest.server.signaling = signaling;
     if (holdSettings) rest.server.signalingGate = Completer<void>();
     await rest.accounts.updateCapabilities('account-a', {
       'signaling-v3',

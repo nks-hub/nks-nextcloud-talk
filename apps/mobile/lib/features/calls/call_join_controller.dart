@@ -131,6 +131,14 @@ final class CallJoinState {
       'lifecycleError: ${lifecycleError?.name})';
 }
 
+/// One signalling session as recorded for the media session about to start.
+typedef _SignalingCapture = ({
+  CallSignalingSession source,
+  CallSignalingUpdate initial,
+  Stream<CallSignalingUpdate> updates,
+  StreamSubscription<CallSignalingUpdate> forward,
+});
+
 /// Joins one room's call with audio and leaves it again.
 ///
 /// Joining is two steps that both have to hold: the Talk call REST lifecycle
@@ -170,6 +178,7 @@ base class CallJoinController
   CallMediaError? _cameraError;
   Future<void>? _teardownPending;
   StateController<Set<ChatRoomSignalingKey>>? _heldRooms;
+  _SignalingCapture? _signalingCapture;
 
   @override
   CallJoinState build(CallRoomKey arg) {
@@ -276,6 +285,50 @@ base class CallJoinController
     if (state.isBusy || state.phase == CallJoinPhase.joined) {
       return;
     }
+    try {
+      await _join(withVideo: withVideo);
+    } finally {
+      // Only a media session reads the captured signalling.
+      if (_session == null) _releaseSignalingCapture();
+    }
+  }
+
+  /// Starts recording the room's signalling for the media session.
+  ///
+  /// The peer already in a mesh call offers once, as soon as the REST join
+  /// lists this side, and this side can then still be in the microphone
+  /// prompt: measured on 22 November 2026, that offer was published to a
+  /// lane nobody listened to yet and the call stayed "connecting" for good.
+  /// The state now and every update after it reach the session in order.
+  _SignalingCapture _captureSignaling(CallSignalingSession source) {
+    final existing = _signalingCapture;
+    if (existing != null && identical(existing.source, source)) {
+      return existing;
+    }
+    _releaseSignalingCapture();
+    final replay = StreamController<CallSignalingUpdate>();
+    final initial = source.current;
+    final forward = source.updates.listen(
+      replay.add,
+      onError: replay.addError,
+      onDone: replay.close,
+    );
+    replay.onCancel = forward.cancel;
+    return _signalingCapture = (
+      source: source,
+      initial: initial,
+      updates: replay.stream,
+      forward: forward,
+    );
+  }
+
+  void _releaseSignalingCapture() {
+    final capture = _signalingCapture;
+    _signalingCapture = null;
+    unawaited(capture?.forward.cancel());
+  }
+
+  Future<void> _join({required bool withVideo}) async {
     _leaveRequested = false;
     state = const CallJoinState(phase: CallJoinPhase.joining);
     final teardown = _teardownPending;
@@ -298,6 +351,7 @@ base class CallJoinController
       );
       return;
     }
+    _captureSignaling(signaling);
 
     // Held rather than read again on dispose: the teardown runs while the
     // container is already tearing down, and reading a provider there throws.
@@ -356,6 +410,7 @@ base class CallJoinController
         }
         return;
       }
+      _captureSignaling(signaling);
     }
 
     _moderator = await _readModeratorState();
@@ -412,9 +467,10 @@ base class CallJoinController
       return;
     }
 
+    final capture = _captureSignaling(signaling);
     final session = CallMediaSession(
-      initial: signaling.current,
-      updates: signaling.updates,
+      initial: capture.initial,
+      updates: capture.updates,
       sendMessage: signaling.sendPeerMessage,
       sendControl: signaling.sendControl,
       engine: ref.read(callMediaEngineProvider),
@@ -978,6 +1034,7 @@ base class CallJoinController
     // then belonged to nobody.
     final session = _session;
     _session = null;
+    _releaseSignalingCapture();
     final subscription = _mediaStates;
     _mediaStates = null;
     await _stopScreenShareService();

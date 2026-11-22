@@ -730,12 +730,19 @@ final class _CallServer {
   bool extraFeature = false;
   bool signalingEnabled = false;
   Completer<void>? signalingGate;
+
+  /// Serves every signalling request (settings, pulls, batches) when set.
+  Future<http.Response> Function(http.Request request)? signaling;
   Map<String, Object?> callPolicy = const {};
 
   List<String> get callMethods =>
       callRequests.map((request) => request.method).toList(growable: false);
 
   Future<http.Response> _handle(http.Request request) async {
+    final signaling = this.signaling;
+    if (signaling != null && request.url.path.contains('/signaling/')) {
+      return signaling(request);
+    }
     if (request.url.path.contains('/cloud/capabilities')) {
       return http.Response(
         jsonEncode(
