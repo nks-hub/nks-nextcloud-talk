@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/services.dart' show MethodChannel, PlatformException;
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 
 abstract interface class CredentialVault {
   Future<void> writeAppPassword(String accountId, String appPassword);
@@ -32,6 +33,26 @@ abstract interface class PendingRevocationStore {
 abstract interface class PendingRevocationClaims {
   Future<bool> tryClaimRevocation(String id, String token);
   Future<void> releaseRevocationClaim(String id, String token);
+}
+
+extension PendingRevocationDrain on PendingRevocationStore {
+  static final _localDrainTails = Expando<Future<void>>();
+  static final _sharedVault = Object();
+
+  Future<void> withPendingRevocationDrain(Future<void> Function() drain) {
+    final store = this;
+    if (store is SecureCredentialVault && Platform.isAndroid) {
+      return store._withAndroidPendingRevocationDrain(drain);
+    }
+    final key = store is SecureCredentialVault ? _sharedVault : store;
+    final previous = _localDrainTails[key] ?? Future<void>.value();
+    final next = previous.then((_) => drain());
+    _localDrainTails[key] = next.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return next;
+  }
 }
 
 extension CurrentCredential on CredentialVault {
@@ -174,6 +195,22 @@ final class SecureCredentialVault
   );
   static Future<void> _pendingRevocationMutationTail = Future<void>.value();
   static final _localRevocationClaims = <String, String>{};
+
+  Future<void> _withAndroidPendingRevocationDrain(
+    Future<void> Function() drain,
+  ) async {
+    final token = {'token': const Uuid().v4()};
+    final acquired = await _androidVault.invokeMethod<bool>(
+      'acquireRevocationDrain',
+      token,
+    );
+    if (acquired != true) return;
+    try {
+      await drain();
+    } finally {
+      await _androidVault.invokeMethod<void>('releaseRevocationDrain', token);
+    }
+  }
 
   @override
   Future<bool> tryClaimRevocation(String id, String token) async {

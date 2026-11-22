@@ -31,6 +31,48 @@ class PendingRevocationStorageTest {
     }
 
     @Test
+    fun drainWaitersRunInOrderAfterTheMatchingRelease() {
+        val owners = PendingRevocationOwners()
+        val foreground = Any()
+        val headless = Any()
+        val replies = mutableListOf<Pair<String, Boolean>>()
+        owners.acquireDrain(foreground, "active") { replies.add("active" to it) }
+        owners.acquireDrain(headless, "next") { replies.add("next" to it) }
+        owners.acquireDrain(foreground, "last") { replies.add("last" to it) }
+
+        assertTrue(owners.claim(foreground, "reservation", "independent"))
+        owners.releaseDrain(headless, "active")
+        owners.releaseDrain(foreground, "last")
+        assertEquals(listOf("active" to true), replies)
+
+        owners.releaseDrain(foreground, "active")
+        assertEquals(listOf("active" to true, "next" to true), replies)
+        owners.releaseDrain(headless, "next")
+        assertEquals(listOf("active" to true, "next" to true, "last" to true), replies)
+    }
+
+    @Test
+    fun retiringAnEngineCancelsItsWaitingDrainsAndGrantsTheNextLiveEngine() {
+        val owners = PendingRevocationOwners()
+        val foreground = Any()
+        val stopped = Any()
+        val surviving = Any()
+        val replies = mutableListOf<Pair<String, Boolean>>()
+        owners.acquireDrain(foreground, "active") { replies.add("active" to it) }
+        owners.acquireDrain(stopped, "stopped") { replies.add("stopped" to it) }
+        owners.acquireDrain(foreground, "another") { replies.add("another" to it) }
+        owners.acquireDrain(surviving, "remaining") { replies.add("remaining" to it) }
+
+        owners.detach(stopped)
+        assertEquals(listOf("active" to true, "stopped" to false), replies)
+        owners.detach(foreground)
+        assertEquals(
+            listOf("active" to true, "stopped" to false, "another" to false, "remaining" to true),
+            replies,
+        )
+    }
+
+    @Test
     fun oldVaultKeysAreMigratedAndDeletionDoesNotResurrectThePassword() {
         val legacy = "account.fixture.appPassword"
         val current = "credential.v2.account.fixture.appPassword"

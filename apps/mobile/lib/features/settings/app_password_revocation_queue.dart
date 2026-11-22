@@ -353,7 +353,9 @@ final class AppPasswordRevocationQueue {
   Future<int> pendingRevocationCount() async =>
       (await _load()).whereType<_RevocationEntry>().length;
 
-  Future<void> drain() async {
+  Future<void> drain() => _store.withPendingRevocationDrain(_drain);
+
+  Future<void> _drain() async {
     await recoverHeldCredentials();
     final entries = await _load();
     final revocations = entries.whereType<_RevocationEntry>().toList();

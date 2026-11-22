@@ -274,6 +274,37 @@ void main() {
     },
   );
 
+  test('a waiting vault drain starts after its owner throws', () async {
+    final storage = _RecordingSecureStorage();
+    final first = SecureCredentialVault(storage: storage);
+    final second = SecureCredentialVault(storage: storage);
+    final entered = Completer<void>();
+    final release = Completer<void>();
+    final failure = StateError('drain failed');
+    var waitingStarted = false;
+    final active = first.withPendingRevocationDrain(() async {
+      entered.complete();
+      await release.future;
+      throw failure;
+    });
+    final finished = expectLater(active, throwsA(same(failure)));
+    Future<void>? waiting;
+    addTearDown(() async {
+      if (!release.isCompleted) release.complete();
+      await Future.wait([finished, ?waiting]);
+    });
+    await entered.future;
+    waiting = second.withPendingRevocationDrain(() async {
+      waitingStarted = true;
+    });
+    await pumpEventQueue();
+    expect(waitingStarted, isFalse);
+
+    release.complete();
+    await Future.wait([finished, waiting]);
+    expect(waitingStarted, isTrue);
+  });
+
   test('a queue left over from before the marker is drained again', () async {
     const queue = '[{"server":"https://example.invalid"}]';
     final storage = _RecordingSecureStorage()

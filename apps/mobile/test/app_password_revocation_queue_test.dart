@@ -139,6 +139,72 @@ void main() {
     expect(await q.pendingCount(), 0);
   });
 
+  test('overlapping drains share three slots and read new entries', () async {
+    final firstBatchStarted = Completer<void>();
+    final release = Completer<void>();
+    var firstRequests = 0;
+    var secondRequests = 0;
+    var active = 0;
+    var peak = 0;
+
+    Future<http.Response> respond(int status) async {
+      active++;
+      peak = max(peak, active);
+      await release.future;
+      active--;
+      return http.Response(status == 200 ? _okOcs() : '{}', status);
+    }
+
+    final first = queue(
+      MockClient((_) {
+        if (++firstRequests == 3) firstBatchStarted.complete();
+        return respond(200);
+      }),
+    );
+    final second = queue(
+      MockClient((_) {
+        secondRequests++;
+        return respond(secondRequests == 1 ? 503 : 401);
+      }),
+    );
+    for (var index = 0; index < 3; index++) {
+      await first.record(
+        server: server,
+        loginName: 'fixture-user-$index',
+        appPassword: 'fixture-password-$index',
+      );
+    }
+    final draining = first.drain();
+    Future<void>? waiting;
+    addTearDown(() async {
+      if (!release.isCompleted) release.complete();
+      await Future.wait([draining, ?waiting]);
+    });
+    await firstBatchStarted.future;
+    waiting = second.drain();
+    await pumpEventQueue();
+
+    expect(peak, 3);
+    expect(secondRequests, 0);
+    await second.record(
+      server: server,
+      loginName: 'late-fixture-user',
+      appPassword: 'late-fixture-password',
+    );
+    release.complete();
+    await Future.wait([draining, waiting]);
+
+    expect(firstRequests, 3);
+    expect(secondRequests, 1);
+    expect(peak, 3);
+    expect(await first.pendingCount(), 1);
+    expect(vault.pendingRevocations, contains('late-fixture-user'));
+
+    await second.drain();
+    expect(secondRequests, 2);
+    expect(await first.pendingCount(), 0);
+  });
+
   test('another queue instance can record safely during a drain', () async {
     final requestStarted = Completer<void>();
     final releaseRequest = Completer<void>();

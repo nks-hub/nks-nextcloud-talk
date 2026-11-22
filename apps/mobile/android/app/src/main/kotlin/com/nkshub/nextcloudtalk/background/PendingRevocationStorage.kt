@@ -81,6 +81,11 @@ object PendingRevocationStorage {
                     null
                 }
             }
+            "acquireRevocationDrain" -> acquireDrain(client, call.argument("token"), result)
+            "releaseRevocationDrain" -> run(result) {
+                claims.releaseDrain(client, requireNotNull(call.argument<String>("token")))
+                null
+            }
             "readAppPassword", "writeAppPassword", "deleteAppPassword" -> run(result) {
                 val accountId = requireNotNull(call.argument<String>("accountId"))
                 val records = credentialRecords(context)
@@ -97,6 +102,18 @@ object PendingRevocationStorage {
                 }
             }
             else -> result.notImplemented()
+        }
+    }
+
+    private fun acquireDrain(client: Any, token: String?, result: MethodChannel.Result) {
+        if (token.isNullOrEmpty()) {
+            result.error("pending_revocation_storage", "The drain token is missing.", null)
+            return
+        }
+        executor.execute {
+            claims.acquireDrain(client, token) { acquired ->
+                mainHandler.post { runCatching { result.success(acquired) } }
+            }
         }
     }
 
@@ -195,8 +212,11 @@ object PendingRevocationStorage {
 /** Called on the vault worker in the same order as reads and writes. */
 internal class PendingRevocationOwners {
     private data class Claim(val client: Any, val token: String)
+    private data class WaitingDrain(val claim: Claim, val complete: (Boolean) -> Unit)
 
     private val owners = mutableMapOf<String, Claim>()
+    private val waitingDrains = ArrayDeque<WaitingDrain>()
+    private var drainOwner: Claim? = null
 
     fun claim(client: Any, id: String, token: String): Boolean {
         if (owners.containsKey(id)) return false
@@ -209,8 +229,29 @@ internal class PendingRevocationOwners {
         if (owner.client === client && owner.token == token) owners.remove(id)
     }
 
+    fun acquireDrain(client: Any, token: String, complete: (Boolean) -> Unit) {
+        // The current drain still needs this worker to commit its results.
+        waitingDrains.addLast(WaitingDrain(Claim(client, token), complete))
+        if (drainOwner == null) grantNextDrain()
+    }
+
+    fun releaseDrain(client: Any, token: String) {
+        val owner = drainOwner ?: return
+        if (owner.client === client && owner.token == token) grantNextDrain()
+    }
+
     fun detach(client: Any) {
         owners.entries.removeAll { it.value.client === client }
+        val departed = waitingDrains.filter { it.claim.client === client }
+        waitingDrains.removeAll { it.claim.client === client }
+        departed.forEach { it.complete(false) }
+        if (drainOwner?.client === client) grantNextDrain()
+    }
+
+    private fun grantNextDrain() {
+        val next = waitingDrains.removeFirstOrNull()
+        drainOwner = next?.claim
+        next?.complete?.invoke(true)
     }
 }
 
