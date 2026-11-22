@@ -1050,6 +1050,7 @@ void main() {
     tester,
   ) async {
     clipboard
+      ..durable = false
       ..readNeedsConsent = true
       ..copyImage('clip-1', tinyPng);
     await pumpComposer(tester);
