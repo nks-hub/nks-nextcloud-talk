@@ -595,7 +595,7 @@ final class _Tile extends StatelessWidget {
           // over this tile are white, and on the light scheme's own container
           // colour that reads at about 1.2:1. The rest of the call screen is
           // black anyway, so the tile was the one place that drifted.
-          const ColoredBox(color: Color(0xFF1C1B1F)),
+          const ColoredBox(color: Color(0xFF1A1C1F)),
           if (video != null)
             video!
           else
