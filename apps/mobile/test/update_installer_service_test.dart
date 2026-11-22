@@ -139,6 +139,74 @@ void main() {
     );
   });
 
+  test('a disk failure ends a download while its body is still open', () async {
+    final body = StreamController<List<int>>()..add(installerBytes);
+    final firstTerminalEvent = Completer<Object>();
+    final uncaught = <Object>[];
+    final zone = Zone.current.fork(
+      specification: ZoneSpecification(
+        handleUncaughtError: (_, _, _, error, _) {
+          uncaught.add(error);
+          if (!firstTerminalEvent.isCompleted) {
+            firstTerminalEvent.complete(error);
+          }
+        },
+      ),
+    );
+    var firstDownload = true;
+    final updater = service(
+      MockClient.streaming((request, _) async {
+        if (request.url == sumsUri) {
+          return http.StreamedResponse(
+            Stream.value(utf8.encode('$installerHash  $installerName\n')),
+            200,
+          );
+        }
+        expect(request.url, installerUri);
+        if (firstDownload) {
+          firstDownload = false;
+          final destination = leftoverTempDirs().single;
+          // A directory at the file path makes the real disk open fail.
+          await Directory(
+            '${destination.path}${Platform.pathSeparator}$installerName',
+          ).create();
+          return http.StreamedResponse(body.stream, 200);
+        }
+        return http.StreamedResponse(Stream.value(installerBytes), 200);
+      }),
+    );
+    final operation = zone.run(
+      () => updater.downloadAndVerify(release: release()),
+    );
+    unawaited(
+      operation.then((result) {
+        if (!firstTerminalEvent.isCompleted) {
+          firstTerminalEvent.complete(result);
+        }
+      }),
+    );
+    Object outcome;
+    try {
+      outcome = await firstTerminalEvent.future.timeout(
+        const Duration(seconds: 3),
+      );
+      expect(body.isClosed, isFalse);
+    } finally {
+      unawaited(body.close());
+      await operation;
+    }
+    expect(uncaught, isEmpty);
+    expect(outcome, isA<UpdateInstallUnavailable>());
+    expect(leftoverTempDirs(), isEmpty);
+
+    final retry = await updater.downloadAndVerify(release: release());
+    expect(retry, isA<UpdateInstallReady>());
+    expect(
+      await (retry as UpdateInstallReady).installerFile.readAsBytes(),
+      installerBytes,
+    );
+  });
+
   test('a SHA256SUMS that does not list the installer is refused', () async {
     final before = leftoverTempDirs().map((d) => d.path).toSet();
     final result = await service(

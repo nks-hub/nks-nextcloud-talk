@@ -466,9 +466,9 @@ final class UpdateInstallerService {
         throw const FormatException('Installer is larger than expected.');
       }
 
-      final sink = file.openWrite();
       final digestOutput = _DigestOutput();
       final digestInput = sha256.startChunkedConversion(digestOutput);
+      final output = await file.open(mode: FileMode.write);
       var received = 0;
       try {
         await for (final chunk in response.stream) {
@@ -477,13 +477,14 @@ final class UpdateInstallerService {
           if (received > maximumInstallerBytes) {
             throw const FormatException('Installer is larger than expected.');
           }
+          await output.writeFrom(chunk);
+          cancellation._check();
           digestInput.add(chunk);
-          sink.add(chunk);
           onProgress?.call(received, totalBytes);
         }
         digestInput.close();
       } finally {
-        await sink.close();
+        await output.close();
       }
       return (file: file, sha256: digestOutput.value.toString());
     } on Object {
