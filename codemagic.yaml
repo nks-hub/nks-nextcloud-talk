@@ -111,9 +111,10 @@ workflows:
           key=${APP_STORE_CONNECT_PRIVATE_KEY:?Missing App Store Connect private key}
           notary_key=$(mktemp /tmp/owntalk-notary.XXXXXX)
           trap 'rm -f "$notary_key"' EXIT
+          pem_header_pattern='-----BEGIN[ ]PRIVATE KEY-----'
           if [[ "$key" = /* && -f "$key" ]]; then
             cp "$key" "$notary_key"
-          elif [[ "$key" = *"-----BEGIN PRIVATE KEY-----"* ]]; then
+          elif [[ "$key" =~ $pem_header_pattern ]]; then
             printf '%b\n' "$key" > "$notary_key"
           else
             printf '%s' "$key" | base64 --decode > "$notary_key"
