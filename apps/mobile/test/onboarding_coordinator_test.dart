@@ -498,12 +498,12 @@ void main() {
               .having(
                 (error) => error.code,
                 'code',
-                OnboardingFailureCode.localPersistence,
+                OnboardingFailureCode.pendingSignInCleanup,
               )
               .having(
                 (error) => error.cleanupIncomplete,
                 'cleanupIncomplete',
-                isTrue,
+                isFalse,
               ),
         ),
       );
@@ -1003,12 +1003,12 @@ void main() {
             .having(
               (error) => error.code,
               'code',
-              OnboardingFailureCode.localPersistence,
+              OnboardingFailureCode.pendingSignInCleanup,
             )
             .having(
               (error) => error.cleanupIncomplete,
               'cleanupIncomplete',
-              isTrue,
+              isFalse,
             ),
       ),
     );

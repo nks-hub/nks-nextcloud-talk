@@ -733,6 +733,8 @@ String? _errorMessage(AppLocalizations strings, Object? error) {
       OnboardingFailureCode.accountIdentityMismatch =>
         strings.reauthenticateAccountMismatch,
       OnboardingFailureCode.localPersistence => strings.localPersistenceFailed,
+      OnboardingFailureCode.pendingSignInCleanup =>
+        strings.pendingSignInCleanup,
       OnboardingFailureCode.scannedLoginRejected =>
         strings.scannedLoginRejected,
       OnboardingFailureCode.untrustedCertificate =>

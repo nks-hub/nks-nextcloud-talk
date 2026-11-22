@@ -157,6 +157,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The account could not be stored securely on this device.';
 
   @override
+  String get pendingSignInCleanup =>
+      'Earlier sign-ins on this device are still being cleaned up. Try again later.';
+
+  @override
   String get scanLoginCode => 'Scan a login code';
 
   @override

@@ -44,6 +44,7 @@
   "talkUnavailable": "Nextcloud Talk is not available for this account.",
   "reauthenticateAccountMismatch": "Sign in with the same account. The stored account was not changed.",
   "localPersistenceFailed": "The account could not be stored securely on this device.",
+  "pendingSignInCleanup": "Earlier sign-ins on this device are still being cleaned up. Try again later.",
   "scanLoginCode": "Scan a login code",
   "@scanLoginCode": {
     "description": "Button that opens the camera to scan a Nextcloud login QR code"

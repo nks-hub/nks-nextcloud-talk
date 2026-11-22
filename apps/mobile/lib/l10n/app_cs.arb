@@ -44,6 +44,7 @@
   "talkUnavailable": "Nextcloud Talk není pro tento účet dostupný.",
   "reauthenticateAccountMismatch": "Přihlaste se ke stejnému účtu. Uložený účet nebyl změněn.",
   "localPersistenceFailed": "Účet se nepodařilo bezpečně uložit do tohoto zařízení.",
+  "pendingSignInCleanup": "Zařízení ještě uklízí po dřívějších přihlášeních. Zkuste to znovu později.",
   "scanLoginCode": "Načíst přihlašovací kód",
   "@scanLoginCode": {
     "description": "Button that opens the camera to scan a Nextcloud login QR code"

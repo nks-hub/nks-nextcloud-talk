@@ -26,6 +26,10 @@ enum OnboardingFailureCode {
   accountIdentityMismatch,
   localPersistence,
 
+  /// Earlier unfinished sign-ins or removals still hold every cleanup slot,
+  /// so no new app password may be created yet.
+  pendingSignInCleanup,
+
   /// A scanned payload named a server but the credentials in it could not be
   /// turned into a usable app password.
   scannedLoginRejected,
@@ -667,6 +671,8 @@ final class OnboardingCoordinator {
     }
     try {
       return await queue.reserve(browser: browser);
+    } on AppPasswordRevocationQueueFull {
+      throw const OnboardingFailure(OnboardingFailureCode.pendingSignInCleanup);
     } on Object {
       throw const OnboardingFailure(
         OnboardingFailureCode.localPersistence,

@@ -157,6 +157,10 @@ class AppLocalizationsCs extends AppLocalizations {
       'Účet se nepodařilo bezpečně uložit do tohoto zařízení.';
 
   @override
+  String get pendingSignInCleanup =>
+      'Zařízení ještě uklízí po dřívějších přihlášeních. Zkuste to znovu později.';
+
+  @override
   String get scanLoginCode => 'Načíst přihlašovací kód';
 
   @override

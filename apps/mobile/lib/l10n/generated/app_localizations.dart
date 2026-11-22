@@ -362,6 +362,12 @@ abstract class AppLocalizations {
   /// **'The account could not be stored securely on this device.'**
   String get localPersistenceFailed;
 
+  /// No description provided for @pendingSignInCleanup.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier sign-ins on this device are still being cleaned up. Try again later.'**
+  String get pendingSignInCleanup;
+
   /// Button that opens the camera to scan a Nextcloud login QR code
   ///
   /// In en, this message translates to:
