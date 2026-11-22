@@ -544,8 +544,7 @@ jobs:
         run: pip install --quiet google-api-python-client google-auth
       # Play rejects a version code it already has, but only after the whole
       # AAB has been uploaded. Asking first turns a late upload error into an
-      # immediate one. A code already on Play was uploaded by hand from the
-      # release machine, so the upload is skipped instead of failing the run.
+      # immediate one. Skip the upload only when the alpha release is completed.
       - name: Check the version code is new
         id: code
         env:
@@ -557,23 +556,33 @@ jobs:
           from google.oauth2.service_account import Credentials
           from googleapiclient.discovery import build
 
-          pkg, want = "com.nkshub.nextcloudtalk", int(os.environ["VERSION_CODE"])
+          pkg, want = "com.nkshub.nextcloudtalk", str(int(os.environ["VERSION_CODE"]))
           svc = build("androidpublisher", "v3", cache_discovery=False,
                       credentials=Credentials.from_service_account_file("key.json"))
           edit = svc.edits().insert(packageName=pkg, body={}).execute()["id"]
           try:
-              taken = {c for t in svc.edits().tracks().list(packageName=pkg, editId=edit)
-                       .execute().get("tracks", [])
-                       for r in t.get("releases", []) for c in r.get("versionCodes", [])}
+              response = svc.edits().tracks().list(packageName=pkg, editId=edit).execute()
           finally:
               svc.edits().delete(packageName=pkg, editId=edit).execute()
-          already = str(want) in {str(c) for c in taken}
+          matches = {
+              (track.get("track") or "unknown", release.get("status") or "unknown")
+              for track in response.get("tracks", [])
+              for release in track.get("releases", [])
+              if want in map(str, release.get("versionCodes", []))
+          }
+          already = ("alpha", "completed") in matches
+          if matches and not already:
+              locations = ", ".join(f"{track}/{status}" for track, status in sorted(matches))
+              raise SystemExit(
+                  f"Version code {want} is already used by {locations}. "
+                  "Expected a completed release on alpha to skip upload."
+              )
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
               out.write(f"already={'true' if already else 'false'}\n")
           if already:
-              print(f"::notice::version code {want} is already on Play, upload skipped")
+              print(f"::notice::version code {want} is already completed on alpha, upload skipped")
           else:
-              print(f"version code {want} is free; Play has {sorted(taken)}")
+              print(f"version code {want} is free on Play")
           PY
       # Committed notes win when they exist - the ones earlier releases shipped
       # were written by hand, and `apps/mobile/release-notes` holds them again.
