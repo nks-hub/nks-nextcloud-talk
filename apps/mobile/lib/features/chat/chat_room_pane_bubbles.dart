@@ -199,137 +199,161 @@ final class _MessageBubble extends StatelessWidget {
                                 groupEnd: groupEnd,
                               ),
                               border: highlighted
-                                  ? Border.all(color: scheme.tertiary, width: 2)
+                                  ? Border.all(
+                                      // The tertiary ring has the same tone
+                                      // as the primary outgoing fill.
+                                      color: outgoing
+                                          ? colors.foreground
+                                          : scheme.tertiary,
+                                      width: 2,
+                                    )
                                   : isThreadRoot
                                   ? Border.all(color: scheme.outlineVariant)
                                   : null,
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (!outgoing && showAuthor)
-                                    ExcludeSemantics(
-                                      child: Text(
-                                        message.actorDisplayName,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelMedium
-                                            ?.copyWith(
-                                              color: colors.shared
-                                                  ? colors.foreground
-                                                  : scheme.primary,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                      ),
-                                    ),
-                                  if (!outgoing && showAuthor)
-                                    const SizedBox(height: 2),
-                                  DefaultTextStyle.merge(
-                                    style: TextStyle(
-                                      color: colors.foreground,
-                                      fontStyle: message.deleted
-                                          ? FontStyle.italic
-                                          : null,
-                                    ),
-                                    child:
-                                        content ??
-                                        ChatMessageContent(
-                                          account: account,
-                                          message: message.deleted
-                                              ? null
-                                              : parsed,
-                                          fallbackText: message.deleted
-                                              ? AppLocalizations.of(
-                                                  context,
-                                                ).deletedMessage
-                                              : message.displayText,
-                                          foregroundColor: colors.foreground,
-                                          showReplyPreview: showReplyPreview,
-                                          onReactionTap: message.deleted
-                                              ? null
-                                              : (emoji) => onReactionTap(
-                                                  message,
-                                                  parsed,
-                                                  emoji,
-                                                ),
-                                          onOpenParent: onJumpToMessage,
+                            child: DefaultSelectionStyle(
+                              // The default selection colour is the primary at
+                              // 40 %, which vanishes on a primary-filled bubble.
+                              selectionColor: colors.foreground.withValues(
+                                alpha: 0.35,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  8,
+                                  12,
+                                  7,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (!outgoing && showAuthor)
+                                      ExcludeSemantics(
+                                        child: Text(
+                                          message.actorDisplayName,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelMedium
+                                              ?.copyWith(
+                                                color: colors.shared
+                                                    ? colors.foreground
+                                                    : scheme.primary,
+                                                fontWeight: FontWeight.w700,
+                                              ),
                                         ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  SelectionContainer.disabled(
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (parsed?.lastEditTimestamp !=
-                                            null) ...[
+                                      ),
+                                    if (!outgoing && showAuthor)
+                                      const SizedBox(height: 2),
+                                    DefaultTextStyle.merge(
+                                      style: TextStyle(
+                                        color: colors.foreground,
+                                        fontStyle: message.deleted
+                                            ? FontStyle.italic
+                                            : null,
+                                      ),
+                                      child:
+                                          content ??
+                                          ChatMessageContent(
+                                            account: account,
+                                            message: message.deleted
+                                                ? null
+                                                : parsed,
+                                            fallbackText: message.deleted
+                                                ? AppLocalizations.of(
+                                                    context,
+                                                  ).deletedMessage
+                                                : message.displayText,
+                                            foregroundColor: colors.foreground,
+                                            showReplyPreview: showReplyPreview,
+                                            onReactionTap: message.deleted
+                                                ? null
+                                                : (emoji) => onReactionTap(
+                                                    message,
+                                                    parsed,
+                                                    emoji,
+                                                  ),
+                                            onOpenParent: onJumpToMessage,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    SelectionContainer.disabled(
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (parsed?.lastEditTimestamp !=
+                                              null) ...[
+                                            Text(
+                                              AppLocalizations.of(
+                                                context,
+                                              ).edited,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .labelSmall
+                                                  ?.copyWith(
+                                                    color: colors.meta,
+                                                  ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                          ],
                                           Text(
-                                            AppLocalizations.of(context).edited,
+                                            _formatMessageClock(
+                                              context,
+                                              message.timestamp,
+                                            ),
                                             style: Theme.of(context)
                                                 .textTheme
                                                 .labelSmall
                                                 ?.copyWith(color: colors.meta),
                                           ),
-                                          const SizedBox(width: 6),
-                                        ],
-                                        Text(
-                                          _formatMessageClock(
-                                            context,
-                                            message.timestamp,
-                                          ),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelSmall
-                                              ?.copyWith(color: colors.meta),
-                                        ),
-                                        if (outgoing &&
-                                            deliveryState != null) ...[
-                                          const SizedBox(width: 6),
-                                          _DeliveryMark(
-                                            key: Key(
-                                              'chat-delivery-${message.messageId}',
+                                          if (outgoing &&
+                                              deliveryState != null) ...[
+                                            const SizedBox(width: 6),
+                                            _DeliveryMark(
+                                              key: Key(
+                                                'chat-delivery-${message.messageId}',
+                                              ),
+                                              state: deliveryState!,
+                                              color: colors.foreground,
                                             ),
-                                            state: deliveryState!,
-                                            color: colors.foreground,
-                                          ),
+                                          ],
                                         ],
-                                      ],
-                                    ),
-                                  ),
-                                  if (canOpenThread) ...[
-                                    const SizedBox(height: 2),
-                                    SelectionContainer.disabled(
-                                      child: TextButton.icon(
-                                        key: Key(
-                                          'chat-open-thread-${message.messageId}',
-                                        ),
-                                        onPressed: () => onOpenThread!(message),
-                                        style: TextButton.styleFrom(
-                                          foregroundColor:
-                                              outgoing || colors.shared
-                                              ? colors.foreground
-                                              : scheme.primary,
-                                          minimumSize: const Size(48, 48),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 4,
-                                          ),
-                                        ),
-                                        icon: const Icon(
-                                          Icons.forum_outlined,
-                                          size: 18,
-                                        ),
-                                        label: Text(
-                                          threadReplies > 0
-                                              ? strings.threadReplies(
-                                                  threadReplies,
-                                                )
-                                              : strings.openThread,
-                                        ),
                                       ),
                                     ),
+                                    if (canOpenThread) ...[
+                                      const SizedBox(height: 2),
+                                      SelectionContainer.disabled(
+                                        child: TextButton.icon(
+                                          key: Key(
+                                            'chat-open-thread-${message.messageId}',
+                                          ),
+                                          onPressed: () =>
+                                              onOpenThread!(message),
+                                          style: TextButton.styleFrom(
+                                            foregroundColor:
+                                                outgoing || colors.shared
+                                                ? colors.foreground
+                                                : scheme.primary,
+                                            minimumSize: const Size(48, 48),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 4,
+                                            ),
+                                          ),
+                                          icon: const Icon(
+                                            Icons.forum_outlined,
+                                            size: 18,
+                                          ),
+                                          label: Text(
+                                            threadReplies > 0
+                                                ? strings.threadReplies(
+                                                    threadReplies,
+                                                  )
+                                                : strings.openThread,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ],
-                                ],
+                                ),
                               ),
                             ),
                           ),

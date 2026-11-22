@@ -98,14 +98,11 @@ final class _RichBlocks extends StatelessWidget {
     return _SelectableLines(spacing: spacing, children: blocks);
   }
 
-  /// On a shared bubble colour the theme's primary may not reach 3:1; the
-  /// text colour already does (it is chosen for 4.5:1 on that bubble).
-  Color _quoteBarColor(BuildContext context, ThemeData theme) {
-    final shared = SharedChatAppearance.maybeOf(context);
-    return shared?.ownBubble != null || shared?.otherBubble != null
-        ? foregroundColor
-        : theme.colorScheme.primary;
-  }
+  /// The text colour is the one thing chosen for contrast on whatever the
+  /// bubble is: the theme's primary is the outgoing bubble's own fill, and on
+  /// a shared colour it may not reach 3:1.
+  Color _quoteBarColor(BuildContext context, ThemeData theme) =>
+      foregroundColor;
 
   Widget _buildBlock(BuildContext context, RichChatSemanticNode node) {
     final theme = Theme.of(context);
@@ -448,11 +445,14 @@ InlineSpan _inlineSpan(
       alignment: PlaceholderAlignment.middle,
       child: Padding(
         padding: const EdgeInsets.only(right: 4),
-        child: Icon(
-          node.checked == true
-              ? Icons.check_box_rounded
-              : Icons.check_box_outline_blank_rounded,
-          size: 18,
+        child: Builder(
+          builder: (context) => Icon(
+            node.checked == true
+                ? Icons.check_box_rounded
+                : Icons.check_box_outline_blank_rounded,
+            size: 18,
+            color: DefaultTextStyle.of(context).style.color,
+          ),
         ),
       ),
     ),

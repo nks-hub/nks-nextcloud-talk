@@ -182,7 +182,7 @@ final class _ReferenceCard extends ConsumerWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: foregroundColor.withValues(alpha: 0.70),
+                          color: foregroundColor.withValues(alpha: 0.90),
                         ),
                       ),
                       if (description != null && description.isNotEmpty) ...[
@@ -194,7 +194,7 @@ final class _ReferenceCard extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
-                                color: foregroundColor.withValues(alpha: 0.85),
+                                color: foregroundColor.withValues(alpha: 0.9),
                               ),
                         ),
                       ],
