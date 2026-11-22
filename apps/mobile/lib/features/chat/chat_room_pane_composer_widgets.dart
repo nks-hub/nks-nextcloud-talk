@@ -644,7 +644,7 @@ final class _ChatComposer extends ConsumerWidget {
                                 scheme.surfaceContainerHighest,
                                 0.45,
                               ),
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(26),
                               border: Border.all(
                                 color: focusNode.hasFocus
                                     ? scheme.primary
