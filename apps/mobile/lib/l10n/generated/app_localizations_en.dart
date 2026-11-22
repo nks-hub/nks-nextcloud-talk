@@ -158,7 +158,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pendingSignInCleanup =>
-      'Earlier sign-ins on this device are still being cleaned up. Try again later.';
+      'Earlier sign-ins and removed accounts are still being cleaned up on this device. Try again later.';
 
   @override
   String get scanLoginCode => 'Scan a login code';

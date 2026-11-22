@@ -158,7 +158,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get pendingSignInCleanup =>
-      'Zařízení ještě uklízí po dřívějších přihlášeních. Zkuste to znovu později.';
+      'Zařízení ještě uklízí po dřívějších přihlášeních a odebraných účtech. Zkuste to znovu později.';
 
   @override
   String get scanLoginCode => 'Načíst přihlašovací kód';

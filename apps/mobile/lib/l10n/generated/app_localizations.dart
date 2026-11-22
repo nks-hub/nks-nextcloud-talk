@@ -365,7 +365,7 @@ abstract class AppLocalizations {
   /// No description provided for @pendingSignInCleanup.
   ///
   /// In en, this message translates to:
-  /// **'Earlier sign-ins on this device are still being cleaned up. Try again later.'**
+  /// **'Earlier sign-ins and removed accounts are still being cleaned up on this device. Try again later.'**
   String get pendingSignInCleanup;
 
   /// Button that opens the camera to scan a Nextcloud login QR code
