@@ -705,11 +705,10 @@ final class _ThreadListTab extends StatelessWidget {
                   }
                   return RefreshIndicator(
                     onRefresh: onRefresh,
-                    child: ListView.separated(
+                    child: ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       itemCount: threads.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, index) {
                         final thread = threads[index];
                         return _ThreadListTile(
@@ -744,60 +743,202 @@ final class _ThreadListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
-    final title = thread.title.trim().isEmpty ? strings.thread : thread.title;
-    // Room and replies only. The date used to be joined onto the end of this
-    // line, which put it in a different place in every row depending on how
-    // long the room name was; a conversation row has always carried it at the
-    // right edge instead, and these two lists sit one tap apart.
-    final details = <String>[
-      ?roomName,
-      strings.threadReplies(thread.numReplies),
-    ].join(' · ');
-    final notification = _notificationLevelLabel(
-      strings,
-      thread.notificationLevel,
-    );
     final scheme = Theme.of(context).colorScheme;
-    return ListTile(
-      key: Key('thread-management-item-${thread.roomToken}-${thread.threadId}'),
-      minTileHeight: context.secondaryRowHeight,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: const CircleAvatar(child: Icon(Icons.forum_outlined)),
-      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(details, maxLines: 2, overflow: TextOverflow.ellipsis),
-      // Both in the trailing slot, which is the one place a list tile keeps
-      // hard against its right edge. Putting the date in the title row beside
-      // an expanded title splits the row in half and leaves it floating in
-      // the middle, and joining it onto the subtitle put it in a different
-      // place in every row. Side by side rather than stacked: at 200 % text a
-      // stack of the two was taller than the row by exactly the gap between
-      // them, and the row has width to spare where it has no height.
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            _formatActivity(context, thread.lastActivity),
-            key: Key(
-              'thread-management-activity-'
-              '${thread.roomToken}-${thread.threadId}',
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-          const SizedBox(width: 8),
-          Tooltip(
-            message: notification,
-            child: Icon(
-              _notificationIcon(thread.notificationLevel),
-              semanticLabel: notification,
-            ),
-          ),
-        ],
-      ),
+    final textTheme = Theme.of(context).textTheme;
+    final title = thread.title.trim().isEmpty ? strings.thread : thread.title;
+    final level = thread.notificationLevel;
+    final muted = level == 3;
+    final activity = _formatActivity(context, thread.lastActivity);
+    final notification = _notificationLevelLabel(strings, level);
+    return Semantics(
+      container: true,
+      button: true,
+      label: title,
+      value: [
+        ?roomName,
+        strings.threadReplies(thread.numReplies),
+        activity,
+        if (level != 0) notification,
+      ].join(', '),
       onTap: onTap,
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: Key(
+                'thread-management-item-${thread.roomToken}-${thread.threadId}',
+              ),
+              onTap: onTap,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: context.secondaryRowHeight,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      _ThreadAvatar(radius: context.listAvatarRadius),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // The date may take half the row at most. Expanded
+                            // plus Flexible would split the space evenly and
+                            // leave the date floating mid-row.
+                            LayoutBuilder(
+                              builder: (context, box) => Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: muted
+                                            ? scheme.onSurfaceVariant
+                                            : scheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: box.maxWidth / 2,
+                                    ),
+                                    child: Text(
+                                      activity,
+                                      key: Key(
+                                        'thread-management-activity-'
+                                        '${thread.roomToken}-${thread.threadId}',
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: textTheme.labelSmall?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                _ReplyCountPill(count: thread.numReplies),
+                                if (roomName != null) ...[
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      roomName!,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: textTheme.bodyMedium?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                ] else
+                                  const Spacer(),
+                                // The default level is the baseline and says
+                                // nothing; only a changed level gets an icon.
+                                if (level != 0) ...[
+                                  const SizedBox(width: 8),
+                                  Tooltip(
+                                    message: notification,
+                                    child: Icon(
+                                      _notificationIcon(level),
+                                      size: 18,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _ThreadAvatar extends StatelessWidget {
+  const _ThreadAvatar({required this.radius});
+
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: scheme.primaryContainer,
+      foregroundColor: scheme.onPrimaryContainer,
+      child: Icon(Icons.forum_outlined, size: radius * 0.9),
+    );
+  }
+}
+
+/// The reply count as a tonal pill, so it reads before the room name does.
+/// A thread nobody has answered yet drops to a neutral fill.
+final class _ReplyCountPill extends StatelessWidget {
+  const _ReplyCountPill({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final answered = count > 0;
+    final foreground = answered
+        ? scheme.onSecondaryContainer
+        : scheme.onSurfaceVariant;
+    return DecoratedBox(
+      key: const Key('thread-reply-count'),
+      decoration: ShapeDecoration(
+        color: answered
+            ? scheme.secondaryContainer
+            : scheme.surfaceContainerLow,
+        shape: const StadiumBorder(),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline_rounded,
+              size: 14,
+              color: foreground,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              AppLocalizations.of(context).threadReplies(count),
+              maxLines: 1,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -811,32 +952,68 @@ final class _ThreadDetailHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     final title = thread.title.trim().isEmpty ? strings.thread : thread.title;
-    return Card.outlined(
+    return Card(
+      color: scheme.surfaceContainerLow,
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const CircleAvatar(radius: 24, child: Icon(Icons.forum_outlined)),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 8),
-                  Text(roomName),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${strings.threadReplies(thread.numReplies)} · '
-                    '${_formatActivity(context, thread.lastActivity)}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _ThreadAvatar(radius: 28),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        roomName,
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _ReplyCountPill(count: thread.numReplies),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 16,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _formatActivity(context, thread.lastActivity),
+                      style: textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ],
         ),
@@ -885,6 +1062,33 @@ final class _ThreadErrorBanner extends StatelessWidget {
   }
 }
 
+/// Icon on a tonal disc, shared by the empty and the failed full-screen state.
+final class _ThreadStateIcon extends StatelessWidget {
+  const _ThreadStateIcon({required this.icon, this.error = false});
+
+  final IconData icon;
+  final bool error;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: error ? scheme.errorContainer : scheme.primaryContainer,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Icon(
+          icon,
+          size: 40,
+          color: error ? scheme.onErrorContainer : scheme.onPrimaryContainer,
+        ),
+      ),
+    );
+  }
+}
+
 final class _ThreadFullErrorState extends StatelessWidget {
   const _ThreadFullErrorState({required this.error, required this.onRetry});
 
@@ -897,24 +1101,31 @@ final class _ThreadFullErrorState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.cloud_off_outlined, size: 48),
-            const SizedBox(height: 16),
-            Text(
-              _threadErrorMessage(strings, error),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              key: const Key('thread-management-error-retry'),
-              onPressed: () => unawaited(onRetry()),
-              style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
-              icon: const Icon(Icons.refresh_rounded),
-              label: Text(strings.retry),
-            ),
-          ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _ThreadStateIcon(
+                icon: Icons.cloud_off_outlined,
+                error: true,
+              ),
+              const SizedBox(height: 20),
+              Text(
+                _threadErrorMessage(strings, error),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                key: const Key('thread-management-error-retry'),
+                onPressed: () => unawaited(onRetry()),
+                style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(strings.retry),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -929,22 +1140,34 @@ final class _ThreadEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.forum_outlined, size: 48),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(body, textAlign: TextAlign.center),
-          ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _ThreadStateIcon(icon: Icons.forum_outlined),
+              const SizedBox(height: 20),
+              Text(
+                title,
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                body,
+                textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

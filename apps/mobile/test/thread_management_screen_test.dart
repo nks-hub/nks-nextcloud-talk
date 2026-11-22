@@ -8,9 +8,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nextcloudtalk/app_providers.dart';
+import 'package:nextcloudtalk/core/app_theme.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/thread_repository.dart';
+import 'package:nextcloudtalk/features/chat/chat_background_theme.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/features/threads/thread_management_screen.dart';
@@ -729,6 +731,84 @@ void main() {
       reason: 'the date belongs at the edge, not floating mid-row',
     );
     await disposeHarness(tester);
+  });
+
+  testWidgets('a row leads with its reply count and shows an icon only for a '
+      'changed notification level', (tester) async {
+    await _setLargeSurface(tester);
+    Map<String, Object?> wire(int id, String title, int replies, int level) => {
+      'thread': {
+        'id': id,
+        'roomToken': _roomToken,
+        'title': title,
+        'lastMessageId': id + replies,
+        'lastActivity': 1787443000 + id,
+        'numReplies': replies,
+      },
+      'attendee': {'notificationLevel': level},
+      'first': null,
+      'last': null,
+    };
+    await tester.pumpWidget(
+      buildApp(
+        home: ThreadManagementScreen(
+          account: account,
+          conversation: conversation,
+        ),
+        handler: (request) {
+          if (request.url.path.endsWith('/threads/recent')) {
+            return _ocsResponse(
+              statusCode: 200,
+              data: [wire(120, 'Design', 2, 2), wire(121, 'Quiet', 0, 0)],
+            );
+          }
+          return _ocsResponse(statusCode: 404, data: const {});
+        },
+      ),
+    );
+    await _pumpUntil(tester, () => find.text('Quiet').evaluate().isNotEmpty);
+
+    Finder inRow(int id, Finder what) => find.descendant(
+      of: find.byKey(Key('thread-management-item-rooma123-$id')),
+      matching: what,
+    );
+    expect(inRow(120, find.text('2 replies')), findsOneWidget);
+    expect(inRow(121, find.text('0 replies')), findsOneWidget);
+    expect(
+      inRow(120, find.byIcon(Icons.alternate_email_rounded)),
+      findsOneWidget,
+    );
+    expect(inRow(121, find.byType(Tooltip)), findsNothing);
+    // The count is the first thing after the title, ahead of the room name.
+    expect(
+      tester
+          .getTopLeft(inRow(120, find.byKey(const Key('thread-reply-count'))))
+          .dx,
+      lessThan(
+        tester.getTopLeft(inRow(120, find.text(conversation.displayName))).dx,
+      ),
+    );
+    await disposeHarness(tester);
+  });
+
+  test('the colour pairs of the thread rows keep 4.5:1 in both themes', () {
+    for (final theme in [AppTheme.light(), AppTheme.dark()]) {
+      final s = theme.colorScheme;
+      final pairs = {
+        'reply pill': (s.onSecondaryContainer, s.secondaryContainer),
+        'quiet pill': (s.onSurfaceVariant, s.surfaceContainerLow),
+        'avatar': (s.onPrimaryContainer, s.primaryContainer),
+        'failed state': (s.onErrorContainer, s.errorContainer),
+        'muted title': (s.onSurfaceVariant, s.surface),
+      };
+      for (final entry in pairs.entries) {
+        expect(
+          chatBackgroundContrast(entry.value.$1, entry.value.$2),
+          greaterThanOrEqualTo(4.5),
+          reason: '${entry.key} in ${s.brightness.name}',
+        );
+      }
+    }
   });
 
   testWidgets('the thread list survives 200 % text on a narrow window', (
