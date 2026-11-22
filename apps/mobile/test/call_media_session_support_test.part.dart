@@ -225,6 +225,9 @@ final class _FakeVideo implements CallLocalVideo {
 }
 
 final class _FakeRemoteVideo implements CallRemoteVideo {
+  _FakeRemoteVideo({this.beforeDispose});
+
+  final Future<void> Function()? beforeDispose;
   bool disposed = false;
 
   @override
@@ -235,7 +238,10 @@ final class _FakeRemoteVideo implements CallRemoteVideo {
       const SizedBox.shrink();
 
   @override
-  Future<void> dispose() async => disposed = true;
+  Future<void> dispose() async {
+    disposed = true;
+    await beforeDispose?.call();
+  }
 }
 
 final class _FakeAudio implements CallLocalAudio {

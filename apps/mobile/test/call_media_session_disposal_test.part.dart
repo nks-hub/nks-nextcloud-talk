@@ -441,6 +441,75 @@ extension _MediaDisposalTests on _MediaSessionTests {
       },
     );
 
+    for (final leaving in [false, true]) {
+      test(
+        'MCU subscriber renderer failure during ${leaving ? 'leave' : 'recovery'}',
+        () async {
+          final media = session(_mcuScreenUpdate(), withControl: true);
+          addTearDown(media.dispose);
+          final releaseStarted = Completer<void>();
+          final finishRelease = Completer<void>();
+          addTearDown(() {
+            if (!finishRelease.isCompleted) finishRelease.complete();
+          });
+          await media.start();
+          updates.add(
+            _mcuScreenUpdate(
+              messages: [
+                _message(_remote, 'offer', {
+                  'type': 'offer',
+                  'sdp': 'remote-video',
+                }, sid: 'failed-subscriber'),
+                _message(
+                  _remote,
+                  'offer',
+                  {'type': 'offer', 'sdp': 'remote-screen'},
+                  sid: 'incoming-screen',
+                  roomType: 'screen',
+                ),
+              ],
+            ),
+          );
+          await pumpEventQueue();
+          final [publisher, subscriber, screen] = engine.connections;
+          final renderer = _FakeRemoteVideo(
+            beforeDispose: () async {
+              releaseStarted.complete();
+              await finishRelease.future;
+              throw StateError('subscriber renderer release failed');
+            },
+          );
+          subscriber.onRemoteVideo(renderer);
+          await pumpEventQueue();
+          expect(media.state.participants.single.video, same(renderer));
+          expect(screen.remoteDescriptions.single.sdp, 'remote-screen');
+
+          sent.clear();
+          subscriber.emitConnectionState(CallMediaConnectionState.failed);
+          await releaseStarted.future;
+          final disposal = leaving ? media.dispose() : null;
+          finishRelease.complete();
+          await disposal;
+          await pumpEventQueue();
+
+          expect(renderer.disposed, isTrue);
+          expect(subscriber.closed, isTrue);
+          expect(publisher.closed, leaving);
+          expect(screen.closed, leaving);
+          final requests = sent.where(
+            (message) => message.type == 'requestoffer',
+          );
+          if (leaving) {
+            expect(requests, isEmpty);
+          } else {
+            expect(requests.single.recipient?.value, _remote);
+            expect(requests.single.sid, isNot('failed-subscriber'));
+            expect(sent.where((message) => message.type == 'offer'), isEmpty);
+          }
+        },
+      );
+    }
+
     test('dispose closes an incoming screen without a call peer', () async {
       engine.audioConnectionError = CallMediaError.engineFailure;
       final media = session(

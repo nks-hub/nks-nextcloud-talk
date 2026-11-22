@@ -589,8 +589,7 @@ extension _CallMediaSessionSignaling on CallMediaSession {
         // A subscriber must request a new server offer instead.
         (_retiredSubscriberSids[peer.peerId] ??= {}).add(peer.sid);
         _peers.remove(peer.peerId);
-        await peer.video?.dispose();
-        await peer.connection?.close();
+        await _closeMediaPeer('MCU subscriber', peer, CallResourceCleanup());
         await _subscribe(peer.peerId);
       } else {
         await _offer(peer, iceRestart: true);
