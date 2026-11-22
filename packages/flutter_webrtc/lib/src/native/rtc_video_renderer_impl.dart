@@ -83,7 +83,7 @@ class RTCVideoRenderer extends ValueNotifier<RTCVideoValue>
         'textureId': _textureId,
         'streamId': stream?.id ?? '',
         'ownerTag': stream?.ownerTag ?? '',
-        'trackId': trackId ?? '0'
+        if (trackId != null) 'trackId': trackId,
       });
       value = (stream == null)
           ? RTCVideoValue.empty

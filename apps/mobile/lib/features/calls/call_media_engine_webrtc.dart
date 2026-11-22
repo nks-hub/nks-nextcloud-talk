@@ -238,14 +238,35 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
         unawaited(_probeOutbound(connection));
       }
     };
+    var remoteVideoGeneration = 0;
+    ({int generation, String? trackId})? pendingVideo;
+    ({String? trackId})? publishedVideo;
     connection.onTrack = (event) {
       if (event.track.kind != 'video' || event.streams.isEmpty) {
         return;
       }
+      final stream = event.streams.first;
+      final attachment = (
+        generation: ++remoteVideoGeneration,
+        trackId: stream.getVideoTracks().firstOrNull?.id ?? event.track.id,
+      );
+      pendingVideo = attachment;
       unawaited(
-        _WebRtcRemoteVideo.open(event.streams.first).then(
-          onRemoteVideo,
+        _WebRtcRemoteVideo.open(stream).then(
+          (video) async {
+            if (pendingVideo == attachment) {
+              pendingVideo = null;
+              publishedVideo = (trackId: attachment.trackId);
+              onRemoteVideo(video);
+            } else {
+              await CallResourceCleanup().run(
+                video.dispose,
+                label: 'superseded remote video renderer',
+              );
+            }
+          },
           onError: (Object error, StackTrace stack) {
+            if (pendingVideo == attachment) pendingVideo = null;
             debugPrint(
               '[call] remote video renderer failed: ${error.runtimeType}',
             );
@@ -255,7 +276,14 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
       );
     };
     connection.onRemoveTrack = (stream, track) {
-      if (track.kind == 'video') {
+      if (track.kind != 'video') return;
+      final pending = pendingVideo;
+      if (pending != null && pending.trackId == track.id) {
+        pendingVideo = null;
+      }
+      final published = publishedVideo;
+      if (published != null && published.trackId == track.id) {
+        publishedVideo = null;
         onRemoteVideo(null);
       }
     };
@@ -296,6 +324,18 @@ rtc.RTCVideoViewObjectFit _fit(bool contain) => contain
     ? rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitContain
     : rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitCover;
 
+Future<void> _attachVideoRenderer(
+  rtc.RTCVideoRenderer renderer,
+  rtc.MediaStream stream,
+) async {
+  if (kIsWeb) {
+    // The web setter keeps all video tracks; setSrcObject filters by ID.
+    renderer.srcObject = stream;
+  } else {
+    await renderer.setSrcObject(stream: stream);
+  }
+}
+
 final class _WebRtcLocalVideo implements CallLocalVideo {
   _WebRtcLocalVideo._(this.stream, this._renderer);
 
@@ -303,7 +343,7 @@ final class _WebRtcLocalVideo implements CallLocalVideo {
     final renderer = rtc.RTCVideoRenderer();
     try {
       await renderer.initialize();
-      renderer.srcObject = stream;
+      await _attachVideoRenderer(renderer, stream);
       return _WebRtcLocalVideo._(stream, renderer);
     } on Object {
       final cleanup = CallResourceCleanup();
@@ -387,13 +427,21 @@ final class _WebRtcRemoteVideo implements CallRemoteVideo {
 
   static Future<_WebRtcRemoteVideo> open(rtc.MediaStream stream) async {
     final renderer = rtc.RTCVideoRenderer();
-    await renderer.initialize();
-    renderer.srcObject = stream;
-    final tracks = stream.getVideoTracks();
-    return _WebRtcRemoteVideo._(
-      renderer,
-      tracks.isEmpty ? null : tracks.first.id,
-    );
+    try {
+      await renderer.initialize();
+      await _attachVideoRenderer(renderer, stream);
+      final tracks = stream.getVideoTracks();
+      return _WebRtcRemoteVideo._(
+        renderer,
+        tracks.isEmpty ? null : tracks.first.id,
+      );
+    } on Object {
+      await CallResourceCleanup().run(
+        renderer.dispose,
+        label: 'incomplete remote video renderer',
+      );
+      rethrow;
+    }
   }
 
   @override

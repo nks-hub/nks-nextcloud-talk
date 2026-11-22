@@ -33,6 +33,24 @@ const _receiver = {
   'track': _videoTrack,
   'rtpParameters': _rtpParameters,
 };
+const _remoteStream = {
+  'streamId': 'remote-stream',
+  'ownerTag': 'peer-fixture',
+  'audioTracks': [],
+  'videoTracks': [_videoTrack],
+};
+const _replacementTrack = {
+  'id': 'replacement-video',
+  'kind': 'video',
+  'label': 'replacement video',
+  'enabled': true,
+};
+const _replacementStream = {
+  'streamId': 'replacement-stream',
+  'ownerTag': 'peer-fixture',
+  'audioTracks': [],
+  'videoTracks': [_replacementTrack],
+};
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +59,7 @@ void main() {
   const methods = MethodChannel('FlutterWebRTC.Method');
   const events = MethodChannel('FlutterWebRTC.Event');
   const textureEvents = MethodChannel('FlutterWebRTC/Texture23');
+  const replacementTextureEvents = MethodChannel('FlutterWebRTC/Texture24');
   const peerEvents = MethodChannel(
     'FlutterWebRTC/peerConnectionEventpeer-fixture',
   );
@@ -48,19 +67,63 @@ void main() {
   final releases = <String>[];
   final failures = <String, PlatformException>{};
   Future<int> Function()? openRenderer;
+  Future<void> Function(Map<Object?, Object?>)? attachRenderer;
+
+  Future<void> receivePeerEvent(Map<String, Object?> event) =>
+      messenger.handlePlatformMessage(
+        peerEvents.name,
+        const StandardMethodCodec().encodeSuccessEnvelope(event),
+        null,
+      );
+
+  Future<void> receiveVideoTrack({
+    Map<String, Object?> track = _videoTrack,
+    Map<String, Object?> stream = _remoteStream,
+  }) => receivePeerEvent({
+    'event': 'onTrack',
+    'track': track,
+    'receiver': {..._receiver, 'track': track},
+    'streams': [stream],
+  });
+
+  Future<void> openPeer(List<CallRemoteVideo?> published) async {
+    final peer = await engine.createPeerConnection(
+      iceServers: const [],
+      audio: null,
+      onIceCandidate: (_) {},
+      onConnectionState: (_) {},
+      onRemoteVideo: published.add,
+    );
+    addTearDown(peer.close);
+    addTearDown(() async {
+      for (final video in published) {
+        await video?.dispose();
+      }
+    });
+  }
 
   setUp(() {
     releases.clear();
     failures.clear();
     openRenderer = null;
+    attachRenderer = null;
     messenger.setMockMethodCallHandler(events, (_) async => null);
     messenger.setMockMethodCallHandler(textureEvents, (_) async => null);
+    messenger.setMockMethodCallHandler(
+      replacementTextureEvents,
+      (_) async => null,
+    );
     messenger.setMockMethodCallHandler(peerEvents, (_) async => null);
     messenger.setMockMethodCallHandler(methods, (call) async {
       switch (call.method) {
         case 'initialize':
-        case 'videoRendererSetSrcObject':
         case 'enableSpeakerphone':
+          return null;
+        case 'videoRendererSetSrcObject':
+          final arguments = call.arguments as Map<Object?, Object?>;
+          if (arguments['streamId'] != '') {
+            await attachRenderer?.call(arguments);
+          }
           return null;
         case 'getSources':
           return {'sources': []};
@@ -118,6 +181,7 @@ void main() {
     messenger.setMockMethodCallHandler(methods, null);
     messenger.setMockMethodCallHandler(events, null);
     messenger.setMockMethodCallHandler(textureEvents, null);
+    messenger.setMockMethodCallHandler(replacementTextureEvents, null);
     messenger.setMockMethodCallHandler(peerEvents, null);
   });
 
@@ -158,6 +222,167 @@ void main() {
       'streamDispose',
     ]);
   });
+
+  test('camera waits for attachment and releases after it fails', () async {
+    final attaching = Completer<Map<Object?, Object?>>();
+    final attached = Completer<void>();
+    attachRenderer = (arguments) {
+      attaching.complete(arguments);
+      return attached.future;
+    };
+    addTearDown(() {
+      if (!attached.isCompleted) attached.complete();
+    });
+
+    var completed = false;
+    final opening = engine
+        .openCamera()
+        .then<Object>((camera) => camera, onError: (Object error) => error)
+        .then((result) {
+          completed = true;
+          return result;
+        });
+    final arguments = await attaching.future.timeout(
+      const Duration(seconds: 2),
+    );
+    await pumpEventQueue();
+    final openedEarly = completed;
+    attached.completeError(PlatformException(code: 'preview_attach'));
+    final result = await opening.timeout(const Duration(seconds: 2));
+    final automaticReleases = releases.toList();
+    if (result case final CallLocalVideo camera) await camera.dispose();
+
+    expect(arguments, {
+      'textureId': 23,
+      'streamId': 'local-fixture',
+      'ownerTag': 'local',
+    });
+    expect(
+      {
+        'openedEarly': openedEarly,
+        'result': result,
+        'releases': automaticReleases,
+      },
+      {
+        'openedEarly': false,
+        'result': isA<CallMediaException>().having(
+          (error) => error.code,
+          'code',
+          CallMediaError.cameraUnavailable,
+        ),
+        'releases': [
+          'videoRendererDispose',
+          'video-1',
+          'video-2',
+          'streamDispose',
+        ],
+      },
+    );
+  });
+
+  test(
+    'failed remote attachment releases the texture and keeps the peer',
+    () async {
+      attachRenderer = (_) async =>
+          throw PlatformException(code: 'remote_attach');
+      final published = <CallRemoteVideo?>[];
+      await openPeer(published);
+
+      await receiveVideoTrack();
+      await pumpEventQueue();
+
+      expect(
+        {'published': published, 'released': releases},
+        {
+          'published': isEmpty,
+          'released': ['videoRendererDispose'],
+        },
+      );
+    },
+  );
+
+  test('a removed track never publishes its late attachment', () async {
+    final attaching = Completer<void>();
+    final attached = Completer<void>();
+    attachRenderer = (_) {
+      attaching.complete();
+      return attached.future;
+    };
+    addTearDown(() {
+      if (!attached.isCompleted) attached.complete();
+    });
+    final published = <CallRemoteVideo?>[];
+    await openPeer(published);
+    await receivePeerEvent({'event': 'onAddStream', ..._remoteStream});
+    await receiveVideoTrack();
+    await attaching.future.timeout(const Duration(seconds: 2));
+    await pumpEventQueue();
+
+    await receivePeerEvent({
+      'event': 'onRemoveTrack',
+      'trackId': _videoTrack['id'],
+    });
+    attached.complete();
+    await pumpEventQueue();
+
+    expect(
+      {'published': published, 'released': releases},
+      {
+        'published': isEmpty,
+        'released': ['videoRendererDispose'],
+      },
+    );
+  });
+
+  for (final removePrevious in [true, false]) {
+    test(
+      removePrevious
+          ? 'removing the shown track keeps its pending replacement'
+          : 'removing a pending replacement keeps the shown track',
+      () async {
+        var textureId = 23;
+        openRenderer = () async => textureId++;
+        final published = <CallRemoteVideo?>[];
+        await openPeer(published);
+        await receivePeerEvent({'event': 'onAddStream', ..._remoteStream});
+        await receivePeerEvent({'event': 'onAddStream', ..._replacementStream});
+        await receiveVideoTrack();
+        await pumpEventQueue();
+        expect(published.single?.videoTrackId, _videoTrack['id']);
+
+        final attaching = Completer<void>();
+        final attached = Completer<void>();
+        attachRenderer = (_) {
+          attaching.complete();
+          return attached.future;
+        };
+        addTearDown(() {
+          if (!attached.isCompleted) attached.complete();
+        });
+        await receiveVideoTrack(
+          track: _replacementTrack,
+          stream: _replacementStream,
+        );
+        await attaching.future.timeout(const Duration(seconds: 2));
+        await receivePeerEvent({
+          'event': 'onRemoveTrack',
+          'trackId': (removePrevious ? _videoTrack : _replacementTrack)['id'],
+        });
+        final beforeAttachment = published
+            .map((video) => video?.videoTrackId)
+            .toList();
+        attached.complete();
+        await pumpEventQueue();
+
+        expect(beforeAttachment, [_videoTrack['id'], if (removePrevious) null]);
+        expect(published.map((video) => video?.videoTrackId), [
+          ...beforeAttachment,
+          if (removePrevious) _replacementTrack['id'],
+        ]);
+        expect(releases, [if (!removePrevious) 'videoRendererDispose']);
+      },
+    );
+  }
 
   test('camera stops its tracks after native renderer release fails', () async {
     final camera = await engine.openCamera();
@@ -299,23 +524,7 @@ void main() {
       await media.start();
       expect(media.state.peers, 1);
 
-      await messenger.handlePlatformMessage(
-        peerEvents.name,
-        const StandardMethodCodec().encodeSuccessEnvelope({
-          'event': 'onTrack',
-          'track': _videoTrack,
-          'receiver': _receiver,
-          'streams': [
-            {
-              'streamId': 'remote-stream',
-              'ownerTag': 'peer-fixture',
-              'audioTracks': [],
-              'videoTracks': [_videoTrack],
-            },
-          ],
-        }),
-        null,
-      );
+      await receiveVideoTrack();
       await opening.future.timeout(const Duration(seconds: 2));
 
       await media.dispose().timeout(const Duration(seconds: 2));
