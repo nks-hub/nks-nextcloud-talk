@@ -7,6 +7,8 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'app_database.dart';
 import 'attachment_thread_binding.dart';
 
+part 'attachment_repository_account_state.dart';
+
 typedef AttachmentPersistenceKey = ({String accountId, String jobId});
 
 const int attachmentTerminalHistoryLimitPerAccount = 128;
@@ -443,15 +445,16 @@ final class AttachmentRepository {
   }) => _database
       .into(_database.attachmentRuntimeAccounts)
       .insertOnConflictUpdate(
-        AttachmentRuntimeAccountsCompanion.insert(
-          accountId: account.accountId.value,
-          serverUrl: account.server.value,
-          lane: account.lane.name,
-          credentialGeneration: account.credentialGeneration,
-          capabilityGeneration: account.capabilityGeneration,
-          updatedAtMillis: updatedAt.toUtc().millisecondsSinceEpoch,
+        _runtimeAccountCompanion(
+          account,
+          updatedAt.toUtc().millisecondsSinceEpoch,
         ),
       );
+
+  Future<void> resumeSuspendedAccount({
+    required AccountId accountId,
+    required DateTime updatedAt,
+  }) => _resumeSuspendedAttachmentAccount(_database, accountId, updatedAt);
 
   Future<void> persistAdmission({
     required AttachmentAccountState account,
@@ -515,23 +518,20 @@ final class AttachmentRepository {
   }) {
     final updatedAtMillis = updatedAt.toUtc().millisecondsSinceEpoch;
     return _database.transaction(() async {
-      final runtimeAccount = AttachmentRuntimeAccountsCompanion.insert(
-        accountId: account.accountId.value,
-        serverUrl: account.server.value,
-        lane: account.lane.name,
-        credentialGeneration: account.credentialGeneration,
-        capabilityGeneration: account.capabilityGeneration,
-        updatedAtMillis: updatedAtMillis,
-      );
+      final runtimeAccount = _runtimeAccountCompanion(account, updatedAtMillis);
       final stored =
           await (_database.select(_database.attachmentRuntimeAccounts)
                 ..where((row) => row.accountId.equals(account.accountId.value)))
               .getSingleOrNull();
-      // Nearly every step leaves the account as it was; only the job moved.
-      if (stored
-              ?.toCompanion(false)
-              .copyWith(updatedAtMillis: Value(updatedAtMillis)) !=
-          runtimeAccount) {
+      // Late job cleanup must not restore a suspension after rollback.
+      final staleSuspension =
+          account.lane == AttachmentAccountLane.suspended &&
+          stored?.lane == AttachmentAccountLane.ready.name;
+      if (!staleSuspension &&
+          stored
+                  ?.toCompanion(false)
+                  .copyWith(updatedAtMillis: Value(updatedAtMillis)) !=
+              runtimeAccount) {
         await _database
             .into(_database.attachmentRuntimeAccounts)
             .insertOnConflictUpdate(runtimeAccount);

@@ -56,6 +56,144 @@ void _registerAttachmentOwnershipTests() {
   );
 
   test(
+    'failed account removal restores the attachment lane through late cleanup',
+    () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final fixture = await _Fixture.create(
+        accountIds: ['account-a', 'account-b'],
+        terminalHistoryLimitPerAccount: 1,
+      );
+      addTearDown(fixture.close);
+      await fixture.seedTerminal(messageId: 201);
+      final releaseStarted = Completer<void>();
+      final allowRelease = Completer<void>();
+      final runtime = fixture.service(
+        _unexpectedClient(),
+        releaseSource: (_) async {
+          releaseStarted.complete();
+          await allowRelease.future;
+          await fixture.sourceFile.delete();
+        },
+      );
+      addTearDown(() async {
+        if (!allowRelease.isCompleted) allowRelease.complete();
+        await runtime.close();
+      });
+      await runtime.ready;
+      await releaseStarted.future.timeout(const Duration(seconds: 2));
+
+      final accountA = AccountId.parse('account-a');
+      final accountB = AccountId.parse('account-b');
+      await fixture.repository.persistAccountState(
+        account: AttachmentAccountState(
+          accountId: accountB,
+          server: ServerBase.parse('https://cloud.example.invalid'),
+          lane: AttachmentAccountLane.ready,
+          credentialGeneration: 1,
+          capabilityGeneration: 1,
+          jobs: const {},
+        ),
+        updatedAt: DateTime.utc(2026, 11, 22),
+      );
+      final completed = await fixture.database
+          .select(fixture.database.attachmentJobs)
+          .getSingle();
+      await fixture.database.batch((batch) {
+        for (var index = 0; index < 2; index++) {
+          final jobId = 'aaaaaaaa-aaaa-4aaa-8aaa-00000000000$index';
+          final job = completed.copyWith(
+            accountId: accountB.value,
+            jobId: jobId,
+            remoteTemporaryPath: Value(
+              '${completed.remoteDraftFolder}/$jobId.upload',
+            ),
+            referenceId: 'bbbbbbbb-bbbb-4bbb-8bbb-00000000000$index',
+            enqueueSequence: index + 1,
+            sourceReleased: true,
+            updatedAtMillis: index,
+          );
+          batch.insert(fixture.database.attachmentJobs, job.toCompanion(true));
+        }
+      });
+      await fixture.database.customStatement('''
+        CREATE TRIGGER fail_terminal_history_prune BEFORE DELETE ON attachment_jobs
+        WHEN OLD.account_id = 'account-b'
+        BEGIN SELECT RAISE(ABORT, 'fixture pruning failure'); END
+      ''');
+
+      Future<String> accountLane() async {
+        final row = await (fixture.database.select(
+          fixture.database.attachmentRuntimeAccounts,
+        )..where((row) => row.accountId.equals(accountA.value))).getSingle();
+        return row.lane;
+      }
+
+      final credentials = _FailedRemovalCredentialVault(
+        fixture.credentials,
+        beforeFailure: () async {
+          expect(await accountLane(), AttachmentAccountLane.suspended.name);
+        },
+      );
+      final api = HttpNextcloudApi(
+        client: MockClient(
+          (_) async => http.Response(
+            '{"ocs":{"meta":{"status":"ok","statuscode":200},"data":{}}}',
+            200,
+          ),
+        ),
+      );
+      addTearDown(api.close);
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(fixture.database),
+          attachmentRepositoryProvider.overrideWithValue(fixture.repository),
+          attachmentServiceProvider.overrideWith((_) async => runtime),
+          appPasswordRevocationQueueProvider.overrideWithValue(
+            AppPasswordRevocationQueue(store: fixture.credentials, api: api),
+          ),
+          credentialVaultProvider.overrideWithValue(credentials),
+          nextcloudApiProvider.overrideWithValue(api),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        container
+            .read(accountRemovalServiceProvider)
+            .removeAccount(accountA.value),
+        throwsA(isA<CredentialVaultTemporarilyUnavailable>()),
+      );
+      expect(await accountLane(), AttachmentAccountLane.ready.name);
+      expect(
+        await (fixture.database.select(
+          fixture.database.attachmentJobs,
+        )..where((row) => row.accountId.equals(accountB.value))).get(),
+        hasLength(2),
+      );
+
+      await fixture.database.customStatement(
+        'DROP TRIGGER fail_terminal_history_prune',
+      );
+      final closing = runtime.close();
+      allowRelease.complete();
+      await closing;
+
+      final loaded = await fixture.repository.loadRuntime();
+      expect(
+        loaded.snapshot.accounts[accountA]?.lane,
+        AttachmentAccountLane.ready,
+      );
+      expect(loaded.snapshot.accounts[accountB]?.jobs, hasLength(1));
+      expect(
+        loaded
+            .metadata[(accountId: accountA.value, jobId: completed.jobId)]
+            ?.sourceReleased,
+        isTrue,
+      );
+    },
+  );
+
+  test(
     'close preserves an account suspension already writing to disk',
     () async {
       final fixture = await _Fixture.create(fileBacked: true);
@@ -388,4 +526,25 @@ final class _HeldAttachmentInsert extends QueryInterceptor {
     }
     return super.runInsert(executor, statement, args);
   }
+}
+
+final class _FailedRemovalCredentialVault implements CredentialVault {
+  _FailedRemovalCredentialVault(this._vault, {required this.beforeFailure});
+
+  final CredentialVault _vault;
+  final Future<void> Function() beforeFailure;
+
+  @override
+  Future<void> deleteAppPassword(String accountId) async {
+    await beforeFailure();
+    throw const CredentialVaultTemporarilyUnavailable();
+  }
+
+  @override
+  Future<String?> readAppPassword(String accountId) =>
+      _vault.readAppPassword(accountId);
+
+  @override
+  Future<void> writeAppPassword(String accountId, String appPassword) =>
+      _vault.writeAppPassword(accountId, appPassword);
 }

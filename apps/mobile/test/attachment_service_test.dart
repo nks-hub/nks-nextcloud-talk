@@ -5,7 +5,7 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart'
-    show ApplyInterceptor, QueryExecutor, QueryInterceptor;
+    show ApplyInterceptor, QueryExecutor, QueryInterceptor, Value;
 import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show MethodCall, MethodChannel;
@@ -16,7 +16,10 @@ import 'package:http/testing.dart';
 import 'package:nextcloudtalk/features/chat/attachment_runtime_owner.dart';
 import 'package:nextcloudtalk/app_providers.dart'
     show
+        accountRemovalServiceProvider,
         appDatabaseProvider,
+        appPasswordRevocationQueueProvider,
+        attachmentRepositoryProvider,
         attachmentServiceProvider,
         credentialVaultProvider,
         drainForBackground,
@@ -29,6 +32,7 @@ import 'package:nextcloudtalk/data/attachment_repository.dart';
 import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:nextcloudtalk/features/chat/chat_service.dart';
+import 'package:nextcloudtalk/features/settings/app_password_revocation_queue.dart';
 import 'package:nextcloudtalk/network/attachment_transport.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart' show HttpNextcloudApi;
 import 'package:talk_protocol/talk_protocol.dart';

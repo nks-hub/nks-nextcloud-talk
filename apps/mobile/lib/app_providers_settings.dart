@@ -83,15 +83,10 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
       final typedAccountId = AccountId.parse(accountId);
       final repository = ref.read(attachmentRepositoryProvider);
       try {
-        final runtime = await repository.loadRuntime();
-        final account = runtime.snapshot.accounts[typedAccountId];
-        if (account != null &&
-            account.lane == AttachmentAccountLane.suspended) {
-          await repository.persistAccountState(
-            account: account.copyWith(lane: AttachmentAccountLane.ready),
-            updatedAt: DateTime.now().toUtc(),
-          );
-        }
+        await repository.resumeSuspendedAccount(
+          accountId: typedAccountId,
+          updatedAt: DateTime.now().toUtc(),
+        );
       } finally {
         // Suspension is intentionally one-way inside each service instance.
         // Recreate those instances after restoring the durable attachment
