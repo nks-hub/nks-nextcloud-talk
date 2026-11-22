@@ -66,6 +66,7 @@ final class CallMediaSession {
   /// authority before it gives up. Long enough to cover a lift, a tunnel or a
   /// hand-over between Wi-Fi and mobile data; short enough that a call which
   /// is really gone does not pretend otherwise.
+  /// Unanswered MCU screen offers use the same grace period.
   final Duration renegotiationHold;
 
   Timer? _renegotiationHold;
@@ -85,6 +86,7 @@ final class CallMediaSession {
   /// has two screen connections that only their direction tells apart.
   final Map<String, _MediaPeer> _shares = <String, _MediaPeer>{};
   CallLocalVideo? _screen;
+  Timer? _screenAnswerTimer;
   List<CallIceServer> _iceServers = const <CallIceServer>[];
   List<CallAudioRoute> _audioRoutes = const <CallAudioRoute>[];
   CallAudioRoute? _audioRoute;
@@ -245,6 +247,7 @@ final class CallMediaSession {
     }
     // Pending capture must see Leave before its queued cleanup can run.
     _disposed = true;
+    _cancelScreenAnswerTimer();
     return _disposal = _enqueue(() async {
       final cleanup = CallResourceCleanup();
       final routeChanges = _routeChanges;

@@ -1,5 +1,33 @@
 part of 'call_media_session_test.dart';
 
+typedef _CapturedTimer = ({Timer timer, VoidCallback expire});
+
+Future<void> _withCapturedTimers(
+  Duration delay,
+  Future<void> Function(List<_CapturedTimer>) testBody,
+) {
+  final timers = <_CapturedTimer>[];
+  return runZoned(
+    () => testBody(timers),
+    zoneSpecification: ZoneSpecification(
+      createTimer: (self, parent, zone, duration, callback) {
+        final timer = parent.createTimer(zone, duration, callback);
+        if (duration == delay) {
+          timers.add((
+            timer: timer,
+            expire: () {
+              if (!timer.isActive) return;
+              timer.cancel();
+              callback();
+            },
+          ));
+        }
+        return timer;
+      },
+    ),
+  );
+}
+
 CallSignalingUpdate _update({
   required String? localPeerId,
   List<SignalingParticipant> participants = const [],

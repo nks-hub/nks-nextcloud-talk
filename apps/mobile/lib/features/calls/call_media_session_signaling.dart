@@ -428,6 +428,7 @@ extension _CallMediaSessionSignaling on CallMediaSession {
       await connection.setRemoteDescription(sdp);
       peer.localOfferPending = false;
       peer.remoteDescriptionSet = true;
+      if (_isCurrentMcuScreenPublisher(peer)) _cancelScreenAnswerTimer();
       await _drainRemoteCandidates(peer);
     } on CallMediaException {
       if (!_disposed && _mcu && peer.ownScreen) {

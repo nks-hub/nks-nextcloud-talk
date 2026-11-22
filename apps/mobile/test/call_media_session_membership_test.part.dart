@@ -382,25 +382,9 @@ extension _MediaMembershipTests on _MediaSessionTests {
 
 Future<void> _withPublisherRetry(
   Future<void> Function(VoidCallback retryPublisher) testBody,
-) {
-  Timer? retry;
-  VoidCallback? fire;
-  return runZoned(
-    () => testBody(() {
-      final timer = retry;
-      if (timer == null || !timer.isActive) return;
-      timer.cancel();
-      fire?.call();
-    }),
-    zoneSpecification: ZoneSpecification(
-      createTimer: (self, parent, zone, delay, callback) {
-        final timer = parent.createTimer(zone, delay, callback);
-        if (delay == const Duration(seconds: 10)) {
-          retry = timer;
-          fire = callback;
-        }
-        return timer;
-      },
-    ),
-  );
-}
+) => _withCapturedTimers(
+  const Duration(seconds: 10),
+  (timers) => testBody(() {
+    if (timers.isNotEmpty) timers.last.expire();
+  }),
+);

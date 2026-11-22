@@ -130,8 +130,10 @@ extension _CallMediaSessionScreen on CallMediaSession {
         ),
         onConnectionState: (state) => unawaited(
           _enqueue(() async {
-            if (identical(_shares[peerId], share)) {
-              share.state = state;
+            if (_disposed || !identical(_shares[peerId], share)) return;
+            share.state = state;
+            if (_mcu && state == CallMediaConnectionState.failed) {
+              await _stopFailedMcuScreenPublisher(share);
             }
           }),
         ),
@@ -148,7 +150,38 @@ extension _CallMediaSessionScreen on CallMediaSession {
       return false;
     }
     debugPrint('[call] share → $peerId sid=${share.sid}');
-    return _offer(share);
+    final offered = await _offer(share);
+    if (offered && _isCurrentMcuScreenPublisher(share)) {
+      _screenAnswerTimer = Timer(renegotiationHold, () {
+        unawaited(
+          _enqueue(() async {
+            if (share.localOfferPending) {
+              await _stopFailedMcuScreenPublisher(share);
+            }
+          }),
+        );
+      });
+    }
+    return offered;
+  }
+
+  bool _isCurrentMcuScreenPublisher(_MediaPeer share) =>
+      !_disposed &&
+      _mcu &&
+      share.ownScreen &&
+      share.peerId == _boundLocalPeerId &&
+      share.roomEpoch == _boundRoomEpoch &&
+      identical(_shares[share.peerId], share);
+
+  Future<void> _stopFailedMcuScreenPublisher(_MediaPeer share) async {
+    if (!_isCurrentMcuScreenPublisher(share)) return;
+    await _stopSharing();
+    _publish();
+  }
+
+  void _cancelScreenAnswerTimer() {
+    _screenAnswerTimer?.cancel();
+    _screenAnswerTimer = null;
   }
 
   /// Tells one participant that this side is publishing a screen.
@@ -180,6 +213,7 @@ extension _CallMediaSessionScreen on CallMediaSession {
     CallResourceCleanup? cleanup,
     bool notifyPeers = true,
   }) async {
+    _cancelScreenAnswerTimer();
     final resources = cleanup ?? CallResourceCleanup();
     // Through an MCU the only share is the publish to this side's own
     // session, which tells the SERVER to drop the publisher; the other

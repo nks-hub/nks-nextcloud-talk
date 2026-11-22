@@ -1,5 +1,7 @@
 part of 'call_media_session_test.dart';
 
+const _screenNegotiationHold = Duration(seconds: 45);
+
 extension _MediaDisposalTests on _MediaSessionTests {
   void _registerDisposal() {
     for (final sharing in [false, true]) {
@@ -136,6 +138,150 @@ extension _MediaDisposalTests on _MediaSessionTests {
 
       expect(status.map((frame) => frame.type), ['audioOff']);
     });
+
+    test('a failed live MCU screen closes only the outgoing share', () async {
+      const peers = [_remote, 'second-session'];
+      final media = session(
+        _mcuScreenUpdate(
+          peers: peers,
+          messages: [
+            for (final peer in peers)
+              _message(peer, 'offer', {
+                'type': 'offer',
+                'sdp': 'subscriber-offer',
+              }, sid: 'incoming-$peer'),
+          ],
+        ),
+        withControl: true,
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      final callConnections = engine.connections.toList();
+      await media.setScreenSharing(true);
+      final share = engine.connections.last;
+      updates.add(
+        _mcuScreenUpdate(
+          peers: peers,
+          messages: [
+            for (final offer in sent.where(
+              (message) => message.type == 'offer',
+            ))
+              _mcuPublisherAnswer(offer),
+          ],
+        ),
+      );
+      for (final connection in engine.connections) {
+        connection.emitConnectionState(CallMediaConnectionState.connected);
+      }
+      await pumpEventQueue();
+      expect(share.remoteDescriptions, hasLength(1));
+      expect(callConnections.first.remoteDescriptions, hasLength(1));
+      expect(media.state.screenSharing, isTrue);
+      expect(media.state.connectedPeers, peers.length);
+
+      sent.clear();
+      share.emitConnectionState(CallMediaConnectionState.failed);
+      await pumpEventQueue();
+
+      expect(media.state.screenSharing, isFalse);
+      expect(engine.screens.single.disposeCalls, 1);
+      expect(share.closed, isTrue);
+      expect(callConnections.every((connection) => !connection.closed), isTrue);
+      expect(media.state.connectedPeers, peers.length);
+      expect(media.state.phase, CallMediaPhase.connected);
+      expect(
+        sent
+            .where((message) => message.type == 'unshareScreen')
+            .map((message) => message.recipient?.value),
+        unorderedEquals([_local, ...peers]),
+      );
+    });
+
+    test(
+      'an unanswered MCU screen offer releases its capture',
+      () => _withCapturedTimers(_screenNegotiationHold, (timers) async {
+        final media = await _startPendingMcuScreen();
+        final [publisher, share] = engine.connections;
+        expect(media.state.screenSharing, isTrue);
+
+        expect(timers, hasLength(1));
+        timers.single.expire();
+        await pumpEventQueue();
+
+        expect(media.state.screenSharing, isFalse);
+        expect(engine.screens.single.disposeCalls, 1);
+        expect(share.closed, isTrue);
+        expect(publisher.closed, isFalse);
+        expect(media.state.peers, 1);
+      }),
+    );
+
+    for (final queuedDeadline in [false, true]) {
+      test(
+        queuedDeadline
+            ? 'an MCU screen answer received before the deadline keeps sharing'
+            : 'an accepted MCU screen answer cancels the deadline',
+        () => _withCapturedTimers(_screenNegotiationHold, (timers) async {
+          final media = await _startPendingMcuScreen();
+          final share = engine.connections.last;
+          final offer = sent.lastWhere((message) => message.type == 'offer');
+          expect(timers.single.timer.isActive, isTrue);
+
+          updates.add(_mcuScreenUpdate(messages: [_mcuPublisherAnswer(offer)]));
+          if (queuedDeadline) timers.single.expire();
+          await pumpEventQueue();
+
+          expect(share.remoteDescriptions, hasLength(1));
+          expect(timers.single.timer.isActive, isFalse);
+          expect(media.state.screenSharing, isTrue);
+          expect(engine.screens.single.disposed, isFalse);
+        }),
+      );
+    }
+
+    test(
+      'queued MCU screen events cannot close a replacement share',
+      () => _withCapturedTimers(_screenNegotiationHold, (timers) async {
+        final media = await _startPendingMcuScreen();
+        final replaced = engine.connections.last;
+
+        final stopping = media.setScreenSharing(false);
+        final starting = media.setScreenSharing(true);
+        timers.single.expire();
+        replaced.emitConnectionState(CallMediaConnectionState.failed);
+        await Future.wait([stopping, starting]);
+        await pumpEventQueue();
+
+        expect(replaced.closed, isTrue);
+        expect(engine.screens.first.disposeCalls, 1);
+        expect(engine.connections.last.closed, isFalse);
+        expect(timers, hasLength(2));
+        expect(timers.last.timer.isActive, isTrue);
+        expect(media.state.screenSharing, isTrue);
+        expect(engine.screens.last.disposed, isFalse);
+      }),
+    );
+
+    test(
+      'leaving cancels the pending MCU screen deadline',
+      () => _withCapturedTimers(_screenNegotiationHold, (timers) async {
+        final media = await _startPendingMcuScreen();
+        final share = engine.connections.last;
+        expect(timers.single.timer.isActive, isTrue);
+
+        sent.clear();
+        share.emitConnectionState(CallMediaConnectionState.failed);
+        final disposal = media.dispose();
+
+        expect(timers.single.timer.isActive, isFalse);
+        await disposal;
+
+        expect(media.state, CallMediaState.idle);
+        expect(engine.screens.single.disposeCalls, 1);
+        expect(share.closed, isTrue);
+        expect(sent, isEmpty);
+      }),
+    );
 
     test('an obsolete MCU answer cannot close a replacement share', () async {
       final participants = [_participant(_remote)];
@@ -380,4 +526,31 @@ extension _MediaDisposalTests on _MediaSessionTests {
       );
     });
   }
+
+  Future<CallMediaSession> _startPendingMcuScreen() async {
+    final media = session(_mcuScreenUpdate(), withControl: true);
+    addTearDown(media.dispose);
+    await media.start();
+    await media.setScreenSharing(true);
+    return media;
+  }
 }
+
+CallSignalingUpdate _mcuScreenUpdate({
+  List<String> peers = const [_remote],
+  List<SignalingPeerMessage> messages = const [],
+}) => _update(
+  localPeerId: _local,
+  topology: SignalingTopology.externalMcu,
+  participants: [for (final peer in peers) _participant(peer)],
+  messages: messages,
+);
+
+SignalingPeerMessage _mcuPublisherAnswer(SignalingPeerMessage offer) =>
+    _message(
+      _local,
+      'answer',
+      {'type': 'answer', 'sdp': 'publisher-answer'},
+      sid: offer.sid,
+      roomType: offer.roomType,
+    );
