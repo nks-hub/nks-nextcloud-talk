@@ -45,6 +45,28 @@ void main() {
     }
   });
 
+  test('a server colour carries its secondary and tertiary roles with it', () {
+    const server = Color(0xFFE65100);
+    for (final brightness in Brightness.values) {
+      final custom =
+          (brightness == Brightness.light
+                  ? AppTheme.light(seedColor: server)
+                  : AppTheme.dark(seedColor: server))
+              .colorScheme;
+      final expected = ColorScheme.fromSeed(
+        seedColor: server,
+        brightness: brightness,
+      );
+      final fallback =
+          (brightness == Brightness.light ? AppTheme.light() : AppTheme.dark())
+              .colorScheme;
+      expect(custom.secondaryContainer, expected.secondaryContainer);
+      expect(custom.tertiaryContainer, expected.tertiaryContainer);
+      expect(custom.secondaryContainer, isNot(fallback.secondaryContainer));
+      expect(custom.tertiaryContainer, isNot(fallback.tertiaryContainer));
+    }
+  });
+
   testWidgets('filter labels follow selected and disabled states', (
     tester,
   ) async {

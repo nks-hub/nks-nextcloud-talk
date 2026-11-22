@@ -35,6 +35,27 @@ abstract final class AppTheme {
     return rgb == null ? null : Color(0xFF000000 | rgb);
   }
 
+  static ColorScheme _fixedRoles(ColorScheme generated, Brightness brightness) {
+    final secondary = ColorScheme.fromSeed(
+      seedColor: _secondarySeed,
+      brightness: brightness,
+    );
+    final tertiary = ColorScheme.fromSeed(
+      seedColor: _tertiarySeed,
+      brightness: brightness,
+    );
+    return generated.copyWith(
+      secondary: secondary.primary,
+      onSecondary: secondary.onPrimary,
+      secondaryContainer: secondary.primaryContainer,
+      onSecondaryContainer: secondary.onPrimaryContainer,
+      tertiary: tertiary.primary,
+      onTertiary: tertiary.onPrimary,
+      tertiaryContainer: tertiary.primaryContainer,
+      onTertiaryContainer: tertiary.onPrimaryContainer,
+    );
+  }
+
   static ThemeData _create(Brightness brightness, {Color? seedColor}) {
     final isDark = brightness == Brightness.dark;
     final pointer = _pointerFirst;
@@ -60,23 +81,12 @@ abstract final class AppTheme {
       seedColor: seedColor ?? _seed,
       brightness: brightness,
     );
-    final secondary = ColorScheme.fromSeed(
-      seedColor: _secondarySeed,
-      brightness: brightness,
-    );
-    final tertiary = ColorScheme.fromSeed(
-      seedColor: _tertiarySeed,
-      brightness: brightness,
-    );
-    final scheme = generated.copyWith(
-      secondary: secondary.primary,
-      onSecondary: secondary.onPrimary,
-      secondaryContainer: secondary.primaryContainer,
-      onSecondaryContainer: secondary.onPrimaryContainer,
-      tertiary: tertiary.primary,
-      onTertiary: tertiary.onPrimary,
-      tertiaryContainer: tertiary.primaryContainer,
-      onTertiaryContainer: tertiary.onPrimaryContainer,
+    // The fixed purple and teal belong to the default blue. A server theme
+    // brings its own primary, and its secondary and tertiary roles follow it.
+    final roles = seedColor == null
+        ? _fixedRoles(generated, brightness)
+        : generated;
+    final scheme = roles.copyWith(
       surface: isDark ? _darkSurface : _lightSurface,
       surfaceContainerLowest: isDark ? const Color(0xFF080B0F) : Colors.white,
       surfaceContainerLow: isDark
