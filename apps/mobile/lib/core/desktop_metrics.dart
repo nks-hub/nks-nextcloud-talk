@@ -32,6 +32,9 @@ extension AppMetrics on BuildContext {
   /// Radius of the avatar shown in a conversation row.
   double get listAvatarRadius => _pointerFirst ? 20 : 28;
 
+  /// Radius of the avatar in a pane header, which did not grow with the list's.
+  double get headerAvatarRadius => _pointerFirst ? 20 : 24;
+
   /// Minimum height of a pane header — the conversation list header and the
   /// chat room header both use it, so they stay aligned with each other.
   double get paneHeaderHeight => _pointerFirst ? 52 : 72;

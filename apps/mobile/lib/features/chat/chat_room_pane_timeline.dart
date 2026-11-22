@@ -32,6 +32,7 @@ final class _ChatHeader extends StatelessWidget {
                   child: ConversationAvatar(
                     account: account,
                     conversation: conversation,
+                    radius: context.headerAvatarRadius,
                   ),
                 ),
                 const SizedBox(width: 14),

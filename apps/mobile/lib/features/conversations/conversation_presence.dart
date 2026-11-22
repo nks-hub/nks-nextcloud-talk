@@ -389,6 +389,9 @@ final class PresenceChatRoomPane extends ConsumerWidget {
                       child: ConversationAvatar(
                         account: account,
                         conversation: conversation,
+                        // The header stays at the size it was built for; the
+                        // list avatar has grown.
+                        radius: context.headerAvatarRadius,
                       ),
                     ),
                     const SizedBox(width: avatarGap),
