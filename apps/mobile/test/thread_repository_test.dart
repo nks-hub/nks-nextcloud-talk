@@ -532,6 +532,55 @@ void main() {
     expect(await threads.listAccount('account-a'), isEmpty);
   });
 
+  test(
+    'later thread metadata wins for repaired rows and ordinary quotes',
+    () async {
+      await _insertThreadMessages(database, title: 'Before', replyCount: 3);
+      final table = database.cachedChatMessages;
+      await (database.update(table)
+            ..where((row) => row.messageId.isIn([100, 101, 103])))
+          .write(const CachedChatMessagesCompanion(rawJson: Value('{')));
+      final quote = await (database.select(
+        table,
+      )..where((row) => row.messageId.equals(102))).getSingle();
+      final quoteWire = jsonDecode(quote.rawJson) as Map<String, Object?>
+        ..['threadId'] = 900
+        ..['threadTitle'] = 'Other thread';
+      await (database.update(
+        table,
+      )..where((row) => row.messageId.equals(102))).write(
+        CachedChatMessagesCompanion(
+          threadId: const Value(900),
+          rawJson: Value(jsonEncode(quoteWire)),
+        ),
+      );
+      await threads.replaceSubscribed(
+        accountId: 'account-a',
+        server: _serverFor('account-a'),
+        values: [
+          _threadWithMessages(title: 'First copy', rootText: 'Older root'),
+          _threadWithMessages(title: 'New title', rootText: 'Latest root'),
+        ],
+      );
+      final rows = await (database.select(
+        table,
+      )..orderBy([(row) => OrderingTerm.asc(row.messageId)])).get();
+      final [root, reply, ordinaryQuote] = rows
+          .take(3)
+          .map((row) => ChatMessage.fromJson(jsonDecode(row.rawJson)))
+          .toList();
+      expect(root.message, 'Latest root');
+      expect(reply.threadTitle, 'New title');
+      expect((reply.parent as ChatFullParent).message.message, 'Latest root');
+      expect(ordinaryQuote.threadTitle, 'Other thread');
+      expect(
+        (ordinaryQuote.parent as ChatFullParent).message.message,
+        'Latest root',
+      );
+      expect(rows.last.rawJson, '{');
+    },
+  );
+
   test('subscription refresh batches rows and reads messages once', () async {
     await database.close();
     final counter = _CachedMessageSelectCounter();
@@ -619,7 +668,7 @@ void main() {
   });
 
   test(
-    'subscription projection flushes room batches in one transaction',
+    'subscription projection pages large room batches in one transaction',
     () async {
       await database.close();
       final counter = _CachedMessageSelectCounter();
@@ -642,7 +691,7 @@ void main() {
         await _insertThreadMessages(
           database,
           title: 'Before',
-          replyCount: 4,
+          replyCount: 34,
           roomToken: roomToken,
         );
         values.add(
@@ -672,7 +721,14 @@ void main() {
         server: _serverFor('account-a'),
         values: values,
       );
-      const operations = ['read:40', 'write:40', 'read:10', 'write:10'];
+      const operations = [
+        'read:256',
+        'write:256',
+        'read:24',
+        'write:24',
+        'read:70',
+        'write:70',
+      ];
 
       counter.enabled = true;
       await expectLater(
@@ -698,7 +754,7 @@ void main() {
       expect(counter.projectionOperations, operations);
       counter.enabled = false;
       final after = await database.select(database.cachedChatMessages).get();
-      expect(after, hasLength(52));
+      expect(after, hasLength(352));
       for (final row in after) {
         final title = ChatMessage.fromJson(jsonDecode(row.rawJson)).threadTitle;
         expect(
@@ -755,12 +811,13 @@ RichChatThread _threadWithMessages({
   required String title,
   String roomToken = 'rooma123',
   int rootId = 100,
+  String rootText = 'Root message',
 }) {
   final root = _messageWire(
     id: rootId,
     title: title,
     isRoot: true,
-    message: 'Root message',
+    message: rootText,
     roomToken: roomToken,
     threadId: rootId,
   );

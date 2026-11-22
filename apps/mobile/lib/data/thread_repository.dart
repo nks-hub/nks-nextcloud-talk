@@ -389,111 +389,118 @@ final class ThreadRepository {
           ? offset + roomChunkSize
           : roomTokens.length;
       final chunk = roomTokens.sublist(offset, end);
-      final rowsByRoom = <String, List<CachedChatMessage>>{
-        for (final roomToken in chunk) roomToken: <CachedChatMessage>[],
-      };
-      final rows =
-          await (_database.select(_database.cachedChatMessages)..where(
-                (message) =>
-                    message.accountId.equals(accountId) &
-                    message.roomToken.isIn(chunk),
-              ))
-              .get();
-      for (final row in rows) {
-        rowsByRoom[row.roomToken]!.add(row);
-      }
-      final changedMessages = <CachedChatMessagesCompanion>[
+      final projections = {
         for (final roomToken in chunk)
-          ..._projectRoomMessages(
-            accountId: accountId,
-            server: server,
-            values: valuesByRoom[roomToken]!,
-            rows: rowsByRoom[roomToken]!,
-          ),
-      ];
-      // Subscription refreshes span rooms, so release each chunk's history
-      // before loading the next one. The caller's transaction covers all chunks.
-      if (changedMessages.isNotEmpty) {
-        await _database.batch(
-          (batch) => batch.insertAllOnConflictUpdate(
-            _database.cachedChatMessages,
-            changedMessages,
-          ),
+          roomToken: _RoomThreadProjection(valuesByRoom[roomToken]!),
+      };
+      ({String roomToken, int messageId})? after;
+      while (true) {
+        final rows = await _loadMessagePage(
+          accountId: accountId,
+          roomTokens: chunk,
+          after: after,
+        );
+        final changed = <CachedChatMessagesCompanion>[];
+        for (final row in rows) {
+          final roomToken = row.read<String>('room_token');
+          final messageId = row.read<int>('message_id');
+          final message = projections[roomToken]!.updateCached(
+            messageId,
+            row.read<String>('raw_json'),
+          );
+          if (message != null) {
+            changed.add(
+              _messageCompanion(
+                accountId: accountId,
+                server: server,
+                message: message,
+              ),
+            );
+          }
+        }
+        final lastPage = rows.length < _messageProjectionPageSize;
+        if (lastPage) {
+          // Inserting missing rows sooner would put them in the cursor's path.
+          for (final projection in projections.values) {
+            for (final message in projection.missingMessages) {
+              changed.add(
+                _messageCompanion(
+                  accountId: accountId,
+                  server: server,
+                  message: message,
+                ),
+              );
+              if (changed.length == _messageProjectionPageSize) {
+                await _writeProjectedMessages(changed);
+                changed.clear();
+              }
+            }
+          }
+        }
+        await _writeProjectedMessages(changed);
+        if (lastPage) {
+          break;
+        }
+        after = (
+          roomToken: rows.last.read<String>('room_token'),
+          messageId: rows.last.read<int>('message_id'),
         );
       }
     }
   }
 
-  List<CachedChatMessagesCompanion> _projectRoomMessages({
+  static const _messageProjectionPageSize = 256;
+
+  Future<List<QueryRow>> _loadMessagePage({
     required String accountId,
-    required ServerBase server,
-    required List<RichChatThread> values,
-    required List<CachedChatMessage> rows,
+    required List<String> roomTokens,
+    required ({String roomToken, int messageId})? after,
   }) {
-    final originals = <int, ChatMessage>{};
-    final projected = <int, ChatMessage>{};
-    for (final row in rows) {
-      final ChatMessage cached;
-      try {
-        cached = ChatMessage.fromJson(jsonDecode(row.rawJson));
-      } on FormatException {
-        continue;
-      } on TalkProtocolException {
-        continue;
-      }
-      originals[row.messageId] = cached;
-      projected[row.messageId] = cached;
-    }
+    final slots = List.filled(roomTokens.length, '?').join(', ');
+    // This branch lets SQLite seek to the message ID in the current room.
+    final currentRoom = after == null
+        ? ''
+        : '''
+          SELECT room_token, message_id, raw_json FROM "cached_chat_messages"
+          WHERE account_id = ? AND room_token = ? AND message_id > ?
+          UNION ALL
+        ''';
+    final laterRooms = after == null ? '' : 'AND room_token > ?';
+    return _database
+        .customSelect(
+          '''
+        $currentRoom
+        SELECT room_token, message_id, raw_json FROM "cached_chat_messages"
+        WHERE account_id = ? AND room_token IN ($slots) $laterRooms
+        ORDER BY room_token, message_id
+        LIMIT $_messageProjectionPageSize
+      ''',
+          variables: [
+            if (after != null) ...[
+              Variable.withString(accountId),
+              Variable.withString(after.roomToken),
+              Variable.withInt(after.messageId),
+            ],
+            Variable.withString(accountId),
+            for (final roomToken in roomTokens) Variable.withString(roomToken),
+            if (after != null) Variable.withString(after.roomToken),
+          ],
+          readsFrom: {_database.cachedChatMessages},
+        )
+        .get();
+  }
 
-    // Apply the server list in order, as the former per-thread calls did,
-    // while keeping the room rows decoded only once.
-    for (final value in values) {
-      final authoritative = <int, ChatMessage>{};
-      for (final message in <ChatMessage?>[
-        value.firstMessage,
-        value.lastMessage,
-      ]) {
-        if (message == null) {
-          continue;
-        }
-        authoritative[message.messageId] = message.projectThreadTitle(
-          roomToken: value.roomToken,
-          threadId: value.threadId,
-          threadTitle: value.title,
-        );
-      }
-      for (final entry in projected.entries.toList(growable: false)) {
-        var updated =
-            authoritative[entry.key] ??
-            entry.value.projectThreadTitle(
-              roomToken: value.roomToken,
-              threadId: value.threadId,
-              threadTitle: value.title,
-            );
-        for (final message in authoritative.values) {
-          updated = updated.replaceParentMessageIfMatching(message);
-        }
-        projected[entry.key] = updated;
-      }
-      for (final message in authoritative.values) {
-        projected.putIfAbsent(message.messageId, () => message);
-      }
-    }
-
-    final changedMessages = <CachedChatMessagesCompanion>[];
-    for (final entry in projected.entries) {
-      if (identical(originals[entry.key], entry.value)) {
-        continue;
-      }
-      changedMessages.add(
-        _messageCompanion(
-          accountId: accountId,
-          server: server,
-          message: entry.value,
+  Future<void> _writeProjectedMessages(
+    List<CachedChatMessagesCompanion> messages,
+  ) async {
+    if (messages.isNotEmpty) {
+      await _database.batch(
+        (batch) => batch.insertAllOnConflictUpdate(
+          _database.cachedChatMessages,
+          messages,
         ),
       );
     }
-    return changedMessages;
   }
 
   CachedChatMessagesCompanion _messageCompanion({
@@ -552,5 +559,85 @@ final class ThreadRepository {
               thread.detailed.equals(false),
         ))
         .go();
+  }
+}
+
+final class _RoomThreadProjection {
+  _RoomThreadProjection(List<RichChatThread> threads)
+    : _values = [
+        for (final thread in threads)
+          (
+            thread: thread,
+            authoritative: {
+              for (final message in [thread.firstMessage, thread.lastMessage])
+                if (message != null)
+                  message.messageId: message.projectThreadTitle(
+                    roomToken: thread.roomToken,
+                    threadId: thread.threadId,
+                    threadTitle: thread.title,
+                  ),
+            },
+          ),
+      ],
+      _threadIds = {for (final thread in threads) thread.threadId} {
+    _authoritativeIds = {
+      for (final value in _values) ...value.authoritative.keys,
+    };
+    _missingIds = _authoritativeIds.toSet();
+  }
+
+  final List<({RichChatThread thread, Map<int, ChatMessage> authoritative})>
+  _values;
+  final Set<int> _threadIds;
+  late final Set<int> _authoritativeIds;
+  late final Set<int> _missingIds;
+
+  ChatMessage? updateCached(int messageId, String rawJson) {
+    final ChatMessage cached;
+    try {
+      cached = ChatMessage.fromJson(jsonDecode(rawJson));
+    } on FormatException {
+      return null;
+    } on TalkProtocolException {
+      return null;
+    }
+    _missingIds.remove(messageId);
+    final parent = cached.parent;
+    if (!_authoritativeIds.contains(messageId) &&
+        !_threadIds.contains(cached.threadId) &&
+        (parent is! ChatFullParent ||
+            !_authoritativeIds.contains(parent.messageId))) {
+      return null;
+    }
+    final updated = _project(messageId, cached);
+    return identical(updated, cached) ? null : updated;
+  }
+
+  Iterable<ChatMessage> get missingMessages =>
+      _missingIds.map((id) => _project(id, null)!);
+
+  ChatMessage? _project(int messageId, ChatMessage? cached) {
+    var projected = cached;
+    for (final value in _values) {
+      final incoming = value.authoritative[messageId];
+      final current = projected;
+      if (current == null) {
+        // A new row only receives parent updates from later thread entries.
+        projected = incoming;
+        continue;
+      }
+      var updated =
+          incoming ??
+          current.projectThreadTitle(
+            roomToken: value.thread.roomToken,
+            threadId: value.thread.threadId,
+            threadTitle: value.thread.title,
+          );
+      for (final parent in value.authoritative.values) {
+        updated = updated.replaceParentMessageIfMatching(parent);
+      }
+      projected = updated;
+    }
+    return projected;
   }
 }
