@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../data/account_repository.dart';
 import '../../data/credential_vault.dart';
+import '../../network/account_http_client.dart';
 import '../../network/nextcloud_api.dart';
 
 /// App passwords the device still owes a `DELETE /core/apppassword` for.
@@ -181,6 +182,7 @@ final class AppPasswordRevocationQueue {
     required String loginName,
     required String appPassword,
     required String accountId,
+    String? certificateFingerprint,
   }) async {
     if (accountId.isEmpty) {
       throw const AppPasswordRevocationQueueCorrupt();
@@ -205,6 +207,7 @@ final class AppPasswordRevocationQueue {
             since: _now(),
             phase: AppPasswordCredentialPhase.removalReserved,
             accountId: accountId,
+            certificateFingerprint: certificateFingerprint,
           ),
         );
         return _encode(entries);
@@ -487,8 +490,19 @@ final class AppPasswordRevocationQueue {
     } on TalkProtocolException {
       return false;
     }
+    HttpNextcloudApi? pinnedApi;
     try {
-      await _api.revokeAppPassword(
+      final fingerprint = entry.certificateFingerprint;
+      if (fingerprint != null) {
+        pinnedApi = HttpNextcloudApi(
+          client: createPinnedRevocationClient(
+            server: server,
+            fingerprint: fingerprint,
+          ),
+          requestTimeout: _api.requestTimeout,
+        );
+      }
+      await (pinnedApi ?? _api).revokeAppPassword(
         server: server,
         loginName: entry.loginName,
         appPassword: entry.appPassword,
@@ -498,6 +512,8 @@ final class AppPasswordRevocationQueue {
       return error.statusCode == 401;
     } on Object {
       return false;
+    } finally {
+      pinnedApi?.close();
     }
   }
 
@@ -662,6 +678,7 @@ final class _HeldEntry extends _QueueEntry {
     required this.since,
     required this.phase,
     required this.accountId,
+    this.certificateFingerprint,
   });
 
   final String id;
@@ -671,6 +688,7 @@ final class _HeldEntry extends _QueueEntry {
   final DateTime since;
   final AppPasswordCredentialPhase phase;
   final String? accountId;
+  final String? certificateFingerprint;
 
   @override
   String get reservationId => id;
@@ -689,6 +707,7 @@ final class _HeldEntry extends _QueueEntry {
     appPassword: appPassword,
     since: since,
     attempts: 0,
+    certificateFingerprint: certificateFingerprint,
   );
 
   _HeldEntry withPhase({
@@ -702,6 +721,7 @@ final class _HeldEntry extends _QueueEntry {
     since: since,
     phase: phase,
     accountId: accountId,
+    certificateFingerprint: certificateFingerprint,
   );
 
   @override
@@ -711,7 +731,8 @@ final class _HeldEntry extends _QueueEntry {
       secret == other.secret &&
       since == other.since &&
       phase == other.phase &&
-      accountId == other.accountId;
+      accountId == other.accountId &&
+      certificateFingerprint == other.certificateFingerprint;
 
   static _HeldEntry? fromJson(Map<String, Object?> json) {
     final id = json['id'];
@@ -721,6 +742,7 @@ final class _HeldEntry extends _QueueEntry {
     final since = json['since'];
     final phaseName = json['phase'];
     final accountId = json['accountId'];
+    final certificateFingerprint = json['certificateFingerprint'];
     if (id is! String ||
         id.isEmpty ||
         server is! String ||
@@ -729,6 +751,7 @@ final class _HeldEntry extends _QueueEntry {
         appPassword.isEmpty ||
         since is! String ||
         (phaseName != null && phaseName is! String) ||
+        (certificateFingerprint != null && certificateFingerprint is! String) ||
         (accountId != null && (accountId is! String || accountId.isEmpty))) {
       return null;
     }
@@ -743,7 +766,10 @@ final class _HeldEntry extends _QueueEntry {
             'removalReserved' => AppPasswordCredentialPhase.removalReserved,
             _ => null,
           };
-    if (parsedSince == null || phase == null) {
+    if (parsedSince == null ||
+        phase == null ||
+        (certificateFingerprint != null &&
+            phase != AppPasswordCredentialPhase.removalReserved)) {
       return null;
     }
     if (phase != AppPasswordCredentialPhase.received && accountId == null) {
@@ -762,6 +788,7 @@ final class _HeldEntry extends _QueueEntry {
       since: parsedSince,
       phase: phase,
       accountId: accountId as String?,
+      certificateFingerprint: certificateFingerprint as String?,
     );
   }
 
@@ -775,6 +802,7 @@ final class _HeldEntry extends _QueueEntry {
     'since': since.toUtc().toIso8601String(),
     'phase': phase.name,
     'accountId': ?accountId,
+    'certificateFingerprint': ?certificateFingerprint,
   };
 }
 
@@ -786,6 +814,7 @@ final class _RevocationEntry extends _QueueEntry {
     required this.appPassword,
     required this.since,
     required this.attempts,
+    this.certificateFingerprint,
   });
 
   @override
@@ -795,6 +824,7 @@ final class _RevocationEntry extends _QueueEntry {
   final String appPassword;
   final DateTime since;
   final int attempts;
+  final String? certificateFingerprint;
 
   @override
   _QueueIdentity get identity => reservationId == null
@@ -814,7 +844,8 @@ final class _RevocationEntry extends _QueueEntry {
       reservationId == other.reservationId &&
       secret == other.secret &&
       since == other.since &&
-      attempts == other.attempts;
+      attempts == other.attempts &&
+      certificateFingerprint == other.certificateFingerprint;
 
   static _RevocationEntry? fromJson(Map<String, Object?> json) {
     final reservationId = json['reservationId'];
@@ -823,6 +854,7 @@ final class _RevocationEntry extends _QueueEntry {
     final appPassword = json['appPassword'];
     final since = json['since'];
     final attempts = json['attempts'];
+    final certificateFingerprint = json['certificateFingerprint'];
     if ((reservationId != null &&
             (reservationId is! String || reservationId.isEmpty)) ||
         server is! String ||
@@ -830,6 +862,8 @@ final class _RevocationEntry extends _QueueEntry {
         appPassword is! String ||
         appPassword.isEmpty ||
         since is! String ||
+        (certificateFingerprint != null &&
+            (certificateFingerprint is! String || reservationId == null)) ||
         attempts is! int ||
         attempts < 0) {
       return null;
@@ -844,6 +878,7 @@ final class _RevocationEntry extends _QueueEntry {
             appPassword: appPassword,
             since: parsedSince,
             attempts: attempts,
+            certificateFingerprint: certificateFingerprint as String?,
           );
   }
 
@@ -856,6 +891,7 @@ final class _RevocationEntry extends _QueueEntry {
     'appPassword': appPassword,
     'since': since.toUtc().toIso8601String(),
     'attempts': attempts,
+    'certificateFingerprint': ?certificateFingerprint,
   };
 
   _RevocationEntry afterAttempt() => _RevocationEntry(
@@ -865,5 +901,6 @@ final class _RevocationEntry extends _QueueEntry {
     appPassword: appPassword,
     since: since,
     attempts: attempts + 1,
+    certificateFingerprint: certificateFingerprint,
   );
 }

@@ -109,13 +109,9 @@ final class CertificateTrustGate {
 
   http.Client createClient() {
     unawaited(refresh());
-    final client = HttpClient()
-      // Covers the TLS handshake too; without it a connection that died while
-      // the app was frozen keeps its socket open for good.
-      ..connectionTimeout = const Duration(seconds: 30)
-      ..badCertificateCallback = (certificate, host, port) =>
-          accepts(certificate: certificate, host: host);
-    return IOClient(client);
+    return _createClient(
+      (certificate, host, _) => accepts(certificate: certificate, host: host),
+    );
   }
 
   /// Visible for testing: the whole handshake decision minus the socket.
@@ -146,6 +142,38 @@ final class CertificateTrustGate {
     return false;
   }
 }
+
+/// The removed account's pin applies to its queued revocation only.
+http.Client createPinnedRevocationClient({
+  required ServerBase server,
+  required String fingerprint,
+}) {
+  final endpoint = server.uri;
+  if (endpoint.scheme != 'https') {
+    throw ArgumentError('A pinned revocation requires HTTPS');
+  }
+  final gate = CertificateTrustGate()
+    ..storedPins = {
+      endpoint.host: {fingerprint},
+    };
+  return _createClient(
+    (certificate, host, port) =>
+        host.toLowerCase() == endpoint.host &&
+        port == endpoint.port &&
+        gate.accepts(certificate: certificate, host: host),
+    context: SecurityContext(withTrustedRoots: false),
+  );
+}
+
+http.Client _createClient(
+  bool Function(X509Certificate certificate, String host, int port) accepts, {
+  SecurityContext? context,
+}) => IOClient(
+  HttpClient(context: context)
+    // Covers the TLS handshake, including when a connection dies while frozen.
+    ..connectionTimeout = const Duration(seconds: 30)
+    ..badCertificateCallback = accepts,
+);
 
 /// Lowercase SHA-256 of the DER encoding, the form a pin is stored in.
 String certificateFingerprint(List<int> der) =>

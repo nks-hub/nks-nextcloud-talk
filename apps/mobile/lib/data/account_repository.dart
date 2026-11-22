@@ -92,6 +92,19 @@ final class AccountRepository {
     return pins;
   }
 
+  Future<String?> readCertificatePin({
+    required String accountId,
+    required String host,
+  }) async {
+    final query = _database.select(_database.certificatePins)
+      ..where(
+        (pin) =>
+            pin.accountId.equals(accountId) &
+            pin.host.equals(host.toLowerCase()),
+      );
+    return (await query.getSingleOrNull())?.fingerprint;
+  }
+
   Stream<List<CachedConversation>> watchConversations(String accountId) {
     final query = _database.select(_database.cachedConversations)
       ..where((conversation) => conversation.accountId.equals(accountId))

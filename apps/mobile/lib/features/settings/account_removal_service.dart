@@ -170,6 +170,10 @@ final class AccountRemovalService {
           loginName: account.loginName,
           appPassword: appPassword!,
           accountId: accountId,
+          certificateFingerprint: await _accounts.readCertificatePin(
+            accountId: accountId,
+            host: server.uri.host,
+          ),
         );
       }
       await _credentials.deleteAppPassword(accountId);
