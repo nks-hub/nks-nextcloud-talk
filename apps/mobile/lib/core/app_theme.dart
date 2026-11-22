@@ -88,7 +88,9 @@ abstract final class AppTheme {
         : generated;
     final scheme = roles.copyWith(
       surface: isDark ? _darkSurface : _lightSurface,
-      surfaceContainerLowest: isDark ? const Color(0xFF080B0F) : Colors.white,
+      // Fills inputs and the cards inside bubbles. Near-black in the dark theme
+      // read as a hole in a bubble, so it stops a step short of that.
+      surfaceContainerLowest: isDark ? const Color(0xFF101319) : Colors.white,
       surfaceContainerLow: isDark
           ? const Color(0xFF172331)
           : const Color(0xFFECF3FA),
