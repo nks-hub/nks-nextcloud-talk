@@ -298,6 +298,7 @@ final class ChatMediaDiskCache {
   final Map<String, Set<Future<void>>> _pendingWrites = {};
 
   Directory? _root;
+  Future<Directory>? _indexing;
   Future<Directory>? _opening;
   int _bytes = 0;
   int _temporaryFileNonce = 0;
@@ -451,7 +452,7 @@ final class ChatMediaDiskCache {
   }) async {
     final Directory root;
     try {
-      root = await _open();
+      root = await _open(waitForInitialPrune: false);
     } on FileSystemException {
       return false;
     }
@@ -510,7 +511,7 @@ final class ChatMediaDiskCache {
     if (pending != null) await Future.wait(pending.toList(growable: false));
     final Directory root;
     try {
-      root = await _open();
+      root = await _open(waitForInitialPrune: false);
     } on FileSystemException {
       return;
     }
@@ -527,12 +528,22 @@ final class ChatMediaDiskCache {
     }
   }
 
-  Future<Directory> _open() {
+  Future<Directory> _open({bool waitForInitialPrune = true}) {
     final opened = _root;
     if (opened != null) {
       return Future<Directory>.value(opened);
     }
-    return _opening ??= _scan();
+    final indexed = _indexing ??= _scan();
+    final pruned = _opening ??= indexed.then((root) async {
+      _root = root;
+      // Enforce the bound even if the first operation only needs the index.
+      await _prune();
+      return root;
+    });
+    if (waitForInitialPrune) return pruned;
+    // The index waiter handles scan failures through its own future.
+    pruned.ignore();
+    return indexed;
   }
 
   Future<Directory> _scan() async {
@@ -570,10 +581,6 @@ final class ChatMediaDiskCache {
         ? files.length
         : _scanConcurrency;
     await Future.wait(List.generate(workerCount, (_) => indexFiles()));
-    _root = root;
-    // A shrunken bound, or bytes written by an older build, are enforced here
-    // rather than left to sit until the next write.
-    await _prune();
     return root;
   }
 

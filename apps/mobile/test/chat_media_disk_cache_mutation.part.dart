@@ -302,6 +302,87 @@ void _previewMutationTests(
       await writing.timeout(deadline);
     }
   });
+
+  for (final writesFirst in [false, true]) {
+    test(
+      writesFirst
+          ? 'a cold write can publish while unrelated pruning waits'
+          : 'a cold account purge can finish while unrelated pruning waits',
+      () async {
+        const otherAccount = 'account-b';
+        final oldest = uriFor(1);
+        final kept = uriFor(2);
+        final removed = uriFor(3);
+        final seed = open();
+        await seed.write(
+          accountId: otherAccount,
+          uri: oldest,
+          image: image(20, 1),
+        );
+        final oldestFile = storedPreviews().single;
+        await oldestFile.setLastModified(DateTime.utc(2020));
+        await seed.write(
+          accountId: otherAccount,
+          uri: kept,
+          image: image(10, 2),
+        );
+        if (!writesFirst) {
+          await seed.write(
+            accountId: account,
+            uri: removed,
+            image: image(10, 3),
+          );
+        }
+
+        final deleteStarted = Completer<String>();
+        final deleteGate = Completer<void>();
+        final cache = open(
+          maximumBytes: 40,
+          deleteFile: (file) async {
+            deleteStarted.complete(p.normalize(file.path));
+            await deleteGate.future;
+            await file.delete();
+          },
+        );
+        final operation = writesFirst
+            ? cache.write(accountId: account, uri: removed, image: image(10, 3))
+            : cache.evictAccount(account);
+        var coldReadFinished = false;
+        final coldRead = cache.read(accountId: otherAccount, uri: kept).then((
+          image,
+        ) {
+          coldReadFinished = true;
+          return image;
+        });
+
+        try {
+          expect(
+            await deleteStarted.future.timeout(deadline),
+            p.normalize(oldestFile.path),
+          );
+          await operation.timeout(deadline);
+          if (writesFirst) {
+            final published = await cache.read(
+              accountId: account,
+              uri: removed,
+            );
+            expect(published?.body.last, 3);
+            await cache.evictAccount(account).timeout(deadline);
+          }
+          expect(coldReadFinished, isFalse);
+          expect(await cache.read(accountId: account, uri: removed), isNull);
+          expect(cache.length, 1);
+        } finally {
+          deleteGate.complete();
+          await Future.wait([operation, coldRead]).timeout(deadline);
+        }
+
+        expect((await coldRead)?.body.last, 2);
+        expect(storedPreviews(), hasLength(1));
+        expect(cache.byteLength, 20);
+      },
+    );
+  }
 }
 
 Future<void> _writeObservedPreview(
