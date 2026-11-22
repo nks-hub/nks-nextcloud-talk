@@ -651,6 +651,52 @@ extension _MediaDisposalTests on _MediaSessionTests {
       expect(engine.connectionCloseStarts, 1);
     });
 
+    test('a late incoming screen is discarded even if release fails', () async {
+      final media = session(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+          messages: [
+            _message(
+              _remote,
+              'offer',
+              {'type': 'offer', 'sdp': 'remote-screen'},
+              roomType: 'screen',
+              sid: 'incoming-screen',
+            ),
+          ],
+        ),
+      );
+      addTearDown(media.dispose);
+      final states = <CallMediaState>[];
+      final subscription = media.states.listen(states.add);
+      addTearDown(subscription.cancel);
+      await media.start();
+      final screen = engine.connections.singleWhere(
+        (connection) => connection.remoteDescriptions.isNotEmpty,
+      );
+      expect(screen.remoteDescriptions.single.sdp, 'remote-screen');
+
+      await media.dispose();
+      var releases = 0;
+      final renderer = _FakeRemoteVideo(
+        beforeDispose: () async {
+          releases++;
+          throw StateError('late screen renderer release failed');
+        },
+      );
+      screen.onRemoteVideo(renderer);
+      await pumpEventQueue();
+
+      expect(screen.closed, isTrue);
+      expect(releases, 1);
+      expect(media.state.phase, CallMediaPhase.idle);
+      expect(
+        states.expand((state) => state.participants).map((peer) => peer.screen),
+        isNot(contains(same(renderer))),
+      );
+    });
+
     test('dispose closes peer connections with bounded concurrency', () async {
       final closeGate = Completer<void>();
       engine.connectionCloseGate = closeGate;

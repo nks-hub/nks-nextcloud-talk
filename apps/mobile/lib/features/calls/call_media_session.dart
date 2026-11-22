@@ -595,7 +595,10 @@ final class CallMediaSession {
     CallRemoteVideo? video,
   ) async {
     if (_disposed || !identical(_peers[peer.peerId], peer)) {
-      await video?.dispose();
+      await CallResourceCleanup().run(
+        video?.dispose,
+        label: 'late call peer renderer',
+      );
       return;
     }
     final previous = peer.video;

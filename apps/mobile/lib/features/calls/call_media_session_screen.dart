@@ -374,7 +374,10 @@ extension _CallMediaSessionScreen on CallMediaSession {
     CallRemoteVideo? video,
   ) async {
     if (_disposed || !identical(_screens[screen.peerId], screen)) {
-      await video?.dispose();
+      await CallResourceCleanup().run(
+        video?.dispose,
+        label: 'late incoming screen renderer',
+      );
       return;
     }
     final previous = screen.video;

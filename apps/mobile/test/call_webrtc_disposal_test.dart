@@ -190,9 +190,18 @@ void main() {
     );
   });
 
-  test(
-    'closed call handles a late failure to create a video renderer',
-    () async {
+  for (final (name, failedMethod) in [
+    (
+      'closed call handles a late failure to create a video renderer',
+      'createVideoRenderer',
+    ),
+    ('closed call releases a video renderer that opens late', null),
+    (
+      'closed call handles a late failure to release a video renderer',
+      'videoRendererDispose',
+    ),
+  ]) {
+    test(name, () async {
       final opening = Completer<void>();
       final allowRenderer = Completer<int>();
       openRenderer = () {
@@ -274,9 +283,19 @@ void main() {
       await media.dispose().timeout(const Duration(seconds: 2));
       expect(releases, isNot(contains('videoRendererDispose')));
 
-      allowRenderer.completeError(
-        PlatformException(code: 'late_renderer_open'),
-      );
+      if (failedMethod == 'createVideoRenderer') {
+        allowRenderer.completeError(
+          PlatformException(code: 'late_renderer_open'),
+        );
+      } else {
+        if (failedMethod == 'videoRendererDispose') {
+          failures['videoRendererDispose'] = PlatformException(
+            code: 'videoRendererDispose',
+            message: 'render [23] not found !',
+          );
+        }
+        allowRenderer.complete(23);
+      }
       await pumpEventQueue();
 
       expect(media.state.phase, CallMediaPhase.idle);
@@ -284,7 +303,12 @@ void main() {
       expect(releases.where((method) => method == 'peerConnectionDispose'), [
         'peerConnectionDispose',
       ]);
-      expect(releases, isNot(contains('videoRendererDispose')));
-    },
-  );
+      expect(
+        releases.where((method) => method == 'videoRendererDispose'),
+        failedMethod == 'createVideoRenderer'
+            ? isEmpty
+            : ['videoRendererDispose'],
+      );
+    });
+  }
 }
