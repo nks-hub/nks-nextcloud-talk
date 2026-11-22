@@ -65,6 +65,7 @@ extension BrowserLoginRecovery on AppPasswordRevocationQueue {
     LoginFlowCredentials credential, {
     Future<bool> Function()? revokeIfUnowned,
   }) async {
+    var delay = const Duration(milliseconds: 50);
     var canTryRevocation = revokeIfUnowned != null;
     while (true) {
       try {
@@ -119,7 +120,8 @@ extension BrowserLoginRecovery on AppPasswordRevocationQueue {
           }
         }
         // The response cannot be fetched again. Keep its claim during retries.
-        await Future<void>.delayed(const Duration(milliseconds: 10));
+        await Future<void>.delayed(delay);
+        if (delay < const Duration(milliseconds: 800)) delay *= 2;
       }
     }
   }
@@ -129,36 +131,39 @@ extension BrowserLoginRecovery on AppPasswordRevocationQueue {
     LoginFlowCredentials credential, {
     AccountRepository? accounts,
     CredentialVault? credentials,
+    Future<bool>? persistence,
   }) async {
     final accountRepository = accounts ?? _accounts;
     final vault = credentials ?? _credentials;
-    final held = await holdBrowserCredential(
-      claim,
-      credential,
-      revokeIfUnowned: accountRepository == null || vault == null
-          ? null
-          : () async {
-              try {
-                if (await browserCredentialIsOwned(
-                  credential,
-                  accounts: accountRepository,
-                  credentials: vault,
-                )) {
-                  return false;
-                }
-                await _api.revokeAppPassword(
-                  server: credential.server,
-                  loginName: credential.loginName,
-                  appPassword: credential.appPassword,
-                );
-                return true;
-              } on NextcloudApiException catch (error) {
-                return error.statusCode == 401;
-              } on Object {
-                return false;
-              }
-            },
-    );
+    final held =
+        await (persistence ??
+            holdBrowserCredential(
+              claim,
+              credential,
+              revokeIfUnowned: accountRepository == null || vault == null
+                  ? null
+                  : () async {
+                      try {
+                        if (await browserCredentialIsOwned(
+                          credential,
+                          accounts: accountRepository,
+                          credentials: vault,
+                        )) {
+                          return false;
+                        }
+                        await _api.revokeAppPassword(
+                          server: credential.server,
+                          loginName: credential.loginName,
+                          appPassword: credential.appPassword,
+                        );
+                        return true;
+                      } on NextcloudApiException catch (error) {
+                        return error.statusCode == 401;
+                      } on Object {
+                        return false;
+                      }
+                    },
+            ));
     if (!held || accountRepository == null || vault == null) return;
     for (final entry in (await _load()).whereType<_HeldEntry>()) {
       if (entry.id == claim.id) {
@@ -185,12 +190,14 @@ extension BrowserLoginRecovery on AppPasswordRevocationQueue {
   Future<void> _discardRevokedBrowserReservation(
     AppPasswordRevocationReservation claim,
   ) async {
+    var delay = const Duration(milliseconds: 50);
     while (true) {
       try {
         await releaseReservation(claim);
         return;
       } on Object {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
+        await Future<void>.delayed(delay);
+        if (delay < const Duration(milliseconds: 800)) delay *= 2;
       }
     }
   }

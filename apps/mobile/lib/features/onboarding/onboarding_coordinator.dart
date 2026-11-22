@@ -637,8 +637,6 @@ final class OnboardingCoordinator {
     required bool Function(Object error) provesNoCredential,
     AppPasswordRevocationReservation? reservation,
     bool releaseWhenEmpty = true,
-    VoidCallback? onBrowserDetached,
-    Duration? browserWait,
   }) async {
     final queue = _pendingRevocations;
     if (queue == null) {
@@ -659,28 +657,15 @@ final class OnboardingCoordinator {
       }
       throw const OnboardingCancelled();
     }
-    if (browserWait != null && browserWait <= Duration.zero) {
-      throw const OnboardingFailure(OnboardingFailureCode.loginTimedOut);
-    }
     final outcome = Future<T>.sync(operation).then<_OneShotOutcome<T>>(
       _OneShotValue<T>.new,
       onError: (Object error, StackTrace stackTrace) =>
           _OneShotError<T>(error, stackTrace),
     );
-    final deadline = Completer<_OneShotOutcome<T>>();
-    final timer = browserWait == null
-        ? null
-        : Timer(browserWait, () => deadline.complete(_OneShotExpired<T>()));
-    final _OneShotOutcome<T> first;
-    try {
-      first = await Future.any<_OneShotOutcome<T>>([
-        outcome,
-        cancellation.whenCancelled.then((_) => _OneShotCancelled<T>()),
-        if (timer != null) deadline.future,
-      ]);
-    } finally {
-      timer?.cancel();
-    }
+    final first = await Future.any<_OneShotOutcome<T>>([
+      outcome,
+      cancellation.whenCancelled.then((_) => _OneShotCancelled<T>()),
+    ]);
     if (first case _OneShotValue<T>(:final value)) {
       final credential = credentialFrom(value);
       if (credential == null) {
@@ -689,17 +674,12 @@ final class OnboardingCoordinator {
         }
         return _ReservedOneShot<T>(value: value, reservation: null);
       }
-      final held = onBrowserDetached != null && value is LoginPollSucceeded
-          ? await queue.holdBrowserCredential(
-              activeReservation,
-              value.credentials,
-            )
-          : await _holdKnownCredential(
-              queue: queue,
-              reservation: activeReservation,
-              server: server,
-              credential: credential,
-            );
+      final held = await _holdKnownCredential(
+        queue: queue,
+        reservation: activeReservation,
+        server: server,
+        credential: credential,
+      );
       if (!held) {
         throw const OnboardingFailure(OnboardingFailureCode.localPersistence);
       }
@@ -710,14 +690,6 @@ final class OnboardingCoordinator {
         await _releaseEmptyReservation(queue, activeReservation);
       }
       Error.throwWithStackTrace(error, stackTrace);
-    }
-    if (onBrowserDetached != null) {
-      onBrowserDetached();
-      unawaited(_settleCancelledBrowserPoll(queue, activeReservation, outcome));
-      if (first is _OneShotExpired<T>) {
-        throw const OnboardingFailure(OnboardingFailureCode.loginTimedOut);
-      }
-      throw const OnboardingCancelled();
     }
     unawaited(
       _handleLateReservedOneShot(
@@ -980,5 +952,3 @@ final class _OneShotError<T> extends _OneShotOutcome<T> {
 final class _OneShotCancelled<T> extends _OneShotOutcome<T> {
   const _OneShotCancelled();
 }
-
-final class _OneShotExpired<T> extends _OneShotOutcome<T> {}

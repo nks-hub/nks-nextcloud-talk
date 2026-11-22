@@ -67,26 +67,14 @@ extension _OnboardingBrowserLogin on OnboardingCoordinator {
         ]);
         continue;
       }
-      final _ReservedOneShot<LoginPollResult> poll;
+      final LoginPollResult result;
       try {
-        poll = await _awaitReservedOneShot(
-          operation: () => _api.pollLogin(pending),
-          cancellation: cancellation,
-          server: pending.server,
-          reservation: reservation,
-          releaseWhenEmpty: false,
-          onBrowserDetached: onDetached,
-          browserWait: deadline.difference(DateTime.now().toUtc()),
-          credentialFrom: (result) {
-            if (result case LoginPollSucceeded(:final credentials)) {
-              return (
-                loginName: credentials.loginName,
-                appPassword: credentials.appPassword,
-              );
-            }
-            return null;
-          },
-          provesNoCredential: (_) => false,
+        result = await _pollAndHoldBrowserCredential(
+          pending,
+          cancellation,
+          reservation,
+          deadline.difference(DateTime.now().toUtc()),
+          onDetached,
         );
       } on NextcloudApiException catch (error) {
         cancellation.throwIfCancelled();
@@ -103,7 +91,6 @@ extension _OnboardingBrowserLogin on OnboardingCoordinator {
         ]);
         continue;
       }
-      final result = poll.value;
       if (result case LoginPollSucceeded(:final credentials)) {
         return _commitAccount(
           server: pending.server,
@@ -112,7 +99,7 @@ extension _OnboardingBrowserLogin on OnboardingCoordinator {
           credentialSource: _CredentialSource.browser,
           cancellation: cancellation,
           expectedAccountId: expectedAccountId,
-          cleanupReservation: poll.reservation,
+          cleanupReservation: reservation,
         );
       }
       cancellation.throwIfCancelled();
@@ -125,25 +112,82 @@ extension _OnboardingBrowserLogin on OnboardingCoordinator {
     throw const OnboardingFailure(OnboardingFailureCode.loginTimedOut);
   }
 
-  Future<void> _settleCancelledBrowserPoll<T>(
-    AppPasswordRevocationQueue queue,
+  Future<LoginPollResult> _pollAndHoldBrowserCredential(
+    PendingLogin pending,
+    CancellationSignal cancellation,
     AppPasswordRevocationReservation reservation,
-    Future<_OneShotOutcome<T>> outcome,
+    Duration remaining,
+    VoidCallback onDetached,
   ) async {
-    try {
-      if (await outcome case _OneShotValue<T>(:final value)) {
-        if (value case LoginPollSucceeded(:final credentials)) {
-          await queue.retireBrowserCredential(
-            reservation,
-            credentials,
-            accounts: _accounts,
-            credentials: _credentials,
-          );
+    cancellation.throwIfCancelled();
+    if (remaining <= Duration.zero) {
+      throw const OnboardingFailure(OnboardingFailureCode.loginTimedOut);
+    }
+    final queue = _pendingRevocations!;
+    final poll = _api.pollLogin(pending);
+    Future<bool>? persistence;
+    var detached = false;
+    final ready = poll.then((result) async {
+      if (result case LoginPollSucceeded(:final credentials) when !detached) {
+        final hold = persistence = queue.holdBrowserCredential(
+          reservation,
+          credentials,
+        );
+        if (!await hold) {
+          throw const OnboardingFailure(OnboardingFailureCode.localPersistence);
         }
       }
+      return result;
+    });
+
+    final expiration = Completer<LoginPollResult>();
+    final timer = Timer(remaining, () {
+      expiration.completeError(
+        const OnboardingFailure(OnboardingFailureCode.loginTimedOut),
+      );
+    });
+    try {
+      return await Future.any([
+        ready,
+        cancellation.whenCancelled.then<LoginPollResult>(
+          (_) => throw const OnboardingCancelled(),
+        ),
+        expiration.future,
+      ]);
+    } on Object catch (error) {
+      if (error is OnboardingCancelled ||
+          (error is OnboardingFailure &&
+              error.code == OnboardingFailureCode.loginTimedOut)) {
+        detached = true;
+        onDetached();
+        unawaited(
+          _settleCancelledBrowserPoll(queue, reservation, poll, persistence),
+        );
+      }
+      rethrow;
+    } finally {
+      timer.cancel();
+    }
+  }
+
+  Future<void> _settleCancelledBrowserPoll(
+    AppPasswordRevocationQueue queue,
+    AppPasswordRevocationReservation reservation,
+    Future<LoginPollResult> poll,
+    Future<bool>? persistence,
+  ) async {
+    try {
+      if (await poll case LoginPollSucceeded(:final credentials)) {
+        await queue.retireBrowserCredential(
+          reservation,
+          credentials,
+          accounts: _accounts,
+          credentials: _credentials,
+          persistence: persistence,
+        );
+      }
     } on Object {
-      // Store the result before attempting account/vault reconciliation.
-      // The held entry can be reconciled on the next wake.
+      // A held entry can be reconciled on the next wake.
     } finally {
       await queue.abandonHeldCredential(reservation);
     }

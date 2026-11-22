@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
+import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/onboarding/onboarding_coordinator.dart';
 import 'package:nextcloudtalk/features/settings/app_password_revocation_queue.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
@@ -312,6 +313,63 @@ void main() {
     },
   );
 
+  for (final cancel in [true, false]) {
+    test('browser ${cancel ? 'cancel' : 'deadline'} returns while the known '
+        'credential is still being stored', () async {
+      final f = _RecoveryFixture(blockFirstHold: true);
+      final writer = f.store!;
+      addTearDown(f.close);
+      addTearDown(writer.unblock);
+      f.pollReply = () async =>
+          http.Response(jsonEncode(loginSuccessJson()), 200);
+      final browser = RecordingLoginPageLauncher();
+      final coordinator = f.coordinator(
+        browser,
+        loginTimeout: cancel
+            ? const Duration(minutes: 15)
+            : const Duration(milliseconds: 350),
+      );
+      final pending = await coordinator.start(_origin);
+      final cancellation = CancellationSignal();
+      final result = coordinator.completeLogin(pending, cancellation);
+      final outcome = result.then<Object>(
+        (value) => value,
+        onError: (Object e) => e,
+      );
+      await writer.started.future.timeout(const Duration(seconds: 2));
+      if (cancel) cancellation.cancel();
+
+      final early = await outcome.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => TimeoutException('Foreground is waiting on the vault'),
+      );
+      expect(
+        early,
+        cancel
+            ? isA<OnboardingCancelled>()
+            : isA<OnboardingFailure>().having(
+                (e) => e.code,
+                'code',
+                OnboardingFailureCode.loginTimedOut,
+              ),
+      );
+      expect(browser.closeCount, 1);
+      expect(await f.queue.unresolvedReservationCount(), 1);
+      expect(await f.queue.recoverBrowserLogins(canPoll: () => true), isFalse);
+      expect(f.polls, 1);
+      expect(await f.accounts.watchAccounts().first, isEmpty);
+
+      writer.unblock();
+      await _waitForRetirement(f.queue);
+      expect(writer.writes, 1);
+      expect(await f.queue.unresolvedReservationCount(), 0);
+      await f.queue.drain();
+      expect(f.revokes, 1);
+      expect(await f.queue.pendingRevocationCount(), 0);
+      expect(await f.accounts.watchAccounts().first, isEmpty);
+    });
+  }
+
   test(
     'cancelled nonresponsive transport relinquishes claim at its hard bound',
     () async {
@@ -387,7 +445,11 @@ Future<void> _waitForRetirement(AppPasswordRevocationQueue queue) async {
 const _origin = 'https://cloud.example.invalid';
 
 final class _RecoveryFixture {
-  _RecoveryFixture({Duration requestTimeout = const Duration(seconds: 20)}) {
+  _RecoveryFixture({
+    Duration requestTimeout = const Duration(seconds: 20),
+    bool blockFirstHold = false,
+  }) {
+    store = blockFirstHold ? _BlockedHeldWrite(vault) : null;
     api = HttpNextcloudApi(
       requestTimeout: requestTimeout,
       client: MockClient.streaming((request, body) async {
@@ -435,6 +497,7 @@ final class _RecoveryFixture {
   final database = openTestDatabase();
   late final accounts = AccountRepository(database);
   final vault = MemoryCredentialVault();
+  late final _BlockedHeldWrite? store;
   late final HttpNextcloudApi api;
   late final AppPasswordRevocationQueue queue;
   DateTime now = DateTime.utc(2026);
@@ -446,7 +509,7 @@ final class _RecoveryFixture {
 
   AppPasswordRevocationQueue createQueue(MemoryCredentialVault store) =>
       AppPasswordRevocationQueue(
-        store: store,
+        store: identical(store, vault) ? this.store ?? store : store,
         api: api,
         accounts: accounts,
         credentials: store,
@@ -501,4 +564,40 @@ final class _BlockedBrowser implements LoginPageLauncher {
 
   @override
   Future<void> close() async => closes++;
+}
+
+final class _BlockedHeldWrite implements PendingRevocationStore {
+  _BlockedHeldWrite(this.delegate);
+
+  final PendingRevocationStore delegate;
+  final started = Completer<void>();
+  final gate = Completer<void>();
+  int writes = 0;
+
+  void unblock() {
+    if (!gate.isCompleted) gate.complete();
+  }
+
+  @override
+  Future<String?> readPendingRevocations() => delegate.readPendingRevocations();
+
+  @override
+  Future<void> writePendingRevocations(String? value) =>
+      delegate.writePendingRevocations(value);
+
+  @override
+  Future<void> updatePendingRevocations(
+    String? Function(String? current) update,
+  ) async {
+    final oldValue = await delegate.readPendingRevocations();
+    final next = update(oldValue);
+    if (oldValue != null &&
+        oldValue.contains('"kind":"reservation"') &&
+        (next?.contains('"kind":"held"') ?? false)) {
+      writes++;
+      if (!started.isCompleted) started.complete();
+      await gate.future;
+    }
+    await delegate.updatePendingRevocations(update);
+  }
 }
