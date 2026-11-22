@@ -551,7 +551,7 @@ final class OnboardingCoordinator {
       } on Object {
         // The account and vault now own the credential. A durable held entry
         // lets the next coordinator confirm that before releasing it.
-        _pendingRevocations!.abandonHeldCredential(cleanupReservation);
+        await _pendingRevocations!.abandonHeldCredential(cleanupReservation);
       }
     }
     return stored;

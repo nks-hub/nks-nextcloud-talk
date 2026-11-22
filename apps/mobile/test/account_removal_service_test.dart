@@ -519,13 +519,14 @@ void main() {
       addTearDown(api.close);
       await _seedAccount(database, accounts, vault, 'account-a', _serverA);
       final setupQueue = AppPasswordRevocationQueue(store: vault, api: api);
-      await setupQueue.reserveCredentialForRemoval(
+      final reservation = await setupQueue.reserveCredentialForRemoval(
         server: ServerBase.parse(_serverA),
         loginName: 'user-account-a',
         appPassword: 'fixture-app-password-never-use',
         accountId: 'account-a',
       );
       await vault.deleteAppPassword('account-a');
+      await setupQueue.abandonHeldCredential(reservation);
 
       final restartedQueue = AppPasswordRevocationQueue(
         store: vault,
@@ -541,43 +542,50 @@ void main() {
     },
   );
 
-  test(
-    'recovery cannot steal a removal reservation while its write returns',
-    () async {
-      final api = HttpNextcloudApi(
-        client: MockClient((request) async {
-          if (request.url.path.endsWith('/core/apppassword')) {
-            throw const SocketException('offline');
-          }
-          return http.Response(_okOcs(), 200);
-        }),
-      );
-      addTearDown(api.close);
-      await _seedAccount(database, accounts, vault, 'account-a', _serverA);
-      final pausedStore = _PauseAfterFirstUpdateStore(vault);
-      addTearDown(pausedStore.release);
-      final queue = AppPasswordRevocationQueue(
-        store: pausedStore,
-        api: api,
-        accounts: accounts,
-        credentials: vault,
-      );
-      final removal = buildService(
-        api,
-        pendingRevocations: queue,
-      ).removeAccount('account-a');
-      await pausedStore.persisted;
+  test('a second queue cannot steal a published removal reservation', () async {
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/core/apppassword')) {
+          throw const SocketException('offline');
+        }
+        return http.Response(_okOcs(), 200);
+      }),
+    );
+    addTearDown(api.close);
+    await _seedAccount(database, accounts, vault, 'account-a', _serverA);
+    final pausedStore = _PauseAfterFirstUpdateStore(vault);
+    addTearDown(pausedStore.release);
+    final queue = AppPasswordRevocationQueue(
+      store: pausedStore,
+      api: api,
+      accounts: accounts,
+      credentials: vault,
+    );
+    final removal = buildService(
+      api,
+      pendingRevocations: queue,
+    ).removeAccount('account-a');
+    await pausedStore.persisted;
 
+    final background = AppPasswordRevocationQueue(
+      store: pausedStore,
+      api: api,
+      accounts: accounts,
+      credentials: vault,
+    );
+    try {
       await queue.recoverHeldCredentials();
+      await background.recoverHeldCredentials();
+    } finally {
       pausedStore.release();
-      final outcome = await removal;
+    }
+    final outcome = await removal;
 
-      expect(outcome.appPasswordRevoked, isFalse);
-      expect(await queue.pendingRevocationCount(), 1);
-      expect(await accounts.getAccount('account-a'), isNull);
-      expect(await vault.readAppPassword('account-a'), isNull);
-    },
-  );
+    expect(outcome.appPasswordRevoked, isFalse);
+    expect(await queue.pendingRevocationCount(), 1);
+    expect(await accounts.getAccount('account-a'), isNull);
+    expect(await vault.readAppPassword('account-a'), isNull);
+  });
 
   test(
     'a sixth offline removal preserves its account and credential',

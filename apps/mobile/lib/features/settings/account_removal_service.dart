@@ -177,7 +177,7 @@ final class AccountRemovalService {
       if (removalReservation != null) {
         final queue = _pendingRevocations!;
         try {
-          final retainedPassword = await _credentials.readAppPassword(
+          final retainedPassword = await _credentials.readCurrentAppPassword(
             accountId,
           );
           if (retainedPassword == appPassword) {
@@ -193,7 +193,7 @@ final class AccountRemovalService {
         } on Object {
           // The durable held entry remains. Recovery will inspect the vault
           // before deciding whether it is safe to revoke or release it.
-          queue.abandonHeldCredential(removalReservation);
+          await queue.abandonHeldCredential(removalReservation);
         }
       }
       try {
@@ -213,7 +213,7 @@ final class AccountRemovalService {
           appPassword: appPassword!,
         );
       } on Object catch (error, stackTrace) {
-        _pendingRevocations!.abandonHeldCredential(removalReservation);
+        await _pendingRevocations!.abandonHeldCredential(removalReservation);
         try {
           await _onRemovalAborted?.call(accountId);
         } on Object {

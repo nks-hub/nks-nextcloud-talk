@@ -46,6 +46,7 @@ class BackgroundDrainJobService : JobService() {
         val created = FlutterEngine(applicationContext)
         resources.engine = created
         AttachmentRuntimeChannel.attach(created)
+        PendingRevocationStorage.attach(created, applicationContext)
         MethodChannel(created.dartExecutor.binaryMessenger, BackgroundDrain.CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -53,16 +54,6 @@ class BackgroundDrainJobService : JobService() {
                         result.success(null)
                         finish(params, run, call.argument<Boolean>("retry") == true)
                     }
-                    "readPendingRevocations" -> PendingRevocationStorage.read(
-                        applicationContext,
-                        result,
-                    )
-                    "compareAndSetPendingRevocations" -> PendingRevocationStorage.compareAndSet(
-                        applicationContext,
-                        call.argument<String>("expected"),
-                        call.argument<String>("updated"),
-                        result,
-                    )
                     else -> result.notImplemented()
                 }
             }

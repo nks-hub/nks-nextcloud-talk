@@ -28,6 +28,22 @@ abstract interface class PendingRevocationStore {
   );
 }
 
+/// Active owners of records in the shared revocation store.
+abstract interface class PendingRevocationClaims {
+  Future<bool> tryClaimRevocation(String id, String token);
+  Future<void> releaseRevocationClaim(String id, String token);
+}
+
+extension CurrentCredential on CredentialVault {
+  /// Reads the vault when local credential ownership determines recovery.
+  Future<String?> readCurrentAppPassword(String accountId) {
+    final vault = this;
+    return vault is SecureCredentialVault
+        ? vault._readAppPassword(accountId, refresh: true)
+        : vault.readAppPassword(accountId);
+  }
+}
+
 /// The Apple credential store is intact but cannot be accessed in the current
 /// device state, for example during a dark wake or while authorization UI is
 /// unavailable. Callers may retry after the app returns to the foreground.
@@ -39,7 +55,10 @@ final class CredentialVaultTemporarilyUnavailable implements Exception {
 }
 
 final class SecureCredentialVault
-    implements CredentialVault, PendingRevocationStore {
+    implements
+        CredentialVault,
+        PendingRevocationStore,
+        PendingRevocationClaims {
   SecureCredentialVault({
     FlutterSecureStorage? storage,
     Future<Directory> Function()? supportDirectory,
@@ -87,22 +106,43 @@ final class SecureCredentialVault
   Future<void> writeAppPassword(String accountId, String appPassword) async {
     _forgetPassword(accountId);
     try {
-      await _ensureCurrent(accountId);
-      await _write(_currentKey(accountId), appPassword);
+      if (Platform.isAndroid) {
+        await _androidVault.invokeMethod<void>('writeAppPassword', {
+          'accountId': accountId,
+          'password': appPassword,
+        });
+      } else {
+        await _ensureCurrent(accountId);
+        await _write(_currentKey(accountId), appPassword);
+      }
     } finally {
       _forgetPassword(accountId);
     }
   }
 
   @override
-  Future<String?> readAppPassword(String accountId) async {
+  Future<String?> readAppPassword(String accountId) =>
+      _readAppPassword(accountId, refresh: false);
+
+  Future<String?> _readAppPassword(
+    String accountId, {
+    required bool refresh,
+  }) async {
+    if (refresh) _forgetPassword(accountId);
     final cached = _passwords[accountId];
     if (cached != null) {
       return cached;
     }
     final epoch = _passwordEpoch;
-    await _ensureCurrent(accountId);
-    final password = await _read(_currentKey(accountId));
+    final String? password;
+    if (Platform.isAndroid) {
+      password = await _androidVault.invokeMethod<String>('readAppPassword', {
+        'accountId': accountId,
+      });
+    } else {
+      await _ensureCurrent(accountId);
+      password = await _read(_currentKey(accountId));
+    }
     if (password != null && epoch == _passwordEpoch) {
       _passwords[accountId] = password;
     }
@@ -113,8 +153,14 @@ final class SecureCredentialVault
   Future<void> deleteAppPassword(String accountId) async {
     _forgetPassword(accountId);
     try {
-      await _ensureCurrent(accountId);
-      await _delete(_currentKey(accountId));
+      if (Platform.isAndroid) {
+        await _androidVault.invokeMethod<void>('deleteAppPassword', {
+          'accountId': accountId,
+        });
+      } else {
+        await _ensureCurrent(accountId);
+        await _delete(_currentKey(accountId));
+      }
     } finally {
       _forgetPassword(accountId);
     }
@@ -123,10 +169,37 @@ final class SecureCredentialVault
   static const _pendingRevocationsKey = 'nks.pending_revocations';
   static const _pendingRevocationsMarker = 'pending-revocations';
   static const _pendingRevocationsReconciled = 'pending-revocations-reconciled';
-  static const _backgroundDrainChannel = MethodChannel(
-    'com.nkshub.nextcloudtalk/background_drain',
+  static const _androidVault = MethodChannel(
+    'com.nkshub.nextcloudtalk/credential_vault',
   );
   static Future<void> _pendingRevocationMutationTail = Future<void>.value();
+  static final _localRevocationClaims = <String, String>{};
+
+  @override
+  Future<bool> tryClaimRevocation(String id, String token) async {
+    if (Platform.isAndroid) {
+      return await _androidVault.invokeMethod<bool>('claimRevocation', {
+            'id': id,
+            'token': token,
+          }) ==
+          true;
+    }
+    if (_localRevocationClaims.containsKey(id)) return false;
+    _localRevocationClaims[id] = token;
+    return true;
+  }
+
+  @override
+  Future<void> releaseRevocationClaim(String id, String token) async {
+    if (Platform.isAndroid) {
+      await _androidVault.invokeMethod<void>('releaseRevocationClaim', {
+        'id': id,
+        'token': token,
+      });
+    } else if (_localRevocationClaims[id] == token) {
+      _localRevocationClaims.remove(id);
+    }
+  }
 
   var _reconciled = false;
 
@@ -144,9 +217,7 @@ final class SecureCredentialVault
   @override
   Future<String?> readPendingRevocations() async {
     if (Platform.isAndroid) {
-      return _backgroundDrainChannel.invokeMethod<String>(
-        'readPendingRevocations',
-      );
+      return _androidVault.invokeMethod<String>('readPendingRevocations');
     }
     if (!await (await _pendingRevocationsMarkerFile()).exists()) {
       return null;
@@ -199,7 +270,7 @@ final class SecureCredentialVault
       final current = await readPendingRevocations();
       final next = update(current);
       final written =
-          await _backgroundDrainChannel.invokeMethod<bool>(
+          await _androidVault.invokeMethod<bool>(
             'compareAndSetPendingRevocations',
             <String, Object?>{'expected': current, 'updated': next},
           ) ??

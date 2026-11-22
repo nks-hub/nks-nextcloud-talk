@@ -717,6 +717,9 @@ void main() {
       accounts: repository,
       credentials: vault,
     );
+    await restartedQueue.recoverHeldCredentials();
+    expect(await restartedQueue.pendingRevocationCount(), 0);
+    await setupQueue.abandonHeldCredential(reservation);
     final restarted = OnboardingCoordinator(
       api: api,
       accounts: repository,
@@ -757,6 +760,7 @@ void main() {
       phase: AppPasswordCredentialPhase.vaultWritten,
       accountId: 'restart-account',
     );
+    await setupQueue.abandonHeldCredential(reservation);
 
     final restartedQueue = AppPasswordRevocationQueue(
       store: vault,
@@ -816,6 +820,7 @@ void main() {
       phase: AppPasswordCredentialPhase.accountCommitted,
       accountId: 'restart-account',
     );
+    await setupQueue.abandonHeldCredential(reservation);
 
     final restartedQueue = AppPasswordRevocationQueue(
       store: vault,

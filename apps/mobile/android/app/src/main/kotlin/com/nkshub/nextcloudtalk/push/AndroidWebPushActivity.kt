@@ -115,6 +115,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         AttachmentRuntimeChannel.attach(flutterEngine)
+        PendingRevocationStorage.attach(flutterEngine, applicationContext)
         val channel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL_NAME,
@@ -234,16 +235,6 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
                     BackgroundDrain.scheduleOnce(applicationContext)
                     result.success(null)
                 }
-                "readPendingRevocations" -> PendingRevocationStorage.read(
-                    applicationContext,
-                    result,
-                )
-                "compareAndSetPendingRevocations" -> PendingRevocationStorage.compareAndSet(
-                    applicationContext,
-                    call.argument<String>("expected"),
-                    call.argument<String>("updated"),
-                    result,
-                )
                 else -> result.notImplemented()
             }
         }
