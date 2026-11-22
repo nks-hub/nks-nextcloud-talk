@@ -195,14 +195,22 @@ extension _CallMediaSessionScreen on CallMediaSession {
   /// (`sendOffer(sessionId, 'screen')`). Without it the publish succeeds and
   /// no one ever sees the screen.
   Future<void> _announceShare(String peerId) async {
+    final share = _shares[_boundLocalPeerId];
+    if (share == null || !_isCurrentMcuScreenPublisher(share)) return;
     debugPrint('[call] sendoffer(screen) → $peerId');
     try {
-      await _send(
+      final accepted = await _send(
         peerId: peerId,
         type: 'sendoffer',
         payload: null,
         roomType: CallMediaSession._screenRoomType,
       );
+      if (!_isCurrentMcuScreenPublisher(share)) return;
+      if (accepted) {
+        _refusedMcuScreenAnnouncements.remove(peerId);
+      } else {
+        _refusedMcuScreenAnnouncements.add(peerId);
+      }
     } on CallMediaException {
       // The participant left between the list and this message.
     }
@@ -214,6 +222,7 @@ extension _CallMediaSessionScreen on CallMediaSession {
     bool notifyPeers = true,
   }) async {
     _cancelScreenAnswerTimer();
+    _refusedMcuScreenAnnouncements.clear();
     final resources = cleanup ?? CallResourceCleanup();
     // Through an MCU the only share is the publish to this side's own
     // session, which tells the SERVER to drop the publisher; the other

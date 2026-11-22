@@ -86,6 +86,8 @@ final class CallMediaSession {
   /// has two screen connections that only their direction tells apart.
   final Map<String, _MediaPeer> _shares = <String, _MediaPeer>{};
   CallLocalVideo? _screen;
+  final Set<String> _refusedMcuScreenAnnouncements = <String>{};
+  bool _wasSignalingUnavailable = false;
   Timer? _screenAnswerTimer;
   List<CallIceServer> _iceServers = const <CallIceServer>[];
   List<CallAudioRoute> _audioRoutes = const <CallAudioRoute>[];
@@ -318,6 +320,7 @@ final class CallMediaSession {
     }
     _mcu = update.topology == SignalingTopology.externalMcu;
     if (!update.signalingReady || !update.roomConfirmed) {
+      _wasSignalingUnavailable = true;
       _cancelPublisherRetry();
       // The peers stay. A socket that is reconnecting keeps its room epoch
       // and this side's peer id, so nothing below would rebuild them — and
@@ -349,6 +352,9 @@ final class CallMediaSession {
     final bindingChanged =
         _boundRoomEpoch != update.roomEpoch ||
         _boundLocalPeerId != localPeerId.value;
+    final retryScreenAnnouncements =
+        _wasSignalingUnavailable && !bindingChanged;
+    _wasSignalingUnavailable = false;
     final rebuilt = _boundRoomEpoch != null && bindingChanged;
     if (rebuilt) {
       await _closeAllPeers();
@@ -391,7 +397,10 @@ final class CallMediaSession {
         .where((peerId) => !_peers.containsKey(peerId))
         .toList(growable: false);
     if (_mcu) {
-      await _runPeerTasks(missingPeers, (peerId) async {
+      final recipients = retryScreenAnnouncements
+          ? <String>{...missingPeers, ..._refusedMcuScreenAnnouncements}
+          : missingPeers;
+      await _runPeerTasks(recipients, (peerId) async {
         await _subscribe(peerId);
         // Someone who joins while the screen is up has to be told about it:
         // the one publisher already carries the picture, but the server does
@@ -553,6 +562,7 @@ final class CallMediaSession {
 
   Future<void> _closePeer(String peerId, [CallResourceCleanup? cleanup]) async {
     final resources = cleanup ?? CallResourceCleanup();
+    _refusedMcuScreenAnnouncements.remove(peerId);
     _offerRequests.remove(peerId)?.cancel();
     await _closeScreen(peerId, resources);
     await _closeShare(peerId, resources);

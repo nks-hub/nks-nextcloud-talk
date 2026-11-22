@@ -740,6 +740,94 @@ extension _ScreenMediaSessionTests on _MediaSessionTests {
       },
     );
 
+    test('MCU resume retries only the refused screen announcement', () async {
+      const healthyPeer = 'healthy-peer';
+      const delayedPeer = 'delayed-peer';
+      const epoch = 7;
+      final initial = [_participant(_remote)];
+      final participants = [
+        ...initial,
+        _participant(healthyPeer),
+        _participant(delayedPeer),
+      ];
+      CallSignalingUpdate update(
+        List<SignalingParticipant> current, {
+        SignalingAccountPhase phase = SignalingAccountPhase.signalingReady,
+        List<SignalingPeerMessage> messages = const [],
+      }) => _update(
+        localPeerId: _local,
+        participants: current,
+        phase: phase,
+        messages: messages,
+        topology: SignalingTopology.externalMcu,
+        roomEpoch: epoch,
+      );
+
+      var resumed = false;
+      final attempted = <SignalingPeerMessage>[];
+      final media = session(
+        update(initial),
+        withControl: true,
+        sendMessage: (message, {required expectedRoomEpoch}) async {
+          expect(expectedRoomEpoch, epoch);
+          attempted.add(message);
+          if (!resumed &&
+              message.type == 'sendoffer' &&
+              message.recipient?.value == delayedPeer) {
+            return false;
+          }
+          sent.add(message);
+          return true;
+        },
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      await media.setScreenSharing(true);
+      final publish = sent.singleWhere(
+        (message) => message.type == 'offer' && message.roomType == 'screen',
+      );
+      final share = engine.connections.last;
+      updates.add(update(initial, messages: [_mcuPublisherAnswer(publish)]));
+      await pumpEventQueue();
+      expect(share.remoteDescriptions, hasLength(1));
+
+      List<String> forPeer(List<SignalingPeerMessage> messages, String peer) =>
+          messages
+              .where((message) => message.recipient?.value == peer)
+              .map((message) => message.type)
+              .toList();
+      updates.add(update(participants));
+      await pumpEventQueue();
+      expect(forPeer(sent, healthyPeer), ['requestoffer', 'sendoffer']);
+      expect(forPeer(attempted, delayedPeer), ['requestoffer', 'sendoffer']);
+      expect(forPeer(sent, delayedPeer), ['requestoffer']);
+
+      updates.add(
+        update(participants, phase: SignalingAccountPhase.reconnectWaiting),
+      );
+      await pumpEventQueue();
+      resumed = true;
+      updates.add(update(participants));
+      await pumpEventQueue();
+      updates.add(update(participants));
+      await pumpEventQueue();
+
+      expect(forPeer(sent, delayedPeer), ['requestoffer', 'sendoffer']);
+      expect(forPeer(attempted, delayedPeer), [
+        'requestoffer',
+        'sendoffer',
+        'sendoffer',
+      ]);
+      expect(forPeer(sent, healthyPeer), ['requestoffer', 'sendoffer']);
+      expect(
+        forPeer(sent, _remote).where((type) => type == 'sendoffer'),
+        hasLength(1),
+      );
+      expect(engine.connections.last, same(share));
+      expect(engine.screens.single.disposed, isFalse);
+      expect(media.state.screenSharing, isTrue);
+    });
+
     test('MCU screen messages keep four peer sends in flight', () async {
       final peers = List.generate(6, (index) => 'peer-$index');
       final peerSet = peers.toSet();
