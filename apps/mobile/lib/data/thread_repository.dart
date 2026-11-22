@@ -593,9 +593,18 @@ final class _RoomThreadProjection {
   late final Set<int> _missingIds;
 
   ChatMessage? updateCached(int messageId, String rawJson) {
+    final isAuthoritative = _authoritativeIds.contains(messageId);
     final ChatMessage cached;
     try {
-      cached = ChatMessage.fromJson(jsonDecode(rawJson));
+      final wire = jsonDecode(rawJson);
+      if (!isAuthoritative &&
+          wire is Map<String, Object?> &&
+          wire['parent'] == null &&
+          !_threadIds.contains(wire['threadId'])) {
+        // Use the wire scope here: older cache rows can have a stale column.
+        return null;
+      }
+      cached = ChatMessage.fromJson(wire);
     } on FormatException {
       return null;
     } on TalkProtocolException {
@@ -603,7 +612,7 @@ final class _RoomThreadProjection {
     }
     _missingIds.remove(messageId);
     final parent = cached.parent;
-    if (!_authoritativeIds.contains(messageId) &&
+    if (!isAuthoritative &&
         !_threadIds.contains(cached.threadId) &&
         (parent is! ChatFullParent ||
             !_authoritativeIds.contains(parent.messageId))) {

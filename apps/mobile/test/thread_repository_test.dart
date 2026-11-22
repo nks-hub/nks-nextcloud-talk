@@ -537,9 +537,12 @@ void main() {
     () async {
       await _insertThreadMessages(database, title: 'Before', replyCount: 3);
       final table = database.cachedChatMessages;
-      await (database.update(table)
-            ..where((row) => row.messageId.isIn([100, 101, 103])))
-          .write(const CachedChatMessagesCompanion(rawJson: Value('{')));
+      const invalidWire = '{"threadId":900}';
+      await (database.update(
+        table,
+      )..where((row) => row.messageId.isIn([100, 101, 103]))).write(
+        const CachedChatMessagesCompanion(rawJson: Value(invalidWire)),
+      );
       final quote = await (database.select(
         table,
       )..where((row) => row.messageId.equals(102))).getSingle();
@@ -549,10 +552,7 @@ void main() {
       await (database.update(
         table,
       )..where((row) => row.messageId.equals(102))).write(
-        CachedChatMessagesCompanion(
-          threadId: const Value(900),
-          rawJson: Value(jsonEncode(quoteWire)),
-        ),
+        CachedChatMessagesCompanion(rawJson: Value(jsonEncode(quoteWire))),
       );
       await threads.replaceSubscribed(
         accountId: 'account-a',
@@ -573,11 +573,12 @@ void main() {
       expect(reply.threadTitle, 'New title');
       expect((reply.parent as ChatFullParent).message.message, 'Latest root');
       expect(ordinaryQuote.threadTitle, 'Other thread');
+      expect(rows[2].threadId, 900);
       expect(
         (ordinaryQuote.parent as ChatFullParent).message.message,
         'Latest root',
       );
-      expect(rows.last.rawJson, '{');
+      expect(rows.last.rawJson, invalidWire);
     },
   );
 
