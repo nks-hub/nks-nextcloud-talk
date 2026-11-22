@@ -297,46 +297,60 @@ final class _ConversationFilterBar extends StatelessWidget {
       child: Padding(
         key: const Key('conversation-filters'),
         padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-        child: Wrap(
-          spacing: 4,
-          runSpacing: 4,
-          children: [
-            _chip(
-              context,
-              key: const Key('conversation-filter-unread'),
-              selected: selected.contains(_ConversationListFilter.unread),
-              label: Text(strings.conversationFilterUnread),
-              onSelected: (_) => onToggle(_ConversationListFilter.unread),
-            ),
-            _chip(
-              context,
-              key: const Key('conversation-filter-mentions'),
-              selected: selected.contains(_ConversationListFilter.mentions),
-              label: Text(strings.conversationFilterMentions),
-              onSelected: (_) => onToggle(_ConversationListFilter.mentions),
-            ),
-            if (showArchived)
-              _chip(
-                context,
-                key: const Key('conversation-filter-archived'),
-                selected: selected.contains(_ConversationListFilter.archived),
-                label: Text(strings.conversationFilterArchived),
-                onSelected: (_) => onToggle(_ConversationListFilter.archived),
-              ),
-          ],
+        // Under 340 dp three Czech labels only fit with the tight chip, so
+        // that is what a squeezed list pane gets; a phone gets the regular one.
+        child: LayoutBuilder(
+          builder: (context, box) =>
+              _chips(context, strings, box.maxWidth < 340),
         ),
       ),
     );
   }
 
+  Widget _chips(BuildContext context, AppLocalizations strings, bool compact) {
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        _chip(
+          context,
+          compact: compact,
+          key: const Key('conversation-filter-unread'),
+          selected: selected.contains(_ConversationListFilter.unread),
+          label: Text(strings.conversationFilterUnread),
+          onSelected: (_) => onToggle(_ConversationListFilter.unread),
+        ),
+        _chip(
+          context,
+          compact: compact,
+          key: const Key('conversation-filter-mentions'),
+          selected: selected.contains(_ConversationListFilter.mentions),
+          label: Text(strings.conversationFilterMentions),
+          onSelected: (_) => onToggle(_ConversationListFilter.mentions),
+        ),
+        if (showArchived)
+          _chip(
+            context,
+            compact: compact,
+            key: const Key('conversation-filter-archived'),
+            selected: selected.contains(_ConversationListFilter.archived),
+            label: Text(strings.conversationFilterArchived),
+            onSelected: (_) => onToggle(_ConversationListFilter.archived),
+          ),
+      ],
+    );
+  }
+
   Widget _chip(
     BuildContext context, {
+    required bool compact,
     required Key key,
     required bool selected,
     required Widget label,
     required ValueChanged<bool> onSelected,
   }) {
     final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return FilterChip(
       key: key,
       selected: selected,
@@ -344,17 +358,22 @@ final class _ConversationFilterBar extends StatelessWidget {
       onSelected: onSelected,
       showCheckmark: false,
       materialTapTargetSize: MaterialTapTargetSize.padded,
-      visualDensity: const VisualDensity(horizontal: -2, vertical: -1),
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+      visualDensity: compact
+          ? const VisualDensity(horizontal: -4)
+          : VisualDensity.standard,
+      padding: compact ? EdgeInsets.zero : null,
+      labelPadding: compact ? const EdgeInsets.symmetric(horizontal: 2) : null,
       side: BorderSide(
         color: selected ? scheme.tertiary : scheme.outlineVariant,
       ),
       selectedColor: scheme.tertiaryContainer,
-      labelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: selected ? scheme.onTertiaryContainer : scheme.onSurfaceVariant,
-        fontWeight: FontWeight.w600,
-      ),
+      labelStyle: (compact ? textTheme.labelSmall : textTheme.labelLarge)
+          ?.copyWith(
+            color: selected
+                ? scheme.onTertiaryContainer
+                : scheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
     );
   }
 }

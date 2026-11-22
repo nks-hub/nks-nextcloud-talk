@@ -13,9 +13,10 @@ void main() {
     WidgetTester tester,
     List<CachedConversation> conversations, {
     double textScale = 1,
+    double width = 900,
   }) async {
     tester.view
-      ..physicalSize = const Size(900, 700)
+      ..physicalSize = Size(width, 700)
       ..devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
@@ -59,6 +60,28 @@ void main() {
       reason: 'the date belongs at the edge, not floating mid-row',
     );
   });
+
+  testWidgets(
+    'filters are regular chips on a phone and tight in a narrow pane',
+    (tester) async {
+      double? labelSize() => tester
+          .widget<FilterChip>(
+            find.byKey(const Key('conversation-filter-unread')),
+          )
+          .labelStyle
+          ?.fontSize;
+
+      await pump(tester, [
+        _conversation('room-a', 'Synthetic peer'),
+      ], width: 390);
+      expect(labelSize(), 14);
+
+      await pump(tester, [
+        _conversation('room-a', 'Synthetic peer'),
+      ], width: 300);
+      expect(labelSize(), 11);
+    },
+  );
 
   testWidgets('rows are separated by space, not by divider lines', (
     tester,

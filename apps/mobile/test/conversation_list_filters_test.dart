@@ -78,12 +78,10 @@ void main() {
     expect(cache.entryCount, 2);
   });
 
-  testWidgets('three localized filters fit a 360 dp pane or reflow', (
+  testWidgets('three localized filters fit a 300 dp pane or reflow', (
     tester,
   ) async {
-    // Ahem draws a glyph one em wide, so these labels measure about twice what
-    // they do in Roboto; 360 dp here is a pane well under 300 dp in practice.
-    tester.view.physicalSize = const Size(360, 640);
+    tester.view.physicalSize = const Size(300, 640);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
