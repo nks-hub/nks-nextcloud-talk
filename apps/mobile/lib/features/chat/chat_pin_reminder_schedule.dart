@@ -539,7 +539,8 @@ final class _ScheduledMessagesSheetState
     unawaited(_load());
   }
 
-  Future<void> _load() async {
+  /// False when a newer load superseded this one before it finished.
+  Future<bool> _load() async {
     final generation = ++_loadGeneration;
     try {
       final messages = await ref
@@ -559,6 +560,7 @@ final class _ScheduledMessagesSheetState
         setState(() => _failed = true);
       }
     }
+    return generation == _loadGeneration;
   }
 
   Future<void> _delete(RichChatScheduledMessage message) async {
@@ -607,8 +609,10 @@ final class _ScheduledMessagesSheetState
           _deletedScheduleIdsAwaitingRefresh.isNotEmpty) {
         final refreshedIds = Set<String>.of(_deletedScheduleIdsAwaitingRefresh);
         _deletedScheduleIdsAwaitingRefresh.removeAll(refreshedIds);
-        await _load();
-        _deletingScheduleIds.removeAll(refreshedIds);
+        // A superseded list may still show these rows, so they stay locked.
+        if (await _load()) {
+          _deletingScheduleIds.removeAll(refreshedIds);
+        }
       }
       if (mounted) {
         setState(() {});

@@ -1202,6 +1202,91 @@ void main() {
       await teardownTree(tester);
     });
 
+    testWidgets('a deleted row stays locked while its refresh is stale', (
+      tester,
+    ) async {
+      final conversation = await insertRoom(hasScheduledMessages: 1);
+      final refreshGates = <int, Completer<void>>{
+        2: Completer<void>(),
+        3: Completer<void>(),
+      };
+      final deletedIds = <String>{};
+      var getRequests = 0;
+      var deleteRequests = 0;
+      addTearDown(() {
+        for (final gate in refreshGates.values) {
+          if (!gate.isCompleted) {
+            gate.complete();
+          }
+        }
+      });
+      await tester.pumpWidget(
+        wrap(
+          api: buildApi(
+            localFeatures: const <String>['scheduled-messages'],
+            onRichChat: (request) async {
+              if (request.method == 'GET') {
+                final index = ++getRequests;
+                final visible = <Object?>[
+                  if (!deletedIds.contains('77'))
+                    _scheduledMessageJson(4102444800),
+                  if (!deletedIds.contains('78'))
+                    <String, Object?>{
+                      ..._scheduledMessageJson(4102448400),
+                      'id': '78',
+                      'message': 'Second scheduled message',
+                    },
+                ];
+                await refreshGates[index]?.future;
+                return http.Response(jsonEncode(_ocs(200, visible)), 200);
+              }
+              deleteRequests += 1;
+              deletedIds.add(request.url.pathSegments.last);
+              return http.Response(
+                jsonEncode(_ocs(200, <String, Object?>{})),
+                200,
+              );
+            },
+          ),
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+          ),
+        ),
+      );
+      await settle(tester);
+
+      await tester.tap(find.byKey(const Key('open-scheduled-messages')));
+      await flush(tester);
+      await tester.tap(find.byKey(const Key('delete-scheduled-77')));
+      await pumpUntil(tester, () => getRequests == 2);
+      await tester.tap(find.byKey(const Key('delete-scheduled-78')));
+      await pumpUntil(tester, () => getRequests == 3);
+      expect(deleteRequests, 2);
+
+      refreshGates[2]!.complete();
+      for (var round = 0; round < 8; round++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump(const Duration(milliseconds: 120));
+      }
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('delete-scheduled-77')))
+            .onPressed,
+        isNull,
+        reason: 'the superseded refresh must not unlock the deleted row',
+      );
+
+      refreshGates[3]!.complete();
+      await flush(tester);
+      expect(deleteRequests, 2);
+      expect(find.byKey(const Key('scheduled-messages-empty')), findsOneWidget);
+
+      await teardownTree(tester);
+    });
+
     testWidgets('the scheduled list entry point stays hidden when empty', (
       tester,
     ) async {
