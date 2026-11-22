@@ -8,6 +8,17 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.1.0 (120) — 22 November 2026
+
+- Moderators can set the default participant permissions of a conversation, choose who may mention everyone and give one participant individual permissions in the conversation details.
+- Diagnostics show when push last arrived, when it was last decrypted for the account, what happened to the notification and the last delivery error. No message content or token is stored.
+- A browser login that was cancelled, or cut off by closing the app, no longer blocks adding the account. After a restart the app finishes or expires the unfinished attempt and revokes an app password it can no longer use.
+- Removing an account revokes its app password on the server even when the app closes halfway through. A removal that fails keeps the account and its attachments usable.
+- In a call, a screen share the other side rejected is offered again without dropping the call. The camera and the connections are released when the call setup fails, and leaving stops all media work.
+- At most four attachments transfer at once, three per conversation. On Android, an upload cut off in the background is finished by the app in the foreground.
+- Inline code formatting no longer drops the characters at its edges. Recognising 10 MiB of pasted text takes 12 ms instead of 1.9 s on a Galaxy S9+.
+- Saving the conversation list after a sync takes 307 ms instead of 719 ms on a Galaxy S9+ and 114 ms instead of 226 ms on a Galaxy S21.
+
 ## 1.0.40 (108) — 18 November 2026
 
 - On macOS, OwnTalk offers an image copied to the clipboard above the message field. Tap the card to attach the image.
