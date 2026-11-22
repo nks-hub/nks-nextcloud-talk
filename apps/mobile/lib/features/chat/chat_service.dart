@@ -53,6 +53,7 @@ final class ChatService {
     required ChatRepository chat,
     required CredentialVault credentials,
     required HttpNextcloudApi api,
+    TextSendOwnership? ownership,
     Uuid? uuid,
     int absenceGraceSeconds = textSendAbsenceGraceSeconds,
     void Function(bool active)? reportSendActivity,
@@ -63,7 +64,7 @@ final class ChatService {
        _holdRetryDeliveryLaneForTesting = holdRetryDeliveryLaneForTesting,
        _accounts = accounts,
        _chat = chat,
-       _textSends = textSendOwnership(),
+       _textSends = ownership ?? textSendOwnership(),
        _credentials = credentials,
        _api = api,
        _uuid = uuid ?? const Uuid(),
@@ -1267,33 +1268,39 @@ final class ChatService {
     }
   }
 
-  /// Sends one claimed operation and records what became of it. The operation
-  /// remains owned from the claim until its outcome is stored.
-  ///
-  /// Returns false when [prepared] carries a password that has been replaced,
-  /// which makes it useless for anything further.
+  /// Keeps ownership until the send and its result write have both settled.
   Future<bool> _transmitClaim(
     _PreparedChat prepared,
     ClaimedTextSend claim,
   ) async {
-    _ensureAccountActive(prepared.account.id);
-
-    Future<void> recordFailure(
-      ChatTransportBodyState bodyState, {
-      int? nextAttemptAt,
-    }) async {
-      final outcome = await _chat.recordTextSendFailure(
-        accountId: prepared.account.id,
-        operationId: claim.operation.operationId,
-        bodyState: bodyState,
-        nextAttemptAt: nextAttemptAt,
-        now: _nowSeconds(),
-        absenceGraceSeconds: _absenceGraceSeconds,
-      );
-      if (outcome != ChatOutboxOutcome.rejected) {
+    try {
+      return await _sendClaim(prepared, claim);
+    } finally {
+      try {
         await claim.reservation?.release();
+      } on Object catch (error) {
+        debugPrint(
+          'Text send reservation release failed: ${error.runtimeType}',
+        );
       }
     }
+  }
+
+  // Returns false when the request used a password that has been replaced.
+  Future<bool> _sendClaim(_PreparedChat prepared, ClaimedTextSend claim) async {
+    _ensureAccountActive(prepared.account.id);
+
+    Future<ChatOutboxOutcome> recordFailure(
+      ChatTransportBodyState bodyState, {
+      int? nextAttemptAt,
+    }) => _chat.recordTextSendFailure(
+      accountId: prepared.account.id,
+      operationId: claim.operation.operationId,
+      bodyState: bodyState,
+      nextAttemptAt: nextAttemptAt,
+      now: _nowSeconds(),
+      absenceGraceSeconds: _absenceGraceSeconds,
+    );
 
     final ChatSendResponse response;
     try {
@@ -1357,9 +1364,6 @@ final class ChatService {
       now: _nowSeconds(),
       absenceGraceSeconds: _absenceGraceSeconds,
     );
-    if (outcome != ChatOutboxOutcome.rejected) {
-      await claim.reservation?.release();
-    }
     if (outcome == ChatOutboxOutcome.completed ||
         outcome == ChatOutboxOutcome.failed ||
         outcome == ChatOutboxOutcome.reauthenticationRequired ||

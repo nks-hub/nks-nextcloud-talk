@@ -22,134 +22,190 @@ extension _BackgroundReaderCases on _ChatServiceIntegrationSuite {
   }
 
   void registerBackgroundReaderCases() {
-    for (final overlap in [false, true]) {
-      test(
-        'background text wake overlap=$overlap preserves the live send',
-        () async {
-          final dir = await Directory.systemTemp.createTemp(
-            'own-talk-drain-overlap-',
-          );
-          addTearDown(() async => dir.delete(recursive: true));
-          final file = File('${dir.path}/outbox.sqlite');
-          final dbA = AppDatabase.forTesting(NativeDatabase(file));
-          final dbB = AppDatabase.forTesting(NativeDatabase(file));
-          addTearDown(dbA.close);
-          addTearDown(dbB.close);
-          final accountsA = AccountRepository(dbA);
-          final accountsB = AccountRepository(dbB);
-          final chatA = ChatRepository(dbA);
-          final chatB = ChatRepository(dbB);
-          final localVault = MemoryCredentialVault();
-          const accountId = 'audit-account';
-          const roomToken = 'rooma123';
-          await accountsA.upsertAccount(
-            accountId: accountId,
-            serverUrl: 'https://cloud.example.invalid',
-            loginName: 'fixture-user',
-            serverProductName: 'Nextcloud',
-            createdAt: DateTime.utc(2026, 1, 1),
-          );
-          localVault.values[accountId] = 'synthetic-password-no-network';
-          await _cacheConversation(dbA, accountId: accountId);
-          const features = {'conversation-v4', 'chat-v2', 'chat-reference-id'};
-          await accountsA.updateTalkFeatures(accountId, features);
-          await chatA.recordCapabilities(
-            accountId: accountId,
-            talkFeatures: features,
-            observedAt: DateTime.utc(2026, 1, 1),
-          );
+    for (final (overlap, rejectConfirmation, rejectRelease, name) in [
+      (false, false, false, 'sequential preserves the live send'),
+      (true, false, false, 'overlap preserves the live send'),
+      (false, true, false, 'failed confirmation allows conservative recovery'),
+      (false, true, true, 'failed release preserves the persistence error'),
+    ]) {
+      test('background text wake $name without replaying the POST', () async {
+        final dir = await Directory.systemTemp.createTemp(
+          'own-talk-drain-overlap-',
+        );
+        addTearDown(() async => dir.delete(recursive: true));
+        final file = File('${dir.path}/outbox.sqlite');
+        final dbA = AppDatabase.forTesting(NativeDatabase(file));
+        final dbB = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(dbA.close);
+        addTearDown(dbB.close);
+        final accountsA = AccountRepository(dbA);
+        final accountsB = AccountRepository(dbB);
+        final chatA = ChatRepository(dbA);
+        final chatB = ChatRepository(dbB);
+        final localVault = MemoryCredentialVault();
+        const accountId = 'audit-account';
+        const roomToken = 'rooma123';
+        await accountsA.upsertAccount(
+          accountId: accountId,
+          serverUrl: 'https://cloud.example.invalid',
+          loginName: 'fixture-user',
+          serverProductName: 'Nextcloud',
+          createdAt: DateTime.utc(2026, 1, 1),
+        );
+        localVault.values[accountId] = 'synthetic-password-no-network';
+        await _cacheConversation(dbA, accountId: accountId);
+        const features = {'conversation-v4', 'chat-v2', 'chat-reference-id'};
+        await accountsA.updateTalkFeatures(accountId, features);
+        await chatA.recordCapabilities(
+          accountId: accountId,
+          talkFeatures: features,
+          observedAt: DateTime.utc(2026, 1, 1),
+        );
 
-          final offlineApi = HttpNextcloudApi(client: OfflineClient());
-          addTearDown(offlineApi.close);
-          final seed = ChatService(
-            accounts: accountsA,
-            chat: chatA,
-            credentials: localVault,
-            api: offlineApi,
-          );
-          addTearDown(seed.close);
-          await seed.sendText(
-            accountId: accountId,
-            roomToken: roomToken,
-            message: 'offline queued text',
-          );
-          await waitForUnsentTextSends(dbA);
-          await seed.close();
+        final offlineApi = HttpNextcloudApi(client: OfflineClient());
+        addTearDown(offlineApi.close);
+        final seed = ChatService(
+          accounts: accountsA,
+          chat: chatA,
+          credentials: localVault,
+          api: offlineApi,
+        );
+        addTearDown(seed.close);
+        await seed.sendText(
+          accountId: accountId,
+          roomToken: roomToken,
+          message: 'offline queued text',
+        );
+        await waitForUnsentTextSends(dbA);
+        await seed.close();
 
-          final postStarted = Completer<void>();
-          final releasePost = Completer<void>();
-          var postsA = 0;
-          var postsB = 0;
-          final apiA = HttpNextcloudApi(
-            client: _sendServer((request) async {
-              postsA++;
-              if (!postStarted.isCompleted) postStarted.complete();
-              await releasePost.future;
-              return _acceptedSend(request, 121);
-            }),
+        final postStarted = Completer<void>();
+        final releasePost = Completer<void>();
+        var postsA = 0;
+        var postsB = 0;
+        int? statusA;
+        final apiA = HttpNextcloudApi(
+          client: _sendServer((request) async {
+            postsA++;
+            if (!postStarted.isCompleted) postStarted.complete();
+            await releasePost.future;
+            final response = _acceptedSend(request, 121);
+            statusA = response.statusCode;
+            return response;
+          }),
+        );
+        final apiB = HttpNextcloudApi(
+          client: _sendServer((request) {
+            postsB++;
+            return _acceptedSend(request, 122);
+          }),
+        );
+        addTearDown(apiA.close);
+        addTearDown(apiB.close);
+        final failingRelease = rejectRelease
+            ? _LosesTextSendReleaseReply(textSendOwnership())
+            : null;
+        final first = ChatService(
+          accounts: accountsA,
+          chat: chatA,
+          credentials: localVault,
+          api: apiA,
+          ownership: failingRelease,
+        );
+        final second = ChatService(
+          accounts: accountsB,
+          chat: chatB,
+          credentials: localVault,
+          api: apiB,
+        );
+        addTearDown(first.close);
+        addTearDown(second.close);
+        final queued = await dbA.select(dbA.textSendOperations).getSingle();
+        if (rejectConfirmation) {
+          await (dbA.update(
+            dbA.textSendOperations,
+          )..where((row) => row.operationId.equals(queued.operationId))).write(
+            const TextSendOperationsCompanion(
+              outboxState: Value('awaitingConfirmation'),
+              nextAttemptAt: Value(null),
+            ),
           );
-          final apiB = HttpNextcloudApi(
-            client: _sendServer((request) {
-              postsB++;
-              return _acceptedSend(request, 122);
-            }),
-          );
-          addTearDown(apiA.close);
-          addTearDown(apiB.close);
-          final first = ChatService(
-            accounts: accountsA,
-            chat: chatA,
-            credentials: localVault,
-            api: apiA,
-          );
-          final second = ChatService(
-            accounts: accountsB,
-            chat: chatB,
-            credentials: localVault,
-            api: apiB,
-          );
-          addTearDown(first.close);
-          addTearDown(second.close);
-          final firstRun = first.drainPendingSends();
-          try {
-            await postStarted.future.timeout(const Duration(seconds: 5));
-            final live = await dbA.select(dbA.textSendOperations).getSingle();
-            expect(live.outboxState, 'sending');
-            if (overlap) {
-              await second.drainPendingSends().timeout(
-                const Duration(seconds: 5),
-              );
-            }
-            final afterSecond = await dbB
-                .select(dbB.textSendOperations)
-                .getSingle();
-            releasePost.complete();
-            await firstRun.timeout(const Duration(seconds: 5));
-            if (!overlap) await second.drainPendingSends();
-            final terminal = await dbA
-                .select(dbA.textSendOperations)
-                .getSingle();
-            stdout.writeln(
-              'BACKGROUND_TEXT_OVERLAP overlap=$overlap '
-              'afterSecond=${afterSecond.outboxState} reason=${afterSecond.errorClass} '
-              'terminal=${terminal.outboxState} ids=${terminal.messageIdsJson} '
-              'mockPosts=$postsA/$postsB',
+        }
+        final firstRun = rejectConfirmation
+            ? expectLater(
+                first.resendText(
+                  accountId: accountId,
+                  roomToken: roomToken,
+                  operationId: queued.operationId,
+                ),
+                throwsA(
+                  predicate(
+                    (Object? error) =>
+                        '$error'.contains('reject audit confirmation'),
+                  ),
+                ),
+              )
+            : first.drainPendingSends();
+        try {
+          await postStarted.future.timeout(const Duration(seconds: 5));
+          final live = await dbA.select(dbA.textSendOperations).getSingle();
+          expect(live.outboxState, 'sending');
+          if (overlap) {
+            await second.drainPendingSends().timeout(
+              const Duration(seconds: 5),
             );
-            expect(
-              (
-                afterSecond.outboxState,
-                terminal.outboxState,
-                terminal.messageIdsJson,
-              ),
-              ('sending', 'completed', '[121]'),
-            );
-            expect((postsA, postsB), (1, 0));
-          } finally {
-            if (!releasePost.isCompleted) releasePost.complete();
-            await firstRun;
           }
-        },
-      );
+          final afterSecond = await dbB
+              .select(dbB.textSendOperations)
+              .getSingle();
+          if (rejectConfirmation) {
+            await dbA.customStatement('''
+                CREATE TRIGGER reject_audit_confirmation BEFORE INSERT ON text_send_operations
+                WHEN NEW.outbox_state = 'completed'
+                BEGIN SELECT RAISE(ABORT, 'reject audit confirmation'); END
+              ''');
+          }
+          releasePost.complete();
+          await firstRun.timeout(const Duration(seconds: 5));
+          expect(statusA, 201);
+          if (rejectConfirmation) {
+            expect(
+              (await dbA.select(dbA.textSendOperations).getSingle())
+                  .outboxState,
+              'sending',
+            );
+            await dbA.customStatement('DROP TRIGGER reject_audit_confirmation');
+          }
+          if (!overlap) await second.drainPendingSends();
+          final terminal = await dbA.select(dbA.textSendOperations).getSingle();
+          stdout.writeln(
+            'BACKGROUND_TEXT_OVERLAP overlap=$overlap '
+            'rejectConfirmation=$rejectConfirmation statusA=$statusA '
+            'rejectRelease=$rejectRelease '
+            'afterSecond=${afterSecond.outboxState} reason=${afterSecond.errorClass} '
+            'terminal=${terminal.outboxState} ids=${terminal.messageIdsJson} '
+            'mockPosts=$postsA/$postsB',
+          );
+          expect(
+            (
+              afterSecond.outboxState,
+              terminal.outboxState,
+              terminal.messageIdsJson,
+            ),
+            rejectConfirmation
+                ? ('sending', 'awaitingConfirmation', '[]')
+                : ('sending', 'completed', '[121]'),
+          );
+          if (rejectConfirmation) {
+            expect(terminal.errorClass, 'process-interrupted');
+          }
+          expect((postsA, postsB), (1, 0));
+          expect(failingRelease?.releases ?? 0, rejectRelease ? 1 : 0);
+        } finally {
+          if (!releasePost.isCompleted) releasePost.complete();
+          await firstRun;
+        }
+      });
     }
 
     test('text send ownership survives only a committed live claim', () async {
@@ -691,4 +747,29 @@ extension _BackgroundReaderCases on _ChatServiceIntegrationSuite {
       },
     );
   }
+}
+
+final class _LosesTextSendReleaseReply implements TextSendOwnership {
+  _LosesTextSendReleaseReply(this.delegate);
+
+  final TextSendOwnership delegate;
+  int releases = 0;
+
+  @override
+  Future<TextSendReservation?> acquire(
+    String accountId,
+    ChatOperationId id,
+  ) async {
+    final reservation = await delegate.acquire(accountId, id);
+    if (reservation == null) return null;
+    return TextSendReservation(() async {
+      releases++;
+      await reservation.release();
+      throw StateError('audit release reply lost');
+    });
+  }
+
+  @override
+  Future<Set<ChatOperationId>> active(String accountId) =>
+      delegate.active(accountId);
 }
