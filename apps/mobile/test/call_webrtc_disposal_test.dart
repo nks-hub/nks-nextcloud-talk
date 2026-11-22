@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/features/calls/call_media_engine.dart';
 import 'package:nextcloudtalk/features/calls/call_media_engine_webrtc.dart';
 
 void main() {
@@ -9,6 +10,9 @@ void main() {
   const methods = MethodChannel('FlutterWebRTC.Method');
   const events = MethodChannel('FlutterWebRTC.Event');
   const textureEvents = MethodChannel('FlutterWebRTC/Texture23');
+  const peerEvents = MethodChannel(
+    'FlutterWebRTC/peerConnectionEventpeer-fixture',
+  );
   const engine = WebRtcCallMediaEngine();
   final releases = <String>[];
   final failures = <String, PlatformException>{};
@@ -18,6 +22,7 @@ void main() {
     failures.clear();
     messenger.setMockMethodCallHandler(events, (_) async => null);
     messenger.setMockMethodCallHandler(textureEvents, (_) async => null);
+    messenger.setMockMethodCallHandler(peerEvents, (_) async => null);
     messenger.setMockMethodCallHandler(methods, (call) async {
       switch (call.method) {
         case 'initialize':
@@ -41,6 +46,12 @@ void main() {
           };
         case 'createVideoRenderer':
           return {'textureId': 23};
+        case 'createPeerConnection':
+          return {'peerConnectionId': 'peer-fixture'};
+        case 'addTransceiver':
+          throw PlatformException(code: 'transceiver_setup');
+        case 'peerConnectionClose':
+        case 'peerConnectionDispose':
         case 'videoRendererDispose':
         case 'trackDispose':
         case 'streamDispose':
@@ -60,6 +71,7 @@ void main() {
     messenger.setMockMethodCallHandler(methods, null);
     messenger.setMockMethodCallHandler(events, null);
     messenger.setMockMethodCallHandler(textureEvents, null);
+    messenger.setMockMethodCallHandler(peerEvents, null);
   });
 
   test('camera stops its tracks after native renderer release fails', () async {
@@ -103,5 +115,30 @@ void main() {
     await microphone.dispose();
 
     expect(releases, ['audio-1', 'audio-2', 'streamDispose']);
+  });
+
+  test('failed peer setup attempts disposal even when closing fails', () async {
+    failures['peerConnectionClose'] = PlatformException(code: 'peer_close');
+    failures['peerConnectionDispose'] = PlatformException(code: 'peer_dispose');
+
+    final error = await engine
+        .createPeerConnection(
+          iceServers: const [],
+          audio: null,
+          onIceCandidate: (_) {},
+          onConnectionState: (_) {},
+          onRemoteVideo: (_) {},
+        )
+        .then<Object?>((_) => null, onError: (Object error) => error);
+
+    expect(releases, ['peerConnectionClose', 'peerConnectionDispose']);
+    expect(
+      error,
+      isA<CallMediaException>().having(
+        (error) => error.code,
+        'code',
+        CallMediaError.engineFailure,
+      ),
+    );
   });
 }

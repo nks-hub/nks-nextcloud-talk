@@ -198,8 +198,10 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
         );
       }
     } on Object {
-      await connection.close();
-      await connection.dispose();
+      await CallResourceCleanup().run(
+        () => _releasePeerConnection(connection),
+        label: 'incomplete peer connection',
+      );
       throw const CallMediaException(CallMediaError.engineFailure);
     }
     connection.onIceCandidate = (candidate) {
@@ -584,6 +586,15 @@ List<String> compactWebRtcStatusFramesForTesting(
   return pending.takeAll();
 }
 
+Future<void> _releasePeerConnection(rtc.RTCPeerConnection connection) async {
+  try {
+    await connection.close();
+  } on Object {
+    // The plugin can fail to close an already closed connection.
+  }
+  await connection.dispose();
+}
+
 final class _WebRtcPeerConnection implements CallPeerConnection {
   _WebRtcPeerConnection(
     this._connection,
@@ -879,12 +890,7 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
         // The connection closing below takes it down regardless.
       }
     }
-    try {
-      await _connection.close();
-    } on Object {
-      // A connection the engine already tore down is still closed.
-    }
-    await _connection.dispose();
+    await _releasePeerConnection(_connection);
   }
 
   Future<CallSessionDescription> _describe(
