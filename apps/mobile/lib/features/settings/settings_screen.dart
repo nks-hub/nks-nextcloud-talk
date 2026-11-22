@@ -15,6 +15,7 @@ import '../diagnostics/diagnostics_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../core/desktop_metrics.dart';
+import '../../core/section_header_style.dart';
 import 'account_removal_service.dart';
 import 'app_password_revocation_queue.dart';
 import 'app_lock/app_lock_controller.dart';
@@ -744,13 +745,7 @@ final class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: Theme.of(context).colorScheme.tertiary,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+      child: Text(title, style: sectionHeaderStyle(context)),
     );
   }
 }

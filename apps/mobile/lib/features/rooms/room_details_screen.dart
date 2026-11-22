@@ -11,6 +11,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import '../../app_providers.dart';
 import '../../core/color_palette.dart';
 import '../../core/desktop_metrics.dart';
+import '../../core/section_header_style.dart';
 import '../../core/text_prompt_dialog.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
@@ -254,7 +255,7 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text(
               strings.roomDetailsActionsHeader,
-              style: Theme.of(context).textTheme.titleMedium,
+              style: sectionHeaderStyle(context),
             ),
           ),
           if (_canEditRoomMetadata)
@@ -625,7 +626,7 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
                 Expanded(
                   child: Text(
                     strings.roomDetailsParticipantsHeader,
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: sectionHeaderStyle(context),
                   ),
                 ),
                 // Adding someone was missing entirely until 5 September 2026:
