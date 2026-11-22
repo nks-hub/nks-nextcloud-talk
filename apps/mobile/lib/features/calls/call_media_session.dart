@@ -425,10 +425,7 @@ final class CallMediaSession {
 
     // Process newer offers and unshares before resending these answers.
     final screenAnswers = _mcu && resumed
-        ? {
-            for (final screen in _screens.values)
-              screen: ?screen.pendingMcuScreenAnswer,
-          }
+        ? _mcuScreenAnswersFor(expected)
         : const <_MediaPeer, _PendingMcuScreenAnswer>{};
     for (final message in update.messages) {
       await _receive(

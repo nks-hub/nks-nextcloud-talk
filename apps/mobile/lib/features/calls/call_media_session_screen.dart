@@ -385,6 +385,22 @@ extension _CallMediaSessionScreen on CallMediaSession {
     }
   }
 
+  Map<_MediaPeer, _PendingMcuScreenAnswer> _mcuScreenAnswersFor(
+    Set<String> participants,
+  ) {
+    final answers = <_MediaPeer, _PendingMcuScreenAnswer>{};
+    for (final screen in _screens.values) {
+      final answer = screen.pendingMcuScreenAnswer;
+      if (answer == null) continue;
+      if (participants.contains(screen.peerId)) {
+        answers[screen] = answer;
+      } else {
+        screen.pendingMcuScreenAnswer = null;
+      }
+    }
+    return answers;
+  }
+
   Future<void> _retryMcuScreenAnswer(
     MapEntry<_MediaPeer, _PendingMcuScreenAnswer> entry,
   ) async {

@@ -7,6 +7,8 @@ enum _McuScreenAnswerChange {
   leave,
   newOffer,
   unshare,
+  screenOnlySenderAbsent,
+  earlyScreenSenderJoins,
 }
 
 extension _McuScreenAnswerTests on _MediaSessionTests {
@@ -16,7 +18,13 @@ extension _McuScreenAnswerTests on _MediaSessionTests {
         const other = 'other-session';
         const epoch = 7;
         const originalSid = 'original-screen';
-        final participants = [_participant(_remote), _participant(other)];
+        final screenOnly =
+            change == _McuScreenAnswerChange.screenOnlySenderAbsent ||
+            change == _McuScreenAnswerChange.earlyScreenSenderJoins;
+        final participants = [
+          _participant(_remote, inCall: screenOnly ? 0 : 7),
+          _participant(other),
+        ];
         CallSignalingUpdate update({
           List<SignalingParticipant>? members,
           SignalingAccountPhase phase = SignalingAccountPhase.signalingReady,
@@ -67,7 +75,7 @@ extension _McuScreenAnswerTests on _MediaSessionTests {
         updates.add(
           update(
             messages: [
-              for (final peerId in [_remote, other])
+              for (final peerId in [if (!screenOnly) _remote, other])
                 _message(peerId, 'offer', <String, Object?>{
                   'type': 'offer',
                   'sdp': peerId,
@@ -76,7 +84,7 @@ extension _McuScreenAnswerTests on _MediaSessionTests {
           ),
         );
         await pumpEventQueue();
-        expect(engine.connections, hasLength(3));
+        expect(engine.connections, hasLength(screenOnly ? 2 : 3));
         final audioPeers = engine.connections.skip(1).toList();
         for (final peer in audioPeers) {
           peer.emitConnectionState(CallMediaConnectionState.connected);
@@ -96,7 +104,11 @@ extension _McuScreenAnswerTests on _MediaSessionTests {
         expect(incomingScreen.closed, isFalse);
 
         final resumed = switch (change) {
-          _McuScreenAnswerChange.memberLeaves => update(
+          _McuScreenAnswerChange.earlyScreenSenderJoins => update(
+            members: [_participant(_remote), _participant(other)],
+          ),
+          _McuScreenAnswerChange.memberLeaves ||
+          _McuScreenAnswerChange.screenOnlySenderAbsent => update(
             members: [_participant(other)],
           ),
           _McuScreenAnswerChange.roomChanges => update(roomEpoch: epoch + 1),
@@ -128,6 +140,7 @@ extension _McuScreenAnswerTests on _MediaSessionTests {
 
         switch (change) {
           case _McuScreenAnswerChange.resume:
+          case _McuScreenAnswerChange.earlyScreenSenderJoins:
             expect(attempted, [original, original]);
             expect(incomingScreen.createdAnswers, 1);
             expect(incomingScreen.closed, isFalse);
@@ -145,6 +158,20 @@ extension _McuScreenAnswerTests on _MediaSessionTests {
             expect(attempted, [original]);
             expect(incomingScreen.closed, isTrue);
             expect(audioPeers.last.closed, isFalse);
+          case _McuScreenAnswerChange.screenOnlySenderAbsent:
+            expect(attempted, [original]);
+            expect(audioPeers.single.closed, isFalse);
+            expect(media.state.peers, 1);
+            final joined = [_participant(_remote), _participant(other)];
+            updates.add(
+              update(
+                members: joined,
+                phase: SignalingAccountPhase.reconnectWaiting,
+              ),
+            );
+            updates.add(update(members: joined));
+            await pumpEventQueue();
+            expect(attempted, [original]);
           case _McuScreenAnswerChange.roomChanges:
           case _McuScreenAnswerChange.leave:
             expect(attempted, [original]);
