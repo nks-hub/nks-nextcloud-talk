@@ -89,7 +89,17 @@ void main() {
     await open().write(accountId: 'account-a', uri: uri, image: image(64, 3));
 
     // A fresh instance stands in for the next cold start.
-    final restarted = open();
+    Future<void>? pendingTouch;
+    addTearDown(() async {
+      await pendingTouch;
+    });
+    final restarted = open(
+      touchFile: (file, touchedAt) {
+        final touch = file.setLastModified(touchedAt);
+        pendingTouch = touch;
+        return touch;
+      },
+    );
     final restored = await restarted.read(accountId: 'account-a', uri: uri);
 
     expect(restored, isNotNull);
