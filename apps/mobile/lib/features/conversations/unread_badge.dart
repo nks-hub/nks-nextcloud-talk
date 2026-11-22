@@ -79,7 +79,7 @@ final class UnreadCountBadge extends StatelessWidget {
           constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
           decoration: BoxDecoration(
-            color: scheme.error,
+            color: scheme.tertiary,
             borderRadius: BorderRadius.circular(9),
           ),
           alignment: Alignment.center,
@@ -87,7 +87,7 @@ final class UnreadCountBadge extends StatelessWidget {
             count > 99 ? '99+' : '$count',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: scheme.onError,
+              color: scheme.onTertiary,
               fontWeight: FontWeight.w700,
               fontSize: 10,
               height: 1,

@@ -36,6 +36,41 @@ void main() {
       expect(find.text('3'), findsOneWidget);
     });
 
+    testWidgets('uses the row badge colours, not the error colour', (
+      tester,
+    ) async {
+      for (final brightness in Brightness.values) {
+        final theme = ThemeData(brightness: brightness);
+        await tester.pumpWidget(
+          localizedTestApp(
+            theme: theme,
+            home: const Scaffold(body: UnreadCountBadge(count: 3)),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final box = tester.widget<Container>(
+          find.descendant(
+            of: find.byType(UnreadCountBadge),
+            matching: find.byType(Container),
+          ),
+        );
+        final scheme = Theme.of(
+          tester.element(find.byType(UnreadCountBadge)),
+        ).colorScheme;
+        expect(scheme.brightness, brightness);
+        expect(
+          (box.decoration! as BoxDecoration).color,
+          scheme.tertiary,
+          reason: '$brightness',
+        );
+        expect(
+          (box.decoration! as BoxDecoration).color,
+          isNot(scheme.error),
+          reason: '$brightness',
+        );
+      }
+    });
+
     testWidgets('caps large counts at 99+', (tester) async {
       await tester.pumpWidget(
         localizedTestApp(
