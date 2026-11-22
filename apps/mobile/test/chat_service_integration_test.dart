@@ -10,6 +10,7 @@ import 'package:http/testing.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_repository.dart';
+import 'package:nextcloudtalk/data/text_send_ownership.dart';
 import 'package:nextcloudtalk/features/chat/chat_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';

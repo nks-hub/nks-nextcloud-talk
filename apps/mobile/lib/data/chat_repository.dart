@@ -6,6 +6,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import '../core/giphy_reference.dart';
 import 'app_database.dart';
+import 'text_send_ownership.dart';
 
 part 'chat_repository_models.dart';
 part 'chat_repository_clear_history.dart';
@@ -16,6 +17,7 @@ part 'chat_repository_queries.dart';
 part 'chat_repository_reactions.dart';
 part 'chat_repository_read_markers.dart';
 part 'chat_repository_thread_replies.dart';
+part 'chat_repository_text_send_runtime.dart';
 
 const String _rootScopeKey = 'root';
 const String _networkRootScopeKey = 'network-root';
@@ -30,10 +32,15 @@ const Duration _completedTextSendRetention = Duration(days: 7);
 const Duration _completedTextSendPruneInterval = Duration(days: 1);
 
 final class ClaimedTextSend {
-  const ClaimedTextSend({required this.request, required this.operation});
+  const ClaimedTextSend({
+    required this.request,
+    required this.operation,
+    this.reservation,
+  });
 
   final ChatSendRequest request;
   final TextSendOutboxOperation operation;
+  final TextSendReservation? reservation;
 }
 
 final class StoredOutgoingTextMessage {
@@ -791,8 +798,9 @@ final class ChatRepository {
     required ChatTextSendAuthority authority,
     required ChatRequestId requestId,
     required int now,
+    TextSendOwnership? ownership,
   }) {
-    return _database.transaction(() async {
+    return _claimTextSendTransaction(accountId, ownership, (reserve) async {
       var snapshot = await _loadRuntime(accountId);
       final account = snapshot.accounts[AccountId.parse(accountId)];
       if (account == null) {
@@ -833,6 +841,7 @@ final class ChatRepository {
         final candidate = plan.commit(snapshot);
         final candidateAccount = candidate.accounts[account.accountId]!;
         final claimed = candidateAccount.operations[operation.operationId]!;
+        if (!await reserve(claimed.operationId)) return null;
         await _persistAccount(candidateAccount);
         return ClaimedTextSend(
           request: _restoreSendRequest(
@@ -853,8 +862,9 @@ final class ChatRepository {
     required ChatOperationId operationId,
     required ChatTextSendAuthority authority,
     required ChatRequestId requestId,
+    TextSendOwnership? ownership,
   }) {
-    return _database.transaction(() async {
+    return _claimTextSendTransaction(accountId, ownership, (reserve) async {
       final snapshot = await _loadRuntime(accountId);
       final typedAccountId = AccountId.parse(accountId);
       final result = manuallyResendTextSend(
@@ -871,6 +881,7 @@ final class ChatRepository {
       final candidate = plan.commit(snapshot);
       final account = candidate.accounts[typedAccountId]!;
       final operation = account.operations[operationId]!;
+      if (!await reserve(operation.operationId)) return null;
       await _persistAccount(account);
       return ClaimedTextSend(
         request: _restoreSendRequest(
@@ -996,16 +1007,14 @@ final class ChatRepository {
 
   /// Converts the sends a killed process left in `sending`.
   ///
-  /// [inFlight] names the operations this process is transmitting right now,
-  /// in any room of the account: those are not interrupted, and disowning
-  /// one would leave its outcome with nowhere to be recorded. The set is read
-  /// inside the transaction, so it may be the caller's live one.
+  /// [ownership] and [inFlight] identify sends that are still live.
   ///
   /// [now] starts the grace period of the converted sends; without it they
   /// wait for the sender for good.
   Future<void> recoverInterruptedTextSends(
     String accountId, {
     Set<ChatOperationId> inFlight = const <ChatOperationId>{},
+    TextSendOwnership? ownership,
     int? now,
     int absenceGraceSeconds = textSendAbsenceGraceSeconds,
   }) async {
@@ -1024,21 +1033,19 @@ final class ChatRepository {
       if (pruneDue) {
         await _pruneCompletedTextSends(pruneStartedAt);
       }
-      if (!await _hasInterruptedTextSend(accountId, inFlight)) {
-        return pruneDue;
-      }
+      final sending = (await _sendingTextOperationIds(
+        accountId,
+      )).where((id) => !inFlight.contains(id));
+      if (sending.isEmpty) return pruneDue;
+      // Read ownership after the SQLite snapshot sees the claims. Reading it
+      // before the transaction could miss a sender about to publish sending.
+      final live = await ownership?.active(accountId);
+      final abandoned = sending.where((id) => !(live?.contains(id) ?? false));
+      if (abandoned.isEmpty) return pruneDue;
       var snapshot = await _loadRuntime(accountId);
       final typedAccountId = AccountId.parse(accountId);
-      final sending = snapshot.accounts[typedAccountId]!.operations.values
-          .where(
-            (operation) =>
-                operation.state == TextSendOutboxState.sending &&
-                !inFlight.contains(operation.operationId),
-          )
-          .map((operation) => operation.operationId)
-          .toList(growable: false);
       var changed = false;
-      for (final operationId in sending) {
+      for (final operationId in abandoned) {
         final result = recoverTextSendAfterRestart(
           snapshot,
           accountId: typedAccountId,
@@ -1065,23 +1072,6 @@ final class ChatRepository {
         _nextCompletedTextSendPruneAt = candidate;
       }
     }
-  }
-
-  Future<bool> _hasInterruptedTextSend(
-    String accountId,
-    Set<ChatOperationId> inFlight,
-  ) async {
-    final rows = _database.textSendOperations;
-    final sending =
-        await (_database.selectOnly(rows)
-              ..addColumns([rows.operationId])
-              ..where(
-                rows.accountId.equals(accountId) &
-                    rows.outboxState.equals(TextSendOutboxState.sending.name),
-              ))
-            .map((row) => row.read(rows.operationId)!)
-            .get();
-    return sending.any((id) => !inFlight.contains(ChatOperationId.parse(id)));
   }
 
   /// The ambiguous send a chat read may still prove absent from the server,

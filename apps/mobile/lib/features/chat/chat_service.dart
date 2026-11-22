@@ -12,6 +12,7 @@ import '../../data/account_repository.dart';
 import '../../data/app_database.dart';
 import '../../data/chat_repository.dart';
 import '../../data/credential_vault.dart';
+import '../../data/text_send_ownership.dart';
 import '../../network/nextcloud_api.dart';
 import 'outgoing_message_status.dart';
 
@@ -62,6 +63,7 @@ final class ChatService {
        _holdRetryDeliveryLaneForTesting = holdRetryDeliveryLaneForTesting,
        _accounts = accounts,
        _chat = chat,
+       _textSends = textSendOwnership(),
        _credentials = credentials,
        _api = api,
        _uuid = uuid ?? const Uuid(),
@@ -78,6 +80,7 @@ final class ChatService {
 
   final AccountRepository _accounts;
   final ChatRepository _chat;
+  final TextSendOwnership _textSends;
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
   final Uuid _uuid;
@@ -111,10 +114,6 @@ final class ChatService {
 
   /// The capability snapshot whose rows this service last wrote, per account.
   final Map<String, CapabilitySnapshot> _recordedCapabilities = {};
-
-  /// Operations on the wire per account, which restart recovery must not
-  /// mistake for sends a dead process left behind.
-  final Map<String, Set<ChatOperationId>> _inFlightSends = {};
 
   /// The pending retry of a send that never left, or the pending check of
   /// one that may have, one per room: only the oldest undelivered send of a
@@ -632,6 +631,7 @@ final class ChatService {
             operationId: ChatOperationId.parse(operationId),
             authority: prepared.authority,
             requestId: ChatRequestId.parse(_uuid.v4()),
+            ownership: _textSends,
           );
           if (claim == null) {
             throw const ChatServiceException(ChatServiceError.invalidResponse);
@@ -647,7 +647,7 @@ final class ChatService {
   Future<void> _recoverInterruptedSends(String accountId) =>
       _chat.recoverInterruptedTextSends(
         accountId,
-        inFlight: _inFlightSends[accountId] ??= <ChatOperationId>{},
+        ownership: _textSends,
         now: _nowSeconds(),
         absenceGraceSeconds: _absenceGraceSeconds,
       );
@@ -1235,11 +1235,11 @@ final class ChatService {
           authority: prepared.authority,
           requestId: ChatRequestId.parse(_uuid.v4()),
           now: _nowSeconds(),
+          ownership: _textSends,
         );
         if (claim == null) {
           return true;
         }
-        _ensureAccountActive(prepared.account.id);
         if (!await _transmitClaim(prepared, claim)) {
           unawaited(_deliverWithCurrentCredentials(prepared));
           return true;
@@ -1268,8 +1268,7 @@ final class ChatService {
   }
 
   /// Sends one claimed operation and records what became of it. The operation
-  /// counts as in flight from here, with no gap after the claim, until its
-  /// outcome is stored.
+  /// remains owned from the claim until its outcome is stored.
   ///
   /// Returns false when [prepared] carries a password that has been replaced,
   /// which makes it useless for anything further.
@@ -1277,17 +1276,25 @@ final class ChatService {
     _PreparedChat prepared,
     ClaimedTextSend claim,
   ) async {
-    final inFlight = _inFlightSends[prepared.account.id] ??=
-        <ChatOperationId>{};
-    inFlight.add(claim.operation.operationId);
-    try {
-      return await _sendClaim(prepared, claim);
-    } finally {
-      inFlight.remove(claim.operation.operationId);
-    }
-  }
+    _ensureAccountActive(prepared.account.id);
 
-  Future<bool> _sendClaim(_PreparedChat prepared, ClaimedTextSend claim) async {
+    Future<void> recordFailure(
+      ChatTransportBodyState bodyState, {
+      int? nextAttemptAt,
+    }) async {
+      final outcome = await _chat.recordTextSendFailure(
+        accountId: prepared.account.id,
+        operationId: claim.operation.operationId,
+        bodyState: bodyState,
+        nextAttemptAt: nextAttemptAt,
+        now: _nowSeconds(),
+        absenceGraceSeconds: _absenceGraceSeconds,
+      );
+      if (outcome != ChatOutboxOutcome.rejected) {
+        await claim.reservation?.release();
+      }
+    }
+
     final ChatSendResponse response;
     try {
       response = await _api.sendChat(
@@ -1303,15 +1310,11 @@ final class ChatService {
       final retryDelay =
           error.retryAfter?.inSeconds ??
           _unsentRetryDelaySeconds(claim.operation.attemptCount);
-      await _chat.recordTextSendFailure(
-        accountId: prepared.account.id,
-        operationId: claim.operation.operationId,
-        bodyState: error.requestNotSent
+      await recordFailure(
+        error.requestNotSent
             ? ChatTransportBodyState.notSent
             : ChatTransportBodyState.possiblySent,
         nextAttemptAt: error.requestNotSent ? _nowSeconds() + retryDelay : null,
-        now: _nowSeconds(),
-        absenceGraceSeconds: _absenceGraceSeconds,
       );
       if (error.requestNotSent) {
         _armRetry(
@@ -1325,13 +1328,7 @@ final class ChatService {
       return true;
     } on TalkProtocolException {
       _ensureAccountActive(prepared.account.id);
-      await _chat.recordTextSendFailure(
-        accountId: prepared.account.id,
-        operationId: claim.operation.operationId,
-        bodyState: ChatTransportBodyState.possiblySent,
-        now: _nowSeconds(),
-        absenceGraceSeconds: _absenceGraceSeconds,
-      );
+      await recordFailure(ChatTransportBodyState.possiblySent);
       await _armAbsenceVerification(prepared);
       return true;
     }
@@ -1347,10 +1344,8 @@ final class ChatService {
       // save, so the operation goes back to the queue rather than taking the
       // new login down with it.
       _ensureAccountActive(prepared.account.id);
-      await _chat.recordTextSendFailure(
-        accountId: prepared.account.id,
-        operationId: claim.operation.operationId,
-        bodyState: ChatTransportBodyState.notSent,
+      await recordFailure(
+        ChatTransportBodyState.notSent,
         nextAttemptAt: _nowSeconds(),
       );
       return false;
@@ -1362,6 +1357,9 @@ final class ChatService {
       now: _nowSeconds(),
       absenceGraceSeconds: _absenceGraceSeconds,
     );
+    if (outcome != ChatOutboxOutcome.rejected) {
+      await claim.reservation?.release();
+    }
     if (outcome == ChatOutboxOutcome.completed ||
         outcome == ChatOutboxOutcome.failed ||
         outcome == ChatOutboxOutcome.reauthenticationRequired ||

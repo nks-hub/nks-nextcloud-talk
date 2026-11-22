@@ -45,6 +45,7 @@ class BackgroundDrainJobService : JobService() {
         }
         val created = FlutterEngine(applicationContext)
         resources.engine = created
+        TextSendOwnershipChannel.attach(created)
         AttachmentRuntimeChannel.attach(created)
         PendingRevocationStorage.attach(created, applicationContext)
         MethodChannel(created.dartExecutor.binaryMessenger, BackgroundDrain.CHANNEL)

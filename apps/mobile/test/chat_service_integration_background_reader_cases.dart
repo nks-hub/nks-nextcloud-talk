@@ -22,6 +22,218 @@ extension _BackgroundReaderCases on _ChatServiceIntegrationSuite {
   }
 
   void registerBackgroundReaderCases() {
+    for (final overlap in [false, true]) {
+      test(
+        'background text wake overlap=$overlap preserves the live send',
+        () async {
+          final dir = await Directory.systemTemp.createTemp(
+            'own-talk-drain-overlap-',
+          );
+          addTearDown(() async => dir.delete(recursive: true));
+          final file = File('${dir.path}/outbox.sqlite');
+          final dbA = AppDatabase.forTesting(NativeDatabase(file));
+          final dbB = AppDatabase.forTesting(NativeDatabase(file));
+          addTearDown(dbA.close);
+          addTearDown(dbB.close);
+          final accountsA = AccountRepository(dbA);
+          final accountsB = AccountRepository(dbB);
+          final chatA = ChatRepository(dbA);
+          final chatB = ChatRepository(dbB);
+          final localVault = MemoryCredentialVault();
+          const accountId = 'audit-account';
+          const roomToken = 'rooma123';
+          await accountsA.upsertAccount(
+            accountId: accountId,
+            serverUrl: 'https://cloud.example.invalid',
+            loginName: 'fixture-user',
+            serverProductName: 'Nextcloud',
+            createdAt: DateTime.utc(2026, 1, 1),
+          );
+          localVault.values[accountId] = 'synthetic-password-no-network';
+          await _cacheConversation(dbA, accountId: accountId);
+          const features = {'conversation-v4', 'chat-v2', 'chat-reference-id'};
+          await accountsA.updateTalkFeatures(accountId, features);
+          await chatA.recordCapabilities(
+            accountId: accountId,
+            talkFeatures: features,
+            observedAt: DateTime.utc(2026, 1, 1),
+          );
+
+          final offlineApi = HttpNextcloudApi(client: OfflineClient());
+          addTearDown(offlineApi.close);
+          final seed = ChatService(
+            accounts: accountsA,
+            chat: chatA,
+            credentials: localVault,
+            api: offlineApi,
+          );
+          addTearDown(seed.close);
+          await seed.sendText(
+            accountId: accountId,
+            roomToken: roomToken,
+            message: 'offline queued text',
+          );
+          await waitForUnsentTextSends(dbA);
+          await seed.close();
+
+          final postStarted = Completer<void>();
+          final releasePost = Completer<void>();
+          var postsA = 0;
+          var postsB = 0;
+          final apiA = HttpNextcloudApi(
+            client: _sendServer((request) async {
+              postsA++;
+              if (!postStarted.isCompleted) postStarted.complete();
+              await releasePost.future;
+              return _acceptedSend(request, 121);
+            }),
+          );
+          final apiB = HttpNextcloudApi(
+            client: _sendServer((request) {
+              postsB++;
+              return _acceptedSend(request, 122);
+            }),
+          );
+          addTearDown(apiA.close);
+          addTearDown(apiB.close);
+          final first = ChatService(
+            accounts: accountsA,
+            chat: chatA,
+            credentials: localVault,
+            api: apiA,
+          );
+          final second = ChatService(
+            accounts: accountsB,
+            chat: chatB,
+            credentials: localVault,
+            api: apiB,
+          );
+          addTearDown(first.close);
+          addTearDown(second.close);
+          final firstRun = first.drainPendingSends();
+          try {
+            await postStarted.future.timeout(const Duration(seconds: 5));
+            final live = await dbA.select(dbA.textSendOperations).getSingle();
+            expect(live.outboxState, 'sending');
+            if (overlap) {
+              await second.drainPendingSends().timeout(
+                const Duration(seconds: 5),
+              );
+            }
+            final afterSecond = await dbB
+                .select(dbB.textSendOperations)
+                .getSingle();
+            releasePost.complete();
+            await firstRun.timeout(const Duration(seconds: 5));
+            if (!overlap) await second.drainPendingSends();
+            final terminal = await dbA
+                .select(dbA.textSendOperations)
+                .getSingle();
+            stdout.writeln(
+              'BACKGROUND_TEXT_OVERLAP overlap=$overlap '
+              'afterSecond=${afterSecond.outboxState} reason=${afterSecond.errorClass} '
+              'terminal=${terminal.outboxState} ids=${terminal.messageIdsJson} '
+              'mockPosts=$postsA/$postsB',
+            );
+            expect(
+              (
+                afterSecond.outboxState,
+                terminal.outboxState,
+                terminal.messageIdsJson,
+              ),
+              ('sending', 'completed', '[121]'),
+            );
+            expect((postsA, postsB), (1, 0));
+          } finally {
+            if (!releasePost.isCompleted) releasePost.complete();
+            await firstRun;
+          }
+        },
+      );
+    }
+
+    test('text send ownership survives only a committed live claim', () async {
+      const id = 'account-a';
+      final token = ConversationToken.parse('rooma123', path: r'$.roomToken');
+      final operation = ChatOperationId.parse(
+        '00000000-0000-4000-8000-000000000187',
+      );
+      const features = {'conversation-v4', 'chat-v2', 'chat-reference-id'};
+      final capability = await chat.recordCapabilities(
+        accountId: id,
+        talkFeatures: features,
+        observedAt: DateTime.utc(2026, 1, 1),
+      );
+      final authority = ChatTextSendAuthority(
+        accountId: AccountId.parse(id),
+        server: ServerBase.parse('https://cloud.example.invalid'),
+        capabilityGeneration: capability.generation,
+        profile: ChatCapabilityProfile.fromTalkFeatures(
+          features.toList(),
+          federated: false,
+        ),
+        replayContractRevision: textSendReplayContractRevision,
+      );
+      await chat.admitTextSend(
+        accountId: id,
+        roomToken: token,
+        authority: authority,
+        operationId: operation,
+        referenceId: ChatReferenceId.parse(
+          '00000000-0000-4000-8000-000000000188',
+        ),
+        message: 'queued text',
+      );
+      final ownership = LocalTextSendOwnership();
+      Future<ClaimedTextSend?> claim() => chat.claimNextTextSend(
+        accountId: id,
+        roomToken: token,
+        authority: authority,
+        requestId: ChatRequestId.parse('claim-audit'),
+        now: 10,
+        ownership: ownership,
+      );
+      Future<StoredTextSendOperation> row() =>
+          database.select(database.textSendOperations).getSingle();
+
+      await database.customStatement('''
+        CREATE TRIGGER reject_audit_claim BEFORE INSERT ON text_send_operations
+        WHEN NEW.outbox_state = 'sending'
+        BEGIN SELECT RAISE(ABORT, 'reject audit claim'); END
+      ''');
+      await expectLater(
+        claim(),
+        throwsA(
+          predicate((Object? error) => '$error'.contains('reject audit claim')),
+        ),
+      );
+      expect(await ownership.active(id), isEmpty);
+      expect((await row()).outboxState, 'queued');
+      await database.customStatement('DROP TRIGGER reject_audit_claim');
+
+      final owned = (await claim())!;
+      final recovering = ChatRepository(database);
+      await recovering.recoverInterruptedTextSends(id, ownership: ownership);
+      expect((await row()).outboxState, 'sending');
+      await owned.reservation!.release();
+      await recovering.recoverInterruptedTextSends(id, ownership: ownership);
+      final abandoned = await row();
+      expect(abandoned.outboxState, 'awaitingConfirmation');
+      expect(abandoned.errorClass, 'process-interrupted');
+
+      final manual = (await chat.manuallyResend(
+        accountId: id,
+        operationId: operation,
+        authority: authority,
+        requestId: ChatRequestId.parse('manual-audit'),
+        ownership: ownership,
+      ))!;
+      addTearDown(manual.reservation!.release);
+      await recovering.recoverInterruptedTextSends(id, ownership: ownership);
+      expect(await ownership.active(id), {operation});
+      expect((await row()).outboxState, 'sending');
+    });
+
     for (final passive in [false, true]) {
       test(
         'single-message ${passive ? 'passive' : 'legacy'} repair respects reader admission',

@@ -15,6 +15,7 @@ import com.nkshub.nextcloudtalk.attachments.AttachmentRuntimeChannel
 import com.nkshub.nextcloudtalk.attachments.AttachmentTransferChannel
 import com.nkshub.nextcloudtalk.attachments.AttachmentTransferService
 import com.nkshub.nextcloudtalk.background.BackgroundDrain
+import com.nkshub.nextcloudtalk.background.TextSendOwnershipChannel
 import com.nkshub.nextcloudtalk.background.PendingRevocationStorage
 import com.nkshub.nextcloudtalk.calls.CallAudioFocus
 import com.nkshub.nextcloudtalk.calls.CallForegroundChannel
@@ -114,6 +115,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        TextSendOwnershipChannel.attach(flutterEngine)
         AttachmentRuntimeChannel.attach(flutterEngine)
         PendingRevocationStorage.attach(flutterEngine, applicationContext)
         val channel = MethodChannel(
