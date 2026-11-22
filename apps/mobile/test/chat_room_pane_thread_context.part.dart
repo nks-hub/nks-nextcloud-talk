@@ -169,6 +169,13 @@ void _registerChatRoomPaneThreadContextTests() {
             .getBottomLeft(find.text('Root of the thread'))
             .dy;
         expect(tester.getTopLeft(divider).dy, greaterThan(rootBottom));
+        // Same author within seconds, yet the divider splits the group: the
+        // root keeps its avatar and the first reply names its author again.
+        expect(find.byKey(const Key('chat-avatar-$rootId')), findsOneWidget);
+        expect(
+          find.text('Thread author'),
+          findsNWidgets(replyCount == 0 ? 1 : 2),
+        );
         if (replyCount > 0) {
           expect(
             tester.getBottomLeft(divider).dy,
@@ -180,6 +187,56 @@ void _registerChatRoomPaneThreadContextTests() {
         await tester.pump(const Duration(milliseconds: 1));
       });
     }
+
+    testWidgets('the thread header and divider fit 200 % text on a narrow '
+        'phone in Czech', (tester) async {
+      tester.view
+        ..physicalSize = const Size(320, 900)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final wire = _messageJson(
+        id: 95,
+        actorId: 'thread-author',
+        actorDisplayName: 'Thread author',
+        timestamp: 1724300195,
+        message: 'Root of the thread',
+        threadId: 95,
+        isThread: true,
+      );
+      await _insertCachedMessage(database, wire, displayText: 'Root');
+      final threadContext = ChatThreadContext.fromCachedRoot(
+        accountId: account.id,
+        roomToken: conversation.token,
+        root: _cachedThreadRoot(wire),
+      )!;
+
+      await tester.pumpWidget(
+        app(
+          locale: const Locale('cs'),
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: ChatThreadScreen(
+              account: account,
+              conversation: conversation,
+              threadContext: threadContext,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('chat-thread-replies-divider')),
+          matching: find.text('Zatím bez odpovědí'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('chat-thread-room-95')), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    });
 
     testWidgets('a room timeline has no thread divider', (tester) async {
       await _insertCachedMessage(

@@ -316,13 +316,18 @@ final class _ChatTimeline extends StatelessWidget {
             ? null
             : messages[contentIndex + 1];
         final gapBeforeThis = _gapBeforeContentIndex(firstIndex);
+        // The replies divider sits under the root, so a group never runs
+        // through it.
+        final isRoot = threadId != null && message.messageId == threadId;
         final groupedWithPrevious =
             !gapBeforeThis &&
             previous != null &&
+            previous.messageId != threadId &&
             _messagesShareGroup(previous, message);
         final groupedWithNext =
-            next != null && _messagesShareGroup(lastMessage, next);
-        final isRoot = threadId != null && message.messageId == threadId;
+            next != null &&
+            lastMessage.messageId != threadId &&
+            _messagesShareGroup(lastMessage, next);
         final startsDay =
             gapBeforeThis ||
             previous == null ||
@@ -474,6 +479,7 @@ final class _ChatTimeline extends StatelessWidget {
         groupedWithPrevious:
             pendingIndex > 0 ||
             (messages.isNotEmpty &&
+                messages.last.messageId != threadId &&
                 _pendingSharesGroup(messages.last, account.loginName)),
         onRetry: onRetry,
         onResend: () => onResend(operation),
@@ -666,23 +672,34 @@ final class _ThreadRepliesDivider extends StatelessWidget {
       child: SelectionContainer.disabled(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
-          child: Row(
-            children: [
-              const Expanded(child: Divider()),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: ChatBackgroundChip(
-                  child: Text(
-                    label,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
+          // The label may take 80 % of the row; past that it wraps instead of
+          // pushing the rule lines out of the layout at large text sizes.
+          child: LayoutBuilder(
+            builder: (context, box) => Row(
+              children: [
+                const Expanded(child: Divider()),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: box.maxWidth * 0.8),
+                    child: ChatBackgroundChip(
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const Expanded(child: Divider()),
-            ],
+                const Expanded(child: Divider()),
+              ],
+            ),
           ),
         ),
       ),
