@@ -361,6 +361,10 @@ final class AccountRepository {
           (theme) => theme.accountId.equals(accountId),
         );
         batch.deleteWhere(
+          _database.certificatePins,
+          (pin) => pin.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
           _database.callLifecycleSessions,
           (session) => session.accountId.equals(accountId),
         );

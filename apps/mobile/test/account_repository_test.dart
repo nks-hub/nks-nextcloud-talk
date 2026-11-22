@@ -85,6 +85,37 @@ void main() {
     );
   });
 
+  test('purges only the removed account certificate pins without FK', () async {
+    await repository.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://a.example.invalid',
+      loginName: 'alex',
+      serverProductName: 'Nextcloud A',
+      createdAt: DateTime.utc(2026, 1, 1),
+      certificateFingerprint: 'a' * 64,
+    );
+    await repository.upsertAccount(
+      accountId: 'account-b',
+      serverUrl: 'https://b.example.invalid',
+      loginName: 'blair',
+      serverProductName: 'Nextcloud B',
+      createdAt: DateTime.utc(2026, 1, 2),
+      certificateFingerprint: 'b' * 64,
+    );
+    await database.customStatement('PRAGMA foreign_keys = OFF');
+    expect(
+      (await database.customSelect('PRAGMA foreign_keys').getSingle())
+          .read<int>('foreign_keys'),
+      0,
+    );
+
+    await repository.purgeAccount('account-a');
+
+    final pins = await database.select(database.certificatePins).get();
+    expect(pins.map((pin) => pin.accountId), unorderedEquals(['account-b']));
+    expect(pins.single.fingerprint, 'b' * 64);
+  });
+
   test(
     'loads requested conversation names without crossing accounts',
     () async {
