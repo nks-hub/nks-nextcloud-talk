@@ -39,6 +39,104 @@ extension _MediaDisposalTests on _MediaSessionTests {
       });
     }
 
+    test('leaving releases a late camera without attaching it', () async {
+      final media = session(
+        _update(localPeerId: _local, participants: [_participant(_remote)]),
+      );
+      addTearDown(media.dispose);
+      final opening = Completer<void>();
+      engine.cameraStartup = opening;
+      addTearDown(() {
+        if (!opening.isCompleted) opening.complete();
+      });
+      await media.start();
+      final connection = engine.connections.single;
+      connection.sentStatus.clear();
+      sent.clear();
+      final enabling = media.setCameraEnabled(true);
+      await pumpEventQueue();
+
+      final leaving = media.dispose();
+      opening.complete();
+      await Future.wait([enabling, leaving]);
+
+      expect(engine.cameras.single.disposeCalls, 1);
+      expect(connection.localVideos, isEmpty);
+      expect(connection.sentStatus, isEmpty);
+      expect(sent, isEmpty);
+    });
+
+    test(
+      'leaving stops camera fan-out after the active peer updates',
+      () async {
+        final media = session(
+          _update(
+            localPeerId: _local,
+            participants: [for (var i = 0; i < 5; i++) _participant('peer-$i')],
+          ),
+        );
+        addTearDown(media.dispose);
+        await media.start();
+        for (final connection in engine.connections) {
+          connection.sentStatus.clear();
+        }
+        final fourUpdates = Completer<void>();
+        final release = Completer<void>();
+        addTearDown(() {
+          if (!release.isCompleted) release.complete();
+        });
+        var started = 0;
+        engine.beforeSetLocalVideo = () async {
+          if (++started == 4) fourUpdates.complete();
+          await release.future;
+        };
+        final enabling = media.setCameraEnabled(true);
+        await fourUpdates.future;
+
+        final leaving = media.dispose();
+        release.complete();
+        await Future.wait([enabling, leaving]);
+
+        expect(started, 4);
+        expect(engine.cameras.single.disposeCalls, 1);
+        expect(
+          engine.connections.expand((connection) => connection.sentStatus),
+          isEmpty,
+        );
+      },
+    );
+
+    test('leaving stops status frames after a suspended send', () async {
+      final sending = Completer<void>();
+      final release = Completer<void>();
+      final media = session(
+        _update(localPeerId: _local, participants: [_participant(_remote)]),
+        sendMessage: (message, {required expectedRoomEpoch}) async {
+          if (message.type == 'mute' &&
+              message.payload?.wire['name'] == 'audio') {
+            sending.complete();
+            await release.future;
+          }
+          return true;
+        },
+      );
+      addTearDown(media.dispose);
+      addTearDown(() {
+        if (!release.isCompleted) release.complete();
+      });
+      await media.start();
+      final status = engine.connections.single.sentStatus;
+      status.clear();
+      final muting = media.setMicrophoneMuted(true);
+      await sending.future;
+
+      final leaving = media.dispose();
+      release.complete();
+      await Future.wait([muting, leaving]);
+
+      expect(status.map((frame) => frame.type), ['audioOff']);
+    });
+
     test(
       'dispose releases the MCU publisher after a peer close fails',
       () async {

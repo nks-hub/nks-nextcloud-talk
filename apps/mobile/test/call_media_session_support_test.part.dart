@@ -100,6 +100,7 @@ final class _FakeEngine implements CallMediaEngine {
   }
 
   CallMediaError? cameraError;
+  Completer<void>? cameraStartup;
   final List<_FakeVideo> cameras = <_FakeVideo>[];
 
   CallMediaError? screenError;
@@ -107,6 +108,7 @@ final class _FakeEngine implements CallMediaEngine {
 
   @override
   Future<CallLocalVideo> openCamera() async {
+    await cameraStartup?.future;
     final error = cameraError;
     if (error != null) {
       throw CallMediaException(error);

@@ -18,6 +18,7 @@ extension _CallMediaSessionControls on CallMediaSession {
         } on CallMediaException {
           return;
         }
+        if (_disposed) return;
       }
       final video = _video;
       if (!enabled) {
@@ -183,6 +184,7 @@ extension _CallMediaSessionControls on CallMediaSession {
       ('audio', !(_userMuted || _interrupted)),
       ('video', _video != null),
     ]) {
+      if (_disposed) return;
       statusConnection?.sendStatus('$name${on ? 'On' : 'Off'}');
       try {
         await _send(

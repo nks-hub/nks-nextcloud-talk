@@ -645,7 +645,7 @@ final class CallMediaSession {
     final pending = items.toList(growable: false);
     var nextItem = 0;
     Future<void> runNext() async {
-      while (nextItem < pending.length) {
+      while (!_disposed && nextItem < pending.length) {
         await task(pending[nextItem++]);
       }
     }
