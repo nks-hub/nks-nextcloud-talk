@@ -71,6 +71,7 @@ void main() {
         'tertiaryContainer': s.tertiaryContainer,
         'surfaceContainerLow': s.surfaceContainerLow,
         'surfaceContainer': s.surfaceContainer,
+        'surface': s.surface,
       };
       for (final entry in roles.entries) {
         final hsl = HSLColor.fromColor(entry.value);
