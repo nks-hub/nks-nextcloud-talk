@@ -86,9 +86,11 @@ abstract final class AppTheme {
           ? const Color(0xFF202C39)
           : const Color(0xFFE3EBF5),
       outline: isDark ? const Color(0xFF6A7886) : const Color(0xFF66717D),
+      // 3:1 against the surface or better, with headroom: the shared chat
+      // background is a tint of the surface and has to keep that ratio too.
       outlineVariant: isDark
-          ? const Color(0xFF34404B)
-          : const Color(0xFFCDD7E1),
+          ? const Color(0xFF617080)
+          : const Color(0xFF7A8693),
     );
     final base = ThemeData(
       useMaterial3: true,
