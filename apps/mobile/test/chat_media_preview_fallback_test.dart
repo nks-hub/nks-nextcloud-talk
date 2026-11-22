@@ -164,6 +164,134 @@ void main() {
     codec.dispose();
   });
 
+  for (final rollBack in [false, true]) {
+    test(
+      rollBack
+          ? 'only the current preview load can fill caches after rollback'
+          : 'a decoded preview cannot restore removed account data',
+      () async {
+        const deadline = Duration(seconds: 5);
+        final directory = await Directory.systemTemp.createTemp(
+          'preview-removal',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final memory = ChatMediaCache();
+        final disk = ChatMediaDiskCache(rootDirectory: () async => directory);
+        final image = ChatMediaImage(body: _jpeg, contentType: 'image/jpeg');
+        final otherKey = ChatMediaCache.keyOf(
+          accountId: 'account-b',
+          uri: _previewUri,
+        );
+        memory.write(otherKey, image);
+        await disk.write(
+          accountId: 'account-b',
+          uri: _previewUri,
+          image: image,
+        );
+
+        final original = Uint8List(
+          ChatMediaRepository.maximumPreviewFallbackBytes + 1,
+        )..setAll(0, _jpeg);
+        final decoding = Completer<void>();
+        final finishDecode = Completer<ChatMediaImage?>();
+        final removed = _repository((request) async {
+          if (request.url == _previewUri) {
+            return http.StreamedResponse(const Stream.empty(), 404);
+          }
+          expect(request.url, _originalUri);
+          return http.StreamedResponse(
+            Stream.value(original),
+            200,
+            contentLength: original.length,
+            headers: {'content-type': 'image/jpeg'},
+          );
+        });
+        var freshRequests = 0;
+        final fresh = _repository((request) async {
+          expect(request.url, _previewUri);
+          freshRequests++;
+          return http.StreamedResponse(
+            Stream.value(_jpeg),
+            200,
+            headers: {'content-type': 'image/jpeg'},
+          );
+        });
+        var restoreAccount = false;
+        final container = ProviderContainer(
+          overrides: [
+            chatMediaRepositoryProvider.overrideWith((ref) {
+              final repository = restoreAccount ? fresh : removed;
+              ref.onDispose(repository.close);
+              return repository;
+            }),
+            chatMediaCacheProvider.overrideWithValue(memory),
+            chatMediaDiskCacheProvider.overrideWithValue(disk),
+            chatPreviewDownscaleProvider.overrideWithValue((bytes) {
+              decoding.complete();
+              return finishDecode.future;
+            }),
+          ],
+        );
+        addTearDown(container.dispose);
+        final provider = chatMediaProvider(
+          ChatMediaProviderKey(
+            account: _account,
+            uri: _previewUri,
+            originalUri: _originalUri,
+            originalContentType: 'image/jpeg',
+          ),
+        );
+        container.listen(provider, (_, _) {});
+        final initial = container.read(provider.future);
+        late final Future<ChatMediaImage?> result;
+        try {
+          await decoding.future.timeout(deadline);
+          // Suspension completes while conversion is still held.
+          await removed.suspendAccount(_account.id).timeout(deadline);
+          if (rollBack) {
+            restoreAccount = true;
+            container.invalidate(chatMediaRepositoryProvider);
+            result = container.read(provider.future);
+          } else {
+            memory.evictAccount(_account.id);
+            await disk.evictAccount(_account.id).timeout(deadline);
+            result = initial;
+          }
+        } finally {
+          finishDecode.complete(
+            ChatMediaImage(
+              body: Uint8List.fromList([7]),
+              contentType: 'image/png',
+            ),
+          );
+        }
+
+        final expected = rollBack ? _jpeg : null;
+        final completed = await result.timeout(deadline);
+        final cached = memory.read(
+          ChatMediaCache.keyOf(accountId: _account.id, uri: _previewUri),
+        );
+        final reopened = ChatMediaDiskCache(
+          rootDirectory: () async => directory,
+        );
+        final persisted = await reopened.read(
+          accountId: _account.id,
+          uri: _previewUri,
+        );
+        expect(
+          [completed?.body, cached?.body, persisted?.body],
+          [expected, expected, expected],
+        );
+        expect(freshRequests, rollBack ? 1 : 0);
+        expect(memory.read(otherKey)?.body, _jpeg);
+        expect(
+          (await disk.read(accountId: 'account-b', uri: _previewUri))?.body,
+          _jpeg,
+        );
+      },
+    );
+  }
+
   test('without an original the missing preview stays missing', () async {
     final container = _container(
       (request) async => http.StreamedResponse(const Stream.empty(), 404),

@@ -201,6 +201,107 @@ void _previewMutationTests(
     expect(cache.length, 1);
     expect(cache.byteLength, 24);
   });
+
+  test('account purge waits for a write before its directory exists', () async {
+    final cache = open();
+    final first = uriFor(1);
+    final second = uriFor(2);
+    const otherAccount = 'account-b';
+    await cache.write(
+      accountId: otherAccount,
+      uri: second,
+      image: image(10, 2),
+    );
+    final createStarted = Completer<void>();
+    final createGate = Completer<void>();
+    final nativeFiles = _NativeFiles();
+    final writing = IOOverrides.runZoned(
+      () => cache.write(accountId: account, uri: first, image: image(10, 1)),
+      createDirectory: (path) {
+        final directory = nativeFiles.createDirectory(path);
+        if (createStarted.isCompleted) return directory;
+        return _ObservedPreviewDirectory(
+          directory,
+          beforeCreate: () {
+            createStarted.complete();
+            return createGate.future;
+          },
+        );
+      },
+    );
+    Future<void>? removing;
+    try {
+      await createStarted.future.timeout(deadline);
+      var deleteStarted = false;
+      final purge = IOOverrides.runZoned(
+        () => cache.evictAccount(account),
+        createDirectory: (path) => _ObservedPreviewDirectory(
+          nativeFiles.createDirectory(path),
+          beforeDelete: () => deleteStarted = true,
+        ),
+      );
+      removing = purge;
+      // The cache is warm. An unguarded purge starts deleting after the open
+      // microtask. In that case finish deleting before releasing the write.
+      await Future<void>.delayed(Duration.zero);
+      if (deleteStarted) await purge.timeout(deadline);
+    } finally {
+      createGate.complete();
+      await writing.timeout(deadline);
+      await removing?.timeout(deadline);
+    }
+
+    expect(cache.length, 1);
+    expect(cache.byteLength, 20);
+    final remaining = storedPreviews().single;
+    expect((await remaining.readAsBytes()).last, 2);
+    final reopened = open();
+    expect(await reopened.read(accountId: account, uri: first), isNull);
+    final other = await reopened.read(accountId: otherAccount, uri: second);
+    expect(other?.body.last, 2);
+  });
+
+  test('account purge can finish while unrelated pruning waits', () async {
+    const otherAccount = 'account-b';
+    final seed = open();
+    final oldest = uriFor(1);
+    final kept = uriFor(2);
+    final removed = uriFor(3);
+    await seed.write(accountId: otherAccount, uri: oldest, image: image(10, 1));
+    final oldestFile = storedPreviews().single;
+    await oldestFile.setLastModified(DateTime.utc(2020));
+    await seed.write(accountId: otherAccount, uri: kept, image: image(10, 2));
+
+    final deleteStarted = Completer<String>();
+    final deleteGate = Completer<void>();
+    final cache = open(
+      maximumBytes: 40,
+      deleteFile: (file) async {
+        deleteStarted.complete(p.normalize(file.path));
+        await deleteGate.future;
+        await file.delete();
+      },
+    );
+    final writing = cache.write(
+      accountId: account,
+      uri: removed,
+      image: image(10, 3),
+    );
+    try {
+      expect(
+        await deleteStarted.future.timeout(deadline),
+        p.normalize(oldestFile.path),
+      );
+      await cache.evictAccount(account).timeout(deadline);
+      expect(cache.length, 1);
+      expect(await cache.read(accountId: account, uri: removed), isNull);
+      final other = await cache.read(accountId: otherAccount, uri: kept);
+      expect(other?.body.last, 2);
+    } finally {
+      deleteGate.complete();
+      await writing.timeout(deadline);
+    }
+  });
 }
 
 Future<void> _writeObservedPreview(
@@ -254,6 +355,36 @@ final class _PreviewOutput implements RandomAccessFile {
 
   @override
   Future<RandomAccessFile> flush() => output.flush();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _ObservedPreviewDirectory implements Directory {
+  _ObservedPreviewDirectory(
+    this.directory, {
+    this.beforeCreate,
+    this.beforeDelete,
+  });
+
+  final Directory directory;
+  final Future<void> Function()? beforeCreate;
+  final void Function()? beforeDelete;
+
+  @override
+  String get path => directory.path;
+
+  @override
+  Future<Directory> create({bool recursive = false}) async {
+    await beforeCreate?.call();
+    return directory.create(recursive: recursive);
+  }
+
+  @override
+  Future<FileSystemEntity> delete({bool recursive = false}) {
+    beforeDelete?.call();
+    return directory.delete(recursive: recursive);
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

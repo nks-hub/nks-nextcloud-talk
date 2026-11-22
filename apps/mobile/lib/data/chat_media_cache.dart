@@ -78,10 +78,7 @@ final class ChatMediaCache {
     }
   }
 
-  /// Drops everything belonging to one account. Account removal is not
-  /// implemented yet, so this has no caller; it exists because cached bytes
-  /// must never outlive their account once removal lands. See
-  /// [ChatMediaDiskCache.evictAccount] for where both have to be called.
+  /// Drops the in-memory previews for one account.
   void evictAccount(String accountId) {
     final prefix = '$accountId\u0000';
     final doomed = _entries.keys
@@ -298,6 +295,7 @@ final class ChatMediaDiskCache {
   final Map<String, _ChatMediaDiskEntry> _index = {};
   final Set<String> _touching = {};
   final Map<String, Future<void>> _pendingMutations = {};
+  final Map<String, Set<Future<void>>> _pendingWrites = {};
 
   Directory? _root;
   Future<Directory>? _opening;
@@ -419,11 +417,43 @@ final class ChatMediaDiskCache {
     if (total > maximumBytes) {
       return;
     }
+    // Register before the first await so suspension cannot miss this write.
+    final settled = Completer<void>();
+    final pending = _pendingWrites.putIfAbsent(
+      accountId,
+      () => <Future<void>>{},
+    );
+    pending.add(settled.future);
+    final bool stored;
+    try {
+      stored = await _store(
+        accountId: accountId,
+        uri: uri,
+        body: image.body,
+        header: header,
+        total: total,
+      );
+    } finally {
+      pending.remove(settled.future);
+      if (pending.isEmpty) _pendingWrites.remove(accountId);
+      settled.complete();
+    }
+
+    if (stored) await _prune();
+  }
+
+  Future<bool> _store({
+    required String accountId,
+    required Uri uri,
+    required Uint8List body,
+    required List<int> header,
+    required int total,
+  }) async {
     final Directory root;
     try {
       root = await _open();
     } on FileSystemException {
-      return;
+      return false;
     }
     final file = File(_pathFor(root, accountId: accountId, uri: uri));
     final temporary = File('${file.path}.part-${_temporaryFileNonce++}');
@@ -433,7 +463,7 @@ final class ChatMediaDiskCache {
       output = await temporary.open(mode: FileMode.write);
       await output.writeFrom(header);
       await output.writeByte(0x0a);
-      await output.writeFrom(image.body);
+      await output.writeFrom(body);
       await output.flush();
       await output.close();
       output = null;
@@ -454,7 +484,7 @@ final class ChatMediaDiskCache {
         }
       });
     } on FileSystemException {
-      return;
+      return false;
     } finally {
       try {
         await output?.close();
@@ -469,18 +499,15 @@ final class ChatMediaDiskCache {
         // A later scan removes any incomplete file left by a stopped process.
       }
     }
-    await _prune();
+    return true;
   }
 
-  /// Drops every cached byte belonging to one account.
+  /// Drops an account's disk previews after its admitted writes settle.
   ///
-  /// Account removal is not implemented yet — see the unchecked
-  /// "Bezpečné odebrání účtu" item in the maintainer notes. Whatever lands there has
-  /// to await this and call [ChatMediaCache.evictAccount] next to
-  /// `CredentialVault.deleteAppPassword`, in the same `AccountRepository` step
-  /// that deletes the account row, or conversation bytes outlive the account
-  /// that was allowed to see them. The same call belongs on sign-out.
+  /// The caller must stop new writes for this account before purging it.
   Future<void> evictAccount(String accountId) async {
+    final pending = _pendingWrites[accountId];
+    if (pending != null) await Future.wait(pending.toList(growable: false));
     final Directory root;
     try {
       root = await _open();
