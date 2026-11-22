@@ -8,19 +8,14 @@ void main() {
   for (final theme in [AppTheme.light(), AppTheme.dark()]) {
     testWidgets('section headings read at 4.5:1 on the surface in '
         '${theme.brightness.name}', (tester) async {
-      late TextStyle style;
       await tester.pumpWidget(
         MaterialApp(
           theme: theme,
-          home: Builder(
-            builder: (context) {
-              style = sectionHeaderStyle(context)!;
-              return const SizedBox.shrink();
-            },
-          ),
+          home: const Scaffold(body: SectionHeaderText('Participants')),
         ),
       );
 
+      final style = tester.widget<Text>(find.text('Participants')).style!;
       expect(style.color, theme.colorScheme.tertiary);
       expect(style.fontWeight, FontWeight.w600);
       expect(
@@ -29,6 +24,24 @@ void main() {
       );
     });
   }
+
+  testWidgets('a section heading is a header for screen readers', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: const Scaffold(body: SectionHeaderText('Participants')),
+      ),
+    );
+
+    expect(
+      tester.getSemantics(find.text('Participants')),
+      matchesSemantics(label: 'Participants', isHeader: true),
+    );
+    semantics.dispose();
+  });
 
   test(
     'the dark inset colour is darker than the surface but not near-black',

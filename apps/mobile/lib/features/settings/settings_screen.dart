@@ -745,7 +745,7 @@ final class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Text(title, style: sectionHeaderStyle(context)),
+      child: SectionHeaderText(title),
     );
   }
 }

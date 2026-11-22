@@ -253,10 +253,7 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
           const Divider(height: 1),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              strings.roomDetailsActionsHeader,
-              style: sectionHeaderStyle(context),
-            ),
+            child: SectionHeaderText(strings.roomDetailsActionsHeader),
           ),
           if (_canEditRoomMetadata)
             ListTile(
@@ -624,9 +621,8 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
+                  child: SectionHeaderText(
                     strings.roomDetailsParticipantsHeader,
-                    style: sectionHeaderStyle(context),
                   ),
                 ),
                 // Adding someone was missing entirely until 5 September 2026:
