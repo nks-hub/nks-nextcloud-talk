@@ -217,6 +217,7 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
             backgroundColor: tinted ? Colors.transparent : null,
             surfaceTintColor: tinted ? Colors.transparent : null,
             scrolledUnderElevation: tinted ? 0 : null,
+            shape: tinted ? const Border() : null,
             // A transparent bar would otherwise pick light status bar icons.
             systemOverlayStyle: tinted ? _overlayStyleFor(context) : null,
             titleSpacing: 0,
