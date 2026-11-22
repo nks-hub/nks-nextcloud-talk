@@ -109,10 +109,8 @@ final class SecureCredentialVault
 
   static const _currentVersion = 2;
 
-  /// Passwords already read, so a hot path (every thumbnail, every request
-  /// preparation) does not cross into the platform keystore each time. Never
-  /// holds null: right after a cold start the keystore can answer null for an
-  /// account whose password is there.
+  /// Passwords already read on iOS and desktop. Android's vault worker shares
+  /// its cache across engines. A null result may precede a ready keystore.
   final Map<String, String> _passwords = {};
   var _passwordEpoch = 0;
 
@@ -125,17 +123,17 @@ final class SecureCredentialVault
 
   @override
   Future<void> writeAppPassword(String accountId, String appPassword) async {
+    if (Platform.isAndroid) {
+      await _androidVault.invokeMethod<void>('writeAppPassword', {
+        'accountId': accountId,
+        'password': appPassword,
+      });
+      return;
+    }
     _forgetPassword(accountId);
     try {
-      if (Platform.isAndroid) {
-        await _androidVault.invokeMethod<void>('writeAppPassword', {
-          'accountId': accountId,
-          'password': appPassword,
-        });
-      } else {
-        await _ensureCurrent(accountId);
-        await _write(_currentKey(accountId), appPassword);
-      }
+      await _ensureCurrent(accountId);
+      await _write(_currentKey(accountId), appPassword);
     } finally {
       _forgetPassword(accountId);
     }
@@ -149,21 +147,20 @@ final class SecureCredentialVault
     String accountId, {
     required bool refresh,
   }) async {
+    if (Platform.isAndroid) {
+      return _androidVault.invokeMethod<String>('readAppPassword', {
+        'accountId': accountId,
+        if (refresh) 'refresh': true,
+      });
+    }
     if (refresh) _forgetPassword(accountId);
     final cached = _passwords[accountId];
     if (cached != null) {
       return cached;
     }
     final epoch = _passwordEpoch;
-    final String? password;
-    if (Platform.isAndroid) {
-      password = await _androidVault.invokeMethod<String>('readAppPassword', {
-        'accountId': accountId,
-      });
-    } else {
-      await _ensureCurrent(accountId);
-      password = await _read(_currentKey(accountId));
-    }
+    await _ensureCurrent(accountId);
+    final password = await _read(_currentKey(accountId));
     if (password != null && epoch == _passwordEpoch) {
       _passwords[accountId] = password;
     }
@@ -172,16 +169,16 @@ final class SecureCredentialVault
 
   @override
   Future<void> deleteAppPassword(String accountId) async {
+    if (Platform.isAndroid) {
+      await _androidVault.invokeMethod<void>('deleteAppPassword', {
+        'accountId': accountId,
+      });
+      return;
+    }
     _forgetPassword(accountId);
     try {
-      if (Platform.isAndroid) {
-        await _androidVault.invokeMethod<void>('deleteAppPassword', {
-          'accountId': accountId,
-        });
-      } else {
-        await _ensureCurrent(accountId);
-        await _delete(_currentKey(accountId));
-      }
+      await _ensureCurrent(accountId);
+      await _delete(_currentKey(accountId));
     } finally {
       _forgetPassword(accountId);
     }

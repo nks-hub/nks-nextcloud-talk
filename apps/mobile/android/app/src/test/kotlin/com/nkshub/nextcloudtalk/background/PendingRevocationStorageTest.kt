@@ -92,6 +92,89 @@ class PendingRevocationStorageTest {
     }
 
     @Test
+    fun changingOneAccountPreservesTheOtherAccountsCachedRead() {
+        val first = "credential.v2.account.first.appPassword"
+        val second = "credential.v2.account.second.appPassword"
+        val data = mutableMapOf(first to "initial", second to "other")
+        val reads = mutableListOf<String>()
+        val records = AndroidCredentialRecords(
+            readKey = { key ->
+                reads.add(key)
+                data[key]
+            },
+            writeKey = { key, value -> data[key] = value },
+            deleteKey = { data.remove(it) },
+        )
+
+        assertEquals("initial", records.read("first"))
+        assertEquals("other", records.read("second"))
+        reads.clear()
+        assertEquals("initial", records.read("first"))
+        records.write("first", "replaced")
+        assertEquals("replaced", records.read("first"))
+        assertEquals("other", records.read("second"))
+        records.delete("first")
+        assertNull(records.read("first"))
+        assertEquals("other", records.read("second"))
+        assertEquals(listOf(first, first), reads)
+    }
+
+    @Test
+    fun freshReadingClearsACachedPasswordOnMissingOrFailedRead() {
+        val key = "credential.v2.account.fixture.appPassword"
+        val data = mutableMapOf(key to "initial")
+        var failRead = false
+        val records = AndroidCredentialRecords(
+            readKey = {
+                check(!failRead)
+                data[it]
+            },
+            writeKey = { name, value -> data[name] = value },
+            deleteKey = { data.remove(it) },
+        )
+
+        assertEquals("initial", records.read("fixture"))
+        data[key] = "replaced"
+        assertEquals("replaced", records.read("fixture", refresh = true))
+        assertEquals("replaced", records.read("fixture"))
+        failRead = true
+        assertThrows(IllegalStateException::class.java) {
+            records.read("fixture", refresh = true)
+        }
+        assertThrows(IllegalStateException::class.java) { records.read("fixture") }
+        failRead = false
+        assertEquals("replaced", records.read("fixture"))
+        data.remove(key)
+        assertNull(records.read("fixture", refresh = true))
+        assertNull(records.read("fixture"))
+        data[key] = "available"
+        assertEquals("available", records.read("fixture"))
+    }
+
+    @Test
+    fun failedWritesAndDeletesDropThePreviouslyCachedValue() {
+        val key = "credential.v2.account.fixture.appPassword"
+        val data = mutableMapOf(key to "initial", "credential.account.fixture.version" to "2")
+        val records = AndroidCredentialRecords(
+            readKey = data::get,
+            writeKey = { name, value ->
+                data[name] = value
+                error("Write failed after updating storage")
+            },
+            deleteKey = {
+                data.remove(it)
+                error("Delete failed after updating storage")
+            },
+        )
+
+        assertEquals("initial", records.read("fixture"))
+        assertThrows(IllegalStateException::class.java) { records.write("fixture", "replaced") }
+        assertEquals("replaced", records.read("fixture"))
+        assertThrows(IllegalStateException::class.java) { records.delete("fixture") }
+        assertNull(records.read("fixture"))
+    }
+
+    @Test
     fun conflictingOldVaultKeysArePreserved() {
         val legacy = "account.fixture.appPassword"
         val current = "credential.v2.account.fixture.appPassword"

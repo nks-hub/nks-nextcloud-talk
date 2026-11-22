@@ -90,7 +90,9 @@ object PendingRevocationStorage {
                 val accountId = requireNotNull(call.argument<String>("accountId"))
                 val records = credentialRecords(context)
                 when (call.method) {
-                    "readAppPassword" -> records.read(accountId)
+                    "readAppPassword" -> records.read(
+                        accountId, refresh = call.argument<Boolean>("refresh") == true,
+                    )
                     "writeAppPassword" -> {
                         records.write(accountId, requireNotNull(call.argument<String>("password")))
                         null
@@ -255,25 +257,30 @@ internal class PendingRevocationOwners {
     }
 }
 
-/** Uses the existing Dart vault's keys and migration order. */
+/** The single vault worker shares these records and their cache between engines. */
 internal class AndroidCredentialRecords(
     private val readKey: (String) -> String?,
     private val writeKey: (String, String) -> Unit,
     private val deleteKey: (String) -> Unit,
 ) {
     private val migrated = mutableSetOf<String>()
+    private val passwords = mutableMapOf<String, String>()
 
-    fun read(accountId: String): String? {
+    fun read(accountId: String, refresh: Boolean = false): String? {
+        if (refresh) passwords.remove(accountId)
+        passwords[accountId]?.let { return it }
         migrate(accountId)
-        return readKey(currentKey(accountId))
+        return readKey(currentKey(accountId))?.also { passwords[accountId] = it }
     }
 
     fun write(accountId: String, password: String) {
+        passwords.remove(accountId)
         migrate(accountId)
         writeKey(currentKey(accountId), password)
     }
 
     fun delete(accountId: String) {
+        passwords.remove(accountId)
         migrate(accountId)
         deleteKey(currentKey(accountId))
     }
