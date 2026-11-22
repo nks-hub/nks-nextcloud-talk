@@ -749,7 +749,7 @@ final class _ReplyPreview extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(9, 6, 8, 6),
             decoration: BoxDecoration(
-              color: scheme.surfaceContainerLowest,
+              color: scheme.surfaceContainerLow,
               borderRadius: BorderRadius.circular(7),
               border: Border(left: BorderSide(color: scheme.primary, width: 3)),
             ),
