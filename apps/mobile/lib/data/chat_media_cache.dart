@@ -250,10 +250,17 @@ Future<FileStat> _readVoiceFileStat(File file) => file.stat();
 Future<void> _deleteVoiceFile(File file) => file.delete();
 
 final class _ChatMediaDiskEntry {
-  _ChatMediaDiskEntry({required this.bytes, required this.touchedAt});
+  _ChatMediaDiskEntry({
+    required this.bytes,
+    required this.touchedAt,
+    Object? contentVersion,
+  }) : contentVersion = contentVersion ?? Object();
 
   final int bytes;
   final DateTime touchedAt;
+
+  // A read can refresh the stamp without replacing the bytes.
+  final Object contentVersion;
 }
 
 /// Persists chat previews under the private app cache directory so a cold
@@ -289,6 +296,7 @@ final class ChatMediaDiskCache {
   final Future<void> Function(File file) _deleteFile;
   final Future<void> Function(File file, DateTime touchedAt) _touchFile;
   final Map<String, _ChatMediaDiskEntry> _index = {};
+  final Set<String> _touching = {};
 
   Directory? _root;
   Future<Directory>? _opening;
@@ -332,11 +340,17 @@ final class ChatMediaDiskCache {
     if (entry == null) {
       return null;
     }
+    final file = File(path);
     final Uint8List stored;
     try {
-      stored = await File(path).readAsBytes();
+      stored = await file.readAsBytes();
     } on FileSystemException {
-      _drop(path);
+      if (identical(_index[path]?.contentVersion, entry.contentVersion)) {
+        _drop(path);
+      }
+      return null;
+    }
+    if (!identical(_index[path]?.contentVersion, entry.contentVersion)) {
       return null;
     }
     final separator = stored.indexOf(0x0a);
@@ -346,20 +360,12 @@ final class ChatMediaDiskCache {
       await _delete(path);
       return null;
     }
-    final touchedAt = DateTime.now();
     _index[path] = _ChatMediaDiskEntry(
       bytes: entry.bytes,
-      touchedAt: touchedAt,
+      touchedAt: DateTime.now(),
+      contentVersion: entry.contentVersion,
     );
-    try {
-      unawaited(
-        _touchFile(File(path), touchedAt).onError((_, _) {
-          // Losing the recency stamp only costs this entry an earlier eviction.
-        }),
-      );
-    } on FileSystemException {
-      // Losing the recency stamp only costs this entry an earlier eviction.
-    }
+    _scheduleTouch(path, file);
     return ChatMediaImage.takeOwnership(
       body: Uint8List.sublistView(stored, separator + 1),
       contentType: ascii.decode(
@@ -367,6 +373,30 @@ final class ChatMediaDiskCache {
         allowInvalid: true,
       ),
     );
+  }
+
+  void _scheduleTouch(String path, File file) {
+    if (_touching.add(path)) {
+      unawaited(_persistTouch(path, file));
+    }
+  }
+
+  Future<void> _persistTouch(String path, File file) async {
+    try {
+      var entry = _index[path];
+      while (entry != null) {
+        try {
+          await _touchFile(file, entry.touchedAt);
+        } catch (_) {
+          // Losing a stamp only changes the eviction order after a restart.
+        }
+        final latest = _index[path];
+        if (identical(latest, entry)) break;
+        entry = latest;
+      }
+    } finally {
+      _touching.remove(path);
+    }
   }
 
   Future<void> write({
@@ -402,10 +432,20 @@ final class ChatMediaDiskCache {
       await output.flush();
       await output.close();
       output = null;
-      if (await file.exists()) {
-        await file.delete();
+      final path = file.path;
+      final replacesEntry =
+          _index.containsKey(path) || _touching.contains(path);
+      await temporary.rename(path);
+      _drop(path);
+      _index[path] = _ChatMediaDiskEntry(
+        bytes: total,
+        touchedAt: DateTime.now(),
+      );
+      _bytes += total;
+      if (replacesEntry) {
+        // An older touch can land after the OS has moved the new file.
+        _scheduleTouch(path, file);
       }
-      await temporary.rename(file.path);
     } on FileSystemException {
       return;
     } finally {
@@ -422,12 +462,6 @@ final class ChatMediaDiskCache {
         // A later scan removes any incomplete file left by a stopped process.
       }
     }
-    _drop(file.path);
-    _index[file.path] = _ChatMediaDiskEntry(
-      bytes: total,
-      touchedAt: DateTime.now(),
-    );
-    _bytes += total;
     await _prune();
   }
 
@@ -489,6 +523,7 @@ final class ChatMediaDiskCache {
       while (nextFile < files.length) {
         final file = files[nextFile++];
         final stat = await _statFile(file);
+        if (stat.type != FileSystemEntityType.file) continue;
         _index[file.path] = _ChatMediaDiskEntry(
           bytes: stat.size,
           touchedAt: stat.modified,

@@ -40,6 +40,10 @@ void main() {
     contentType: 'image/png',
   );
 
+  Iterable<File> storedPreviews() => Directory(
+    p.join(root.path, 'previews'),
+  ).listSync(recursive: true).whereType<File>();
+
   Uri uriFor(int fileId) => Uri.parse(
     'https://cloud.example.invalid/index.php/core/preview'
     '?fileId=$fileId&x=2048&y=2048&a=0',
@@ -133,6 +137,265 @@ void main() {
 
     expect(await reading.timeout(const Duration(milliseconds: 100)), isNotNull);
     gate.complete();
+  });
+
+  test('a delayed touch cannot undo a newer touch after reopening', () async {
+    final firstTouchGate = Completer<void>();
+    final secondTouchStarted = Completer<void>();
+    final persisted = [Completer<void>(), Completer<void>()];
+    final epoch = DateTime.utc(2020);
+    var stampCount = 0;
+    final cache = open(
+      touchFile: (file, _) async {
+        final index = stampCount++;
+        if (index == 0) {
+          await firstTouchGate.future;
+        } else {
+          secondTouchStarted.complete();
+        }
+        await file.setLastModified(epoch.add(Duration(minutes: 1 + 2 * index)));
+        persisted[index].complete();
+      },
+    );
+    await cache.write(
+      accountId: 'account-a',
+      uri: uriFor(1),
+      image: image(10, 1),
+    );
+    await cache.write(
+      accountId: 'account-a',
+      uri: uriFor(2),
+      image: image(10, 2),
+    );
+    final olderPreview = Directory('${root.path}/previews')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .singleWhere((file) => file.readAsBytesSync().last == 2);
+    await olderPreview.setLastModified(epoch.add(const Duration(minutes: 2)));
+
+    try {
+      expect(
+        await cache.read(accountId: 'account-a', uri: uriFor(1)),
+        isNotNull,
+      );
+      expect(
+        await cache.read(accountId: 'account-a', uri: uriFor(1)),
+        isNotNull,
+      );
+      // If both updates may start together, let the newer stamp reach disk first.
+      if (secondTouchStarted.isCompleted) await persisted[1].future;
+    } finally {
+      firstTouchGate.complete();
+    }
+    await Future.wait(persisted.map((touch) => touch.future));
+
+    final restarted = open(maximumBytes: 20);
+    expect(
+      (await restarted.read(accountId: 'account-a', uri: uriFor(1)))?.body.last,
+      1,
+    );
+    expect(
+      await restarted.read(accountId: 'account-a', uri: uriFor(2)),
+      isNull,
+    );
+  });
+
+  test('a touch in flight cannot age a replacement preview', () async {
+    final oldTouchGate = Completer<void>();
+    final oldTouchCompleted = Completer<void>();
+    final newTouchCompleted = Completer<void>();
+    final newFilePublished = Completer<void>();
+    final renameGate = Completer<void>();
+    final epoch = DateTime.utc(2020);
+    var stampCount = 0;
+    final cache = open(
+      touchFile: (file, _) async {
+        if (stampCount++ == 0) {
+          await oldTouchGate.future;
+          await file.setLastModified(epoch.add(const Duration(minutes: 1)));
+          oldTouchCompleted.complete();
+        } else {
+          await file.setLastModified(epoch.add(const Duration(minutes: 3)));
+          newTouchCompleted.complete();
+        }
+      },
+    );
+    await cache.write(
+      accountId: 'account-a',
+      uri: uriFor(1),
+      image: image(10, 1),
+    );
+    await cache.write(
+      accountId: 'account-a',
+      uri: uriFor(2),
+      image: image(10, 2),
+    );
+    final olderPreview = storedPreviews().singleWhere(
+      (file) => file.readAsBytesSync().last == 2,
+    );
+    await olderPreview.setLastModified(epoch.add(const Duration(minutes: 2)));
+    expect(await cache.read(accountId: 'account-a', uri: uriFor(1)), isNotNull);
+
+    final nativeFiles = _NativeFiles();
+    final replacing = IOOverrides.runZoned(
+      () => cache.write(
+        accountId: 'account-a',
+        uri: uriFor(1),
+        image: image(15, 3),
+      ),
+      createFile: (path) {
+        final file = nativeFiles.createFile(path);
+        if (!path.endsWith('.part-2')) return file;
+        return _PreviewIoFile(
+          file,
+          renameFile: (destination) async {
+            final renamed = await file.rename(destination);
+            newFilePublished.complete();
+            await renameGate.future;
+            return renamed;
+          },
+        );
+      },
+    );
+    try {
+      await newFilePublished.future.timeout(const Duration(seconds: 2));
+      oldTouchGate.complete();
+      await oldTouchCompleted.future;
+      // The touch can finish while publish is still waiting for rename.
+      await Future<void>.delayed(Duration.zero);
+    } finally {
+      renameGate.complete();
+      if (!oldTouchGate.isCompleted) oldTouchGate.complete();
+    }
+    await replacing;
+    if (stampCount > 1) await newTouchCompleted.future;
+
+    final restarted = open(maximumBytes: 25);
+    expect(
+      (await restarted.read(accountId: 'account-a', uri: uriFor(1)))?.body.last,
+      3,
+    );
+    expect(
+      await restarted.read(accountId: 'account-a', uri: uriFor(2)),
+      isNull,
+    );
+  });
+
+  test('both concurrent hits survive a refresh of the same content', () async {
+    final uri = uriFor(42);
+    final cache = open();
+    await cache.write(accountId: 'account-a', uri: uri, image: image(10));
+    final stored = storedPreviews().single;
+    final gates = [Completer<void>(), Completer<void>()];
+    final bothStarted = Completer<void>();
+    final nativeFiles = _NativeFiles();
+    var started = 0;
+    final reads = IOOverrides.runZoned(
+      () => [
+        cache.read(accountId: 'account-a', uri: uri),
+        cache.read(accountId: 'account-a', uri: uri),
+      ],
+      createFile: (path) {
+        final file = nativeFiles.createFile(path);
+        if (p.normalize(path) != p.normalize(stored.path)) return file;
+        return _PreviewIoFile(
+          file,
+          readBytes: () async {
+            final gate = gates[started++];
+            if (started == 2) bothStarted.complete();
+            await gate.future;
+            return file.readAsBytes();
+          },
+        );
+      },
+    );
+    try {
+      await bothStarted.future.timeout(const Duration(seconds: 2));
+      gates[0].complete();
+      expect(await Future.any(reads), isNotNull);
+    } finally {
+      for (final gate in gates) {
+        if (!gate.isCompleted) gate.complete();
+      }
+    }
+
+    final results = await Future.wait(reads);
+    expect(results.map((hit) => hit?.body.length), [10, 10]);
+    expect(cache.length, 1);
+    expect(cache.byteLength, 20);
+  });
+
+  test('a failed replacement keeps the last complete preview', () async {
+    final uri = uriFor(42);
+    final cache = open();
+    await cache.write(accountId: 'account-a', uri: uri, image: image(10, 1));
+    final stored = Directory(
+      '${root.path}/previews',
+    ).listSync(recursive: true).whereType<File>().single;
+    final original = await stored.readAsBytes();
+    final nativeFiles = _NativeFiles();
+    var renameAttempts = 0;
+    await IOOverrides.runZoned(
+      () => cache.write(accountId: 'account-a', uri: uri, image: image(14, 2)),
+      createFile: (path) {
+        final file = nativeFiles.createFile(path);
+        if (!path.endsWith('.part-1')) return file;
+        return _PreviewIoFile(
+          file,
+          renameFile: (_) async {
+            renameAttempts++;
+            throw const FileSystemException('interrupted preview publication');
+          },
+        );
+      },
+    );
+
+    expect(renameAttempts, 1);
+    expect(await stored.exists(), isTrue);
+    expect(await stored.readAsBytes(), original);
+    expect((await open().read(accountId: 'account-a', uri: uri))?.body.last, 1);
+    expect(cache.byteLength, original.length);
+    expect(stored.parent.listSync().whereType<File>().length, 1);
+  });
+
+  test('an in-flight read does not restore an evicted entry', () async {
+    final uri = uriFor(42);
+    final cache = open();
+    await cache.write(accountId: 'account-a', uri: uri, image: image(10));
+    final stored = Directory(
+      '${root.path}/previews',
+    ).listSync(recursive: true).whereType<File>().single;
+    final readStarted = Completer<void>();
+    final readGate = Completer<void>();
+    final nativeFiles = _NativeFiles();
+    final reading = IOOverrides.runZoned(
+      () => cache.read(accountId: 'account-a', uri: uri),
+      createFile: (path) {
+        final file = nativeFiles.createFile(path);
+        if (p.normalize(path) != p.normalize(stored.path)) return file;
+        return _PreviewIoFile(
+          file,
+          readBytes: () async {
+            final snapshot = await file.readAsBytes();
+            readStarted.complete();
+            await readGate.future;
+            return snapshot;
+          },
+        );
+      },
+    );
+    try {
+      await readStarted.future;
+      await cache.evict(accountId: 'account-a', uri: uri);
+    } finally {
+      readGate.complete();
+    }
+
+    expect(await reading, isNull);
+    expect(cache.length, 0);
+    expect(cache.byteLength, 0);
+    expect(await cache.read(accountId: 'account-a', uri: uri), isNull);
+    expect(cache.byteLength, 0);
   });
 
   test('accounts never read each other cached bytes', () async {
@@ -308,6 +571,28 @@ void main() {
 
     await releaseAll();
     expect(cache.length, fileCount);
+  });
+
+  test('a preview removed during the cold scan does not count', () async {
+    final uri = uriFor(42);
+    await open().write(accountId: 'account-a', uri: uri, image: image(10));
+    var statCount = 0;
+    final restarted = open(
+      statFile: (file) async {
+        statCount++;
+        await file.delete();
+        return file.stat();
+      },
+    );
+
+    // Trigger the scan through an unrelated lookup.
+    expect(
+      await restarted.read(accountId: 'account-a', uri: uriFor(99)),
+      isNull,
+    );
+    expect(statCount, 1);
+    expect(restarted.length, 0);
+    expect(restarted.byteLength, 0);
   });
 
   test('pruning deletes files with bounded concurrency', () async {
@@ -576,4 +861,38 @@ void main() {
     await cache.evictAccount('account-a');
     expect(cache.byteLength, 0);
   });
+}
+
+final class _NativeFiles extends IOOverrides {}
+
+final class _PreviewIoFile implements File {
+  _PreviewIoFile(this.file, {this.readBytes, this.renameFile});
+
+  final File file;
+  final Future<Uint8List> Function()? readBytes;
+  final Future<File> Function(String newPath)? renameFile;
+
+  @override
+  Future<Uint8List> readAsBytes() => readBytes?.call() ?? file.readAsBytes();
+
+  @override
+  Future<RandomAccessFile> open({FileMode mode = FileMode.read}) =>
+      file.open(mode: mode);
+
+  @override
+  Future<File> rename(String newPath) =>
+      renameFile?.call(newPath) ?? file.rename(newPath);
+
+  @override
+  Future<bool> exists() => file.exists();
+
+  @override
+  Future<FileSystemEntity> delete({bool recursive = false}) =>
+      file.delete(recursive: recursive);
+
+  @override
+  Future<void> setLastModified(DateTime time) => file.setLastModified(time);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
