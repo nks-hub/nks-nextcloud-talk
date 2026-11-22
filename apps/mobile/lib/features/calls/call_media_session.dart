@@ -229,7 +229,12 @@ final class CallMediaSession {
       // (`setSpeakerphoneOn(true)` in `dumpsys audio`), which is the video
       // call convention, not the telephone one. The state above starts as
       // "off", so the route has to be made to match it.
-      await _audio!.setSpeakerphone(_speakerphone);
+      try {
+        await _audio!.setSpeakerphone(_speakerphone);
+      } on Object {
+        // A refused route leaves the plugin's own; the call must still reach
+        // signalling below, and the speaker control can retry the route.
+      }
       _subscription = _updates.listen(
         (update) => unawaited(_enqueue(() => _apply(update))),
         // The lane closes its stream when the room session is released or

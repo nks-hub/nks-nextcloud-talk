@@ -197,6 +197,33 @@ final class _MediaSessionTests {
       expect(answer.payload?.wire['sdp'], 'sdp-answer-1');
     });
 
+    test('a refused earpiece route still answers the offer', () async {
+      engine.speakerphoneError = StateError('audio route refused');
+      final media = session(
+        _update(localPeerId: _remote, participants: [_participant(_local)]),
+      );
+      addTearDown(media.dispose);
+      await media.start();
+
+      updates.add(
+        _update(
+          localPeerId: _remote,
+          participants: [_participant(_local)],
+          messages: [
+            _message(_local, 'offer', <String, Object?>{
+              'type': 'offer',
+              'sdp': 'sdp-offer-remote',
+            }),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(engine.audio.single.speakerphoneCalls, [false]);
+      expect(media.state.phase, isNot(CallMediaPhase.failed));
+      expect(sent.where((message) => message.type == 'answer'), hasLength(1));
+    });
+
     test('losing the signalling session closes the peer connection', () async {
       final media = session(
         _update(localPeerId: _local, participants: [_participant(_remote)]),

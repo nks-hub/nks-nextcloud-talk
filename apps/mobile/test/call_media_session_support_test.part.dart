@@ -118,6 +118,7 @@ final class _FakeEngine implements CallMediaEngine {
   CallMediaError? connectionRemoteDescriptionError;
   CallMediaError? audioConnectionError;
   CallMediaError? microphoneError;
+  Object? speakerphoneError;
   Completer<void>? microphoneStartup;
   Completer<void>? connectionCreateGate;
   int connectionCreateStarts = 0;
@@ -136,7 +137,7 @@ final class _FakeEngine implements CallMediaEngine {
       throw CallMediaException(error);
     }
     microphoneOpens++;
-    final opened = _FakeAudio();
+    final opened = _FakeAudio()..speakerphoneError = speakerphoneError;
     audio.add(opened);
     return opened;
   }
@@ -272,11 +273,16 @@ final class _FakeAudio implements CallLocalAudio {
   }
 
   final List<bool> speakerphoneCalls = <bool>[];
+  Object? speakerphoneError;
 
   @override
   Future<void> setSpeakerphone(bool on) async {
-    speakerphone = on;
     speakerphoneCalls.add(on);
+    final error = speakerphoneError;
+    if (error != null) {
+      throw error;
+    }
+    speakerphone = on;
   }
 
   List<CallAudioRoute> availableRoutes = const <CallAudioRoute>[];
