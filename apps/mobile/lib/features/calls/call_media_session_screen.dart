@@ -341,6 +341,7 @@ extension _CallMediaSessionScreen on CallMediaSession {
         return;
       }
     }
+    screen.pendingMcuScreenAnswer = null;
     if (sid != null && sid.isNotEmpty) {
       screen.sid = sid;
     }
@@ -358,14 +359,47 @@ extension _CallMediaSessionScreen on CallMediaSession {
         '[call] screen answer → $senderId sid=${screen.sid} '
         'lines=${_mediaLines(answer.sdp)}',
       );
-      await _send(
-        peerId: senderId,
-        type: 'answer',
-        payload: _sdpPayload(answer),
-        via: screen,
-      );
+      await _sendIncomingScreenAnswer(screen, answer);
     } on CallMediaException {
       await _closeScreen(senderId);
+    }
+  }
+
+  Future<void> _sendIncomingScreenAnswer(
+    _MediaPeer screen,
+    CallSessionDescription answer,
+  ) async {
+    final accepted = await _send(
+      peerId: screen.peerId,
+      type: 'answer',
+      payload: _sdpPayload(answer),
+      via: screen,
+    );
+    if (_mcu && !accepted && !_disposed) {
+      // A resumed signaling session can deliver this exact SDP without
+      // renegotiating the native connection.
+      screen.pendingMcuScreenAnswer = _PendingMcuScreenAnswer(
+        answer,
+        screen.sid,
+      );
+    }
+  }
+
+  Future<void> _retryMcuScreenAnswer(
+    MapEntry<_MediaPeer, _PendingMcuScreenAnswer> entry,
+  ) async {
+    final screen = entry.key;
+    final answer = entry.value;
+    if (!identical(_screens[screen.peerId], screen) ||
+        !identical(screen.pendingMcuScreenAnswer, answer) ||
+        screen.sid != answer.sid) {
+      return;
+    }
+    screen.pendingMcuScreenAnswer = null;
+    try {
+      await _sendIncomingScreenAnswer(screen, answer.description);
+    } on CallMediaException {
+      await _closeScreen(screen.peerId);
     }
   }
 
@@ -403,4 +437,11 @@ extension _CallMediaSessionScreen on CallMediaSession {
       _publish();
     }
   }
+}
+
+final class _PendingMcuScreenAnswer {
+  const _PendingMcuScreenAnswer(this.description, this.sid);
+
+  final CallSessionDescription description;
+  final String sid;
 }

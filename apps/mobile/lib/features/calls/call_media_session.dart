@@ -352,8 +352,7 @@ final class CallMediaSession {
     final bindingChanged =
         _boundRoomEpoch != update.roomEpoch ||
         _boundLocalPeerId != localPeerId.value;
-    final retryScreenAnnouncements =
-        _wasSignalingUnavailable && !bindingChanged;
+    final resumed = _wasSignalingUnavailable && !bindingChanged;
     _wasSignalingUnavailable = false;
     final rebuilt = _boundRoomEpoch != null && bindingChanged;
     if (rebuilt) {
@@ -397,7 +396,7 @@ final class CallMediaSession {
         .where((peerId) => !_peers.containsKey(peerId))
         .toList(growable: false);
     if (_mcu) {
-      final recipients = retryScreenAnnouncements
+      final recipients = resumed
           ? <String>{...missingPeers, ..._refusedMcuScreenAnnouncements}
           : missingPeers;
       await _runPeerTasks(recipients, (peerId) async {
@@ -424,12 +423,22 @@ final class CallMediaSession {
       _onSignalingRebuilt?.call();
     }
 
+    // Process newer offers and unshares before resending these answers.
+    final screenAnswers = _mcu && resumed
+        ? {
+            for (final screen in _screens.values)
+              screen: ?screen.pendingMcuScreenAnswer,
+          }
+        : const <_MediaPeer, _PendingMcuScreenAnswer>{};
     for (final message in update.messages) {
       await _receive(
         message: message,
         localPeerId: localPeerId.value,
         iceServers: iceServers,
       );
+    }
+    if (screenAnswers.isNotEmpty) {
+      await _runPeerTasks(screenAnswers.entries, _retryMcuScreenAnswer);
     }
     if (!_mcu) await _retryMeshCameraOffers();
     _publish();
@@ -737,6 +746,7 @@ final class _MediaPeer {
   bool localOfferPending = false;
   ({CallSessionDescription description, bool videoOn, bool sent})?
   deferredCameraOffer;
+  _PendingMcuScreenAnswer? pendingMcuScreenAnswer;
   bool remoteDescriptionSet = false;
   CallMediaConnectionState state = CallMediaConnectionState.connecting;
   final List<CallIceCandidate> pendingRemoteCandidates = [];

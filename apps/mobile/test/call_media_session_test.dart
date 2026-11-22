@@ -9,6 +9,7 @@ import 'package:nextcloudtalk/features/calls/call_signaling_session.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 part 'call_media_session_screen_test.part.dart';
+part 'call_media_session_mcu_screen_answer_test.part.dart';
 part 'call_media_session_controls_test.part.dart';
 part 'call_media_session_disposal_test.part.dart';
 part 'call_media_session_support_test.part.dart';
@@ -39,6 +40,7 @@ final class _MediaSessionTests {
 
     _registerCore();
     _registerScreenSharing();
+    _registerMcuScreenAnswerRecovery();
     _registerControls();
     _registerDisposal();
     _registerRecovery();
