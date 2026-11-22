@@ -7592,6 +7592,78 @@ abstract class AppLocalizations {
   /// **'Purple'**
   String get colorNamePurple;
 
+  /// No description provided for @colorNameIndigo.
+  ///
+  /// In en, this message translates to:
+  /// **'Indigo'**
+  String get colorNameIndigo;
+
+  /// No description provided for @colorNameCyan.
+  ///
+  /// In en, this message translates to:
+  /// **'Cyan'**
+  String get colorNameCyan;
+
+  /// No description provided for @colorNameSteelBlue.
+  ///
+  /// In en, this message translates to:
+  /// **'Steel blue'**
+  String get colorNameSteelBlue;
+
+  /// No description provided for @colorNameSlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Slate'**
+  String get colorNameSlate;
+
+  /// No description provided for @colorNameMoss.
+  ///
+  /// In en, this message translates to:
+  /// **'Moss green'**
+  String get colorNameMoss;
+
+  /// No description provided for @colorNameOlive.
+  ///
+  /// In en, this message translates to:
+  /// **'Olive'**
+  String get colorNameOlive;
+
+  /// No description provided for @colorNameRose.
+  ///
+  /// In en, this message translates to:
+  /// **'Rose'**
+  String get colorNameRose;
+
+  /// No description provided for @colorNameMagenta.
+  ///
+  /// In en, this message translates to:
+  /// **'Magenta'**
+  String get colorNameMagenta;
+
+  /// No description provided for @colorNameCoral.
+  ///
+  /// In en, this message translates to:
+  /// **'Coral'**
+  String get colorNameCoral;
+
+  /// No description provided for @colorNameTerracotta.
+  ///
+  /// In en, this message translates to:
+  /// **'Terracotta'**
+  String get colorNameTerracotta;
+
+  /// No description provided for @colorNameGold.
+  ///
+  /// In en, this message translates to:
+  /// **'Gold'**
+  String get colorNameGold;
+
+  /// No description provided for @colorNameBrown.
+  ///
+  /// In en, this message translates to:
+  /// **'Brown'**
+  String get colorNameBrown;
+
   /// No description provided for @colorPickerHue.
   ///
   /// In en, this message translates to:

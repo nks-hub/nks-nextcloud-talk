@@ -4272,6 +4272,42 @@ class AppLocalizationsCs extends AppLocalizations {
   String get colorNamePurple => 'Fialová';
 
   @override
+  String get colorNameIndigo => 'Indigová';
+
+  @override
+  String get colorNameCyan => 'Azurová';
+
+  @override
+  String get colorNameSteelBlue => 'Ocelová modř';
+
+  @override
+  String get colorNameSlate => 'Břidlicová';
+
+  @override
+  String get colorNameMoss => 'Mechová';
+
+  @override
+  String get colorNameOlive => 'Olivová';
+
+  @override
+  String get colorNameRose => 'Růžová';
+
+  @override
+  String get colorNameMagenta => 'Purpurová';
+
+  @override
+  String get colorNameCoral => 'Korálová';
+
+  @override
+  String get colorNameTerracotta => 'Cihlová';
+
+  @override
+  String get colorNameGold => 'Zlatá';
+
+  @override
+  String get colorNameBrown => 'Hnědá';
+
+  @override
   String get colorPickerHue => 'Odstín';
 
   @override

@@ -4,7 +4,10 @@ import '../l10n/generated/app_localizations.dart';
 import 'color_picker_dialog.dart';
 
 /// Colours offered wherever a colour is chosen, in rows of six: two rows of
-/// light tints, one of vivid colours and one of deep ones.
+/// light tints, one of vivid colours, one of deep ones and two of mid-tone
+/// accents. Every accent keeps 3:1 against both the light and the dark app
+/// surface and 4.5:1 against black or white text; `color_palette_test.dart`
+/// holds them to it.
 const List<String> colorPaletteHexes = [
   '#FFFFFF',
   '#F8EBB0',
@@ -30,6 +33,18 @@ const List<String> colorPaletteHexes = [
   '#7A2E3A',
   '#2B2B2E',
   '#000000',
+  '#5A5BD6',
+  '#0E8FB5',
+  '#4A78A8',
+  '#5E7287',
+  '#4D7C0F',
+  '#7A8B2E',
+  '#D6457A',
+  '#B83EA8',
+  '#E0573F',
+  '#B35A1F',
+  '#B7791F',
+  '#8A5A3C',
 ];
 
 /// Czech or English name of a palette colour, `null` for any other value.
@@ -59,6 +74,18 @@ String? colorPaletteName(AppLocalizations strings, String? hex) =>
       '#7A2E3A' => strings.colorNameBurgundy,
       '#2B2B2E' => strings.colorNameGraphite,
       '#000000' => strings.colorNameBlack,
+      '#5A5BD6' => strings.colorNameIndigo,
+      '#0E8FB5' => strings.colorNameCyan,
+      '#4A78A8' => strings.colorNameSteelBlue,
+      '#5E7287' => strings.colorNameSlate,
+      '#4D7C0F' => strings.colorNameMoss,
+      '#7A8B2E' => strings.colorNameOlive,
+      '#D6457A' => strings.colorNameRose,
+      '#B83EA8' => strings.colorNameMagenta,
+      '#E0573F' => strings.colorNameCoral,
+      '#B35A1F' => strings.colorNameTerracotta,
+      '#B7791F' => strings.colorNameGold,
+      '#8A5A3C' => strings.colorNameBrown,
       _ => null,
     };
 
@@ -213,8 +240,9 @@ Future<ColorPaletteChoice?> showColorPaletteDialog({
     builder: (dialogContext) {
       final strings = AppLocalizations.of(dialogContext);
       final inPalette = colorPaletteName(strings, current) != null;
-      // 12 swatches a row: two rows leave both options in view on a phone
-      // held sideways instead of below the fold.
+      // 12 swatches a row, three rows now. On a wide window the two options go
+      // above them, so a phone held sideways sees both without scrolling past
+      // the grid.
       final wide = MediaQuery.sizeOf(dialogContext).width >= 700;
       final custom = ListTile(
         key: const Key('color-palette-custom'),
@@ -238,8 +266,7 @@ Future<ColorPaletteChoice?> showColorPaletteDialog({
         title: Text(strings.ownTalkSharedThemeDefault),
         trailing: current == null ? const Icon(Icons.check) : null,
         selected: current == null,
-        onTap: () =>
-            Navigator.of(dialogContext).pop(const ColorPaletteTheme()),
+        onTap: () => Navigator.of(dialogContext).pop(const ColorPaletteTheme()),
       );
       return AlertDialog(
         key: dialogKey,
@@ -252,21 +279,22 @@ Future<ColorPaletteChoice?> showColorPaletteDialog({
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ColorSwatchGrid(
-                selected: current,
-                onSelected: (hex) =>
-                    Navigator.of(dialogContext).pop(ColorPaletteColor(hex)),
-              ),
-              const SizedBox(height: 8),
-              if (wide)
+              if (wide) ...[
                 Row(
                   children: [
                     Expanded(child: custom),
                     const SizedBox(width: 16),
                     Expanded(child: theme),
                   ],
-                )
-              else ...[custom, theme],
+                ),
+                const SizedBox(height: 8),
+              ],
+              ColorSwatchGrid(
+                selected: current,
+                onSelected: (hex) =>
+                    Navigator.of(dialogContext).pop(ColorPaletteColor(hex)),
+              ),
+              if (!wide) ...[const SizedBox(height: 8), custom, theme],
             ],
           ),
         ),

@@ -2,7 +2,10 @@ import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/core/app_theme.dart';
 import 'package:nextcloudtalk/core/color_palette.dart';
+import 'package:nextcloudtalk/features/chat/chat_background_theme.dart';
+import 'package:nextcloudtalk/features/owntalk_extensions/chat_appearance.dart';
 import 'package:nextcloudtalk/l10n/generated/app_localizations.dart';
 
 import 'test_support.dart';
@@ -56,11 +59,51 @@ void main() {
   }
 
   group('palette dialog', () {
-    testWidgets('offers twenty-four distinct swatches', (tester) async {
+    testWidgets('offers thirty-six distinct swatches', (tester) async {
       await open(tester, onResult: (_) {});
-      expect(colorPaletteHexes.toSet(), hasLength(24));
+      expect(colorPaletteHexes.toSet(), hasLength(36));
       for (final hex in colorPaletteHexes) {
         expect(find.byKey(Key('color-swatch-$hex')), findsOneWidget);
+      }
+    });
+
+    test('the twelve accent swatches hold up on both app surfaces', () {
+      final light = AppTheme.light().colorScheme.surface;
+      final dark = AppTheme.dark().colorScheme.surface;
+      final accents = colorPaletteHexes.skip(24);
+      expect(accents, hasLength(12));
+      for (final hex in accents) {
+        final color = Color(
+          0xFF000000 | int.parse(hex.substring(1), radix: 16),
+        );
+        // WCAG 1.4.11: a swatch or a bubble in this colour is a component.
+        expect(
+          chatBackgroundContrast(color, light),
+          greaterThanOrEqualTo(3),
+          reason: '$hex on light',
+        );
+        expect(
+          chatBackgroundContrast(color, dark),
+          greaterThanOrEqualTo(3),
+          reason: '$hex on dark',
+        );
+        // WCAG 1.4.3: text on it, in the colour readableTextColor falls back to.
+        final text = readableTextColor(color, color);
+        expect(
+          chatBackgroundContrast(text, color),
+          greaterThanOrEqualTo(4.5),
+          reason: hex,
+        );
+        // The check mark of a selected swatch uses the same rule.
+        final mark =
+            ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+            ? Colors.white
+            : Colors.black;
+        expect(
+          chatBackgroundContrast(mark, color),
+          greaterThanOrEqualTo(3),
+          reason: '$hex mark',
+        );
       }
     });
 

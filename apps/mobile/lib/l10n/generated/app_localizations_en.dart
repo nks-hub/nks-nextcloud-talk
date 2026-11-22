@@ -4265,6 +4265,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get colorNamePurple => 'Purple';
 
   @override
+  String get colorNameIndigo => 'Indigo';
+
+  @override
+  String get colorNameCyan => 'Cyan';
+
+  @override
+  String get colorNameSteelBlue => 'Steel blue';
+
+  @override
+  String get colorNameSlate => 'Slate';
+
+  @override
+  String get colorNameMoss => 'Moss green';
+
+  @override
+  String get colorNameOlive => 'Olive';
+
+  @override
+  String get colorNameRose => 'Rose';
+
+  @override
+  String get colorNameMagenta => 'Magenta';
+
+  @override
+  String get colorNameCoral => 'Coral';
+
+  @override
+  String get colorNameTerracotta => 'Terracotta';
+
+  @override
+  String get colorNameGold => 'Gold';
+
+  @override
+  String get colorNameBrown => 'Brown';
+
+  @override
   String get colorPickerHue => 'Hue';
 
   @override
