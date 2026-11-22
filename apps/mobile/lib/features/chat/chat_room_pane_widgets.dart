@@ -37,10 +37,13 @@ final class ChatThreadScreen extends ConsumerWidget {
       key: Key('chat-thread-screen-$threadId'),
       appBar: AppBar(
         // Two lines of text outgrow the stock 56 dp bar as soon as the text
-        // is scaled, so the bar grows with it.
+        // is scaled, so the bar grows with it. AppBar stops scaling its title
+        // at 1.34, and so does this.
         toolbarHeight: math.max(
           kToolbarHeight,
-          MediaQuery.textScalerOf(context).scale(48),
+          MediaQuery.textScalerOf(
+            context,
+          ).clamp(maxScaleFactor: 1.34).scale(48),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
