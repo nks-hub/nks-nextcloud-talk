@@ -547,6 +547,14 @@ final class _ChatComposer extends ConsumerWidget {
         ),
       ),
     );
+    final reply = replyTo;
+    final replyBanner = reply == null
+        ? null
+        : _ReplyBanner(
+            message: reply,
+            onCancel: onCancelReply,
+            compact: compactHeight,
+          );
     return Material(
       color: scheme.surface,
       shape: Border(
@@ -617,11 +625,7 @@ final class _ChatComposer extends ConsumerWidget {
                             }
                           },
                         ),
-                        if (replyTo != null)
-                          _ReplyBanner(
-                            message: replyTo!,
-                            onCancel: onCancelReply,
-                          ),
+                        if (!compactHeight && replyBanner != null) replyBanner,
                         MentionSuggestionsBar(
                           controller: controller,
                           source: mentionSource,
@@ -652,6 +656,7 @@ final class _ChatComposer extends ConsumerWidget {
                               compact: compactHeight,
                               field: composerField,
                               mediaComposer: mediaComposer,
+                              compactReply: compactHeight ? replyBanner : null,
                               dividerColor: scheme.outlineVariant.withValues(
                                 alpha: 0.7,
                               ),
@@ -669,15 +674,34 @@ final class _ChatComposer extends ConsumerWidget {
 }
 
 final class _ReplyBanner extends StatelessWidget {
-  const _ReplyBanner({required this.message, required this.onCancel});
+  const _ReplyBanner({
+    required this.message,
+    required this.onCancel,
+    required this.compact,
+  });
 
   final CachedChatMessage message;
   final VoidCallback onCancel;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
+    final replyingTo = strings.replyingTo(message.actorDisplayName);
+    final cancel = IconButton(
+      key: const Key('chat-cancel-reply'),
+      tooltip: strings.cancelReply,
+      onPressed: onCancel,
+      icon: const Icon(Icons.close_rounded),
+    );
+    if (compact) {
+      return CompactChatReplyPreview(
+        key: const Key('chat-reply-banner'),
+        label: '$replyingTo · ${message.displayText}',
+        cancel: cancel,
+      );
+    }
     return Padding(
       key: const Key('chat-reply-banner'),
       padding: const EdgeInsets.only(bottom: 6),
@@ -691,7 +715,7 @@ final class _ReplyBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  strings.replyingTo(message.actorDisplayName),
+                  replyingTo,
                   style: Theme.of(
                     context,
                   ).textTheme.labelMedium?.copyWith(color: scheme.primary),
@@ -707,12 +731,7 @@ final class _ReplyBanner extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            key: const Key('chat-cancel-reply'),
-            tooltip: strings.cancelReply,
-            onPressed: onCancel,
-            icon: const Icon(Icons.close_rounded),
-          ),
+          cancel,
         ],
       ),
     );

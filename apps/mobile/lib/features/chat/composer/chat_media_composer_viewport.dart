@@ -89,12 +89,14 @@ final class AdaptiveChatComposerLayout extends StatelessWidget {
     required this.field,
     required this.mediaComposer,
     required this.dividerColor,
+    this.compactReply,
   });
 
   final bool compact;
   final Widget field;
   final Widget mediaComposer;
   final Color dividerColor;
+  final Widget? compactReply;
 
   @override
   Widget build(BuildContext context) {
@@ -102,18 +104,24 @@ final class AdaptiveChatComposerLayout extends StatelessWidget {
       builder: (context, constraints) {
         const fieldFloor = 96.0;
         const actionsViewport = 344.0;
+        const actionSize = 48.0;
+        final reply = compact ? compactReply : null;
+        final replyWidth = reply == null
+            ? 0.0
+            : (constraints.maxWidth / 4).clamp(actionSize, 192.0);
+        final contentWidth = (constraints.maxWidth - replyWidth - 1).clamp(
+          0.0,
+          double.infinity,
+        );
         final mediaWidth = compact
-            ? (constraints.maxWidth - fieldFloor - 1).clamp(
-                0.0,
+            ? (contentWidth - fieldFloor).clamp(
+                contentWidth.clamp(0.0, actionSize),
                 actionsViewport,
               )
             : null;
-        final fieldWidth = compact
-            ? (constraints.maxWidth - (mediaWidth ?? 0) - 1).clamp(
-                fieldFloor,
-                constraints.maxWidth,
-              )
-            : null;
+        final fieldWidth = mediaWidth == null
+            ? null
+            : contentWidth - mediaWidth;
         return Flex(
           direction: compact ? Axis.horizontal : Axis.vertical,
           mainAxisSize: MainAxisSize.min,
@@ -124,12 +132,12 @@ final class AdaptiveChatComposerLayout extends StatelessWidget {
             SizedBox(width: fieldWidth, child: field),
             SizedBox(
               width: compact ? 1 : null,
-              height: compact ? 48 : 1,
+              height: compact ? actionSize : 1,
               child: ColoredBox(color: dividerColor),
             ),
             SizedBox(
               width: mediaWidth,
-              height: compact ? 48 : null,
+              height: compact ? actionSize : null,
               child: Padding(
                 padding: compact
                     ? EdgeInsets.zero
@@ -137,9 +145,48 @@ final class AdaptiveChatComposerLayout extends StatelessWidget {
                 child: mediaComposer,
               ),
             ),
+            if (reply != null)
+              SizedBox(width: replyWidth, height: actionSize, child: reply),
           ],
         );
       },
+    );
+  }
+}
+
+final class CompactChatReplyPreview extends StatelessWidget {
+  const CompactChatReplyPreview({
+    super.key,
+    required this.label,
+    required this.cancel,
+  });
+
+  final String label;
+  final Widget cancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsetsDirectional.only(start: 8),
+            child: Tooltip(
+              message: label,
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ),
+        SizedBox.square(dimension: 48, child: cancel),
+      ],
     );
   }
 }

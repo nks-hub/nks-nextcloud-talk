@@ -47,6 +47,7 @@ part 'chat_composer_giphy_reopen_test.part.dart';
 part 'chat_composer_nonblocking_test.part.dart';
 part 'chat_composer_quick_emoji_test.part.dart';
 part 'chat_composer_clipboard_offer_test.part.dart';
+part 'chat_composer_compact_reply_test.part.dart';
 
 typedef _ShortComposerGeometry = ({
   String name,
@@ -64,6 +65,7 @@ void main() {
   _registerNonBlockingComposerTests();
   _registerQuickEmojiComposerTests();
   _registerClipboardOfferComposerTests();
+  _registerCompactReplyComposerTest();
   for (final geometry in <_ShortComposerGeometry>[
     (
       name: 'Galaxy S9 landscape',
@@ -74,15 +76,7 @@ void main() {
       visibleHeight: 500,
       attachment: true,
     ),
-    (
-      name: 'Galaxy S21 landscape',
-      physicalSize: const Size(2400, 1080),
-      pixelRatio: 3,
-      topPadding: 72,
-      keyboard: 594,
-      visibleHeight: 486,
-      attachment: false,
-    ),
+    _s21LandscapeComposerGeometry,
     (
       name: '300dp short detail pane',
       physicalSize: const Size(787.5, 1080),
