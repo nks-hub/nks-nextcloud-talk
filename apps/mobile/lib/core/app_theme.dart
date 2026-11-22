@@ -210,8 +210,22 @@ abstract final class AppTheme {
           color: chipLabelColor,
         ),
       ),
+      // Content scrolling under a bar must not tint it: the tint turns the
+      // bar blue-grey against the warm surface.
+      appBarTheme: AppBarTheme(
+        backgroundColor: scheme.surface,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        shape: Border(
+          bottom: BorderSide(
+            color: scheme.outlineVariant.withValues(alpha: 0.5),
+          ),
+        ),
+      ),
+      // Separators only group rows; component borders keep the full
+      // outlineVariant.
       dividerTheme: DividerThemeData(
-        color: scheme.outlineVariant,
+        color: scheme.outlineVariant.withValues(alpha: 0.5),
         thickness: 1,
         space: 1,
       ),

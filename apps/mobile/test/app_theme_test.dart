@@ -37,7 +37,12 @@ void main() {
       expect(scheme.secondary, isNot(scheme.primary));
       expect(scheme.tertiary, isNot(scheme.primary));
       expect(scheme.tertiary, isNot(scheme.secondary));
-      expect(theme.dividerTheme.color, scheme.outlineVariant);
+      expect(
+        theme.dividerTheme.color,
+        scheme.outlineVariant.withValues(alpha: 0.5),
+      );
+      expect(theme.appBarTheme.scrolledUnderElevation, 0);
+      expect(theme.appBarTheme.surfaceTintColor, Colors.transparent);
       expect(theme.chipTheme.backgroundColor, scheme.surfaceContainerLow);
       expect(theme.chipTheme.selectedColor, scheme.secondaryContainer);
       expect(theme.chipTheme.checkmarkColor, scheme.onSecondaryContainer);
