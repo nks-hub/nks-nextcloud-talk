@@ -10,6 +10,9 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## 1.1.0 (120) — 22 November 2026
 
+- The chat list and the chat have a new look. Bubbles are rounder and join up within a run of messages, your own messages are filled with the theme colour, and an incoming run shows the avatar on its last message. Unread conversations stand out in bold on a tinted row, and avatars are larger with presence shown as a dot.
+- Thread lists show the reply count as a label, and an open thread sets its first message apart from the replies.
+- The colour palette has 36 colours instead of 24. Each new colour stays readable on light and dark backgrounds. Without a server colour the app uses blue tones only.
 - Moderators can set the default participant permissions of a conversation, choose who may mention everyone and give one participant individual permissions in the conversation details.
 - Diagnostics show when push last arrived, when it was last decrypted for the account, what happened to the notification and the last delivery error. No message content or token is stored.
 - A browser login that was cancelled, or cut off by closing the app, is finished or expired after a restart, and an app password the app can no longer use is revoked. While earlier sign-ins or removed accounts are still being cleaned up, adding or removing an account says so instead of reporting a storage error.
