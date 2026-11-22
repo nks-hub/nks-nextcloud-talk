@@ -297,6 +297,7 @@ final class ChatMediaDiskCache {
   final Future<void> Function(File file, DateTime touchedAt) _touchFile;
   final Map<String, _ChatMediaDiskEntry> _index = {};
   final Set<String> _touching = {};
+  final Map<String, Future<void>> _pendingMutations = {};
 
   Directory? _root;
   Future<Directory>? _opening;
@@ -357,7 +358,11 @@ final class ChatMediaDiskCache {
     if (separator <= 0 ||
         separator > _maximumHeaderBytes ||
         separator + 1 >= stored.length) {
-      await _delete(path);
+      await _delete(
+        path,
+        shouldDelete: () =>
+            identical(_index[path]?.contentVersion, entry.contentVersion),
+      );
       return null;
     }
     _index[path] = _ChatMediaDiskEntry(
@@ -433,19 +438,21 @@ final class ChatMediaDiskCache {
       await output.close();
       output = null;
       final path = file.path;
-      final replacesEntry =
-          _index.containsKey(path) || _touching.contains(path);
-      await temporary.rename(path);
-      _drop(path);
-      _index[path] = _ChatMediaDiskEntry(
-        bytes: total,
-        touchedAt: DateTime.now(),
-      );
-      _bytes += total;
-      if (replacesEntry) {
-        // An older touch can land after the OS has moved the new file.
-        _scheduleTouch(path, file);
-      }
+      await _mutatePath(path, () async {
+        final replacesEntry =
+            _index.containsKey(path) || _touching.contains(path);
+        await temporary.rename(path);
+        _drop(path);
+        _index[path] = _ChatMediaDiskEntry(
+          bytes: total,
+          touchedAt: DateTime.now(),
+        );
+        _bytes += total;
+        if (replacesEntry) {
+          // An older touch can land after the OS has moved the new file.
+          _scheduleTouch(path, file);
+        }
+      });
     } on FileSystemException {
       return;
     } finally {
@@ -555,10 +562,12 @@ final class ChatMediaDiskCache {
     Future<void> deleteNext() async {
       while (_bytes > maximumBytes && nextCandidate < candidates.length) {
         final entry = candidates[nextCandidate++];
-        if (!identical(_index[entry.key], entry.value)) {
-          continue;
-        }
-        await _delete(entry.key);
+        await _delete(
+          entry.key,
+          shouldDelete: () =>
+              _bytes > maximumBytes &&
+              identical(_index[entry.key], entry.value),
+        );
       }
     }
 
@@ -568,12 +577,33 @@ final class ChatMediaDiskCache {
     await Future.wait(List.generate(workerCount, (_) => deleteNext()));
   }
 
-  Future<void> _delete(String path) async {
-    _drop(path);
+  Future<void> _delete(String path, {bool Function()? shouldDelete}) =>
+      _mutatePath(path, () async {
+        if (shouldDelete?.call() == false) return;
+        _drop(path);
+        try {
+          await _deleteFile(File(path));
+        } on FileSystemException {
+          // Already gone; the index stopped counting it either way.
+        }
+      });
+
+  // A dispatched delete can still unlink a later rename to the same path.
+  Future<void> _mutatePath(
+    String path,
+    Future<void> Function() operation,
+  ) async {
+    final previous = _pendingMutations[path];
+    final released = Completer<void>();
+    _pendingMutations[path] = released.future;
     try {
-      await _deleteFile(File(path));
-    } on FileSystemException {
-      // Already gone; the index stopped counting it either way.
+      if (previous != null) await previous;
+      await operation();
+    } finally {
+      if (identical(_pendingMutations[path], released.future)) {
+        _pendingMutations.remove(path);
+      }
+      released.complete();
     }
   }
 

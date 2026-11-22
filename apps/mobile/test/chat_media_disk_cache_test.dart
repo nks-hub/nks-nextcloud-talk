@@ -7,6 +7,8 @@ import 'package:nextcloudtalk/data/chat_media_cache.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:path/path.dart' as p;
 
+part 'chat_media_disk_cache_mutation.part.dart';
+
 void main() {
   late Directory root;
 
@@ -48,6 +50,8 @@ void main() {
     'https://cloud.example.invalid/index.php/core/preview'
     '?fileId=$fileId&x=2048&y=2048&a=0',
   );
+
+  _previewMutationTests(open, image, uriFor, storedPreviews);
 
   test(
     'exact preview eviction survives reopening and preserves other versions',
@@ -866,9 +870,10 @@ void main() {
 final class _NativeFiles extends IOOverrides {}
 
 final class _PreviewIoFile implements File {
-  _PreviewIoFile(this.file, {this.readBytes, this.renameFile});
+  _PreviewIoFile(this.file, {this.openFile, this.readBytes, this.renameFile});
 
   final File file;
+  final Future<RandomAccessFile> Function(FileMode)? openFile;
   final Future<Uint8List> Function()? readBytes;
   final Future<File> Function(String newPath)? renameFile;
 
@@ -877,7 +882,7 @@ final class _PreviewIoFile implements File {
 
   @override
   Future<RandomAccessFile> open({FileMode mode = FileMode.read}) =>
-      file.open(mode: mode);
+      openFile?.call(mode) ?? file.open(mode: mode);
 
   @override
   Future<File> rename(String newPath) =>
