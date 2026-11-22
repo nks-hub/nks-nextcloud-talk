@@ -86,6 +86,39 @@ void main() {
     }
   });
 
+  test('a stock or blue server colour yields no violet or pink role', () {
+    bool violet(Color color) {
+      final hsl = HSLColor.fromColor(color);
+      return hsl.saturation > 0.08 && hsl.hue >= 250 && hsl.hue <= 345;
+    }
+
+    for (final seed in const [
+      Color(0xFF00679E),
+      Color(0xFF0082C9),
+      Color(0xFF1976D2),
+    ]) {
+      for (final theme in [
+        AppTheme.light(seedColor: seed),
+        AppTheme.dark(seedColor: seed),
+      ]) {
+        final s = theme.colorScheme;
+        for (final entry in {
+          'secondaryContainer': s.secondaryContainer,
+          'tertiary': s.tertiary,
+          'tertiaryContainer': s.tertiaryContainer,
+          'tertiaryFixed': s.tertiaryFixed,
+          'tertiaryFixedDim': s.tertiaryFixedDim,
+        }.entries) {
+          expect(
+            violet(entry.value),
+            isFalse,
+            reason: '${entry.key} for $seed in ${s.brightness.name}',
+          );
+        }
+      }
+    }
+  });
+
   test('a server colour carries its secondary and tertiary roles with it', () {
     const server = Color(0xFFE65100);
     for (final brightness in Brightness.values) {

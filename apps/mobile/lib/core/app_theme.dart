@@ -35,25 +35,58 @@ abstract final class AppTheme {
     return rgb == null ? null : Color(0xFF000000 | rgb);
   }
 
-  static ColorScheme _fixedRoles(ColorScheme generated, Brightness brightness) {
+  static ColorScheme _withSecondary(ColorScheme base, Brightness brightness) {
     final secondary = ColorScheme.fromSeed(
       seedColor: _secondarySeed,
       brightness: brightness,
     );
-    final tertiary = ColorScheme.fromSeed(
-      seedColor: _tertiarySeed,
-      brightness: brightness,
-    );
-    return generated.copyWith(
+    return base.copyWith(
       secondary: secondary.primary,
       onSecondary: secondary.onPrimary,
       secondaryContainer: secondary.primaryContainer,
       onSecondaryContainer: secondary.onPrimaryContainer,
+    );
+  }
+
+  static ColorScheme _withTertiary(ColorScheme base, Brightness brightness) {
+    final tertiary = ColorScheme.fromSeed(
+      seedColor: _tertiarySeed,
+      brightness: brightness,
+    );
+    return base.copyWith(
       tertiary: tertiary.primary,
       onTertiary: tertiary.onPrimary,
       tertiaryContainer: tertiary.primaryContainer,
       onTertiaryContainer: tertiary.onPrimaryContainer,
+      tertiaryFixed: tertiary.tertiaryFixed,
+      tertiaryFixedDim: tertiary.tertiaryFixedDim,
     );
+  }
+
+  /// Violet through magenta to pink, 250 to 345 degrees; a grey has no hue.
+  static bool _isVioletOrPink(Color color) {
+    final hsl = HSLColor.fromColor(color);
+    return hsl.saturation > 0.08 && hsl.hue >= 250 && hsl.hue <= 345;
+  }
+
+  /// The stock Nextcloud blue, which is also what a stock server sends, gets
+  /// the fixed blue-grey and teal roles. Any other server colour keeps the
+  /// roles Material derives from it, except that a tertiary which would land
+  /// in violet or pink for a server colour that is not itself violet or pink
+  /// becomes the fixed teal.
+  static ColorScheme _roles(
+    ColorScheme generated,
+    Brightness brightness,
+    Color? seedColor,
+  ) {
+    if (seedColor == null || seedColor == _seed) {
+      return _withTertiary(_withSecondary(generated, brightness), brightness);
+    }
+    if (_isVioletOrPink(generated.tertiaryContainer) &&
+        !_isVioletOrPink(seedColor)) {
+      return _withTertiary(generated, brightness);
+    }
+    return generated;
   }
 
   static ThemeData _create(Brightness brightness, {Color? seedColor}) {
@@ -81,11 +114,7 @@ abstract final class AppTheme {
       seedColor: seedColor ?? _seed,
       brightness: brightness,
     );
-    // The fixed purple and teal belong to the default blue. A server theme
-    // brings its own primary, and its secondary and tertiary roles follow it.
-    final roles = seedColor == null
-        ? _fixedRoles(generated, brightness)
-        : generated;
+    final roles = _roles(generated, brightness, seedColor);
     final scheme = roles.copyWith(
       surface: isDark ? _darkSurface : _lightSurface,
       // Fills inputs and the cards inside bubbles. Near-black in the dark theme
