@@ -81,7 +81,8 @@ final class FileAndroidPushTransportStore implements AndroidPushTransportStore {
 /// notifications start arriving twice, or down the dead path. [select]
 /// therefore revokes the current transport at Nextcloud *and* at its gateway
 /// first, and only stores the new choice once that came back clean. A failed
-/// store write restores the revoked path before surfacing the error.
+/// revocation or store write restores the old path before surfacing the
+/// original error.
 final class AndroidPushTransportSwitch {
   AndroidPushTransportSwitch({
     required AndroidPushTransportStore store,
@@ -107,12 +108,16 @@ final class AndroidPushTransportSwitch {
     if (next == current) {
       return current;
     }
-    await _revoke(current);
     try {
+      await _revoke(current);
       await _store.write(next);
-    } on Object {
-      await _restore(current);
-      rethrow;
+    } on Object catch (error, stackTrace) {
+      try {
+        await _restore(current);
+      } on Object {
+        // Recovery is best effort; the switch must keep its original failure.
+      }
+      Error.throwWithStackTrace(error, stackTrace);
     }
     return next;
   }

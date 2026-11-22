@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/features/push/android_push_coordinator.dart';
+import 'package:nextcloudtalk/features/push/android_push_transport.dart';
 import 'package:nextcloudtalk/features/push/android_web_push_bridge.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 

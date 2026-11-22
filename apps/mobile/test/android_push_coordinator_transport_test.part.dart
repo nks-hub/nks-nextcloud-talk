@@ -4,6 +4,129 @@ part of 'android_push_coordinator_test.dart';
 /// with it. Nextcloud keys a push registration by device, so a subscription
 /// left behind competes with the proxy registration that replaces it.
 void _registerAndroidPushTransportHandoverTests() {
+  test(
+    'failed overlapping revocation restores Web Push after every worker',
+    () async {
+      final fixture = await _createAccounts(const <String>[
+        'account-a',
+        'account-b',
+      ]);
+      final bothDeletesStarted = Completer<void>();
+      final releaseDeletes = Completer<void>();
+      final deletingAccounts = <String>{};
+      var activeDeletes = 0;
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.method == 'DELETE' &&
+              request.url.path.endsWith('/webpush')) {
+            final authorization = request.headers['authorization']!;
+            final login = utf8
+                .decode(base64Decode(authorization.substring('Basic '.length)))
+                .split(':')
+                .first;
+            final accountId = login.replaceFirst('fixture-', '');
+            deletingAccounts.add(accountId);
+            activeDeletes++;
+            if (deletingAccounts.length == 2 &&
+                !bothDeletesStarted.isCompleted) {
+              bothDeletesStarted.complete();
+            }
+            await releaseDeletes.future;
+            activeDeletes--;
+            if (accountId == 'account-b') {
+              return http.Response('', 503);
+            }
+            return http.Response(jsonEncode(_ocs(const <Object>[], 200)), 200);
+          }
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                capabilitiesJson(
+                  notificationPushFeatures: const <String>['webpush'],
+                ),
+              ),
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/webpush/vapid')) {
+            return http.Response(
+              jsonEncode(_ocs(<String, Object>{'vapid': 'B${'a' * 86}'})),
+              200,
+            );
+          }
+          fail('Unexpected request: ${request.method} ${request.url.path}');
+        }),
+      );
+      addTearDown(api.close);
+      addTearDown(() {
+        if (!releaseDeletes.isCompleted) {
+          releaseDeletes.complete();
+        }
+      });
+      final platform = _FakeAndroidWebPushPlatform()
+        ..phase = AndroidWebPushRegistrationPhase.active
+        ..generation = 1
+        ..emitEndpointOnRegister = false;
+      final coordinator = AndroidPushCoordinator(
+        accounts: fixture.accounts,
+        credentials: fixture.credentials,
+        api: api,
+        platform: platform,
+        onWakeUp: (_) async {},
+      );
+      addTearDown(coordinator.close);
+      final store = _MemoryAndroidPushTransportStore(
+        AndroidPushTransport.webPush,
+      );
+      var restoreCalls = 0;
+      int? activeDeletesAtRestore;
+      bool? accountARetiredAtRestore;
+      final transportSwitch = AndroidPushTransportSwitch(
+        store: store,
+        revoke: (_) => coordinator.revokeAllRegistrations(),
+        restore: (_) async {
+          restoreCalls++;
+          activeDeletesAtRestore = activeDeletes;
+          accountARetiredAtRestore = platform.retiredServerRevocations.contains(
+            (accountId: 'account-a', generation: 1),
+          );
+          coordinator.subscribes = true;
+          await coordinator.reconcileAllAfterCurrent();
+        },
+      );
+
+      final switching = transportSwitch.select(
+        AndroidPushTransport.proxy,
+        current: AndroidPushTransport.webPush,
+      );
+      final failure = expectLater(
+        switching,
+        throwsA(
+          isA<NextcloudApiException>().having(
+            (error) => error.statusCode,
+            'statusCode',
+            503,
+          ),
+        ),
+      );
+      await bothDeletesStarted.future.timeout(const Duration(seconds: 2));
+      expect(coordinator.subscribes, isFalse);
+      expect(deletingAccounts, <String>{'account-a', 'account-b'});
+      releaseDeletes.complete();
+      await failure;
+
+      expect(store.stored, AndroidPushTransport.webPush);
+      expect(restoreCalls, 1);
+      expect(activeDeletesAtRestore, 0);
+      expect(accountARetiredAtRestore, isTrue);
+      expect(coordinator.subscribes, isTrue);
+      expect(
+        platform.registrations.map((registration) => registration.accountId),
+        containsAll(<String>['account-a', 'account-b']),
+      );
+    },
+  );
+
   test('revoking for a transport switch clears every account', () async {
     final fixture = await _createAccounts(const <String>[
       'account-a',
@@ -291,4 +414,19 @@ void _registerAndroidPushTransportHandoverTests() {
       hasLength(1),
     );
   });
+}
+
+final class _MemoryAndroidPushTransportStore
+    implements AndroidPushTransportStore {
+  _MemoryAndroidPushTransportStore(this.stored);
+
+  AndroidPushTransport stored;
+
+  @override
+  Future<AndroidPushTransport> read() async => stored;
+
+  @override
+  Future<void> write(AndroidPushTransport transport) async {
+    stored = transport;
+  }
 }

@@ -108,7 +108,9 @@ void main() {
     final transportSwitch = AndroidPushTransportSwitch(
       store: store,
       revoke: (_) async => throw const SocketException('offline'),
-      restore: (_) async {},
+      restore: (transport) async {
+        store.events.add('restore:${transport.name}');
+      },
     );
 
     await expectLater(
@@ -118,7 +120,31 @@ void main() {
       ),
       throwsA(isA<SocketException>()),
     );
-    expect(store.events, isEmpty);
+    expect(store.events, <String>['restore:webPush']);
+    expect(store.stored, AndroidPushTransport.webPush);
+  });
+
+  test('a failed rollback keeps the original revocation error', () async {
+    final store = _RecordingStore(AndroidPushTransport.webPush);
+    const revocationFailure = SocketException('revocation failed');
+    final transportSwitch = AndroidPushTransportSwitch(
+      store: store,
+      revoke: (_) async => throw revocationFailure,
+      restore: (transport) async {
+        store.events.add('restore:${transport.name}');
+        throw const FileSystemException('rollback failed');
+      },
+    );
+
+    await expectLater(
+      transportSwitch.select(
+        AndroidPushTransport.proxy,
+        current: AndroidPushTransport.webPush,
+      ),
+      throwsA(same(revocationFailure)),
+    );
+
+    expect(store.events, <String>['restore:webPush']);
     expect(store.stored, AndroidPushTransport.webPush);
   });
 
