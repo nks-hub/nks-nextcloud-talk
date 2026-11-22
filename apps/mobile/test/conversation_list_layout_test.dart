@@ -101,21 +101,32 @@ void main() {
     expect(find.text('No conversations yet'), findsOneWidget);
   });
 
-  testWidgets('a long name and a date fit 200 % text without overflow', (
-    tester,
-  ) async {
-    await pump(tester, [
-      _conversation(
-        'room-a',
-        'Quarterly planning with the regional sales leads and finance',
-      ),
-    ], textScale: 2);
+  testWidgets('a favourite with a status and a long name fits 200 % text in '
+      'the narrowest list pane', (tester) async {
+    await pump(
+      tester,
+      [
+        _conversation(
+          'room-a',
+          'Quarterly planning with the regional sales leads and finance',
+          favorite: true,
+          status: 'away',
+        ),
+      ],
+      textScale: 2,
+      width: 240,
+    );
 
     expect(tester.takeException(), isNull);
   });
 }
 
-CachedConversation _conversation(String token, String name) {
+CachedConversation _conversation(
+  String token,
+  String name, {
+  bool favorite = false,
+  String? status,
+}) {
   return CachedConversation(
     accountId: _account.id,
     token: token,
@@ -123,7 +134,7 @@ CachedConversation _conversation(String token, String name) {
     description: '',
     lastActivity: 1735689600,
     unreadMessages: 0,
-    favorite: false,
+    favorite: favorite,
     isArchived: false,
     readOnly: 0,
     roomType: 2,
@@ -131,6 +142,8 @@ CachedConversation _conversation(String token, String name) {
     objectType: '',
     avatarVersion: '',
     isCustomAvatar: false,
+    peerStatus: status,
+    peerStatusIcon: status == null ? null : '*',
     lastMessageText: 'Latest message in the room',
     rawJson: '{}',
   );

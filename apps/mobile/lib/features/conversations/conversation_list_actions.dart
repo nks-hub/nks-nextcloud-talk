@@ -1,5 +1,6 @@
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../../core/desktop_metrics.dart';
@@ -358,9 +359,7 @@ final class _ConversationFilterBar extends StatelessWidget {
       onSelected: onSelected,
       showCheckmark: false,
       materialTapTargetSize: MaterialTapTargetSize.padded,
-      visualDensity: compact
-          ? const VisualDensity(horizontal: -4)
-          : VisualDensity.standard,
+      visualDensity: compact ? const VisualDensity(horizontal: -4) : null,
       padding: compact ? EdgeInsets.zero : null,
       labelPadding: compact ? const EdgeInsets.symmetric(horizontal: 2) : null,
       side: BorderSide(
@@ -475,86 +474,107 @@ final class _ConversationTile extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               LayoutBuilder(
-                                builder: (context, box) => Row(
-                                  children: [
-                                    if (conversation.favorite) ...[
-                                      Icon(
-                                        Icons.star_rounded,
-                                        size: 18,
-                                        color: scheme.primary,
-                                      ),
-                                      const SizedBox(width: 4),
-                                    ],
-                                    if (conversation.isArchived) ...[
-                                      Icon(
-                                        Icons.archive_outlined,
-                                        size: 18,
-                                        color: scheme.onSurfaceVariant,
-                                      ),
-                                      const SizedBox(width: 4),
-                                    ],
-                                    if (hasCall) ...[
-                                      // Announced through the tile's semantics
-                                      // value, which this subtree is excluded from.
-                                      Icon(
-                                        Icons.videocam_rounded,
-                                        key: Key(
-                                          'conversation-call-'
-                                          '${conversation.token}',
-                                        ),
-                                        size: 18,
-                                        color: scheme.primary,
-                                      ),
-                                      const SizedBox(width: 4),
-                                    ],
-                                    Expanded(
-                                      child: Text(
-                                        conversation.displayName,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              color: titleColor,
-                                              fontWeight: unread || selected
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w500,
-                                            ),
-                                      ),
+                                builder: (context, box) {
+                                  final icons =
+                                      (conversation.favorite ? 1 : 0) +
+                                      (conversation.isArchived ? 1 : 0) +
+                                      (hasCall ? 1 : 0);
+                                  final badge = presence == null
+                                      ? 0.0
+                                      : 7 +
+                                            MediaQuery.textScalerOf(
+                                              context,
+                                            ).scale(20);
+                                  final maxDate = math.max(
+                                    0.0,
+                                    math.min(
+                                      box.maxWidth / 2,
+                                      box.maxWidth - 48 - 22 * icons - badge,
                                     ),
-                                    if (presence != null) ...[
-                                      const SizedBox(width: 7),
-                                      ConversationPresenceBadge(
-                                        conversation: conversation,
+                                  );
+                                  return Row(
+                                    children: [
+                                      if (conversation.favorite) ...[
+                                        Icon(
+                                          Icons.star_rounded,
+                                          size: 18,
+                                          color: scheme.primary,
+                                        ),
+                                        const SizedBox(width: 4),
+                                      ],
+                                      if (conversation.isArchived) ...[
+                                        Icon(
+                                          Icons.archive_outlined,
+                                          size: 18,
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                        const SizedBox(width: 4),
+                                      ],
+                                      if (hasCall) ...[
+                                        // Announced through the tile's semantics
+                                        // value, which this subtree is excluded from.
+                                        Icon(
+                                          Icons.videocam_rounded,
+                                          key: Key(
+                                            'conversation-call-'
+                                            '${conversation.token}',
+                                          ),
+                                          size: 18,
+                                          color: scheme.primary,
+                                        ),
+                                        const SizedBox(width: 4),
+                                      ],
+                                      Expanded(
+                                        child: Text(
+                                          conversation.displayName,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                color: titleColor,
+                                                fontWeight: unread || selected
+                                                    ? FontWeight.w700
+                                                    : FontWeight.w500,
+                                              ),
+                                        ),
+                                      ),
+                                      if (presence != null) ...[
+                                        const SizedBox(width: 7),
+                                        ConversationPresenceBadge(
+                                          conversation: conversation,
+                                        ),
+                                      ],
+                                      const SizedBox(width: 8),
+                                      // At 200 % text an absolute date is wider
+                                      // than the 240 dp the list may be dragged
+                                      // to (it once overflowed by 65 px), so it
+                                      // is capped at half the row, less the icons
+                                      // and badge beside the name and 48 dp the
+                                      // name keeps for itself.
+                                      ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          maxWidth: maxDate,
+                                        ),
+                                        child: Text(
+                                          _formatActivity(
+                                            context,
+                                            conversation.lastActivity,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall
+                                              ?.copyWith(
+                                                color: supportingColor,
+                                              ),
+                                        ),
                                       ),
                                     ],
-                                    const SizedBox(width: 8),
-                                    // Flexible because the name beside it can
-                                    // already shrink and this cannot: at 200 %
-                                    // text an absolute date is wider than the
-                                    // 240 px the list may be dragged to, and the
-                                    // row overflowed by 65 px rather than trim
-                                    // the one part of it nobody reads twice.
-                                    ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        maxWidth: box.maxWidth / 2,
-                                      ),
-                                      child: Text(
-                                        _formatActivity(
-                                          context,
-                                          conversation.lastActivity,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelSmall
-                                            ?.copyWith(color: supportingColor),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                  );
+                                },
                               ),
                               if (statusMessage != null) ...[
                                 const SizedBox(height: 2),
