@@ -130,7 +130,7 @@ final class _MessageBubble extends StatelessWidget {
       separator: '\n',
       breakBefore: true,
       child: Padding(
-        padding: EdgeInsets.only(top: groupedWithPrevious ? 2 : 8),
+        padding: EdgeInsets.only(top: groupedWithPrevious ? 2 : 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           mainAxisAlignment: outgoing
@@ -174,6 +174,7 @@ final class _MessageBubble extends StatelessWidget {
                       messageId: message.messageId,
                       radius: _bubbleRadius(
                         outgoing: outgoing,
+                        groupedWithPrevious: groupedWithPrevious,
                         groupEnd: groupEnd,
                       ),
                       onActions: messageActions,
@@ -194,6 +195,7 @@ final class _MessageBubble extends StatelessWidget {
                               color: colors.background,
                               borderRadius: _bubbleRadius(
                                 outgoing: outgoing,
+                                groupedWithPrevious: groupedWithPrevious,
                                 groupEnd: groupEnd,
                               ),
                               border: highlighted

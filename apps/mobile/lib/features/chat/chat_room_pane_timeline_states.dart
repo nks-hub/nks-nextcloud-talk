@@ -173,7 +173,7 @@ final class _PendingMessageBubbleState extends State<_PendingMessageBubble> {
       ),
     );
     return Padding(
-      padding: EdgeInsets.only(top: widget.groupedWithPrevious ? 2 : 8),
+      padding: EdgeInsets.only(top: widget.groupedWithPrevious ? 2 : 12),
       child: Align(
         alignment: Alignment.centerRight,
         child: ConstrainedBox(
@@ -186,7 +186,11 @@ final class _PendingMessageBubbleState extends State<_PendingMessageBubble> {
               // on its way no longer reads as a separate card.
               decoration: BoxDecoration(
                 color: colors.background,
-                borderRadius: _bubbleRadius(outgoing: true, groupEnd: true),
+                borderRadius: _bubbleRadius(
+                  outgoing: true,
+                  groupedWithPrevious: widget.groupedWithPrevious,
+                  groupEnd: true,
+                ),
               ),
               child: Padding(
                 padding: EdgeInsets.fromLTRB(

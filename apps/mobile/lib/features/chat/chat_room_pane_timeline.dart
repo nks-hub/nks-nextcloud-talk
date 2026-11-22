@@ -389,7 +389,9 @@ final class _ChatTimeline extends StatelessWidget {
                           ),
                         ),
                   onJumpToMessage: onJumpToMessage,
-                  showAuthor: !groupedWithPrevious,
+                  // A direct chat has one other sender, so naming them is noise.
+                  showAuthor:
+                      !groupedWithPrevious && conversation.roomType != 1,
                   showAvatar: !groupedWithNext,
                   groupedWithPrevious: groupedWithPrevious,
                   groupEnd: !groupedWithNext,
@@ -996,15 +998,31 @@ bool _sameCalendarDay(DateTime left, DateTime right) =>
     left.month == right.month &&
     left.day == right.day;
 
-BorderRadius _bubbleRadius({required bool outgoing, required bool groupEnd}) {
-  const rounded = Radius.circular(16);
-  const tail = Radius.circular(5);
-  return BorderRadius.only(
-    topLeft: rounded,
-    topRight: rounded,
-    bottomLeft: !outgoing && groupEnd ? tail : rounded,
-    bottomRight: outgoing && groupEnd ? tail : rounded,
-  );
+/// Outer corners are round; on the side where consecutive messages of one
+/// sender join, the corners that touch a neighbour tighten so the run reads as
+/// one stack.
+BorderRadius _bubbleRadius({
+  required bool outgoing,
+  required bool groupedWithPrevious,
+  required bool groupEnd,
+}) {
+  const round = Radius.circular(20);
+  const joined = Radius.circular(5);
+  final top = groupedWithPrevious ? joined : round;
+  final bottom = groupEnd ? round : joined;
+  return outgoing
+      ? BorderRadius.only(
+          topLeft: round,
+          bottomLeft: round,
+          topRight: top,
+          bottomRight: bottom,
+        )
+      : BorderRadius.only(
+          topRight: round,
+          bottomRight: round,
+          topLeft: top,
+          bottomLeft: bottom,
+        );
 }
 
 String _formatMessageClock(BuildContext context, int unixSeconds) {

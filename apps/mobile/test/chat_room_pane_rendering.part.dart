@@ -16,6 +16,86 @@ void _registerChatRoomPaneRenderingTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  Future<void> insertRunOfThree() async {
+    for (var i = 0; i < 3; i++) {
+      await _insertCachedMessage(
+        database,
+        _messageJson(
+          id: 70 + i,
+          actorId: 'run-sender',
+          actorDisplayName: 'Run sender',
+          timestamp: 1724300000 + i * 20,
+          message: 'Run message ${i + 1}',
+        ),
+        displayText: 'Run message ${i + 1}',
+      );
+    }
+  }
+
+  BorderRadius bubbleRadiusOf(WidgetTester tester, int id) {
+    final box = tester.widget<AnimatedContainer>(
+      find.descendant(
+        of: find.byKey(Key('chat-message-target-$id')),
+        matching: find.byType(AnimatedContainer),
+      ),
+    );
+    return (box.decoration! as BoxDecoration).borderRadius! as BorderRadius;
+  }
+
+  testWidgets('a run of one sender joins with tight inner corners', (
+    tester,
+  ) async {
+    await insertRunOfThree();
+    await tester.pumpWidget(app(home: roomScreen()));
+    await tester.pump();
+
+    final first = bubbleRadiusOf(tester, 70);
+    final middle = bubbleRadiusOf(tester, 71);
+    final last = bubbleRadiusOf(tester, 72);
+    expect(first.topLeft.x, 20);
+    expect(first.bottomLeft.x, 5);
+    expect(middle.topLeft.x, 5);
+    expect(middle.bottomLeft.x, 5);
+    expect(last.topLeft.x, 5);
+    expect(last.bottomLeft.x, 20);
+    for (final radius in [first, middle, last]) {
+      expect(radius.topRight.x, 20);
+      expect(radius.bottomRight.x, 20);
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('the sender is named once per run in a group and the avatar '
+      'sits on the last message', (tester) async {
+    await insertRunOfThree();
+    await tester.pumpWidget(app(home: roomScreen()));
+    await tester.pump();
+
+    expect(find.text('Run sender'), findsOneWidget);
+    expect(find.byKey(const Key('chat-avatar-70')), findsNothing);
+    expect(find.byKey(const Key('chat-avatar-71')), findsNothing);
+    expect(find.byKey(const Key('chat-avatar-72')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('a direct chat does not name its one other sender', (
+    tester,
+  ) async {
+    await insertRunOfThree();
+    await (database.update(database.cachedConversations)
+          ..where((row) => row.token.equals(conversation.token)))
+        .write(const CachedConversationsCompanion(roomType: Value(1)));
+    await tester.pumpWidget(app(home: roomScreen()));
+    await tester.pump();
+
+    expect(find.text('Run message 1'), findsOneWidget);
+    expect(find.text('Run sender'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   Future<void> insertQuestionAndAnswer() async {
     const timestamp = 1724300000;
     final root = _messageJson(
