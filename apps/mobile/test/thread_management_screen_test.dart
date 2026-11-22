@@ -58,7 +58,11 @@ void main() {
         .getSingle();
   });
 
-  Widget buildApp({required Widget home, required _RequestHandler handler}) {
+  Widget buildApp({
+    required Widget home,
+    required _RequestHandler handler,
+    ThemeData? theme,
+  }) {
     final client = MockClient((request) async {
       if (request.url.path.endsWith('/ocs/v2.php/cloud/capabilities')) {
         return http.Response(
@@ -90,7 +94,7 @@ void main() {
           ),
         ),
       ],
-      child: localizedTestApp(home: home),
+      child: localizedTestApp(home: home, theme: theme),
     );
   }
 
@@ -791,25 +795,83 @@ void main() {
     await disposeHarness(tester);
   });
 
-  test('the colour pairs of the thread rows keep 4.5:1 in both themes', () {
-    for (final theme in [AppTheme.light(), AppTheme.dark()]) {
-      final s = theme.colorScheme;
-      final pairs = {
-        'reply pill': (s.onSecondaryContainer, s.secondaryContainer),
-        'quiet pill': (s.onSurfaceVariant, s.surfaceContainerLow),
-        'avatar': (s.onPrimaryContainer, s.primaryContainer),
-        'failed state': (s.onErrorContainer, s.errorContainer),
-        'muted title': (s.onSurfaceVariant, s.surface),
-      };
-      for (final entry in pairs.entries) {
+  for (final theme in [AppTheme.light(), AppTheme.dark()]) {
+    testWidgets('the drawn pill, avatar and muted title keep 4.5:1 in '
+        '${theme.brightness.name}', (tester) async {
+      await _setLargeSurface(tester);
+      Map<String, Object?> wire(int id, String title, int replies, int level) =>
+          {
+            'thread': {
+              'id': id,
+              'roomToken': _roomToken,
+              'title': title,
+              'lastMessageId': id + replies,
+              'lastActivity': 1787443000 + id,
+              'numReplies': replies,
+            },
+            'attendee': {'notificationLevel': level},
+            'first': null,
+            'last': null,
+          };
+      await tester.pumpWidget(
+        buildApp(
+          theme: theme,
+          home: ThreadManagementScreen(
+            account: account,
+            conversation: conversation,
+          ),
+          handler: (request) {
+            if (request.url.path.endsWith('/threads/recent')) {
+              return _ocsResponse(
+                statusCode: 200,
+                data: [wire(120, 'Answered', 2, 0), wire(121, 'Muted', 0, 3)],
+              );
+            }
+            return _ocsResponse(statusCode: 404, data: const {});
+          },
+        ),
+      );
+      await _pumpUntil(tester, () => find.text('Muted').evaluate().isNotEmpty);
+
+      Finder inRow(int id, Finder what) => find.descendant(
+        of: find.byKey(Key('thread-management-item-rooma123-$id')),
+        matching: what,
+      );
+      // Fill and text are read from what was built, so a changed colour in
+      // the widget shows up here.
+      for (final id in [120, 121]) {
+        final pill = inRow(id, find.byKey(const Key('thread-reply-count')));
+        final fill =
+            (tester.widget<DecoratedBox>(pill).decoration as ShapeDecoration)
+                .color!;
+        final label = tester.widget<Text>(
+          find.descendant(of: pill, matching: find.byType(Text)),
+        );
         expect(
-          chatBackgroundContrast(entry.value.$1, entry.value.$2),
+          chatBackgroundContrast(label.style!.color!, fill),
           greaterThanOrEqualTo(4.5),
-          reason: '${entry.key} in ${s.brightness.name}',
+          reason: 'pill of thread $id',
+        );
+        final avatar = tester.widget<CircleAvatar>(
+          inRow(id, find.byType(CircleAvatar)),
+        );
+        expect(
+          chatBackgroundContrast(
+            avatar.foregroundColor!,
+            avatar.backgroundColor!,
+          ),
+          greaterThanOrEqualTo(4.5),
+          reason: 'avatar of thread $id',
         );
       }
-    }
-  });
+      final muted = tester.widget<Text>(inRow(121, find.text('Muted')));
+      expect(
+        chatBackgroundContrast(muted.style!.color!, theme.colorScheme.surface),
+        greaterThanOrEqualTo(4.5),
+      );
+      await disposeHarness(tester);
+    });
+  }
 
   testWidgets('the thread list survives 200 % text on a narrow window', (
     tester,
