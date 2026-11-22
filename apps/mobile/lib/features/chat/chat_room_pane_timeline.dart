@@ -325,10 +325,13 @@ final class _ChatTimeline extends StatelessWidget {
             previous != null &&
             previous.messageId != threadId &&
             _messagesShareGroup(previous, message);
+        // The last confirmed message also joins a pending bubble below it.
         final groupedWithNext =
-            next != null &&
             lastMessage.messageId != threadId &&
-            _messagesShareGroup(lastMessage, next);
+            (next != null
+                ? _messagesShareGroup(lastMessage, next)
+                : pending.isNotEmpty &&
+                      _pendingSharesGroup(lastMessage, account.loginName));
         final startsDay =
             gapBeforeThis ||
             previous == null ||
@@ -367,9 +370,22 @@ final class _ChatTimeline extends StatelessWidget {
                           messages: [
                             for (final index in album) parsedMessages[index]!,
                           ],
-                          foregroundColor: message.actorId == account.loginName
-                              ? Theme.of(context).colorScheme.onPrimaryContainer
-                              : Theme.of(context).colorScheme.onSurface,
+                          foregroundColor: resolveBubbleColors(
+                            outgoing: message.actorId == account.loginName,
+                            scheme: Theme.of(context).colorScheme,
+                            sharedBubble: message.actorId == account.loginName
+                                ? SharedChatAppearance.maybeOf(
+                                    context,
+                                  )?.ownBubble
+                                : SharedChatAppearance.maybeOf(
+                                    context,
+                                  )?.otherBubble,
+                            sharedText: message.actorId == account.loginName
+                                ? SharedChatAppearance.maybeOf(context)?.ownText
+                                : SharedChatAppearance.maybeOf(
+                                    context,
+                                  )?.otherText,
+                          ).foreground,
                           showReplyPreview: _shouldShowReplyPreview(
                             parsed,
                             threadId,
@@ -392,7 +408,9 @@ final class _ChatTimeline extends StatelessWidget {
                   onJumpToMessage: onJumpToMessage,
                   // A direct chat has one other sender, so naming them is noise.
                   showAuthor:
-                      !groupedWithPrevious && conversation.roomType != 1,
+                      !groupedWithPrevious &&
+                      (conversation.roomType != _oneToOneRoomType ||
+                          message.actorType != 'users'),
                   showAvatar: !groupedWithNext,
                   groupedWithPrevious: groupedWithPrevious,
                   groupEnd: !groupedWithNext,
@@ -484,6 +502,7 @@ final class _ChatTimeline extends StatelessWidget {
             (messages.isNotEmpty &&
                 messages.last.messageId != threadId &&
                 _pendingSharesGroup(messages.last, account.loginName)),
+        groupEnd: pendingIndex == pending.length - 1,
         onRetry: onRetry,
         onResend: () => onResend(operation),
         onCancel: () => onCancel(operation),

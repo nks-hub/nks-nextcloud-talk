@@ -72,6 +72,7 @@ final class _PendingMessageBubble extends StatefulWidget {
     required this.onResend,
     required this.onCancel,
     this.groupedWithPrevious = false,
+    this.groupEnd = true,
   });
 
   final StoredAccount account;
@@ -79,6 +80,9 @@ final class _PendingMessageBubble extends StatefulWidget {
 
   /// Whether the bubble continues a run of the user's own messages.
   final bool groupedWithPrevious;
+
+  /// Whether no further pending bubble follows this one.
+  final bool groupEnd;
   final VoidCallback onRetry;
   final VoidCallback onResend;
   final VoidCallback onCancel;
@@ -189,7 +193,7 @@ final class _PendingMessageBubbleState extends State<_PendingMessageBubble> {
                 borderRadius: _bubbleRadius(
                   outgoing: true,
                   groupedWithPrevious: widget.groupedWithPrevious,
-                  groupEnd: true,
+                  groupEnd: widget.groupEnd,
                 ),
               ),
               child: Padding(
@@ -233,7 +237,7 @@ final class _PendingMessageBubbleState extends State<_PendingMessageBubble> {
                                 ? Icons.warning_amber_rounded
                                 : Icons.schedule_send_rounded,
                             size: 14,
-                            color: onBubble.withValues(alpha: 0.75),
+                            color: onBubble.withValues(alpha: 0.9),
                           ),
                           const SizedBox(width: 4),
                           Flexible(
@@ -241,7 +245,7 @@ final class _PendingMessageBubbleState extends State<_PendingMessageBubble> {
                               status,
                               style: Theme.of(context).textTheme.labelSmall
                                   ?.copyWith(
-                                    color: onBubble.withValues(alpha: 0.75),
+                                    color: onBubble.withValues(alpha: 0.9),
                                   ),
                             ),
                           ),
