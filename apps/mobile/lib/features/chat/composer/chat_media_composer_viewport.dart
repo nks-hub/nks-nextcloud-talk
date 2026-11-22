@@ -82,53 +82,64 @@ final class _ChatComposerLayoutScope extends InheritedWidget {
       compactHeight != oldWidget.compactHeight;
 }
 
-final class CompactChatComposerRow extends StatelessWidget {
-  const CompactChatComposerRow({
+final class AdaptiveChatComposerLayout extends StatelessWidget {
+  const AdaptiveChatComposerLayout({
     super.key,
+    required this.compact,
     required this.field,
-    required this.media,
     required this.mediaComposer,
     required this.dividerColor,
   });
 
+  final bool compact;
   final Widget field;
-  final ChatMediaComposerController media;
   final Widget mediaComposer;
   final Color dividerColor;
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: media.changes,
-      builder: (context, _) => LayoutBuilder(
-        builder: (context, constraints) {
-          const fieldFloor = 96.0;
-          const actionsViewport = 296.0;
-          final viewportWidth = (constraints.maxWidth - fieldFloor - 1).clamp(
-            0.0,
-            actionsViewport,
-          );
-          return Row(
-            children: [
-              Expanded(child: field),
-              VerticalDivider(width: 1, color: dividerColor),
-              SizedBox(
-                width: viewportWidth,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: 456,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: mediaComposer,
-                    ),
-                  ),
-                ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const fieldFloor = 96.0;
+        const actionsViewport = 344.0;
+        final mediaWidth = compact
+            ? (constraints.maxWidth - fieldFloor - 1).clamp(
+                0.0,
+                actionsViewport,
+              )
+            : null;
+        final fieldWidth = compact
+            ? (constraints.maxWidth - (mediaWidth ?? 0) - 1).clamp(
+                fieldFloor,
+                constraints.maxWidth,
+              )
+            : null;
+        return Flex(
+          direction: compact ? Axis.horizontal : Axis.vertical,
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: compact
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: fieldWidth, child: field),
+            SizedBox(
+              width: compact ? 1 : null,
+              height: compact ? 48 : 1,
+              child: ColoredBox(color: dividerColor),
+            ),
+            SizedBox(
+              width: mediaWidth,
+              height: compact ? 48 : null,
+              child: Padding(
+                padding: compact
+                    ? EdgeInsets.zero
+                    : const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: mediaComposer,
               ),
-            ],
-          );
-        },
-      ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -29,6 +29,7 @@ import 'voice_message.dart';
 part 'chat_media_composer_attachments.dart';
 part 'chat_media_composer_pending.dart';
 part 'chat_media_composer_previews.dart';
+part 'chat_media_composer_toolbar.dart';
 part 'chat_media_composer_viewport.dart';
 
 typedef CreateVoiceCaptureBackend = VoiceCaptureBackend Function();
@@ -660,6 +661,13 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     final compactHeight = usesCompactChatComposerLayout(context);
+    final compactPinnedAction =
+        compactHeight && widget.trailingActions.isNotEmpty
+        ? widget.trailingActions.last
+        : null;
+    final trailingActions = compactHeight && widget.trailingActions.isNotEmpty
+        ? widget.trailingActions.take(widget.trailingActions.length - 1)
+        : widget.trailingActions;
     final voiceLabels = _voiceLabels(strings);
     final voiceController = _voiceController;
     final voiceOwnsToolbar =
@@ -701,12 +709,10 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       children: [
         if (!compactHeight) _attachmentPreviews(),
         if (voiceOwnsToolbar)
-          Row(
-            key: const Key('chat-media-composer-actions'),
-            children: <Widget>[
-              Expanded(
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
+          compactHeight
+              ? SingleChildScrollView(
+                  key: const Key('chat-media-composer-actions'),
+                  scrollDirection: Axis.horizontal,
                   child: VoiceMessageControls(
                     controller: voiceController,
                     labels: voiceLabels,
@@ -714,11 +720,25 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
                         ? null
                         : () => unawaited(_openAppSettings()),
                   ),
-                ),
-              ),
-            ],
-          )
-        else if (voiceErrorUsesRemainingWidth)
+                )
+              : Row(
+                  key: const Key('chat-media-composer-actions'),
+                  children: <Widget>[
+                    Expanded(
+                      child: Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: VoiceMessageControls(
+                          controller: voiceController,
+                          labels: voiceLabels,
+                          onOpenSettings: widget.openAppSettings == null
+                              ? null
+                              : () => unawaited(_openAppSettings()),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+        else if (voiceErrorUsesRemainingWidth && !compactHeight)
           Column(
             key: const Key('chat-media-composer-error'),
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -731,11 +751,12 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
               ),
               _ComposerActionToolbar(
                 compact: compactHeight,
+                compactPinnedAction: compactPinnedAction,
                 leadingAction: attachmentAction,
                 actions: <Widget>[
                   ...widget.idleActions,
                   idleVoiceAction,
-                  ...widget.trailingActions,
+                  ...trailingActions,
                   if (compactHeight) _attachmentPreviews(),
                 ],
               ),
@@ -744,11 +765,41 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         else
           _ComposerActionToolbar(
             compact: compactHeight,
+            compactPinnedAction: compactPinnedAction,
             leadingAction: attachmentAction,
             actions: <Widget>[
+              if (voiceErrorUsesRemainingWidth)
+                SizedBox(
+                  key: const Key('compact-voice-error'),
+                  width: 160,
+                  height: 48,
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Tooltip(
+                      message: voiceLabels.errorLabel(
+                        voiceController!.state.error!,
+                      ),
+                      child: Semantics(
+                        liveRegion: true,
+                        label: voiceLabels.errorLabel(
+                          voiceController.state.error!,
+                        ),
+                        child: ExcludeSemantics(
+                          child: Text(
+                            voiceLabels.errorLabel(
+                              voiceController.state.error!,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ...widget.idleActions,
               idleVoiceAction,
-              ...widget.trailingActions,
+              ...trailingActions,
               if (compactHeight) _attachmentPreviews(),
             ],
           ),
@@ -781,118 +832,6 @@ final class _CurrentVoiceAttachmentSubmitter
   Future<VoiceAttachmentAcceptance> submit(
     VoiceAttachmentSubmission submission,
   ) => _current().submit(submission);
-}
-
-final class ChatMediaComposerStatus extends StatelessWidget {
-  const ChatMediaComposerStatus.loading({
-    super.key,
-    this.leadingAction,
-    this.idleActions = const <Widget>[],
-    this.trailingActions = const <Widget>[],
-  }) : unavailable = false,
-       onRetry = null;
-
-  const ChatMediaComposerStatus.unavailable({
-    super.key,
-    required this.onRetry,
-    this.leadingAction,
-    this.idleActions = const <Widget>[],
-    this.trailingActions = const <Widget>[],
-  }) : unavailable = true;
-
-  final bool unavailable;
-  final VoidCallback? onRetry;
-  final Widget? leadingAction;
-  final List<Widget> idleActions;
-  final List<Widget> trailingActions;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = AppLocalizations.of(context);
-    return Column(
-      key: Key(
-        unavailable
-            ? 'chat-media-composer-unavailable'
-            : 'chat-media-composer-loading',
-      ),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                unavailable
-                    ? strings.mediaCapabilityUnavailable
-                    : strings.mediaCapabilityChecking,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            if (unavailable)
-              IconButton(
-                key: const Key('retry-media-capabilities'),
-                onPressed: onRetry,
-                tooltip: strings.retryMediaCapabilities,
-                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-                icon: const Icon(Icons.refresh_rounded),
-              ),
-          ],
-        ),
-        _ComposerActionToolbar(
-          leadingAction: leadingAction,
-          actions: <Widget>[
-            ...idleActions,
-            SizedBox.square(
-              dimension: 48,
-              child: IconButton(
-                key: const Key('voice-record-unavailable'),
-                onPressed: null,
-                tooltip: strings.voiceUnsupported,
-                icon: const Icon(Icons.mic_none_rounded),
-              ),
-            ),
-            ...trailingActions,
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-final class _ComposerActionToolbar extends StatelessWidget {
-  const _ComposerActionToolbar({
-    required this.leadingAction,
-    required this.actions,
-    this.compact = false,
-  });
-
-  final Widget? leadingAction;
-  final List<Widget> actions;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      key: const Key('chat-media-composer-actions'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        ?leadingAction,
-        Expanded(
-          child: Align(
-            alignment: compact
-                ? AlignmentDirectional.centerStart
-                : AlignmentDirectional.centerEnd,
-            child: Wrap(
-              alignment: compact ? WrapAlignment.start : WrapAlignment.end,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: actions,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 bool _showsIdleToolbar(VoiceMessageState state) =>

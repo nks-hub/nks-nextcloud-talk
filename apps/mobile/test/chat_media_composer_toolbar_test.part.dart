@@ -306,10 +306,10 @@ void _registerChatMediaComposerToolbarTests(
         ],
         trailingActions: _aggregatedTrailingActions(),
         openAppSettings: () async => true,
-        wrap: (composer, controller) => ChatComposerViewportLayout(
-          builder: (context, compactHeight) => CompactChatComposerRow(
+        wrap: (composer, _) => ChatComposerViewportLayout(
+          builder: (context, compactHeight) => AdaptiveChatComposerLayout(
+            compact: compactHeight,
             field: const SizedBox(height: 48),
-            media: controller,
             mediaComposer: composer,
             dividerColor: Colors.grey,
           ),
@@ -319,6 +319,7 @@ void _registerChatMediaComposerToolbarTests(
     await tester.tap(find.byKey(const Key('voice-record')));
     await tester.pump();
 
+    expect(find.text('Microphone access was denied.'), findsOneWidget);
     const actionKeys = <String>[
       'pick-image-attachment',
       'open-giphy-picker',
@@ -332,6 +333,7 @@ void _registerChatMediaComposerToolbarTests(
         .map((key) => tester.getCenter(find.byKey(Key(key))).dy)
         .toSet();
     expect(centerYs, hasLength(1));
+    expect(find.byKey(const Key('send-message')).hitTestable(), findsOneWidget);
     for (final key in actionKeys) {
       final action = find.byKey(Key(key));
       await tester.ensureVisible(action);
@@ -341,6 +343,69 @@ void _registerChatMediaComposerToolbarTests(
       expect(size.height, greaterThanOrEqualTo(48));
     }
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('compact recording keeps every voice control reachable', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(300, 500);
+    tester.view.viewInsets = FakeViewPadding.zero;
+    addTearDown(tester.view.reset);
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore(),
+        bridge: bridge.bridge,
+        threadId: null,
+        voiceBackends: voiceBackends,
+        wrap: (composer, _) => ChatComposerViewportLayout(
+          builder: (context, compactHeight) => AdaptiveChatComposerLayout(
+            compact: compactHeight,
+            field: const SizedBox(height: 48),
+            mediaComposer: composer,
+            dividerColor: Colors.grey,
+          ),
+        ),
+      ),
+    );
+    final media = find.byType(ChatMediaComposer);
+    final mediaElement = tester.element(media);
+    await tester.tap(find.byKey(const Key('voice-record')));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('voice-pause')).evaluate().isNotEmpty,
+    );
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(tester.element(media), same(mediaElement));
+    expect(find.byKey(const Key('voice-waveform')), findsOneWidget);
+    expect(
+      find.byKey(const Key('voice-cancel-recording')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('voice-pause')).hitTestable(), findsOneWidget);
+    final stop = find.byKey(const Key('voice-stop'));
+    await tester.ensureVisible(stop);
+    await tester.pump();
+    expect(stop.hitTestable(), findsOneWidget);
+    expect(tester.getSize(stop), const Size(48, 48));
+    expect(tester.takeException(), isNull);
+
+    final cancel = find.byKey(const Key('voice-cancel-recording'));
+    await tester.ensureVisible(cancel);
+    await tester.pump();
+    await tester.tap(cancel);
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('voice-record')).evaluate().isNotEmpty,
+    );
   });
 
   testWidgets('loading toolbar wraps at compact detail pane width', (

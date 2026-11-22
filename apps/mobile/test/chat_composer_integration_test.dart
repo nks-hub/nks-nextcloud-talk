@@ -582,19 +582,55 @@ Future<void> _verifyShortComposer(
         find.byType(ChatMediaComposer).evaluate().isNotEmpty &&
         find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
   );
+  await _pumpUntil(
+    tester,
+    () => find.text('No messages yet').evaluate().isNotEmpty,
+  );
 
   final composer = find.byKey(const Key('chat-composer'));
+  final editable = find.descendant(
+    of: composer,
+    matching: find.byType(EditableText),
+  );
+  final mediaWidget = find.byType(ChatMediaComposer);
+  final editableElement = tester.element(editable);
+  final mediaElement = tester.element(mediaWidget);
+  final media = tester.widget<ChatMediaComposer>(mediaWidget).controller!;
   expect(tester.widget<TextField>(composer).decoration?.isDense, isNull);
   await tester.enterText(composer, 'First line\nSecond line');
   await tester.pump();
+  expect(tester.widget<TextField>(composer).focusNode?.hasFocus, isTrue);
+  expect(tester.element(editable), same(editableElement));
+  expect(tester.element(mediaWidget), same(mediaElement));
+  if (geometry.attachment) {
+    final attached = await tester.runAsync(
+      () => media.attachImageBytes(
+        tinyPng,
+        mimeType: 'image/png',
+        displayName: 'layout-fixture.png',
+      ),
+    );
+    expect(attached, isTrue);
+    expect(tester.element(mediaWidget), same(mediaElement));
+    await _pumpUntil(tester, () => media.hasPreparedAttachment);
+  }
   tester.view.viewInsets = FakeViewPadding(bottom: geometry.keyboard);
   await _pumpTransition(tester);
+  expect(tester.element(editable), same(editableElement));
+  expect(tester.element(mediaWidget), same(mediaElement));
+  expect(tester.widget<TextField>(composer).focusNode?.hasFocus, isTrue);
+  if (geometry.attachment) {
+    expect(media.hasPreparedAttachment, isTrue);
+  }
   expect(tester.widget<TextField>(composer).decoration?.isDense, isTrue);
   await tester.enterText(composer, 'First line\nSecond line updated');
   await tester.pump();
   expect(_composer(tester).text, 'First line\nSecond line updated');
 
   final visibleBottom = geometry.visibleHeight / geometry.pixelRatio;
+  final send = find.byKey(const Key('send-message-gesture'));
+  expect(send.hitTestable(), findsOneWidget);
+  expect(tester.getRect(send).bottom, lessThanOrEqualTo(visibleBottom));
   final controls = <Finder>[
     composer,
     find.byKey(const Key('pick-image-attachment')),
@@ -604,7 +640,7 @@ Future<void> _verifyShortComposer(
     find.byKey(const Key('voice-record')).evaluate().isNotEmpty
         ? find.byKey(const Key('voice-record'))
         : find.byKey(const Key('voice-record-unavailable')),
-    find.byKey(const Key('send-message-gesture')),
+    send,
   ];
   for (final control in controls) {
     expect(control, findsOneWidget);
@@ -618,18 +654,6 @@ Future<void> _verifyShortComposer(
   }
 
   if (geometry.attachment) {
-    final media = tester
-        .widget<ChatMediaComposer>(find.byType(ChatMediaComposer))
-        .controller!;
-    final attached = await tester.runAsync(
-      () => media.attachImageBytes(
-        tinyPng,
-        mimeType: 'image/png',
-        displayName: 'layout-fixture.png',
-      ),
-    );
-    expect(attached, isTrue);
-    await _pumpUntil(tester, () => media.hasPreparedAttachment);
     final summary = find.byKey(const Key('compact-attachment-summary'));
     await _pumpUntil(tester, () => summary.evaluate().isNotEmpty);
     await tester.ensureVisible(summary);
@@ -646,6 +670,9 @@ Future<void> _verifyShortComposer(
     expect(find.byKey(const Key('remove-prepared-attachment')), findsOneWidget);
     tester.view.viewInsets = FakeViewPadding.zero;
     await _pumpTransition(tester);
+    expect(tester.element(editable), same(editableElement));
+    expect(tester.element(mediaWidget), same(mediaElement));
+    expect(media.hasPreparedAttachment, isTrue);
     expect(find.byKey(const Key('compact-attachment-sheet')), findsOneWidget);
     expect(tester.takeException(), isNull);
     Navigator.of(

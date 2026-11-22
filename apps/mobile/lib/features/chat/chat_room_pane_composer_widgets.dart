@@ -648,33 +648,14 @@ final class _ChatComposer extends ConsumerWidget {
                                 width: 2,
                               ),
                             ),
-                            child: compactHeight
-                                ? CompactChatComposerRow(
-                                    field: composerField,
-                                    media: media,
-                                    mediaComposer: mediaComposer,
-                                    dividerColor: scheme.outlineVariant
-                                        .withValues(alpha: 0.7),
-                                  )
-                                : Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      composerField,
-                                      Divider(
-                                        height: 1,
-                                        color: scheme.outlineVariant.withValues(
-                                          alpha: 0.7,
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 4,
-                                          vertical: 2,
-                                        ),
-                                        child: mediaComposer,
-                                      ),
-                                    ],
-                                  ),
+                            child: AdaptiveChatComposerLayout(
+                              compact: compactHeight,
+                              field: composerField,
+                              mediaComposer: mediaComposer,
+                              dividerColor: scheme.outlineVariant.withValues(
+                                alpha: 0.7,
+                              ),
+                            ),
                           ),
                         ),
                       ],
