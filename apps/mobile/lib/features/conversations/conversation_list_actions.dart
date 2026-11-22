@@ -483,13 +483,21 @@ final class _ConversationTile extends StatelessWidget {
                                 bottom: -2,
                                 child: DecoratedBox(
                                   decoration: BoxDecoration(
-                                    color: scheme.surface,
+                                    color: Color.alphaBlend(
+                                      tileColor,
+                                      scheme.surfaceContainerLow,
+                                    ),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Padding(
                                     padding: const EdgeInsets.all(2),
-                                    child: ConversationPresenceBadge(
-                                      conversation: conversation,
+                                    // An emoji status grows with the text size; capped so
+                                    // it stays a dot on the corner at 200 %.
+                                    child: MediaQuery.withClampedTextScaling(
+                                      maxScaleFactor: 1.2,
+                                      child: ConversationPresenceBadge(
+                                        conversation: conversation,
+                                      ),
                                     ),
                                   ),
                                 ),

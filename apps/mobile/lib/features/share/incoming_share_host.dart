@@ -609,7 +609,11 @@ final class _IncomingShareTargetDialogState
     final stored = account.account;
     final conversation = room.conversation;
     if (stored != null && conversation != null) {
-      return ConversationAvatar(account: stored, conversation: conversation);
+      return ConversationAvatar(
+        account: stored,
+        conversation: conversation,
+        radius: 20,
+      );
     }
     final label = room.label.trim();
     return CircleAvatar(
