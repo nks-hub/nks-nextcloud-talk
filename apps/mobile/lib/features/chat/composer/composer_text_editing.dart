@@ -101,8 +101,17 @@ TextEditingValue formatComposerSelection(
         '${inner.endsWith('\n') ? '' : '\n'}$fence'
         '${needsTrailingBreak ? '\n' : ''}';
   } else if (format == ComposerFormat.inlineCode) {
-    before = _backtickFence(inner, minimum: 1);
-    after = before;
+    final fence = _backtickFence(inner, minimum: 1);
+    // Keep literal edge backticks separate from the delimiter. Markdown
+    // removes the added space on each side of non-space code.
+    final pad =
+        inner.startsWith('`') ||
+        inner.endsWith('`') ||
+        (inner.startsWith(' ') &&
+            inner.endsWith(' ') &&
+            inner.trim().isNotEmpty);
+    before = pad ? '$fence ' : fence;
+    after = pad ? ' $fence' : fence;
   } else {
     before = format.marker;
     after = format.marker;

@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/chat/composer/composer_text_editing.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 TextEditingValue _value(String text, int start, [int? end]) => TextEditingValue(
   text: text,
@@ -83,4 +84,31 @@ void main() {
     );
     expect(inline.text, '``a`b``');
   });
+
+  for (final selected in const [
+    '`left',
+    'right`',
+    '`both`',
+    '``',
+    '  text  ',
+    ' \t ',
+  ]) {
+    test('inline code preserves the literal selection "$selected"', () {
+      final result = formatComposerSelection(
+        _value(selected, 0, selected.length),
+        ComposerFormat.inlineCode,
+      );
+      final message = renderRichChatMessage(
+        message: result.text,
+        markdownEnabled: true,
+        parameters: const {},
+        server: ServerBase.parse('https://example.invalid'),
+      );
+      final inlineCode = message.nodes
+          .where((node) => node.kind == RichChatSemanticKind.inlineCode)
+          .map((node) => node.text);
+      expect(inlineCode, [selected]);
+      expect(result.selection.textInside(result.text), selected);
+    });
+  }
 }
