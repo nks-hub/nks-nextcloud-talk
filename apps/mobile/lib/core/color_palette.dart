@@ -240,9 +240,9 @@ Future<ColorPaletteChoice?> showColorPaletteDialog({
     builder: (dialogContext) {
       final strings = AppLocalizations.of(dialogContext);
       final inPalette = colorPaletteName(strings, current) != null;
-      // 12 swatches a row, three rows now. On a wide window the two options go
-      // above them, so a phone held sideways sees both without scrolling past
-      // the grid.
+      // 12 swatches a row on a wide window, 4 to 6 on a phone: the grid is up
+      // to nine rows tall there, so the two options go above it where a
+      // scrolled-off dialog cannot hide them.
       final wide = MediaQuery.sizeOf(dialogContext).width >= 700;
       final custom = ListTile(
         key: const Key('color-palette-custom'),
@@ -279,22 +279,24 @@ Future<ColorPaletteChoice?> showColorPaletteDialog({
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (wide) ...[
+              if (wide)
                 Row(
                   children: [
                     Expanded(child: custom),
                     const SizedBox(width: 16),
                     Expanded(child: theme),
                   ],
-                ),
-                const SizedBox(height: 8),
+                )
+              else ...[
+                custom,
+                theme,
               ],
+              const SizedBox(height: 8),
               ColorSwatchGrid(
                 selected: current,
                 onSelected: (hex) =>
                     Navigator.of(dialogContext).pop(ColorPaletteColor(hex)),
               ),
-              if (!wide) ...[const SizedBox(height: 8), custom, theme],
             ],
           ),
         ),

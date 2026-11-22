@@ -107,6 +107,59 @@ void main() {
       }
     });
 
+    test('no two swatches share a name in either language', () {
+      for (final locale in const [Locale('en'), Locale('cs')]) {
+        final strings = lookupAppLocalizations(locale);
+        final names = [
+          for (final hex in colorPaletteHexes) colorPaletteName(strings, hex),
+        ];
+        expect(names, everyElement(isNotNull));
+        expect(
+          names.toSet(),
+          hasLength(colorPaletteHexes.length),
+          reason: '$locale',
+        );
+      }
+    });
+
+    testWidgets('on a 360 x 640 phone both options show above the grid', (
+      tester,
+    ) async {
+      tester.view
+        ..physicalSize = const Size(360, 640)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await open(tester, onResult: (_) {});
+      final viewport = tester.getRect(
+        find
+            .descendant(
+              of: find.byKey(const Key('palette')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      for (final key in ['color-palette-custom', 'color-palette-theme']) {
+        expect(
+          tester.getBottomLeft(find.byKey(Key(key))).dy,
+          lessThanOrEqualTo(viewport.bottom),
+          reason: key,
+        );
+      }
+      expect(
+        tester
+            .getTopLeft(
+              find.byKey(Key('color-swatch-${colorPaletteHexes.first}')),
+            )
+            .dy,
+        greaterThan(
+          tester
+                  .getBottomLeft(find.byKey(const Key('color-palette-theme')))
+                  .dy -
+              1,
+        ),
+      );
+    });
+
     testWidgets('tapping a swatch returns that colour', (tester) async {
       ColorPaletteChoice? result;
       await open(tester, onResult: (value) => result = value);

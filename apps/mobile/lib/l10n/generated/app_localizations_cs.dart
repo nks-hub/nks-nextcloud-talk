@@ -4293,7 +4293,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get colorNameOlive => 'Olivová';
 
   @override
-  String get colorNameRose => 'Růžová';
+  String get colorNameRose => 'Malinová';
 
   @override
   String get colorNameMagenta => 'Purpurová';
