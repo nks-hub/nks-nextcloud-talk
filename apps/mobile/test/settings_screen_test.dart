@@ -20,6 +20,7 @@ import 'package:nextcloudtalk/features/settings/reply_layout_preference.dart';
 import 'package:nextcloudtalk/features/settings/theme_preference.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 import 'accessibility_probe.dart';
 import 'test_support.dart';
@@ -524,6 +525,78 @@ void main() {
     expect(
       find.textContaining('did not confirm the app password was revoked'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('a full cleanup queue keeps the account and says why', (
+    tester,
+  ) async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    late List<StoredAccount> initial;
+    await tester.runAsync(() async {
+      await accounts.upsertAccount(
+        accountId: 'account-a',
+        serverUrl: 'https://cloud-a.example.invalid',
+        loginName: 'alice',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      initial = await _allAccounts(database);
+    });
+    final removal = _removalService(tester, accounts, serverReachable: false);
+    removal.vault.values['account-a'] = 'fixture-app-password-never-use';
+    await tester.runAsync(() async {
+      for (
+        var index = 0;
+        index < AppPasswordRevocationQueue.maximumEntries;
+        index++
+      ) {
+        await removal.revocations.record(
+          server: ServerBase.parse('https://gone.example.invalid'),
+          loginName: 'old-$index',
+          appPassword: 'old-password-$index',
+        );
+      }
+    });
+
+    await tester.pumpWidget(
+      _wrap(
+        accountRepository: accounts,
+        accountsStream: Stream.value(initial),
+        overrides: [
+          accountRemovalServiceProvider.overrideWithValue(removal.service),
+        ],
+      ),
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('account-remove-account-a')));
+    await _pumpRouteTransition(tester);
+    await tester.tap(find.byKey(const Key('account-remove-confirm')));
+    await _pumpRouteTransition(tester);
+    await _settleUntil(
+      tester,
+      () async => find
+          .textContaining('still being cleaned up')
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    late StoredAccount? kept;
+    await tester.runAsync(() async {
+      kept = await accounts.getAccount('account-a');
+    });
+    expect(kept, isNotNull);
+    expect(
+      removal.vault.values['account-a'],
+      'fixture-app-password-never-use',
     );
   });
 

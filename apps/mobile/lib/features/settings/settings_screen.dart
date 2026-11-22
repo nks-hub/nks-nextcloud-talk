@@ -16,6 +16,7 @@ import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../core/desktop_metrics.dart';
 import 'account_removal_service.dart';
+import 'app_password_revocation_queue.dart';
 import 'app_lock/app_lock_controller.dart';
 import 'reply_layout_preference.dart';
 import 'update_check_tile.dart';
@@ -604,6 +605,13 @@ final class _AccountTileState extends ConsumerState<_AccountTile> {
       outcome = await ref
           .read(accountRemovalServiceProvider)
           .removeAccount(account.id);
+    } on AppPasswordRevocationQueueFull {
+      if (mounted) {
+        messenger?.showSnackBar(
+          SnackBar(content: Text(strings.pendingSignInCleanup)),
+        );
+      }
+      return;
     } on Object {
       if (mounted) {
         messenger?.showSnackBar(
