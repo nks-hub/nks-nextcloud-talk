@@ -371,6 +371,113 @@ void main() {
   }
 
   test(
+    'browser retirement preserves a later shared QR owner after restart',
+    () async {
+      final f = _RecoveryFixture();
+      addTearDown(f.close);
+      await f.queueLateBrowserCredential();
+      final coordinator = f.coordinator(RecordingLoginPageLauncher());
+      final started = Completer<void>();
+      final capabilityGate = Completer<void>();
+      addTearDown(() {
+        if (!capabilityGate.isCompleted) capabilityGate.complete();
+      });
+      f.onCapabilities = () async {
+        started.complete();
+        await capabilityGate.future;
+      };
+      final admission = coordinator.commitScannedLogin(
+        _sharedBrowserCredential,
+        CancellationSignal(),
+      );
+      await started.future.timeout(const Duration(seconds: 2));
+      await f.queue.drain();
+      expect(f.revokes, 0);
+      expect(await f.queue.pendingRevocationCount(), 1);
+
+      capabilityGate.complete();
+      final account = await admission;
+      final restarted = f.createQueue(f.restartedVault());
+      await restarted.drain();
+      expect(f.revokes, 0);
+      expect(await restarted.pendingCount(), 0);
+      expect(await f.accounts.getAccount(account.id), isNotNull);
+      expect(
+        await f.vault.readAppPassword(account.id),
+        loginSuccessJson()['appPassword'],
+      );
+    },
+  );
+
+  test(
+    'browser DELETE and ambiguous outcome prevent adopting its credential',
+    () async {
+      final f = _RecoveryFixture();
+      addTearDown(f.close);
+      await f.queueLateBrowserCredential();
+      final started = Completer<void>();
+      final gate = Completer<void>();
+      addTearDown(() {
+        if (!gate.isCompleted) gate.complete();
+      });
+      f.onRevoke = () async {
+        started.complete();
+        await gate.future;
+        throw http.ClientException('synthetic ambiguous timeout');
+      };
+      final drain = f.queue.drain();
+      await started.future.timeout(const Duration(seconds: 2));
+      await expectLater(
+        f
+            .coordinator(RecordingLoginPageLauncher())
+            .commitScannedLogin(_sharedBrowserCredential, CancellationSignal())
+            .timeout(const Duration(seconds: 2)),
+        throwsA(isA<OnboardingFailure>()),
+      );
+      gate.complete();
+      await drain;
+      final restarted = f.restartedVault();
+      final secondCoordinator = f.coordinator(
+        RecordingLoginPageLauncher(),
+        useVault: restarted,
+      );
+      await expectLater(
+        secondCoordinator.commitScannedLogin(
+          _sharedBrowserCredential,
+          CancellationSignal(),
+        ),
+        throwsA(isA<OnboardingFailure>()),
+      );
+      expect(await f.accounts.watchAccounts().first, isEmpty);
+      expect(await f.createQueue(restarted).pendingRevocationCount(), 1);
+      expect(f.revokes, 1);
+    },
+  );
+
+  test('explicit removal still sends its intentional revocation', () async {
+    final f = _RecoveryFixture();
+    addTearDown(f.close);
+    final account = await f
+        .coordinator(RecordingLoginPageLauncher())
+        .commitScannedLogin(_sharedBrowserCredential, CancellationSignal());
+    final reservation = await f.queue.reserveCredentialForRemoval(
+      server: ServerBase.parse(account.serverUrl),
+      loginName: account.loginName,
+      appPassword: loginSuccessJson()['appPassword']! as String,
+      accountId: account.id,
+    );
+    await f.queue.queueCredential(
+      reservation: reservation,
+      server: ServerBase.parse(account.serverUrl),
+      loginName: account.loginName,
+      appPassword: loginSuccessJson()['appPassword']! as String,
+    );
+    await f.queue.drain();
+    expect(f.revokes, 1);
+    expect(await f.queue.pendingCount(), 0);
+  });
+
+  test(
     'cancelled nonresponsive transport relinquishes claim at its hard bound',
     () async {
       final f = _RecoveryFixture(
@@ -442,6 +549,14 @@ Future<void> _waitForRetirement(AppPasswordRevocationQueue queue) async {
   expect(await queue.pendingRevocationCount(), 1);
 }
 
+QrLoginCredentials get _sharedBrowserCredential =>
+    parseQrLoginPayload(
+          'nc://login/user:${loginSuccessJson()['loginName']}'
+          '&server:https%3A//CLOUD.example.invalid:443/'
+          '&password:${loginSuccessJson()['appPassword']}',
+        )!
+        as QrLoginCredentials;
+
 const _origin = 'https://cloud.example.invalid';
 
 final class _RecoveryFixture {
@@ -477,9 +592,13 @@ final class _RecoveryFixture {
         polls++;
         onPoll?.call(request);
         return pollReply();
+      case '/ocs/v2.php/cloud/capabilities':
+        await onCapabilities?.call();
+        return http.Response(jsonEncode(capabilitiesJson(withTalk: true)), 200);
       case '/ocs/v2.php/core/apppassword':
         expect(request.method, 'DELETE');
         revokes++;
+        await onRevoke?.call();
         return http.Response(
           jsonEncode({
             'ocs': {
@@ -504,6 +623,8 @@ final class _RecoveryFixture {
   int polls = 0;
   int revokes = 0;
   void Function(http.BaseRequest)? onPoll;
+  Future<void> Function()? onRevoke;
+  Future<void> Function()? onCapabilities;
   Future<http.Response> Function() pollReply = () async =>
       http.Response('', 404);
 
@@ -521,14 +642,36 @@ final class _RecoveryFixture {
   OnboardingCoordinator coordinator(
     LoginPageLauncher browser, {
     Duration loginTimeout = const Duration(minutes: 15),
+    MemoryCredentialVault? useVault,
   }) => OnboardingCoordinator(
     loginTimeout: loginTimeout,
     api: api,
     accounts: accounts,
-    credentials: vault,
+    credentials: useVault ?? vault,
     launcher: browser,
-    pendingRevocations: queue,
+    pendingRevocations: useVault == null ? queue : createQueue(useVault),
   );
+  Future<void> queueLateBrowserCredential() async {
+    final started = Completer<void>();
+    final response = Completer<http.Response>();
+    pollReply = () {
+      started.complete();
+      return response.future;
+    };
+    final flow = coordinator(RecordingLoginPageLauncher());
+    final pending = await flow.start(_origin);
+    final cancel = CancellationSignal();
+    final outcome = expectLater(
+      flow.completeLogin(pending, cancel),
+      throwsA(isA<OnboardingCancelled>()),
+    );
+    await started.future;
+    cancel.cancel();
+    await outcome;
+    response.complete(http.Response(jsonEncode(loginSuccessJson()), 200));
+    await _waitForRetirement(queue);
+  }
+
   Future<void> cancelLateLaunch() async {
     final browser = _BlockedBrowser();
     final flow = coordinator(browser);

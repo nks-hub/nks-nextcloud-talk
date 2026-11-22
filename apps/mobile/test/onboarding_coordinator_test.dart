@@ -462,9 +462,9 @@ void main() {
       }
       pendingStore.failNextUpdate = true;
       client.releaseResponse();
-      await client.revoked.future.timeout(const Duration(seconds: 1));
       await _waitForPendingRevocations(queue, 5);
       expect(await queue.unresolvedReservationCount(), 0);
+      expect(client.revokedPassword, null);
 
       var exchanges = 0;
       final restartedApi = _onboardingApi(

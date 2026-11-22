@@ -42,6 +42,31 @@ extension _OnboardingBrowserLogin on OnboardingCoordinator {
     }
   }
 
+  Future<void> _retireFailedBrowserCredential(
+    AppPasswordRevocationReservation reservation,
+    LoginFlowCredentials credential,
+  ) async {
+    final queue = _pendingRevocations!;
+    try {
+      if (await queue.browserCredentialIsOwned(
+        credential,
+        accounts: _accounts,
+        credentials: _credentials,
+      )) {
+        await queue.releaseHeldCredential(reservation);
+      } else {
+        await queue.queueCredential(
+          reservation: reservation,
+          server: credential.server,
+          loginName: credential.loginName,
+          appPassword: credential.appPassword,
+        );
+      }
+    } on Object {
+      // The held entry can be reconciled after a storage or ownership failure.
+    }
+  }
+
   Future<void> _closeLoginPage() async {
     try {
       await _launcher.close();

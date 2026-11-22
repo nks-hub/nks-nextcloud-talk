@@ -382,9 +382,13 @@ final class AppPasswordRevocationQueue {
     Future<void> revokeNext() async {
       while (nextEntry < revocations.length) {
         final entry = revocations[nextEntry++];
-        outcomes[entry.identity] = await _revoked(entry)
-            ? null
-            : entry.afterAttempt();
+        if (entry.fromBrowserLogin) {
+          await _attemptBrowserRevocation(entry);
+        } else {
+          outcomes[entry.identity] = await _revoked(entry)
+              ? null
+              : entry.afterAttempt();
+        }
       }
     }
 
@@ -404,7 +408,7 @@ final class AppPasswordRevocationQueue {
           reconciled.add(current);
           continue;
         }
-        if (current is! _RevocationEntry) {
+        if (current is! _RevocationEntry || current.fromBrowserLogin) {
           reconciled.add(current);
           continue;
         }
@@ -438,11 +442,19 @@ final class AppPasswordRevocationQueue {
         if (reservation == null) continue;
         try {
           if (!(await _load()).any(held.hasSameStateAs)) continue;
-          await _recoverHeldCredential(
-            held,
-            recoveryAccounts,
-            recoveryCredentials,
-          );
+          if (held.fromBrowserLogin) {
+            await _recoverBrowserHeldCredential(
+              held,
+              recoveryAccounts,
+              recoveryCredentials,
+            );
+          } else {
+            await _recoverHeldCredential(
+              held,
+              recoveryAccounts,
+              recoveryCredentials,
+            );
+          }
         } finally {
           await abandonHeldCredential(reservation);
         }
@@ -706,6 +718,7 @@ final class _HeldEntry extends _QueueEntry {
     required this.phase,
     required this.accountId,
     this.certificateFingerprint,
+    this.fromBrowserLogin = false,
   });
 
   final String id;
@@ -716,6 +729,7 @@ final class _HeldEntry extends _QueueEntry {
   final AppPasswordCredentialPhase phase;
   final String? accountId;
   final String? certificateFingerprint;
+  final bool fromBrowserLogin;
 
   @override
   String get reservationId => id;
@@ -735,6 +749,7 @@ final class _HeldEntry extends _QueueEntry {
     since: since,
     attempts: 0,
     certificateFingerprint: certificateFingerprint,
+    fromBrowserLogin: fromBrowserLogin,
   );
 
   _HeldEntry withPhase({
@@ -749,6 +764,7 @@ final class _HeldEntry extends _QueueEntry {
     phase: phase,
     accountId: accountId,
     certificateFingerprint: certificateFingerprint,
+    fromBrowserLogin: fromBrowserLogin,
   );
 
   @override
@@ -759,7 +775,8 @@ final class _HeldEntry extends _QueueEntry {
       since == other.since &&
       phase == other.phase &&
       accountId == other.accountId &&
-      certificateFingerprint == other.certificateFingerprint;
+      certificateFingerprint == other.certificateFingerprint &&
+      fromBrowserLogin == other.fromBrowserLogin;
 
   static _HeldEntry? fromJson(Map<String, Object?> json) {
     final id = json['id'];
@@ -770,6 +787,8 @@ final class _HeldEntry extends _QueueEntry {
     final phaseName = json['phase'];
     final accountId = json['accountId'];
     final certificateFingerprint = json['certificateFingerprint'];
+    final fromBrowserLogin = json['fromBrowserLogin'];
+    if (fromBrowserLogin != null && fromBrowserLogin is! bool) return null;
     if (id is! String ||
         id.isEmpty ||
         server is! String ||
@@ -816,6 +835,7 @@ final class _HeldEntry extends _QueueEntry {
       phase: phase,
       accountId: accountId as String?,
       certificateFingerprint: certificateFingerprint as String?,
+      fromBrowserLogin: fromBrowserLogin == true,
     );
   }
 
@@ -830,6 +850,7 @@ final class _HeldEntry extends _QueueEntry {
     'phase': phase.name,
     'accountId': ?accountId,
     'certificateFingerprint': ?certificateFingerprint,
+    if (fromBrowserLogin) 'fromBrowserLogin': true,
   };
 }
 
@@ -842,6 +863,7 @@ final class _RevocationEntry extends _QueueEntry {
     required this.since,
     required this.attempts,
     this.certificateFingerprint,
+    this.fromBrowserLogin = false,
   });
 
   @override
@@ -852,6 +874,7 @@ final class _RevocationEntry extends _QueueEntry {
   final DateTime since;
   final int attempts;
   final String? certificateFingerprint;
+  final bool fromBrowserLogin;
 
   @override
   _QueueIdentity get identity => reservationId == null
@@ -872,7 +895,8 @@ final class _RevocationEntry extends _QueueEntry {
       secret == other.secret &&
       since == other.since &&
       attempts == other.attempts &&
-      certificateFingerprint == other.certificateFingerprint;
+      certificateFingerprint == other.certificateFingerprint &&
+      fromBrowserLogin == other.fromBrowserLogin;
 
   static _RevocationEntry? fromJson(Map<String, Object?> json) {
     final reservationId = json['reservationId'];
@@ -882,6 +906,8 @@ final class _RevocationEntry extends _QueueEntry {
     final since = json['since'];
     final attempts = json['attempts'];
     final certificateFingerprint = json['certificateFingerprint'];
+    final fromBrowserLogin = json['fromBrowserLogin'];
+    if (fromBrowserLogin != null && fromBrowserLogin is! bool) return null;
     if ((reservationId != null &&
             (reservationId is! String || reservationId.isEmpty)) ||
         server is! String ||
@@ -906,6 +932,7 @@ final class _RevocationEntry extends _QueueEntry {
             since: parsedSince,
             attempts: attempts,
             certificateFingerprint: certificateFingerprint as String?,
+            fromBrowserLogin: fromBrowserLogin == true,
           );
   }
 
@@ -919,6 +946,7 @@ final class _RevocationEntry extends _QueueEntry {
     'since': since.toUtc().toIso8601String(),
     'attempts': attempts,
     'certificateFingerprint': ?certificateFingerprint,
+    if (fromBrowserLogin) 'fromBrowserLogin': true,
   };
 
   _RevocationEntry afterAttempt() => _RevocationEntry(
@@ -929,5 +957,6 @@ final class _RevocationEntry extends _QueueEntry {
     since: since,
     attempts: attempts + 1,
     certificateFingerprint: certificateFingerprint,
+    fromBrowserLogin: fromBrowserLogin,
   );
 }

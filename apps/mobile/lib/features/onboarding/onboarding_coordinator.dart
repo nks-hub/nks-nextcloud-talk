@@ -407,6 +407,53 @@ final class OnboardingCoordinator {
     required String? expectedAccountId,
     AppPasswordRevocationReservation? cleanupReservation,
   }) async {
+    Future<StoredAccount> commit() => _commitClaimedAccount(
+      server: server,
+      serverStatus: serverStatus,
+      loginCredentials: loginCredentials,
+      credentialSource: credentialSource,
+      cancellation: cancellation,
+      expectedAccountId: expectedAccountId,
+      cleanupReservation: cleanupReservation,
+    );
+    final queue = _pendingRevocations;
+    try {
+      return queue == null
+          ? await commit()
+          : await queue.admitCredential(loginCredentials, commit);
+    } on BrowserCredentialAdmissionUnavailable {
+      if (cleanupReservation != null) {
+        await queue!.abandonHeldCredential(cleanupReservation);
+      }
+      cancellation.throwIfCancelled();
+      throw const OnboardingFailure(OnboardingFailureCode.localPersistence);
+    } on Object catch (error, stackTrace) {
+      if (error is! OnboardingCancelled &&
+          credentialSource == _CredentialSource.browser &&
+          cleanupReservation != null) {
+        try {
+          await queue!.revokeRetiredBrowserCredential(
+            cleanupReservation,
+            accounts: _accounts,
+            credentials: _credentials,
+          );
+        } on Object {
+          // The held or pending entry remains recoverable.
+        }
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  Future<StoredAccount> _commitClaimedAccount({
+    required ServerBase server,
+    required ServerStatus serverStatus,
+    required LoginFlowCredentials loginCredentials,
+    required _CredentialSource credentialSource,
+    required CancellationSignal cancellation,
+    required String? expectedAccountId,
+    required AppPasswordRevocationReservation? cleanupReservation,
+  }) async {
     late final StoredAccount stored;
     try {
       stored = await _commitAccountWithoutCredentialCleanup(
@@ -423,19 +470,11 @@ final class OnboardingCoordinator {
       }
       if (credentialSource == _CredentialSource.browser &&
           cleanupReservation != null) {
-        try {
-          if (await _pendingRevocations!.browserCredentialIsOwned(
-            loginCredentials,
-            accounts: _accounts,
-            credentials: _credentials,
-          )) {
-            await _pendingRevocations.releaseHeldCredential(cleanupReservation);
-            Error.throwWithStackTrace(error, stackTrace);
-          }
-        } on Object {
-          // Unknown ownership keeps the credential held for later recovery.
-          Error.throwWithStackTrace(error, stackTrace);
-        }
+        await _retireFailedBrowserCredential(
+          cleanupReservation,
+          loginCredentials,
+        );
+        Error.throwWithStackTrace(error, stackTrace);
       }
       final cleanedUp = cleanupReservation == null
           ? await _revokeOrRememberGeneratedCredential(

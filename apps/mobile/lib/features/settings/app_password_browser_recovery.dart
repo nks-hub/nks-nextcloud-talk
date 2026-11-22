@@ -62,11 +62,9 @@ extension BrowserLoginRecovery on AppPasswordRevocationQueue {
   /// entry is recoverable if the subsequent account/vault lookup fails.
   Future<bool> holdBrowserCredential(
     AppPasswordRevocationReservation claim,
-    LoginFlowCredentials credential, {
-    Future<bool> Function()? revokeIfUnowned,
-  }) async {
+    LoginFlowCredentials credential,
+  ) async {
     var delay = const Duration(milliseconds: 50);
-    var canTryRevocation = revokeIfUnowned != null;
     while (true) {
       try {
         var held = false;
@@ -105,6 +103,7 @@ extension BrowserLoginRecovery on AppPasswordRevocationQueue {
               since: current.since,
               phase: AppPasswordCredentialPhase.received,
               accountId: null,
+              fromBrowserLogin: true,
             );
             held = true;
           }
@@ -112,13 +111,6 @@ extension BrowserLoginRecovery on AppPasswordRevocationQueue {
         });
         return held;
       } on Object {
-        if (canTryRevocation) {
-          canTryRevocation = false;
-          if (await revokeIfUnowned!()) {
-            await _discardRevokedBrowserReservation(claim);
-            return false;
-          }
-        }
         // The response cannot be fetched again. Keep its claim during retries.
         await Future<void>.delayed(delay);
         if (delay < const Duration(milliseconds: 800)) delay *= 2;
@@ -136,38 +128,11 @@ extension BrowserLoginRecovery on AppPasswordRevocationQueue {
     final accountRepository = accounts ?? _accounts;
     final vault = credentials ?? _credentials;
     final held =
-        await (persistence ??
-            holdBrowserCredential(
-              claim,
-              credential,
-              revokeIfUnowned: accountRepository == null || vault == null
-                  ? null
-                  : () async {
-                      try {
-                        if (await browserCredentialIsOwned(
-                          credential,
-                          accounts: accountRepository,
-                          credentials: vault,
-                        )) {
-                          return false;
-                        }
-                        await _api.revokeAppPassword(
-                          server: credential.server,
-                          loginName: credential.loginName,
-                          appPassword: credential.appPassword,
-                        );
-                        return true;
-                      } on NextcloudApiException catch (error) {
-                        return error.statusCode == 401;
-                      } on Object {
-                        return false;
-                      }
-                    },
-            ));
+        await (persistence ?? holdBrowserCredential(claim, credential));
     if (!held || accountRepository == null || vault == null) return;
     for (final entry in (await _load()).whereType<_HeldEntry>()) {
       if (entry.id == claim.id) {
-        await _recoverHeldCredential(entry, accountRepository, vault);
+        await _recoverBrowserHeldCredential(entry, accountRepository, vault);
         return;
       }
     }
@@ -187,20 +152,138 @@ extension BrowserLoginRecovery on AppPasswordRevocationQueue {
             credential.appPassword;
   }
 
-  Future<void> _discardRevokedBrowserReservation(
-    AppPasswordRevocationReservation claim,
+  /// Serialize account admission with a browser-derived DELETE for this
+  /// canonical account identity.
+  Future<T> admitCredential<T>(
+    LoginFlowCredentials credential,
+    Future<T> Function() commit,
   ) async {
-    var delay = const Duration(milliseconds: 50);
-    while (true) {
-      try {
-        await releaseReservation(claim);
+    final claim = await _claimBrowserIdentity(
+      credential.server.value,
+      credential.loginName,
+    );
+    if (claim == null) throw const BrowserCredentialAdmissionUnavailable();
+    try {
+      for (final entry in (await _load()).whereType<_RevocationEntry>()) {
+        if (entry.fromBrowserLogin &&
+            entry.attempts > 0 &&
+            entry.hasSecret(
+              credential.server,
+              credential.loginName,
+              credential.appPassword,
+            )) {
+          throw const BrowserCredentialAdmissionUnavailable();
+        }
+      }
+      return await commit();
+    } finally {
+      await abandonHeldCredential(claim);
+    }
+  }
+
+  Future<void> _recoverBrowserHeldCredential(
+    _HeldEntry held,
+    AccountRepository accounts,
+    CredentialVault credentials,
+  ) async {
+    final claim = await _claimBrowserIdentity(held.server, held.loginName);
+    if (claim == null) return;
+    try {
+      if ((await _load()).any(held.hasSameStateAs)) {
+        await _recoverHeldCredential(held, accounts, credentials);
+      }
+    } finally {
+      await abandonHeldCredential(claim);
+    }
+  }
+
+  Future<void> revokeRetiredBrowserCredential(
+    AppPasswordRevocationReservation reservation, {
+    required AccountRepository accounts,
+    required CredentialVault credentials,
+  }) async {
+    for (final entry in (await _load()).whereType<_RevocationEntry>()) {
+      if (entry.reservationId == reservation.id && entry.fromBrowserLogin) {
+        await _attemptBrowserRevocation(
+          entry,
+          accounts: accounts,
+          credentials: credentials,
+        );
         return;
-      } on Object {
-        await Future<void>.delayed(delay);
-        if (delay < const Duration(milliseconds: 800)) delay *= 2;
       }
     }
   }
+
+  Future<void> _attemptBrowserRevocation(
+    _RevocationEntry entry, {
+    AccountRepository? accounts,
+    CredentialVault? credentials,
+  }) async {
+    final repository = accounts ?? _accounts;
+    final vault = credentials ?? _credentials;
+    if (repository == null || vault == null) return;
+    AppPasswordRevocationReservation? claim;
+    try {
+      claim = await _claimBrowserIdentity(entry.server, entry.loginName);
+      if (claim == null) return;
+      if (!(await _load()).any(entry.hasSameStateAs)) return;
+      final account = await repository.findByIdentity(
+        serverUrl: entry.server,
+        loginName: entry.loginName,
+      );
+      if (account != null &&
+          await vault.readCurrentAppPassword(account.id) == entry.appPassword) {
+        await _replaceBrowserRevocation(entry, null);
+        return;
+      }
+      // The server may finish a DELETE after transport loss. Keep this
+      // credential out of onboarding until the pending attempt is resolved.
+      final dispatched = entry.afterAttempt();
+      if (await _replaceBrowserRevocation(entry, dispatched) &&
+          await _revoked(dispatched)) {
+        await _replaceBrowserRevocation(dispatched, null);
+      }
+    } on Object {
+      // Leave the durable state for the next drain.
+    } finally {
+      if (claim != null) await abandonHeldCredential(claim);
+    }
+  }
+
+  Future<bool> _replaceBrowserRevocation(
+    _RevocationEntry original,
+    _RevocationEntry? replacement,
+  ) async {
+    var found = false;
+    await _store.updatePendingRevocations((raw) {
+      final entries = _decode(raw);
+      final index = entries.indexWhere(original.hasSameStateAs);
+      found = index >= 0;
+      if (!found) return raw;
+      if (replacement == null) {
+        entries.removeAt(index);
+      } else {
+        entries[index] = replacement;
+      }
+      return _encode(entries);
+    });
+    return found;
+  }
+
+  Future<AppPasswordRevocationReservation?> _claimBrowserIdentity(
+    String server,
+    String loginName,
+  ) {
+    final identity = const Uuid().v5(
+      Namespace.url.value,
+      jsonEncode([server, loginName]),
+    );
+    return _tryClaim('browser-account:$identity');
+  }
+}
+
+final class BrowserCredentialAdmissionUnavailable implements Exception {
+  const BrowserCredentialAdmissionUnavailable();
 }
 
 final class _BrowserPoll {
