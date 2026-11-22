@@ -239,7 +239,15 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
         return;
       }
       unawaited(
-        _WebRtcRemoteVideo.open(event.streams.first).then(onRemoteVideo),
+        _WebRtcRemoteVideo.open(event.streams.first).then(
+          onRemoteVideo,
+          onError: (Object error, StackTrace stack) {
+            debugPrint(
+              '[call] remote video renderer failed: ${error.runtimeType}',
+            );
+            if (kDebugMode) debugPrintStack(stackTrace: stack, maxFrames: 5);
+          },
+        ),
       );
     };
     connection.onRemoveTrack = (stream, track) {
