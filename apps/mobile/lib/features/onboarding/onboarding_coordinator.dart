@@ -407,20 +407,27 @@ final class OnboardingCoordinator {
     required String? expectedAccountId,
     AppPasswordRevocationReservation? cleanupReservation,
   }) async {
-    Future<StoredAccount> commit() => _commitClaimedAccount(
-      server: server,
-      serverStatus: serverStatus,
-      loginCredentials: loginCredentials,
-      credentialSource: credentialSource,
-      cancellation: cancellation,
-      expectedAccountId: expectedAccountId,
-      cleanupReservation: cleanupReservation,
-    );
+    Future<StoredAccount> commit(AppPasswordRevocationReservation? adopted) =>
+        _commitClaimedAccount(
+          server: server,
+          serverStatus: serverStatus,
+          loginCredentials: loginCredentials,
+          credentialSource: credentialSource,
+          cancellation: cancellation,
+          expectedAccountId: expectedAccountId,
+          cleanupReservation: cleanupReservation ?? adopted,
+        );
     final queue = _pendingRevocations;
     try {
       return queue == null
-          ? await commit()
-          : await queue.admitCredential(loginCredentials, commit);
+          ? await commit(null)
+          : await queue.admitCredential(
+              loginCredentials,
+              commit,
+              accounts: _accounts,
+              credentials: _credentials,
+              currentReservation: cleanupReservation,
+            );
     } on BrowserCredentialAdmissionUnavailable {
       if (cleanupReservation != null) {
         await queue!.abandonHeldCredential(cleanupReservation);

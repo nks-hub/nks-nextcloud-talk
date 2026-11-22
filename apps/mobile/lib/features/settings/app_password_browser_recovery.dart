@@ -156,30 +156,77 @@ extension BrowserLoginRecovery on AppPasswordRevocationQueue {
   /// canonical account identity.
   Future<T> admitCredential<T>(
     LoginFlowCredentials credential,
-    Future<T> Function() commit,
-  ) async {
+    Future<T> Function(AppPasswordRevocationReservation? adopted) commit, {
+    required AccountRepository accounts,
+    required CredentialVault credentials,
+    AppPasswordRevocationReservation? currentReservation,
+  }) async {
     final claim = await _claimBrowserIdentity(
       credential.server.value,
       credential.loginName,
     );
     if (claim == null) throw const BrowserCredentialAdmissionUnavailable();
+    AppPasswordRevocationReservation? adopted;
     try {
-      for (final entry in (await _load()).whereType<_RevocationEntry>()) {
-        if (entry.fromBrowserLogin &&
-            entry.attempts > 0 &&
-            entry.hasSecret(
+      for (var entry in await _load()) {
+        if (!(entry is _HeldEntry && entry.fromBrowserLogin ||
+                entry is _RevocationEntry && entry.fromBrowserLogin) ||
+            entry.reservationId == currentReservation?.id ||
+            !entry.hasSecret(
               credential.server,
               credential.loginName,
               credential.appPassword,
             )) {
+          continue;
+        }
+        final id = entry.reservationId;
+        if (id == null) throw const AppPasswordRevocationQueueCorrupt();
+        adopted = await _tryClaim(id);
+        if (adopted == null) {
           throw const BrowserCredentialAdmissionUnavailable();
         }
+        if (entry is _HeldEntry) {
+          await _recoverHeldCredential(entry, accounts, credentials);
+          final latest = (await _load())
+              .where((candidate) => candidate.reservationId == id)
+              .firstOrNull;
+          if (latest == null) {
+            await abandonHeldCredential(adopted);
+            adopted = null;
+            break;
+          }
+          entry = latest;
+        }
+        if (entry is! _RevocationEntry ||
+            entry.attempts > 0 ||
+            !await _adoptPendingBrowserCredential(entry, id)) {
+          throw const BrowserCredentialAdmissionUnavailable();
+        }
+        break;
       }
-      return await commit();
+      return await commit(adopted);
     } finally {
+      if (adopted != null) await abandonHeldCredential(adopted);
       await abandonHeldCredential(claim);
     }
   }
+
+  Future<bool> _adoptPendingBrowserCredential(
+    _RevocationEntry pending,
+    String id,
+  ) => _replaceBrowserRevocation(
+    pending,
+    _HeldEntry(
+      id: id,
+      server: pending.server,
+      loginName: pending.loginName,
+      appPassword: pending.appPassword,
+      since: pending.since,
+      phase: AppPasswordCredentialPhase.received,
+      accountId: null,
+      fromBrowserLogin: true,
+    ),
+  );
 
   Future<void> _recoverBrowserHeldCredential(
     _HeldEntry held,
@@ -252,7 +299,7 @@ extension BrowserLoginRecovery on AppPasswordRevocationQueue {
 
   Future<bool> _replaceBrowserRevocation(
     _RevocationEntry original,
-    _RevocationEntry? replacement,
+    _QueueEntry? replacement,
   ) async {
     var found = false;
     await _store.updatePendingRevocations((raw) {

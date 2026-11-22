@@ -1,14 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
+import 'package:nextcloudtalk/data/chat_media_cache.dart';
 import 'package:nextcloudtalk/data/credential_vault.dart';
+import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
 import 'package:nextcloudtalk/features/onboarding/onboarding_coordinator.dart';
+import 'package:nextcloudtalk/features/settings/account_removal_service.dart';
 import 'package:nextcloudtalk/features/settings/app_password_revocation_queue.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
+import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
@@ -393,17 +398,84 @@ void main() {
       await started.future.timeout(const Duration(seconds: 2));
       await f.queue.drain();
       expect(f.revokes, 0);
-      expect(await f.queue.pendingRevocationCount(), 1);
+      expect(await f.queue.pendingRevocationCount(), 0);
+      expect(await f.queue.pendingCount(), 1);
+      expect(f.vault.pendingRevocations, contains('"kind":"held"'));
 
       capabilityGate.complete();
       final account = await admission;
       final restarted = f.createQueue(f.restartedVault());
+      expect(await restarted.pendingCount(), 0);
+      final removal = await restarted.reserveCredentialForRemoval(
+        server: ServerBase.parse(account.serverUrl),
+        loginName: account.loginName,
+        appPassword: loginSuccessJson()['appPassword']! as String,
+        accountId: account.id,
+      );
+      await restarted.releaseHeldCredential(removal);
       await restarted.drain();
       expect(f.revokes, 0);
-      expect(await restarted.pendingCount(), 0);
       expect(await f.accounts.getAccount(account.id), isNotNull);
       expect(
         await f.vault.readAppPassword(account.id),
+        loginSuccessJson()['appPassword'],
+      );
+    },
+  );
+
+  for (final cancel in [true, false]) {
+    test('adopted browser credential remains recoverable after '
+        '${cancel ? 'cancel' : 'database write failure'}', () async {
+      final f = _RecoveryFixture();
+      addTearDown(f.close);
+      await f.queueLateBrowserCredential();
+      final signal = CancellationSignal();
+      if (cancel) {
+        f.onCapabilities = () async => signal.cancel();
+      } else {
+        await f.database.customStatement(
+          'CREATE TRIGGER reject_adoption BEFORE INSERT ON accounts '
+          "BEGIN SELECT RAISE(ABORT, 'synthetic failure'); END",
+        );
+      }
+      await expectLater(
+        f
+            .coordinator(RecordingLoginPageLauncher())
+            .commitScannedLogin(_sharedBrowserCredential, signal),
+        throwsA(cancel ? isA<OnboardingCancelled>() : isA<OnboardingFailure>()),
+      );
+      expect(await f.accounts.listAccounts(), isEmpty);
+      expect(f.vault.values, isEmpty);
+      expect(f.vault.pendingRevocations, contains('"kind":"held"'));
+      final restarted = f.createQueue(f.restartedVault());
+      await restarted.drain();
+      expect(await restarted.pendingCount(), 0);
+      expect(f.revokes, 1);
+    });
+  }
+
+  test(
+    'restart keeps an adopted account if held release fails after commit',
+    () async {
+      final f = _RecoveryFixture(failAdoptedRelease: true);
+      addTearDown(f.close);
+      await f.queueLateBrowserCredential();
+      final account = await f
+          .coordinator(RecordingLoginPageLauncher())
+          .commitScannedLogin(_sharedBrowserCredential, CancellationSignal());
+      expect(
+        f.vault.pendingRevocations,
+        contains('"phase":"accountCommitted"'),
+      );
+      expect(await f.queue.pendingRevocationCount(), 0);
+      final copiedVault = f.restartedVault();
+      final restarted = f.createQueue(copiedVault);
+      await restarted.drain();
+      expect(await restarted.pendingCount(), 0);
+      expect(f.revokes, 0);
+      expect(await f.accounts.getAccount(account.id), isNotNull);
+      expect(
+        await copiedVault.readAppPassword(account.id),
         loginSuccessJson()['appPassword'],
       );
     },
@@ -454,27 +526,41 @@ void main() {
     },
   );
 
-  test('explicit removal still sends its intentional revocation', () async {
+  test('explicit removal works immediately after shared QR adoption', () async {
     final f = _RecoveryFixture();
     addTearDown(f.close);
+    final temporary = await Directory.systemTemp.createTemp(
+      'browser-adoption-',
+    );
+    addTearDown(() => temporary.delete(recursive: true));
+    Directory area(String name) => Directory('${temporary.path}/$name');
+    await f.queueLateBrowserCredential();
     final account = await f
         .coordinator(RecordingLoginPageLauncher())
         .commitScannedLogin(_sharedBrowserCredential, CancellationSignal());
-    final reservation = await f.queue.reserveCredentialForRemoval(
-      server: ServerBase.parse(account.serverUrl),
-      loginName: account.loginName,
-      appPassword: loginSuccessJson()['appPassword']! as String,
-      accountId: account.id,
+    final removal = AccountRemovalService(
+      accounts: f.accounts,
+      credentials: f.vault,
+      api: f.api,
+      mediaCache: ChatMediaCache(),
+      mediaDiskCache: ChatMediaDiskCache(
+        rootDirectory: () async => area('previews'),
+      ),
+      emojiUsage: FileEmojiUsageStore(directory: area('emoji')),
+      clearChatBackgrounds: (_) async {},
+      voiceDirectory: () async => area('voice'),
+      chatAttachmentDirectory: () async => area('attachments'),
+      attachmentSources: () async =>
+          DurableAttachmentSourceStore(root: area('sources')),
+      pendingRevocations: f.queue,
     );
-    await f.queue.queueCredential(
-      reservation: reservation,
-      server: ServerBase.parse(account.serverUrl),
-      loginName: account.loginName,
-      appPassword: loginSuccessJson()['appPassword']! as String,
-    );
-    await f.queue.drain();
+    final outcome = await removal.removeAccount(account.id);
+    expect(outcome.accountExisted, isTrue);
+    expect(outcome.appPasswordRevoked, isTrue);
     expect(f.revokes, 1);
     expect(await f.queue.pendingCount(), 0);
+    expect(await f.accounts.getAccount(account.id), isNull);
+    expect(await f.vault.readAppPassword(account.id), isNull);
   });
 
   test(
@@ -563,8 +649,15 @@ final class _RecoveryFixture {
   _RecoveryFixture({
     Duration requestTimeout = const Duration(seconds: 20),
     bool blockFirstHold = false,
+    bool failAdoptedRelease = false,
   }) {
-    store = blockFirstHold ? _BlockedHeldWrite(vault) : null;
+    store = blockFirstHold || failAdoptedRelease
+        ? _BlockedHeldWrite(
+            vault,
+            blockFirstHold: blockFirstHold,
+            failAdoptedRelease: failAdoptedRelease,
+          )
+        : null;
     api = HttpNextcloudApi(
       requestTimeout: requestTimeout,
       client: MockClient.streaming((request, body) async {
@@ -710,9 +803,15 @@ final class _BlockedBrowser implements LoginPageLauncher {
 }
 
 final class _BlockedHeldWrite implements PendingRevocationStore {
-  _BlockedHeldWrite(this.delegate);
+  _BlockedHeldWrite(
+    this.delegate, {
+    required this.blockFirstHold,
+    required this.failAdoptedRelease,
+  });
 
   final PendingRevocationStore delegate;
+  final bool blockFirstHold;
+  final bool failAdoptedRelease;
   final started = Completer<void>();
   final gate = Completer<void>();
   int writes = 0;
@@ -734,12 +833,18 @@ final class _BlockedHeldWrite implements PendingRevocationStore {
   ) async {
     final oldValue = await delegate.readPendingRevocations();
     final next = update(oldValue);
-    if (oldValue != null &&
+    if (blockFirstHold &&
+        oldValue != null &&
         oldValue.contains('"kind":"reservation"') &&
         (next?.contains('"kind":"held"') ?? false)) {
       writes++;
       if (!started.isCompleted) started.complete();
       await gate.future;
+    }
+    if (failAdoptedRelease &&
+        (oldValue?.contains('"phase":"accountCommitted"') ?? false) &&
+        !(next?.contains('"phase":"accountCommitted"') ?? false)) {
+      throw StateError('Synthetic held release failure');
     }
     await delegate.updatePendingRevocations(update);
   }
