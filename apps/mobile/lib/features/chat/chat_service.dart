@@ -378,6 +378,9 @@ final class ChatService {
 
   /// Refreshes one cached message without moving cursors.
   /// Legacy servers defer this repair until the room has an active reader.
+  ///
+  /// Returns whether the cache holds the server's copy afterwards: false when
+  /// the server did not return it or the row changed while it was read.
   Future<bool> refreshMessage({
     required String accountId,
     required String roomToken,

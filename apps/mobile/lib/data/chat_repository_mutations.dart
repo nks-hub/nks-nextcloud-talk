@@ -215,3 +215,38 @@ extension _ChatRepositoryMutations on ChatRepository {
         );
   }
 }
+
+extension ChatRepositoryRefreshedMessage on ChatRepository {
+  /// Stores [message] as the server returned it to a re-read of that one id.
+  ///
+  /// The re-read runs outside the room's lane, so live sync can edit or
+  /// delete the row while it is on the wire. The row is therefore written only
+  /// if it still holds [expectedRawJson], what it held when the re-read began
+  /// (null: no row), and only if the copy differs, as every write wakes each
+  /// watcher of the table. Returns whether the cache holds the server's copy.
+  Future<bool> applyRefreshedMessage({
+    required String accountId,
+    required ServerBase server,
+    required ChatMessage message,
+    required String? expectedRawJson,
+  }) {
+    return _database.transaction(() async {
+      final current = await getMessage(
+        accountId: accountId,
+        roomToken: message.roomToken.value,
+        messageId: message.messageId,
+      );
+      if (current?.rawJson != expectedRawJson) {
+        return false;
+      }
+      if (current?.rawJson != jsonEncode(message.wire)) {
+        await _applyMessageMutation(
+          accountId: accountId,
+          server: server,
+          message: message,
+        );
+      }
+      return true;
+    });
+  }
+}

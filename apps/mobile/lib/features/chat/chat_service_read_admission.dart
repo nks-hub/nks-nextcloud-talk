@@ -151,6 +151,11 @@ extension _ChatReadAdmissionService on ChatService {
           abortTrigger: read.abortTrigger,
         );
         read.ensureFetchAllowed(prepared);
+        final before = await _chat.getMessage(
+          accountId: accountId,
+          roomToken: roomToken,
+          messageId: messageId,
+        );
         final request = ChatFetchRequest(
           accountId: AccountId.parse(accountId),
           requestId: ChatRequestId.parse(_uuid.v4()),
@@ -178,12 +183,12 @@ extension _ChatReadAdmissionService on ChatService {
         }
         for (final message in response.messages) {
           if (message.messageId != messageId) continue;
-          await _chat.applyMessageMutation(
+          return _chat.applyRefreshedMessage(
             accountId: accountId,
             server: prepared.authority.server,
             message: message,
+            expectedRawJson: before?.rawJson,
           );
-          return true;
         }
         return false;
       });

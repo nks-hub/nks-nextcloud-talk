@@ -162,5 +162,161 @@ extension _ChatRefreshCases on _ChatServiceIntegrationSuite {
         );
       },
     );
+
+    test('a re-read that brings nothing new writes nothing', () async {
+      final wire = _refreshWire(text: 'Unchanged');
+      await _insertRefreshRow(database, wire);
+      final api = _refreshServer(() async => wire);
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+      final reader = service.bindLiveRoom(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      );
+      addTearDown(reader.close);
+      var writes = 0;
+      final watch = database
+          .tableUpdates(TableUpdateQuery.onTable(database.cachedChatMessages))
+          .listen((_) => writes++);
+      addTearDown(watch.cancel);
+
+      final refreshed = await service.refreshMessage(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        messageId: 140,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(refreshed, isTrue, reason: 'the cache already holds that copy');
+      expect(writes, 0, reason: 'an identical row only wakes every watcher');
+    });
+
+    for (final (change, changed) in [
+      ('edit', _refreshWire(text: 'Edited meanwhile')),
+      ('deletion', _refreshWire(text: 'Message deleted', deleted: true)),
+    ]) {
+      test('a re-read keeps the $change live sync applied meanwhile', () async {
+        final original = _refreshWire(text: 'Original');
+        await _insertRefreshRow(database, original);
+        final server = ServerBase.parse('https://cloud.example.invalid');
+        // The live poll writes while the slower re-read is still on the wire
+        // and then answers with the copy it read before that change.
+        final api = _refreshServer(() async {
+          await chat.applyMessageMutation(
+            accountId: 'account-a',
+            server: server,
+            message: ChatMessage.fromJson(changed),
+          );
+          return original;
+        });
+        addTearDown(api.close);
+        final service = ChatService(
+          accounts: accounts,
+          chat: chat,
+          credentials: credentials,
+          api: api,
+        );
+        final reader = service.bindLiveRoom(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+        );
+        addTearDown(reader.close);
+
+        final refreshed = await service.refreshMessage(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          messageId: 140,
+        );
+
+        expect(refreshed, isFalse);
+        final row = await chat.getMessage(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          messageId: 140,
+        );
+        expect(row?.rawJson, jsonEncode(ChatMessage.fromJson(changed).wire));
+        expect(row?.deleted, changed['deleted'] == true);
+      });
+    }
   }
 }
+
+Map<String, Object?> _refreshWire({
+  required String text,
+  bool deleted = false,
+}) => <String, Object?>{
+  'id': 140,
+  'token': 'rooma123',
+  'actorType': 'users',
+  'actorId': 'someone-else',
+  'actorDisplayName': 'Other person',
+  'timestamp': 1770000140,
+  'systemMessage': '',
+  'messageType': deleted ? 'comment_deleted' : 'comment',
+  'isReplyable': !deleted,
+  'referenceId': '',
+  'message': text,
+  'messageParameters': <String, Object?>{},
+  'markdown': true,
+  'reactions': <String, Object?>{},
+  if (deleted) 'deleted': true,
+};
+
+Future<void> _insertRefreshRow(
+  AppDatabase database,
+  Map<String, Object?> wire,
+) {
+  final message = ChatMessage.fromJson(wire);
+  return database
+      .into(database.cachedChatMessages)
+      .insert(
+        CachedChatMessagesCompanion.insert(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          messageId: message.messageId,
+          actorType: message.actorType,
+          actorId: message.actorId,
+          actorDisplayName: message.actorDisplayName,
+          timestamp: message.timestamp,
+          systemMessage: message.systemMessage,
+          messageType: message.messageType,
+          referenceId: message.referenceId,
+          displayText: message.message,
+          deleted: message.deleted,
+          rawJson: jsonEncode(message.wire),
+        ),
+      );
+}
+
+/// Answers every chat read with the one message [answer] yields.
+HttpNextcloudApi _refreshServer(
+  Future<Map<String, Object?>> Function() answer,
+) => HttpNextcloudApi(
+  client: MockClient((request) async {
+    if (request.url.path.endsWith('/cloud/capabilities')) {
+      return http.Response(jsonEncode(_chatCapabilities()), 200);
+    }
+    return http.Response(
+      jsonEncode(<String, Object?>{
+        'ocs': <String, Object?>{
+          'meta': <String, Object?>{
+            'status': 'ok',
+            'statuscode': 200,
+            'message': 'OK',
+          },
+          'data': <Object?>[await answer()],
+        },
+      }),
+      200,
+      headers: const <String, String>{
+        'X-Chat-Last-Given': '140',
+        'X-Chat-Last-Common-Read': '0',
+      },
+    );
+  }),
+);
