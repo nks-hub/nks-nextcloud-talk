@@ -211,21 +211,16 @@ abstract final class AppTheme {
         ),
       ),
       // Content scrolling under a bar must not tint it: the tint turns the
-      // bar blue-grey against the warm surface.
+      // bar blue-grey against the warm surface. The bottom line keeps the
+      // full outlineVariant, the 3:1 boundary the chat background relies on.
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         scrolledUnderElevation: 0,
-        shape: Border(
-          bottom: BorderSide(
-            color: scheme.outlineVariant.withValues(alpha: 0.5),
-          ),
-        ),
+        shape: Border(bottom: BorderSide(color: scheme.outlineVariant)),
       ),
-      // Separators only group rows; component borders keep the full
-      // outlineVariant.
       dividerTheme: DividerThemeData(
-        color: scheme.outlineVariant.withValues(alpha: 0.5),
+        color: scheme.outlineVariant,
         thickness: 1,
         space: 1,
       ),

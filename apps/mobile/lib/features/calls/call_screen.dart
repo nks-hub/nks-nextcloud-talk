@@ -408,6 +408,7 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
           appBar: AppBar(
             backgroundColor: Colors.black,
             foregroundColor: Colors.white,
+            shape: const Border(),
             title: Text(strings.callScreenTitle(tileIds.length)),
             actions: [
               if (selected != null)

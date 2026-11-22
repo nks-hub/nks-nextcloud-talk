@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/core/app_theme.dart';
+import 'package:nextcloudtalk/features/chat/chat_background_theme.dart';
 
 void main() {
   test('server color becomes an opaque Material seed', () {
@@ -37,12 +38,20 @@ void main() {
       expect(scheme.secondary, isNot(scheme.primary));
       expect(scheme.tertiary, isNot(scheme.primary));
       expect(scheme.tertiary, isNot(scheme.secondary));
-      expect(
-        theme.dividerTheme.color,
-        scheme.outlineVariant.withValues(alpha: 0.5),
-      );
+      expect(theme.dividerTheme.color, scheme.outlineVariant);
       expect(theme.appBarTheme.scrolledUnderElevation, 0);
       expect(theme.appBarTheme.surfaceTintColor, Colors.transparent);
+      expect(theme.appBarTheme.backgroundColor, scheme.surface);
+      expect(
+        (theme.appBarTheme.shape! as Border).bottom.color,
+        scheme.outlineVariant,
+      );
+      // The splitter handle, markdown rules and the day separators are drawn
+      // with this colour and nothing else marks them.
+      expect(
+        chatBackgroundContrast(theme.dividerTheme.color!, scheme.surface),
+        greaterThanOrEqualTo(3),
+      );
       expect(theme.chipTheme.backgroundColor, scheme.surfaceContainerLow);
       expect(theme.chipTheme.selectedColor, scheme.secondaryContainer);
       expect(theme.chipTheme.checkmarkColor, scheme.onSecondaryContainer);
