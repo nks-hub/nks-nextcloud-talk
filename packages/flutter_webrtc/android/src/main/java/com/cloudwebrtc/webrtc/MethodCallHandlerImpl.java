@@ -107,6 +107,17 @@ import io.flutter.view.TextureRegistry.SurfaceTextureEntry;
 public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
   static public final String TAG = "FlutterWebRTCPlugin";
 
+  /**
+   * Drops video packets that no receive stream claims instead of opening an unsignaled default
+   * stream for them. In libwebrtc 150 a packet resolved on the network thread while a signaled
+   * receive stream is being rebuilt (a new local description changed its codecs) arrives on the
+   * worker as unknown; the default-stream fallback then fails for that already signaled SSRC and
+   * still calls SetSink(ssrc, nullptr), so the remote track decodes frames nobody ever sees.
+   * Browsers, the mobile clients and Janus all signal their SSRCs, so only media that arrives
+   * before its description is dropped, and the stream asks for a key frame anyway.
+   */
+  static final String FIELD_TRIALS = "WebRTC-Video-DiscardPacketsWithUnknownSsrc/Enabled/";
+
   private final Map<String, PeerConnectionObserver> mPeerConnectionObservers = new HashMap<>();
   private final BinaryMessenger messenger;
   private final Context context;
@@ -339,7 +350,8 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
     options.networkIgnoreMask = networkIgnoreMask;
 
     final PeerConnectionFactory.Builder factoryBuilder = PeerConnectionFactory.builder()
-            .setOptions(options);
+            .setOptions(options)
+            .setFieldTrials(FIELD_TRIALS);
 
     // Initialize EGL contexts required for HW acceleration.
     EglBase.Context eglContext = EglUtils.getRootEglBaseContext();
