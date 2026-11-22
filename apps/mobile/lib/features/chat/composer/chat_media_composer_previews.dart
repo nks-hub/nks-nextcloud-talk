@@ -1,9 +1,33 @@
 part of 'chat_media_composer.dart';
 
 extension _ChatMediaComposerPreviews on _ChatMediaComposerState {
-  Widget _attachmentPreviews() => ListenableBuilder(
+  Future<void> _showCompactAttachmentSheet(BuildContext context) async {
+    final sheetScroll = ScrollController();
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        builder: (sheetContext) => SafeArea(
+          child: Padding(
+            key: const Key('compact-attachment-sheet'),
+            padding: const EdgeInsets.all(16),
+            child: _attachmentPreviews(
+              forceExpanded: true,
+              scrollController: sheetScroll,
+            ),
+          ),
+        ),
+      );
+    } finally {
+      sheetScroll.dispose();
+    }
+  }
+
+  Widget _attachmentPreviews({
+    bool forceExpanded = false,
+    ScrollController? scrollController,
+  }) => ListenableBuilder(
     listenable: Listenable.merge([
-      _attachmentPreviewScroll,
+      scrollController ?? _attachmentPreviewScroll,
       ..._images.map((image) => image.controller),
     ]),
     builder: (context, _) {
@@ -24,16 +48,32 @@ extension _ChatMediaComposerPreviews on _ChatMediaComposerState {
         (image) => image.controller.state.isPrepared,
       );
       final strings = AppLocalizations.of(context);
+      if (usesCompactChatComposerLayout(context) && !forceExpanded) {
+        return SizedBox(
+          key: const Key('compact-attachment-summary'),
+          width: 160,
+          height: 48,
+          child: OutlinedButton.icon(
+            onPressed: () => unawaited(_showCompactAttachmentSheet(context)),
+            icon: const Icon(Icons.attach_file_rounded),
+            label: Text(
+              strings.attachmentBatchTitle(visible.length),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        );
+      }
       final previews = SizedBox(
         key: const Key('composer-attachment-previews'),
         height: prepared ? 100 : 240,
         child: Scrollbar(
-          controller: _attachmentPreviewScroll,
+          controller: scrollController ?? _attachmentPreviewScroll,
           thumbVisibility: true,
           trackVisibility: true,
           scrollbarOrientation: ScrollbarOrientation.bottom,
           child: ListView.separated(
-            controller: _attachmentPreviewScroll,
+            controller: scrollController ?? _attachmentPreviewScroll,
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: visible.length,

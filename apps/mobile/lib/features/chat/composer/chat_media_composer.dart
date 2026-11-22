@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' show FlutterView;
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
@@ -28,6 +29,7 @@ import 'voice_message.dart';
 part 'chat_media_composer_attachments.dart';
 part 'chat_media_composer_pending.dart';
 part 'chat_media_composer_previews.dart';
+part 'chat_media_composer_viewport.dart';
 
 typedef CreateVoiceCaptureBackend = VoiceCaptureBackend Function();
 typedef CreateVoicePlaybackBackend = VoicePlaybackBackend Function();
@@ -657,6 +659,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
+    final compactHeight = usesCompactChatComposerLayout(context);
     final voiceLabels = _voiceLabels(strings);
     final voiceController = _voiceController;
     final voiceOwnsToolbar =
@@ -696,7 +699,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       key: const Key('chat-media-composer'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _attachmentPreviews(),
+        if (!compactHeight) _attachmentPreviews(),
         if (voiceOwnsToolbar)
           Row(
             key: const Key('chat-media-composer-actions'),
@@ -727,22 +730,26 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
                 ),
               ),
               _ComposerActionToolbar(
+                compact: compactHeight,
                 leadingAction: attachmentAction,
                 actions: <Widget>[
                   ...widget.idleActions,
                   idleVoiceAction,
                   ...widget.trailingActions,
+                  if (compactHeight) _attachmentPreviews(),
                 ],
               ),
             ],
           )
         else
           _ComposerActionToolbar(
+            compact: compactHeight,
             leadingAction: attachmentAction,
             actions: <Widget>[
               ...widget.idleActions,
               idleVoiceAction,
               ...widget.trailingActions,
+              if (compactHeight) _attachmentPreviews(),
             ],
           ),
       ],
@@ -857,10 +864,12 @@ final class _ComposerActionToolbar extends StatelessWidget {
   const _ComposerActionToolbar({
     required this.leadingAction,
     required this.actions,
+    this.compact = false,
   });
 
   final Widget? leadingAction;
   final List<Widget> actions;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -871,9 +880,11 @@ final class _ComposerActionToolbar extends StatelessWidget {
         ?leadingAction,
         Expanded(
           child: Align(
-            alignment: AlignmentDirectional.centerEnd,
+            alignment: compact
+                ? AlignmentDirectional.centerStart
+                : AlignmentDirectional.centerEnd,
             child: Wrap(
-              alignment: WrapAlignment.end,
+              alignment: compact ? WrapAlignment.start : WrapAlignment.end,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: actions,
             ),

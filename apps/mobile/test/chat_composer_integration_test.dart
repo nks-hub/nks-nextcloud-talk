@@ -48,12 +48,58 @@ part 'chat_composer_nonblocking_test.part.dart';
 part 'chat_composer_quick_emoji_test.part.dart';
 part 'chat_composer_clipboard_offer_test.part.dart';
 
+typedef _ShortComposerGeometry = ({
+  String name,
+  Size physicalSize,
+  double pixelRatio,
+  double topPadding,
+  double keyboard,
+  double visibleHeight,
+  bool attachment,
+});
+
 void main() {
   _registerLocationComposerTests();
   _registerGiphyReopenTests();
   _registerNonBlockingComposerTests();
   _registerQuickEmojiComposerTests();
   _registerClipboardOfferComposerTests();
+  for (final geometry in <_ShortComposerGeometry>[
+    (
+      name: 'Galaxy S9 landscape',
+      physicalSize: const Size(2220, 1080),
+      pixelRatio: 2.625,
+      topPadding: 63,
+      keyboard: 580,
+      visibleHeight: 500,
+      attachment: true,
+    ),
+    (
+      name: 'Galaxy S21 landscape',
+      physicalSize: const Size(2400, 1080),
+      pixelRatio: 3,
+      topPadding: 72,
+      keyboard: 594,
+      visibleHeight: 486,
+      attachment: false,
+    ),
+    (
+      name: '300dp short detail pane',
+      physicalSize: const Size(787.5, 1080),
+      pixelRatio: 2.625,
+      topPadding: 63,
+      keyboard: 580,
+      visibleHeight: 500,
+      attachment: false,
+    ),
+  ]) {
+    testWidgets(
+      '${geometry.name} keeps the composer above a tall keyboard',
+      (tester) => _verifyShortComposer(tester, geometry),
+      timeout: const Timeout(Duration(seconds: 30)),
+    );
+  }
+
   testWidgets(
     'media reply reaches finalize and clears its banner on enqueue',
     (tester) async {
@@ -514,6 +560,109 @@ Future<void> _unmountComposer(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 1));
   await tester.runAsync(() => Future<void>.delayed(Duration.zero));
   await tester.pump();
+}
+
+Future<void> _verifyShortComposer(
+  WidgetTester tester,
+  _ShortComposerGeometry geometry,
+) async {
+  tester.view.devicePixelRatio = geometry.pixelRatio;
+  tester.view.physicalSize = geometry.physicalSize;
+  tester.view.padding = FakeViewPadding(top: geometry.topPadding);
+  tester.view.viewPadding = FakeViewPadding(top: geometry.topPadding);
+  tester.view.viewInsets = FakeViewPadding.zero;
+  addTearDown(tester.view.reset);
+
+  final harness = (await tester.runAsync(_ComposerHarness.create))!;
+  _addHarnessTearDown(tester, harness);
+  await tester.pumpWidget(harness.app(inRoomScreen: true));
+  await _pumpUntil(
+    tester,
+    () =>
+        find.byType(ChatMediaComposer).evaluate().isNotEmpty &&
+        find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+  );
+
+  final composer = find.byKey(const Key('chat-composer'));
+  expect(tester.widget<TextField>(composer).decoration?.isDense, isNull);
+  await tester.enterText(composer, 'First line\nSecond line');
+  await tester.pump();
+  tester.view.viewInsets = FakeViewPadding(bottom: geometry.keyboard);
+  await _pumpTransition(tester);
+  expect(tester.widget<TextField>(composer).decoration?.isDense, isTrue);
+  await tester.enterText(composer, 'First line\nSecond line updated');
+  await tester.pump();
+  expect(_composer(tester).text, 'First line\nSecond line updated');
+
+  final visibleBottom = geometry.visibleHeight / geometry.pixelRatio;
+  final controls = <Finder>[
+    composer,
+    find.byKey(const Key('pick-image-attachment')),
+    find.byKey(const Key('open-giphy-picker')),
+    find.byKey(const Key('open-format-menu')),
+    find.byKey(const Key('open-emoji-picker')),
+    find.byKey(const Key('voice-record')).evaluate().isNotEmpty
+        ? find.byKey(const Key('voice-record'))
+        : find.byKey(const Key('voice-record-unavailable')),
+    find.byKey(const Key('send-message-gesture')),
+  ];
+  for (final control in controls) {
+    expect(control, findsOneWidget);
+    await tester.ensureVisible(control);
+    await tester.pump();
+    expect(control.hitTestable(), findsOneWidget);
+    final rect = tester.getRect(control);
+    expect(rect.width, greaterThanOrEqualTo(48));
+    expect(rect.height, greaterThanOrEqualTo(48));
+    expect(rect.bottom, lessThanOrEqualTo(visibleBottom));
+  }
+
+  if (geometry.attachment) {
+    final media = tester
+        .widget<ChatMediaComposer>(find.byType(ChatMediaComposer))
+        .controller!;
+    final attached = await tester.runAsync(
+      () => media.attachImageBytes(
+        tinyPng,
+        mimeType: 'image/png',
+        displayName: 'layout-fixture.png',
+      ),
+    );
+    expect(attached, isTrue);
+    await _pumpUntil(tester, () => media.hasPreparedAttachment);
+    final summary = find.byKey(const Key('compact-attachment-summary'));
+    await _pumpUntil(tester, () => summary.evaluate().isNotEmpty);
+    await tester.ensureVisible(summary);
+    await tester.pump();
+    expect(summary.hitTestable(), findsOneWidget);
+    final summaryRect = tester.getRect(summary);
+    expect(summaryRect.width, greaterThanOrEqualTo(48));
+    expect(summaryRect.height, greaterThanOrEqualTo(48));
+    expect(summaryRect.bottom, lessThanOrEqualTo(visibleBottom));
+
+    await tester.tap(summary);
+    await _pumpTransition(tester);
+    expect(find.byKey(const Key('compact-attachment-sheet')), findsOneWidget);
+    expect(find.byKey(const Key('remove-prepared-attachment')), findsOneWidget);
+    tester.view.viewInsets = FakeViewPadding.zero;
+    await _pumpTransition(tester);
+    expect(find.byKey(const Key('compact-attachment-sheet')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    Navigator.of(
+      tester.element(find.byKey(const Key('compact-attachment-sheet'))),
+    ).pop();
+    await _pumpTransition(tester);
+  }
+
+  await tester.enterText(composer, '');
+  await tester.pump();
+  expect(_composer(tester).text, isEmpty);
+  expect(harness.sentMessages, isEmpty);
+  expect(harness.uploadedAttachments, isEmpty);
+  expect(harness.finalizedFileNames, isEmpty);
+  expect(tester.takeException(), isNull);
+  tester.view.viewInsets = FakeViewPadding.zero;
+  await _unmountComposer(tester);
 }
 
 final class _ComposerHarness {

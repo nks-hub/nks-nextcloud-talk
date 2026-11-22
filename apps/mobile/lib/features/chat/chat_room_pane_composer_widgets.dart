@@ -480,8 +480,73 @@ final class _ChatComposer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    return ChatComposerViewportLayout(
+      builder: (context, compactHeight) =>
+          _buildLayout(context, ref, compactHeight),
+    );
+  }
+
+  Widget _buildLayout(BuildContext context, WidgetRef ref, bool compactHeight) {
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
+    final composerField = Focus(
+      onKeyEvent: (node, event) =>
+          _handleKey(context, event, sendsOnEnter: context.sendsOnEnter),
+      child: SizedBox(
+        height: compactHeight ? 48 : null,
+        child: TextField(
+          key: const Key('chat-composer'),
+          controller: controller,
+          onChanged: (_) =>
+              ref.read(windowActivityProvider)?.recordInteraction(),
+          focusNode: focusNode,
+          autofocus: autofocus,
+          minLines: 1,
+          maxLines: 5,
+          maxLength: composerMaximumCharacters,
+          inputFormatters: [
+            OversizedPasteFormatter(
+              onOversizedPaste,
+              canDivert: canDivertPaste,
+            ),
+          ],
+          buildCounter:
+              (_, {required currentLength, required isFocused, maxLength}) =>
+                  null,
+          textCapitalization: TextCapitalization.sentences,
+          keyboardType: TextInputType.multiline,
+          contentInsertionConfiguration: ContentInsertionConfiguration(
+            allowedMimeTypes: const <String>[
+              'image/png',
+              'image/jpeg',
+              'image/gif',
+              'image/webp',
+              'image/bmp',
+            ],
+            onContentInserted: (content) {
+              ref.read(windowActivityProvider)?.recordInteraction();
+              unawaited(
+                _insertKeyboardContent(
+                  content,
+                  ProviderScope.containerOf(context, listen: false),
+                ),
+              );
+            },
+          ),
+          decoration: InputDecoration(
+            hintText: strings.messageHint,
+            isDense: compactHeight ? true : null,
+            filled: false,
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            contentPadding: compactHeight
+                ? const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
+                : const EdgeInsets.fromLTRB(16, 14, 16, 10),
+          ),
+        ),
+      ),
+    );
     return Material(
       color: scheme.surface,
       shape: Border(
@@ -490,7 +555,7 @@ final class _ChatComposer extends ConsumerWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          padding: ChatComposerViewportLayout.padding(compactHeight),
           child: Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
@@ -583,96 +648,33 @@ final class _ChatComposer extends ConsumerWidget {
                                 width: 2,
                               ),
                             ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Focus(
-                                  onKeyEvent: (node, event) => _handleKey(
-                                    context,
-                                    event,
-                                    sendsOnEnter: context.sendsOnEnter,
-                                  ),
-                                  child: TextField(
-                                    key: const Key('chat-composer'),
-                                    controller: controller,
-                                    onChanged: (_) => ref
-                                        .read(windowActivityProvider)
-                                        ?.recordInteraction(),
-                                    focusNode: focusNode,
-                                    autofocus: autofocus,
-                                    minLines: 1,
-                                    maxLines: 5,
-                                    maxLength: composerMaximumCharacters,
-                                    inputFormatters: [
-                                      OversizedPasteFormatter(
-                                        onOversizedPaste,
-                                        canDivert: canDivertPaste,
+                            child: compactHeight
+                                ? CompactChatComposerRow(
+                                    field: composerField,
+                                    media: media,
+                                    mediaComposer: mediaComposer,
+                                    dividerColor: scheme.outlineVariant
+                                        .withValues(alpha: 0.7),
+                                  )
+                                : Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      composerField,
+                                      Divider(
+                                        height: 1,
+                                        color: scheme.outlineVariant.withValues(
+                                          alpha: 0.7,
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                          vertical: 2,
+                                        ),
+                                        child: mediaComposer,
                                       ),
                                     ],
-                                    buildCounter:
-                                        (
-                                          _, {
-                                          required currentLength,
-                                          required isFocused,
-                                          maxLength,
-                                        }) => null,
-                                    textCapitalization:
-                                        TextCapitalization.sentences,
-                                    keyboardType: TextInputType.multiline,
-                                    contentInsertionConfiguration:
-                                        ContentInsertionConfiguration(
-                                          allowedMimeTypes: const <String>[
-                                            'image/png',
-                                            'image/jpeg',
-                                            'image/gif',
-                                            'image/webp',
-                                            'image/bmp',
-                                          ],
-                                          onContentInserted: (content) {
-                                            ref
-                                                .read(windowActivityProvider)
-                                                ?.recordInteraction();
-                                            unawaited(
-                                              _insertKeyboardContent(
-                                                content,
-                                                ProviderScope.containerOf(
-                                                  context,
-                                                  listen: false,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                    decoration: InputDecoration(
-                                      hintText: strings.messageHint,
-                                      filled: false,
-                                      border: InputBorder.none,
-                                      enabledBorder: InputBorder.none,
-                                      focusedBorder: InputBorder.none,
-                                      contentPadding: const EdgeInsets.fromLTRB(
-                                        16,
-                                        14,
-                                        16,
-                                        10,
-                                      ),
-                                    ),
                                   ),
-                                ),
-                                Divider(
-                                  height: 1,
-                                  color: scheme.outlineVariant.withValues(
-                                    alpha: 0.7,
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 2,
-                                  ),
-                                  child: mediaComposer,
-                                ),
-                              ],
-                            ),
                           ),
                         ),
                       ],

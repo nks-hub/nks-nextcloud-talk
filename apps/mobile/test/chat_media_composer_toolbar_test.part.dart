@@ -276,6 +276,73 @@ void _registerChatMediaComposerToolbarTests(
     );
   });
 
+  testWidgets('compact denied microphone keeps every action on one row', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(400, 500);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    addTearDown(tester.view.reset);
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory(permissionGranted: false);
+    addTearDown(voiceBackends.close);
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore(),
+        bridge: bridge.bridge,
+        threadId: null,
+        voiceBackends: voiceBackends,
+        showAttachmentButton: false,
+        leadingAction: _aggregatedLeadingAction(),
+        idleActions: <Widget>[
+          ..._aggregatedIdleActions(),
+          IconButton(
+            key: const Key('open-format-menu'),
+            onPressed: () {},
+            icon: const Icon(Icons.format_bold_rounded),
+          ),
+        ],
+        trailingActions: _aggregatedTrailingActions(),
+        openAppSettings: () async => true,
+        wrap: (composer, controller) => ChatComposerViewportLayout(
+          builder: (context, compactHeight) => CompactChatComposerRow(
+            field: const SizedBox(height: 48),
+            media: controller,
+            mediaComposer: composer,
+            dividerColor: Colors.grey,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const Key('voice-record')));
+    await tester.pump();
+
+    const actionKeys = <String>[
+      'pick-image-attachment',
+      'open-giphy-picker',
+      'open-emoji-picker',
+      'open-format-menu',
+      'voice-record',
+      'voice-open-app-settings',
+      'send-message',
+    ];
+    final centerYs = actionKeys
+        .map((key) => tester.getCenter(find.byKey(Key(key))).dy)
+        .toSet();
+    expect(centerYs, hasLength(1));
+    for (final key in actionKeys) {
+      final action = find.byKey(Key(key));
+      await tester.ensureVisible(action);
+      await tester.pump();
+      final size = tester.getSize(action);
+      expect(size.width, greaterThanOrEqualTo(48));
+      expect(size.height, greaterThanOrEqualTo(48));
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('loading toolbar wraps at compact detail pane width', (
     tester,
   ) async {

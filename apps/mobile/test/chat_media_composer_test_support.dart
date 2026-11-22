@@ -21,45 +21,42 @@ Widget _composerApp({
   String Function()? captionSource,
   ValueChanged<String>? onCaptionConsumed,
   Future<bool> Function()? openAppSettings,
+  Widget Function(Widget composer, ChatMediaComposerController controller)?
+  wrap,
   Locale locale = const Locale('en'),
   double textScale = 1,
 }) {
+  final mediaController = controller ?? ChatMediaComposerController();
+  final composer = ChatMediaComposer(
+    key: composerKey,
+    accountId: _account,
+    server: _server,
+    roomToken: _room,
+    threadId: threadId,
+    replyTarget: replyTarget,
+    onReplyDurablyAccepted: onReplyDurablyAccepted,
+    sourceStore: sourceStore,
+    capabilityProfile: profile ?? _profile(),
+    submissionBridge: bridge,
+    silent: silent,
+    captionSource: captionSource,
+    onCaptionConsumed: onCaptionConsumed,
+    openAppSettings: openAppSettings,
+    controller: mediaController,
+    leadingAction: leadingAction,
+    showAttachmentButton: showAttachmentButton,
+    idleActions: idleActions,
+    trailingActions: trailingActions,
+    imageSelectionBackend: imageSelectionBackend,
+    contactSelectionBackend: contactSelectionBackend,
+    createVoiceCaptureBackend: voiceBackends?.createCapture,
+    createVoicePlaybackBackend: voiceBackends?.createPlayback,
+    voiceClock: _FixedStepClock(),
+  );
   return localizedTestApp(
     locale: locale,
     textScale: textScale,
-    home: Scaffold(
-      body: ChatMediaComposer(
-        key: composerKey,
-        accountId: _account,
-        server: _server,
-        roomToken: _room,
-        threadId: threadId,
-        replyTarget: replyTarget,
-        onReplyDurablyAccepted: onReplyDurablyAccepted,
-        sourceStore: sourceStore,
-        capabilityProfile: profile ?? _profile(),
-        submissionBridge: bridge,
-        silent: silent,
-        captionSource: captionSource,
-        onCaptionConsumed: onCaptionConsumed,
-        openAppSettings: openAppSettings,
-        // Every harness gets a controller so the pick helper can perform the
-        // send step a real user does with the send button.
-        controller: controller ?? ChatMediaComposerController(),
-        leadingAction: leadingAction,
-        showAttachmentButton: showAttachmentButton,
-        idleActions: idleActions,
-        trailingActions: trailingActions,
-        imageSelectionBackend: imageSelectionBackend,
-        contactSelectionBackend: contactSelectionBackend,
-        createVoiceCaptureBackend: voiceBackends?.createCapture,
-        createVoicePlaybackBackend: voiceBackends?.createPlayback,
-        // A widget test starts and stops a recording within the same
-        // millisecond, which now reads as a recording too short to send. This
-        // is the clock a finger would have moved.
-        voiceClock: _FixedStepClock(),
-      ),
-    ),
+    home: Scaffold(body: wrap?.call(composer, mediaController) ?? composer),
   );
 }
 
