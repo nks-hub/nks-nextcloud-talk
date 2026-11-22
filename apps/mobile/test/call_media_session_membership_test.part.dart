@@ -3,6 +3,123 @@ part of 'call_media_session_test.dart';
 extension _MediaMembershipTests on _MediaSessionTests {
   void _registerMembership() {
     test(
+      'an internal pull drops a departed screen-only sender and its queued offer',
+      () async {
+        final remaining = [_participant('other-session')];
+        final known = [_participant(_remote, inCall: 0), ...remaining];
+        CallSignalingUpdate update(
+          List<SignalingParticipant> members, [
+          List<SignalingPeerMessage> messages = const [],
+        ]) => _update(
+          localPeerId: _local,
+          participants: members,
+          messages: messages,
+          phase: SignalingAccountPhase.internalReady,
+          topology: SignalingTopology.internalPeerToPeer,
+          transport: SignalingTransportKind.internal,
+        );
+        SignalingPeerMessage offer(String sid, {String senderId = _remote}) =>
+            _message(
+              senderId,
+              'offer',
+              {'type': 'offer', 'sdp': sid},
+              sid: sid,
+              roomType: 'screen',
+            );
+
+        final media = session(update(remaining));
+        addTearDown(media.dispose);
+        await media.start();
+        final call = engine.connections.single;
+        call.emitConnectionState(CallMediaConnectionState.connected);
+
+        updates.add(update(remaining, [offer('early-screen')]));
+        await pumpEventQueue();
+        final screen = engine.connections.last;
+        expect(engine.connections, [call, screen]);
+        expect(screen.remoteDescriptions.single.sdp, 'early-screen');
+        var rendererDisposals = 0;
+        var rejectRelease = false;
+        screen.onRemoteVideo(
+          _FakeRemoteVideo(
+            beforeDispose: () async {
+              rendererDisposals++;
+              if (rejectRelease) {
+                throw StateError('screen renderer cleanup failed');
+              }
+            },
+          ),
+        );
+
+        const candidate = CallIceCandidate(
+          candidate: 'candidate:screen',
+          sdpMid: '0',
+          sdpMLineIndex: 0,
+        );
+        updates.add(update(known));
+        screen.onIceCandidate(candidate);
+        await pumpEventQueue();
+        expect(screen.closed, isFalse);
+        expect(rendererDisposals, 0);
+        expect(media.state.peers, 1);
+
+        Iterable<String?> sentScreenSids(String type) => sent
+            .where(
+              (message) => message.type == type && message.roomType == 'screen',
+            )
+            .map((message) => message.sid);
+        expect(sentScreenSids('answer'), ['early-screen']);
+        expect(sentScreenSids('candidate'), ['early-screen']);
+
+        // An internal response may deliver an older message followed by
+        // the authoritative roster from after the sender left.
+        rejectRelease = true;
+        updates.add(update(remaining, [offer('departed-screen')]));
+        screen.onIceCandidate(candidate);
+        await pumpEventQueue();
+        rejectRelease = false;
+        expect(screen.closed, isTrue);
+        expect(rendererDisposals, 1);
+        expect(engine.connectionCloseStarts, 1);
+        expect(engine.connections, [call, screen]);
+        expect(sentScreenSids('answer'), ['early-screen']);
+        expect(sentScreenSids('candidate'), ['early-screen']);
+        expect(call.closed, isFalse);
+        expect(media.state.phase, CallMediaPhase.connected);
+
+        updates.add(
+          update(remaining, [
+            offer('delayed-screen'),
+            offer('first-screen', senderId: 'new-session'),
+          ]),
+        );
+        await pumpEventQueue();
+        expect(engine.connections, hasLength(3));
+        expect(
+          engine.connections.last.remoteDescriptions.single.sdp,
+          'first-screen',
+        );
+        expect(sentScreenSids('answer'), ['early-screen', 'first-screen']);
+
+        updates.add(update(known, [offer('rejoined-screen')]));
+        await pumpEventQueue();
+        final rejoined = engine.connections.last;
+        expect(rejoined, isNot(same(screen)));
+        expect(rejoined.remoteDescriptions.single.sdp, 'rejoined-screen');
+        expect(rejoined.closed, isFalse);
+        expect(sentScreenSids('answer'), [
+          'early-screen',
+          'first-screen',
+          'rejoined-screen',
+        ]);
+        expect(call.closed, isFalse);
+        await media.dispose();
+        expect(engine.connectionCloseStarts, 4);
+        expect(rendererDisposals, 1);
+      },
+    );
+
+    test(
       'mesh call opens at most four peer connections concurrently',
       () async {
         final createGate = Completer<void>();

@@ -103,6 +103,18 @@ extension _McuScreenAnswerTests on _MediaSessionTests {
         expect(incomingScreen.createdAnswers, 1);
         expect(incomingScreen.closed, isFalse);
 
+        var rendererDisposals = 0;
+        if (change == _McuScreenAnswerChange.screenOnlySenderAbsent) {
+          incomingScreen.onRemoteVideo(
+            _FakeRemoteVideo(
+              beforeDispose: () async {
+                rendererDisposals++;
+              },
+            ),
+          );
+          await pumpEventQueue();
+        }
+
         final resumed = switch (change) {
           _McuScreenAnswerChange.earlyScreenSenderJoins => update(
             members: [_participant(_remote), _participant(other)],
@@ -160,6 +172,9 @@ extension _McuScreenAnswerTests on _MediaSessionTests {
             expect(audioPeers.last.closed, isFalse);
           case _McuScreenAnswerChange.screenOnlySenderAbsent:
             expect(attempted, [original]);
+            expect(incomingScreen.closed, isTrue);
+            expect(rendererDisposals, 1);
+            expect(engine.connectionCloseStarts, 1);
             expect(audioPeers.single.closed, isFalse);
             expect(media.state.peers, 1);
             final joined = [_participant(_remote), _participant(other)];
@@ -172,6 +187,23 @@ extension _McuScreenAnswerTests on _MediaSessionTests {
             updates.add(update(members: joined));
             await pumpEventQueue();
             expect(attempted, [original]);
+
+            const rejoinedSid = 'rejoined-screen';
+            updates.add(
+              update(members: joined, messages: [screenOffer(rejoinedSid)]),
+            );
+            await pumpEventQueue();
+            final rejoined = engine.connections.last;
+            expect(attempted.map((answer) => answer.sid), [
+              originalSid,
+              rejoinedSid,
+            ]);
+            expect(rejoined, isNot(same(incomingScreen)));
+            expect(rejoined.createdAnswers, 1);
+            expect(rejoined.closed, isFalse);
+            expect(rendererDisposals, 1);
+            expect(engine.connectionCloseStarts, 1);
+            expect(audioPeers.single.closed, isFalse);
           case _McuScreenAnswerChange.roomChanges:
           case _McuScreenAnswerChange.leave:
             expect(attempted, [original]);

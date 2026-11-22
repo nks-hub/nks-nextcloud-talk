@@ -135,6 +135,7 @@ final class CallMediaSession {
   Timer? _reactionTimer;
   CallLocalVideo? _video;
   final Map<String, SignalingParticipant> _participantsByPeer = {};
+  final Set<String> _departedInternalRoomPeers = {};
   CallMediaState _state = CallMediaState.idle;
   Future<void> _serial = Future<void>.value();
   int? _boundRoomEpoch;
@@ -372,19 +373,40 @@ final class CallMediaSession {
         .toList(growable: false);
     final iceServers = _iceServers;
 
-    final expected = <String>{
+    final participantsByPeer = <String, SignalingParticipant>{
       for (final participant in update.participants)
-        if (participant.inCall != 0 && participant.peerId != localPeerId)
-          participant.peerId.value,
+        if (participant.peerId != localPeerId)
+          participant.peerId.value: participant,
     };
+    final expected = <String>{
+      for (final participant in participantsByPeer.values)
+        if (participant.inCall != 0) participant.peerId.value,
+    };
+    // A screen offer can arrive before its sender is listed in the call.
+    // Only a departure from the previous room or call roster ends that share.
+    final departed = <String>{
+      if (!bindingChanged)
+        for (final entry in _participantsByPeer.entries)
+          if (!participantsByPeer.containsKey(entry.key) ||
+              (entry.value.inCall != 0 && !expected.contains(entry.key)))
+            entry.key,
+    };
+    final internal = update.transport == SignalingTransportKind.internal;
+    if (internal) {
+      // The backend reads messages before the roster. An older offer may
+      // arrive on a later pull, after its sender has already disappeared.
+      _departedInternalRoomPeers
+        ..removeAll(participantsByPeer.keys)
+        ..addAll(
+          departed.where((peerId) => !participantsByPeer.containsKey(peerId)),
+        );
+    }
     _participantsByPeer
       ..clear()
-      ..addEntries([
-        for (final participant in update.participants)
-          if (expected.contains(participant.peerId.value))
-            MapEntry(participant.peerId.value, participant),
-      ]);
-    await _closePeers(_peers.keys.toSet().difference(expected));
+      ..addAll(participantsByPeer);
+    final closing = _peers.keys.toSet().difference(expected)
+      ..addAll(_screens.keys.where(departed.contains));
+    await _closePeers(closing);
     if (_disposed) return;
     _retiredSubscriberSids.removeWhere(
       (peerId, _) => !expected.contains(peerId),
@@ -428,6 +450,12 @@ final class CallMediaSession {
         ? _mcuScreenAnswersFor(expected)
         : const <_MediaPeer, _PendingMcuScreenAnswer>{};
     for (final message in update.messages) {
+      final senderId = message.sender?.value;
+      if (message.roomType == _screenRoomType &&
+          (departed.contains(senderId) ||
+              (internal && _departedInternalRoomPeers.contains(senderId)))) {
+        continue;
+      }
       await _receive(
         message: message,
         localPeerId: localPeerId.value,
@@ -544,6 +572,7 @@ final class CallMediaSession {
     final resources = cleanup ?? CallResourceCleanup();
     _cancelPublisherRetry();
     _retiredSubscriberSids.clear();
+    _departedInternalRoomPeers.clear();
     await _stopSharing(cleanup: resources);
     await _closePeers({..._peers.keys, ..._screens.keys}, resources);
     final publisher = _publisher;

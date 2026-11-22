@@ -319,8 +319,13 @@ extension _CallMediaSessionScreen on CallMediaSession {
         final connection = await _engine.createPeerConnection(
           iceServers: iceServers,
           audio: null,
-          onIceCandidate: (candidate) =>
-              unawaited(_enqueue(() => _sendCandidate(opened, candidate))),
+          onIceCandidate: (candidate) => unawaited(
+            _enqueue(() async {
+              if (identical(_screens[senderId], opened)) {
+                await _sendCandidate(opened, candidate);
+              }
+            }),
+          ),
           onConnectionState: (state) => unawaited(
             _enqueue(() async {
               if (identical(_screens[senderId], opened)) {
@@ -446,6 +451,7 @@ extension _CallMediaSessionScreen on CallMediaSession {
     if (screen == null) {
       return;
     }
+    screen.pendingMcuScreenAnswer = null;
     await _closeMediaPeer(
       'incoming screen peer',
       screen,
