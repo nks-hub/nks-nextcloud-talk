@@ -180,6 +180,9 @@ final class CallSignalingSession {
 
   Stream<CallSignalingUpdate> get updates => _lane.updates;
 
+  @visibleForTesting
+  bool get hasUpdateListenersForTesting => _lane._updates.hasListener;
+
   Future<bool> sendPeerMessage(
     SignalingPeerMessage message, {
     int? expectedRoomEpoch,

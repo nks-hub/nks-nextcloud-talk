@@ -322,6 +322,9 @@ base class CallJoinController
     );
   }
 
+  @visibleForTesting
+  bool get capturesSignalingForTesting => _signalingCapture != null;
+
   void _releaseSignalingCapture() {
     final capture = _signalingCapture;
     _signalingCapture = null;

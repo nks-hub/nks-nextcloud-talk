@@ -153,6 +153,72 @@ void _registerCallForegroundLifecycleTests() {
     },
   );
 
+  for (final failure in ['microphone refused', 'REST join refused']) {
+    test('a join failing on $failure stops capturing signalling', () async {
+      final gate = Completer<void>();
+      final restRefused = failure == 'REST join refused';
+      final foreground = _ForegroundCalls(
+        startGate: restRefused ? null : gate.future,
+        denied: !restRefused,
+      );
+      final signaling = _ScriptedInternalSignaling(local: 'session-rooma123');
+      final restStarted = Completer<void>();
+      final fixture = await _ForegroundJoinFixture.create(
+        foreground,
+        _AnsweringEngine(),
+        signaling: signaling.handle,
+        onCall: (request, _) async {
+          if (request.method == 'GET') {
+            return _ocsResponse(200, <Object?>[
+              _peer(token: 'rooma123', sessionId: 'session-rooma123'),
+            ]);
+          }
+          if (restRefused && request.method == 'POST') {
+            restStarted.complete();
+            await gate.future;
+            return _ocsResponse(403, <String, Object?>{});
+          }
+          return _ocsResponse(200, <String, Object?>{});
+        },
+      );
+      addTearDown(() async {
+        if (!gate.isCompleted) gate.complete();
+        await fixture.close();
+        await signaling.close();
+      });
+      signaling.deliver(peerInCall: 'zz-peer-session', localInCall: 0);
+      await signaling.pullStarted(2);
+      final session = (await fixture.container.read(
+        chatRoomSignalingProvider(_ForegroundJoinFixture.key).future,
+      )).session!;
+      expect(session.hasUpdateListenersForTesting, isFalse);
+
+      final joining = fixture.controller.join();
+      await (restRefused ? restStarted.future : foreground.firstStart.future);
+      expect(session.hasUpdateListenersForTesting, isTrue);
+      expect(fixture.controller.capturesSignalingForTesting, isTrue);
+      gate.complete();
+      await joining;
+      // Updates arriving after the failure must find nobody to buffer them.
+      signaling.deliver(peerInCall: 'zz-peer-session', localInCall: 0);
+      await signaling.pullStarted(3);
+      await pumpEventQueue();
+
+      final state = fixture.container.read(
+        callJoinControllerProvider(_ForegroundJoinFixture.key),
+      );
+      expect(state.phase, CallJoinPhase.failed);
+      expect(
+        restRefused ? state.lifecycleError : state.mediaError,
+        restRefused
+            ? CallLifecycleError.forbidden
+            : CallMediaError.microphonePermissionDenied,
+      );
+      expect(session.hasUpdateListenersForTesting, isFalse);
+      expect(fixture.controller.capturesSignalingForTesting, isFalse);
+    });
+  }
+
   test(
     'duplicate camera enable shares admission and camera off cancels it',
     () async {
