@@ -62,6 +62,7 @@ import 'emoji_only_message.dart';
 import 'quick_emoji_hold_button.dart';
 import 'incoming_message_announcement.dart';
 import 'outgoing_message_status.dart';
+import 'unresolved_file_share_refresh.dart';
 import 'media/proportional_image.dart';
 import 'media/chat_image_copy_action.dart';
 import 'media/chat_image_exporter.dart';
@@ -207,7 +208,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   bool _silentSend = false;
   OwnTalkAppearanceMarkerWatch _appearanceMarkers =
       OwnTalkAppearanceMarkerWatch();
-  final Set<int> _fileSharesChecked = <int>{};
+  final _fileShares = UnresolvedFileShareRefresh();
   final Object _typingSource = Object();
   ChatTypingRoomKey? _activeTypingKey;
   bool _typingCanPost = false;
@@ -404,7 +405,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _emojiPickerPending = false;
     _incomingAnnouncements.reset();
     _appearanceMarkers = OwnTalkAppearanceMarkerWatch();
-    _fileSharesChecked.clear();
+    _fileShares.reset();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_restoreDraft(_key));
       unawaited(_restartLiveSync(roomChanged: true));
@@ -481,6 +482,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _syncLoop = null;
     _draftTimer?.cancel();
     _highlightTimer?.cancel();
+    _fileShares.reset();
     _incomingAnnouncements.dispose();
     _attachmentMenuActions_.dispose();
     _scrollController
