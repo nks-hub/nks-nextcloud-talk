@@ -1,6 +1,5 @@
 import 'dart:collection';
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../../core/desktop_metrics.dart';
@@ -359,7 +358,12 @@ final class _ConversationFilterBar extends StatelessWidget {
       onSelected: onSelected,
       showCheckmark: false,
       materialTapTargetSize: MaterialTapTargetSize.padded,
-      visualDensity: compact ? const VisualDensity(horizontal: -4) : null,
+      visualDensity: compact
+          ? VisualDensity(
+              horizontal: -4,
+              vertical: Theme.of(context).visualDensity.vertical,
+            )
+          : null,
       padding: compact ? EdgeInsets.zero : null,
       labelPadding: compact ? const EdgeInsets.symmetric(horizontal: 2) : null,
       side: BorderSide(
@@ -475,23 +479,6 @@ final class _ConversationTile extends StatelessWidget {
                             children: [
                               LayoutBuilder(
                                 builder: (context, box) {
-                                  final icons =
-                                      (conversation.favorite ? 1 : 0) +
-                                      (conversation.isArchived ? 1 : 0) +
-                                      (hasCall ? 1 : 0);
-                                  final badge = presence == null
-                                      ? 0.0
-                                      : 7 +
-                                            MediaQuery.textScalerOf(
-                                              context,
-                                            ).scale(20);
-                                  final maxDate = math.max(
-                                    0.0,
-                                    math.min(
-                                      box.maxWidth / 2,
-                                      box.maxWidth - 48 - 22 * icons - badge,
-                                    ),
-                                  );
                                   return Row(
                                     children: [
                                       if (conversation.favorite) ...[
@@ -550,12 +537,10 @@ final class _ConversationTile extends StatelessWidget {
                                       // At 200 % text an absolute date is wider
                                       // than the 240 dp the list may be dragged
                                       // to (it once overflowed by 65 px), so it
-                                      // is capped at half the row, less the icons
-                                      // and badge beside the name and 48 dp the
-                                      // name keeps for itself.
+                                      // is capped at half the row.
                                       ConstrainedBox(
                                         constraints: BoxConstraints(
-                                          maxWidth: maxDate,
+                                          maxWidth: box.maxWidth / 2,
                                         ),
                                         child: Text(
                                           _formatActivity(

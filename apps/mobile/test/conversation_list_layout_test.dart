@@ -14,6 +14,7 @@ void main() {
     List<CachedConversation> conversations, {
     double textScale = 1,
     double width = 900,
+    Locale locale = const Locale('en'),
   }) async {
     tester.view
       ..physicalSize = Size(width, 700)
@@ -26,6 +27,7 @@ void main() {
         ],
         child: localizedTestApp(
           textScale: textScale,
+          locale: locale,
           home: Scaffold(
             body: ConversationListView(
               account: _account,
@@ -61,27 +63,23 @@ void main() {
     );
   });
 
-  testWidgets(
-    'filters are regular chips on a phone and tight in a narrow pane',
-    (tester) async {
-      double? labelSize() => tester
-          .widget<FilterChip>(
-            find.byKey(const Key('conversation-filter-unread')),
-          )
-          .labelStyle
-          ?.fontSize;
+  testWidgets('filters switch from tight to regular chips at a 340 dp bar', (
+    tester,
+  ) async {
+    double? labelSize() => tester
+        .widget<FilterChip>(find.byKey(const Key('conversation-filter-unread')))
+        .labelStyle
+        ?.fontSize;
+    final rows = [_conversation('room-a', 'Synthetic peer')];
 
-      await pump(tester, [
-        _conversation('room-a', 'Synthetic peer'),
-      ], width: 390);
-      expect(labelSize(), 14);
-
-      await pump(tester, [
-        _conversation('room-a', 'Synthetic peer'),
-      ], width: 300);
-      expect(labelSize(), 11);
-    },
-  );
+    // The bar is the pane minus 16 dp of padding.
+    for (final locale in const [Locale('en'), Locale('cs')]) {
+      await pump(tester, rows, width: 355, locale: locale);
+      expect(labelSize(), 11, reason: '339 dp bar, $locale');
+      await pump(tester, rows, width: 357, locale: locale);
+      expect(labelSize(), 14, reason: '341 dp bar, $locale');
+    }
+  });
 
   testWidgets('rows are separated by space, not by divider lines', (
     tester,
@@ -101,8 +99,8 @@ void main() {
     expect(find.text('No conversations yet'), findsOneWidget);
   });
 
-  testWidgets('a favourite with a status and a long name fits 200 % text in '
-      'the narrowest list pane', (tester) async {
+  testWidgets('a favourite direct chat with a status fits 200 % text in the '
+      'narrowest list pane and keeps its date', (tester) async {
     await pump(
       tester,
       [
@@ -111,6 +109,7 @@ void main() {
           'Quarterly planning with the regional sales leads and finance',
           favorite: true,
           status: 'away',
+          type: 1,
         ),
       ],
       textScale: 2,
@@ -118,6 +117,11 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
+    expect(
+      find.byKey(const Key('conversation-presence-badge-room-a')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.star_rounded), findsOneWidget);
   });
 }
 
@@ -126,6 +130,7 @@ CachedConversation _conversation(
   String name, {
   bool favorite = false,
   String? status,
+  int type = 2,
 }) {
   return CachedConversation(
     accountId: _account.id,
@@ -137,13 +142,13 @@ CachedConversation _conversation(
     favorite: favorite,
     isArchived: false,
     readOnly: 0,
-    roomType: 2,
+    roomType: type,
     roomName: name,
     objectType: '',
     avatarVersion: '',
     isCustomAvatar: false,
     peerStatus: status,
-    peerStatusIcon: status == null ? null : '*',
+    peerStatusIcon: status == null ? null : 'x',
     lastMessageText: 'Latest message in the room',
     rawJson: '{}',
   );
