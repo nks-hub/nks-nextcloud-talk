@@ -112,7 +112,11 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
       await stream.dispose();
       throw const CallMediaException(CallMediaError.cameraUnavailable);
     }
-    return _WebRtcLocalVideo.open(stream);
+    try {
+      return await _WebRtcLocalVideo.open(stream);
+    } on Object catch (error) {
+      throw CallMediaException(_cameraError(error));
+    }
   }
 
   @override
@@ -297,9 +301,16 @@ final class _WebRtcLocalVideo implements CallLocalVideo {
 
   static Future<_WebRtcLocalVideo> open(rtc.MediaStream stream) async {
     final renderer = rtc.RTCVideoRenderer();
-    await renderer.initialize();
-    renderer.srcObject = stream;
-    return _WebRtcLocalVideo._(stream, renderer);
+    try {
+      await renderer.initialize();
+      renderer.srcObject = stream;
+      return _WebRtcLocalVideo._(stream, renderer);
+    } on Object {
+      final cleanup = CallResourceCleanup();
+      await cleanup.run(renderer.dispose, label: 'incomplete video preview');
+      await _releaseLocalStream(stream, cleanup);
+      rethrow;
+    }
   }
 
   final rtc.MediaStream stream;

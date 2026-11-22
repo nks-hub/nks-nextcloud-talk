@@ -121,6 +121,44 @@ void main() {
     messenger.setMockMethodCallHandler(peerEvents, null);
   });
 
+  test('camera releases capture when its preview cannot open', () async {
+    openRenderer = () async => throw PlatformException(
+      code: 'preview_open',
+      message: 'camera preview could not open',
+    );
+    failures['video-1'] = PlatformException(code: 'NotAllowedError');
+    failures['streamDispose'] = PlatformException(code: 'stream_release');
+
+    final failure = await engine.openCamera().then<Object?>(
+      (_) => null,
+      onError: (Object error) => error,
+    );
+    expect(
+      {'failure': failure, 'releases': releases},
+      {
+        'failure': isA<CallMediaException>().having(
+          (error) => error.code,
+          'code',
+          CallMediaError.cameraUnavailable,
+        ),
+        'releases': ['video-1', 'video-2', 'streamDispose'],
+      },
+    );
+
+    openRenderer = null;
+    failures.clear();
+    releases.clear();
+    final retry = await engine.openCamera();
+    expect(releases, isEmpty);
+    await retry.dispose();
+    expect(releases, [
+      'videoRendererDispose',
+      'video-1',
+      'video-2',
+      'streamDispose',
+    ]);
+  });
+
   test('camera stops its tracks after native renderer release fails', () async {
     final camera = await engine.openCamera();
     failures['videoRendererDispose'] = PlatformException(
