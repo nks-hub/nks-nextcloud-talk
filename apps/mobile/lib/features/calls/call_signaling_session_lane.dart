@@ -260,8 +260,11 @@ final class _CallSignalingLane {
       if (--_leases > 0) {
         return;
       }
-      await _shutdownNow(deleteDurableState: true);
-      onReleased();
+      try {
+        await _shutdownNow(deleteDurableState: true);
+      } finally {
+        onReleased();
+      }
     });
   }
 
@@ -710,7 +713,8 @@ final class _CallSignalingLane {
       return;
     }
     _disposed = true;
-    await _stopIo();
+    final cleanup = CallResourceCleanup();
+    await cleanup.run(_stopIo);
     if (deleteDurableState) {
       // Best effort on purpose. This runs while everything is being taken
       // down, and the database can already be gone - closing a desktop window
@@ -726,7 +730,8 @@ final class _CallSignalingLane {
         );
       } on Object catch (_) {}
     }
-    await _updates.close();
+    await cleanup.run(_updates.close);
+    cleanup.rethrowFailure();
   }
 
   Future<void> _stopIo() async {
@@ -740,14 +745,17 @@ final class _CallSignalingLane {
     }
     _httpAborts.clear();
     _peerMessageQueue.clear();
-    await _socketSubscription?.cancel();
+    final subscription = _socketSubscription;
     _socketSubscription = null;
     final socket = _socket;
     _socket = null;
     _socketEpoch = null;
+    final cleanup = CallResourceCleanup();
+    await cleanup.run(subscription?.cancel);
     if (socket != null) {
-      await socket.close(HpbCloseReason.release);
+      await cleanup.run(() => socket.close(HpbCloseReason.release));
     }
+    cleanup.rethrowFailure();
   }
 
   Future<T> _enqueue<T>(Future<T> Function() operation) {

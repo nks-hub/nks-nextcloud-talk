@@ -13,6 +13,7 @@ import '../../data/account_repository.dart';
 import '../../data/call_session_repository.dart';
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
+import 'call_resource_cleanup.dart';
 import 'hpb_socket_transport.dart';
 
 part 'call_signaling_session_lane.dart';
@@ -278,8 +279,8 @@ final class CallSignalingCoordinator {
         return existing.handle;
       }
       if (existing != null) {
-        await existing.shutdown(deleteDurableState: true);
         _lanes.remove(accountId);
+        await existing.shutdown(deleteDurableState: true);
       }
 
       final account = await _accounts.getAccount(accountId);
@@ -424,10 +425,12 @@ final class CallSignalingCoordinator {
   }
 
   Future<void> _shutdownLanes(List<_CallSignalingLane> lanes) async {
+    final cleanup = CallResourceCleanup();
     var nextLane = 0;
     Future<void> shutdownNext() async {
       while (nextLane < lanes.length) {
-        await lanes[nextLane++].shutdown(deleteDurableState: false);
+        final lane = lanes[nextLane++];
+        await cleanup.run(() => lane.shutdown(deleteDurableState: false));
       }
     }
 
@@ -435,6 +438,7 @@ final class CallSignalingCoordinator {
         ? lanes.length
         : _laneShutdownConcurrency;
     await Future.wait(List.generate(workerCount, (_) => shutdownNext()));
+    cleanup.rethrowFailure();
   }
 
   Future<void> shutdownAccount(String accountId) {
