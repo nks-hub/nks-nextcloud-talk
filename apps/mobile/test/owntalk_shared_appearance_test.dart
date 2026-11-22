@@ -808,7 +808,16 @@ void main() {
     });
 
     test('the default bubbles read at 4.5:1 in both themes', () {
-      for (final theme in [AppTheme.light(), AppTheme.dark()]) {
+      for (final theme in [
+        for (final seed in const <Color?>[
+          null,
+          Color(0xFFE65100),
+          Color(0xFF0082C9),
+          Color(0xFFFFEB3B),
+          Color(0xFFFFF59D),
+          Color(0xFF2E7D32),
+        ]) ...[AppTheme.light(seedColor: seed), AppTheme.dark(seedColor: seed)],
+      ]) {
         for (final outgoing in [true, false]) {
           final colors = resolveBubbleColors(
             outgoing: outgoing,

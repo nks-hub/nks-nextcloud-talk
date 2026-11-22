@@ -42,6 +42,47 @@ void _registerChatRoomPaneRenderingTests() {
     return (box.decoration! as BoxDecoration).borderRadius! as BorderRadius;
   }
 
+  testWidgets('an outgoing bubble selects text in its own text colour', (
+    tester,
+  ) async {
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 80,
+        actorId: 'fixture-user',
+        actorDisplayName: 'Me',
+        timestamp: 1724300400,
+        message: '> quoted line\n\nOutgoing body',
+        markdown: true,
+      ),
+      displayText: 'Outgoing body',
+    );
+    await tester.pumpWidget(app(home: roomScreen()));
+    await tester.pump();
+
+    final scheme = Theme.of(
+      tester.element(find.byKey(const Key('chat-message-target-80'))),
+    ).colorScheme;
+    final selection = tester.widget<DefaultSelectionStyle>(
+      find
+          .descendant(
+            of: find.byKey(const Key('chat-message-target-80')),
+            matching: find.byType(DefaultSelectionStyle),
+          )
+          .first,
+    );
+    // The default is the primary at 40 %, which is invisible on a bubble that
+    // is filled with the primary.
+    expect(
+      selection.selectionColor,
+      isNot(scheme.primary.withValues(alpha: 0.4)),
+    );
+    expect(selection.selectionColor!.a, closeTo(0.35, 0.01));
+    expect(selection.selectionColor!.withValues(alpha: 1), scheme.onPrimary);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('a run of one sender joins with tight inner corners', (
     tester,
   ) async {
@@ -76,6 +117,76 @@ void _registerChatRoomPaneRenderingTests() {
     expect(find.byKey(const Key('chat-avatar-70')), findsNothing);
     expect(find.byKey(const Key('chat-avatar-71')), findsNothing);
     expect(find.byKey(const Key('chat-avatar-72')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('a pending bubble continues the run of the last sent message', (
+    tester,
+  ) async {
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 95,
+        actorId: 'fixture-user',
+        actorDisplayName: 'Me',
+        timestamp: now - 20,
+        message: 'Sent just now',
+      ),
+      displayText: 'Sent just now',
+    );
+    await _insertPendingOperation(
+      database,
+      account,
+      conversation,
+      operationId: 'operation-run',
+      outboxState: 'sending',
+      message: 'Still on the wire',
+    );
+    await tester.pumpWidget(app(home: roomScreen()));
+    await tester.pump();
+
+    // Outgoing runs join on the right: the sent bubble gives up its bottom
+    // corner and the pending one its top, as they will once confirmed.
+    expect(bubbleRadiusOf(tester, 95).bottomRight.x, 5);
+    final pending = tester.widget<DecoratedBox>(
+      find
+          .ancestor(
+            of: find.text('Still on the wire'),
+            matching: find.byType(DecoratedBox),
+          )
+          .first,
+    );
+    final radius =
+        (pending.decoration as BoxDecoration).borderRadius! as BorderRadius;
+    expect(radius.topRight.x, 5);
+    expect(radius.bottomRight.x, 20);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('a bot in a direct chat is still named', (tester) async {
+    await insertRunOfThree();
+    await (database.update(database.cachedConversations)
+          ..where((row) => row.token.equals(conversation.token)))
+        .write(const CachedConversationsCompanion(roomType: Value(1)));
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 90,
+        actorId: 'helper-bot',
+        actorDisplayName: 'Helper bot',
+        timestamp: 1724303000,
+        message: 'Bot says hi',
+      )..['actorType'] = 'bots',
+      displayText: 'Bot says hi',
+    );
+    await tester.pumpWidget(app(home: roomScreen()));
+    await tester.pump();
+
+    expect(find.text('Helper bot'), findsOneWidget);
+    expect(find.text('Run sender'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
