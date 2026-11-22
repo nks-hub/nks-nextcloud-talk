@@ -15,6 +15,8 @@ import '../../network/nextcloud_api.dart';
 import '../settings/app_password_revocation_queue.dart';
 import 'server_address_input.dart';
 
+part 'onboarding_browser_login.dart';
+
 enum OnboardingFailureCode {
   invalidServer,
   serverNotReady,
@@ -62,7 +64,7 @@ final class OnboardingCancelled implements Exception {
   const OnboardingCancelled();
 }
 
-enum _CredentialSource { generated, sharedQr }
+enum _CredentialSource { generated, browser, sharedQr }
 
 final class CancellationSignal {
   final Completer<void> _cancelled = Completer<void>();
@@ -197,6 +199,7 @@ final class OnboardingCoordinator {
         accounts: _accounts,
         credentials: _credentials,
       );
+      await queue.recoverBrowserLogins();
     } on Object {
       throw const OnboardingFailure(
         OnboardingFailureCode.localPersistence,
@@ -388,117 +391,12 @@ final class OnboardingCoordinator {
     CancellationSignal cancellation, {
     String? expectedAccountId,
     VoidCallback? onLoginPageOpened,
-  }) async {
-    AppPasswordRevocationReservation? reservation;
-    var loginPageOpened = false;
-    try {
-      cancellation.throwIfCancelled();
-      reservation = await _reserveGeneratedCredential();
-      cancellation.throwIfCancelled();
-      final opened = await _launcher.open(pending.initialization.loginUri);
-      if (!opened) {
-        await _releaseEmptyReservation(_pendingRevocations!, reservation);
-        reservation = null;
-        throw const OnboardingFailure(OnboardingFailureCode.browserUnavailable);
-      }
-      loginPageOpened = true;
-      cancellation.throwIfCancelled();
-      onLoginPageOpened?.call();
-      return await _pollForAccount(
-        pending,
-        cancellation,
-        reservation: reservation,
-        expectedAccountId: expectedAccountId,
-      );
-    } on Object catch (error, stackTrace) {
-      if (!loginPageOpened && reservation != null) {
-        await _releaseEmptyReservation(_pendingRevocations!, reservation);
-      }
-      Error.throwWithStackTrace(error, stackTrace);
-    } finally {
-      await _closeLoginPage();
-    }
-  }
-
-  Future<void> _closeLoginPage() async {
-    try {
-      await _launcher.close();
-    } on Object {
-      // The sheet may already be gone; that must not mask the login outcome.
-    }
-  }
-
-  Future<StoredAccount> _pollForAccount(
-    PendingLogin pending,
-    CancellationSignal cancellation, {
-    required AppPasswordRevocationReservation reservation,
-    String? expectedAccountId,
-  }) async {
-    final deadline = DateTime.now().toUtc().add(loginTimeout);
-    while (DateTime.now().toUtc().isBefore(deadline)) {
-      cancellation.throwIfCancelled();
-      if (_inBackground()) {
-        await Future.any<void>([
-          Future<void>.delayed(pollInterval),
-          cancellation.whenCancelled,
-        ]);
-        continue;
-      }
-      final _ReservedOneShot<LoginPollResult> poll;
-      try {
-        poll = await _awaitReservedOneShot(
-          operation: () => _api.pollLogin(pending),
-          cancellation: cancellation,
-          server: pending.server,
-          reservation: reservation,
-          releaseWhenEmpty: false,
-          credentialFrom: (result) {
-            if (result case LoginPollSucceeded(:final credentials)) {
-              return (
-                loginName: credentials.loginName,
-                appPassword: credentials.appPassword,
-              );
-            }
-            return null;
-          },
-          provesNoCredential: (_) => false,
-        );
-      } on NextcloudApiException catch (error) {
-        cancellation.throwIfCancelled();
-        // iOS suspends the app's sockets while the browser is in front, so the
-        // first polls after returning can fail on a connection that is fine.
-        if (error.code != NextcloudApiError.network &&
-            error.code != NextcloudApiError.timeout) {
-          rethrow;
-        }
-        cancellation.throwIfCancelled();
-        await Future.any<void>([
-          Future<void>.delayed(pollInterval),
-          cancellation.whenCancelled,
-        ]);
-        continue;
-      }
-      final result = poll.value;
-      if (result case LoginPollSucceeded(:final credentials)) {
-        return _commitAccount(
-          server: pending.server,
-          serverStatus: pending.serverStatus,
-          loginCredentials: credentials,
-          credentialSource: _CredentialSource.generated,
-          cancellation: cancellation,
-          expectedAccountId: expectedAccountId,
-          cleanupReservation: poll.reservation,
-        );
-      }
-      cancellation.throwIfCancelled();
-      await Future.any<void>([
-        Future<void>.delayed(pollInterval),
-        cancellation.whenCancelled,
-      ]);
-    }
-    cancellation.throwIfCancelled();
-    throw const OnboardingFailure(OnboardingFailureCode.loginTimedOut);
-  }
+  }) => _completeBrowserLogin(
+    pending,
+    cancellation,
+    expectedAccountId: expectedAccountId,
+    onLoginPageOpened: onLoginPageOpened,
+  );
 
   Future<StoredAccount> _commitAccount({
     required ServerBase server,
@@ -522,6 +420,22 @@ final class OnboardingCoordinator {
     } on Object catch (error, stackTrace) {
       if (credentialSource == _CredentialSource.sharedQr) {
         Error.throwWithStackTrace(error, stackTrace);
+      }
+      if (credentialSource == _CredentialSource.browser &&
+          cleanupReservation != null) {
+        try {
+          if (await _pendingRevocations!.browserCredentialIsOwned(
+            loginCredentials,
+            accounts: _accounts,
+            credentials: _credentials,
+          )) {
+            await _pendingRevocations.releaseHeldCredential(cleanupReservation);
+            Error.throwWithStackTrace(error, stackTrace);
+          }
+        } on Object {
+          // Unknown ownership keeps the credential held for later recovery.
+          Error.throwWithStackTrace(error, stackTrace);
+        }
       }
       final cleanedUp = cleanupReservation == null
           ? await _revokeOrRememberGeneratedCredential(
@@ -695,7 +609,9 @@ final class OnboardingCoordinator {
     return stored;
   }
 
-  Future<AppPasswordRevocationReservation> _reserveGeneratedCredential() async {
+  Future<AppPasswordRevocationReservation> _reserveGeneratedCredential({
+    PendingLogin? browser,
+  }) async {
     final queue = _pendingRevocations;
     if (queue == null) {
       throw const OnboardingFailure(
@@ -704,7 +620,7 @@ final class OnboardingCoordinator {
       );
     }
     try {
-      return await queue.reserve();
+      return await queue.reserve(browser: browser);
     } on Object {
       throw const OnboardingFailure(
         OnboardingFailureCode.localPersistence,
@@ -721,6 +637,8 @@ final class OnboardingCoordinator {
     required bool Function(Object error) provesNoCredential,
     AppPasswordRevocationReservation? reservation,
     bool releaseWhenEmpty = true,
+    VoidCallback? onBrowserDetached,
+    Duration? browserWait,
   }) async {
     final queue = _pendingRevocations;
     if (queue == null) {
@@ -741,15 +659,28 @@ final class OnboardingCoordinator {
       }
       throw const OnboardingCancelled();
     }
+    if (browserWait != null && browserWait <= Duration.zero) {
+      throw const OnboardingFailure(OnboardingFailureCode.loginTimedOut);
+    }
     final outcome = Future<T>.sync(operation).then<_OneShotOutcome<T>>(
       _OneShotValue<T>.new,
       onError: (Object error, StackTrace stackTrace) =>
           _OneShotError<T>(error, stackTrace),
     );
-    final first = await Future.any<_OneShotOutcome<T>>([
-      outcome,
-      cancellation.whenCancelled.then((_) => _OneShotCancelled<T>()),
-    ]);
+    final deadline = Completer<_OneShotOutcome<T>>();
+    final timer = browserWait == null
+        ? null
+        : Timer(browserWait, () => deadline.complete(_OneShotExpired<T>()));
+    final _OneShotOutcome<T> first;
+    try {
+      first = await Future.any<_OneShotOutcome<T>>([
+        outcome,
+        cancellation.whenCancelled.then((_) => _OneShotCancelled<T>()),
+        if (timer != null) deadline.future,
+      ]);
+    } finally {
+      timer?.cancel();
+    }
     if (first case _OneShotValue<T>(:final value)) {
       final credential = credentialFrom(value);
       if (credential == null) {
@@ -758,12 +689,17 @@ final class OnboardingCoordinator {
         }
         return _ReservedOneShot<T>(value: value, reservation: null);
       }
-      final held = await _holdKnownCredential(
-        queue: queue,
-        reservation: activeReservation,
-        server: server,
-        credential: credential,
-      );
+      final held = onBrowserDetached != null && value is LoginPollSucceeded
+          ? await queue.holdBrowserCredential(
+              activeReservation,
+              value.credentials,
+            )
+          : await _holdKnownCredential(
+              queue: queue,
+              reservation: activeReservation,
+              server: server,
+              credential: credential,
+            );
       if (!held) {
         throw const OnboardingFailure(OnboardingFailureCode.localPersistence);
       }
@@ -774,6 +710,14 @@ final class OnboardingCoordinator {
         await _releaseEmptyReservation(queue, activeReservation);
       }
       Error.throwWithStackTrace(error, stackTrace);
+    }
+    if (onBrowserDetached != null) {
+      onBrowserDetached();
+      unawaited(_settleCancelledBrowserPoll(queue, activeReservation, outcome));
+      if (first is _OneShotExpired<T>) {
+        throw const OnboardingFailure(OnboardingFailureCode.loginTimedOut);
+      }
+      throw const OnboardingCancelled();
     }
     unawaited(
       _handleLateReservedOneShot(
@@ -1036,3 +980,5 @@ final class _OneShotError<T> extends _OneShotOutcome<T> {
 final class _OneShotCancelled<T> extends _OneShotOutcome<T> {
   const _OneShotCancelled();
 }
+
+final class _OneShotExpired<T> extends _OneShotOutcome<T> {}

@@ -245,23 +245,41 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
     );
   }
 
-  Future<LoginPollResult> pollLogin(PendingLogin pending) async {
-    final request = _request('POST', pending.initialization.pollEndpoint, null)
-      ..headers['Content-Type'] = 'application/x-www-form-urlencoded'
-      ..headers['User-Agent'] = loginFlowUserAgent
-      ..body = pending.initialization.pollFormBody;
-    final payload = await _sendJson(
-      request,
-      allowedStatusCodes: const {200, 404},
-      maximumBytes: _loginMaximumBytes,
-      parseBodyForStatusCodes: const {200},
-    );
-    return parseLoginPollResponse(
-      statusCode: payload.statusCode,
-      json: payload.json,
-      verifiedServer: pending.server,
-      policy: originPolicy,
-    );
+  Future<LoginPollResult> pollLogin(PendingLogin pending) =>
+      pollLoginCoordinates(pending.server, pending.initialization.poll);
+
+  Future<LoginPollResult> pollLoginCoordinates(
+    ServerBase server,
+    LoginFlowPoll poll,
+  ) async {
+    // An ordinary timeout must not discard a result already consumed on the
+    // server. The browser caller may stop waiting independently of this budget.
+    const hardLimit = Duration(minutes: 2);
+    final extended = requestTimeout * 3;
+    final limit = extended < hardLimit ? extended : hardLimit;
+    final abort = Completer<void>();
+    final timer = Timer(limit, abort.complete);
+    try {
+      final request = _request('POST', poll.endpoint, abort.future)
+        ..headers['Content-Type'] = 'application/x-www-form-urlencoded'
+        ..headers['User-Agent'] = loginFlowUserAgent
+        ..body = poll.formBody;
+      final payload = await _sendJson(
+        request,
+        allowedStatusCodes: const {200, 404},
+        maximumBytes: _loginMaximumBytes,
+        parseBodyForStatusCodes: const {200},
+        oneShotTransportLimit: limit,
+      );
+      return parseLoginPollResponse(
+        statusCode: payload.statusCode,
+        json: payload.json,
+        verifiedServer: server,
+        policy: originPolicy,
+      );
+    } finally {
+      timer.cancel();
+    }
   }
 
   Future<CapabilitySnapshot> getAuthenticatedCapabilities({

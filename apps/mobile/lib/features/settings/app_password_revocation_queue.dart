@@ -11,6 +11,8 @@ import '../../data/credential_vault.dart';
 import '../../network/account_http_client.dart';
 import '../../network/nextcloud_api.dart';
 
+part 'app_password_browser_recovery.dart';
+
 /// App passwords the device still owes a `DELETE /core/apppassword` for.
 ///
 /// Every entry is durable before its local owner disappears. A one-shot login
@@ -77,7 +79,9 @@ final class AppPasswordRevocationQueue {
   });
 
   /// Atomically reserves one durable slot before a one-shot request is sent.
-  Future<AppPasswordRevocationReservation> reserve() async {
+  Future<AppPasswordRevocationReservation> reserve({
+    PendingLogin? browser,
+  }) async {
     final reservation = await _claimNewReservation();
     try {
       await _store.updatePendingRevocations((raw) {
@@ -86,7 +90,13 @@ final class AppPasswordRevocationQueue {
           throw const AppPasswordRevocationQueueCorrupt();
         }
         _requireCapacity(entries);
-        entries.add(_ReservationEntry(id: reservation.id, since: _now()));
+        entries.add(
+          _ReservationEntry(
+            id: reservation.id,
+            since: _now(),
+            browser: browser == null ? null : _BrowserPoll.fromPending(browser),
+          ),
+        );
         return _encode(entries);
       });
     } on Object {
@@ -637,10 +647,15 @@ sealed class _QueueEntry {
 }
 
 final class _ReservationEntry extends _QueueEntry {
-  const _ReservationEntry({required this.id, required this.since});
+  const _ReservationEntry({
+    required this.id,
+    required this.since,
+    this.browser,
+  });
 
   final String id;
   final DateTime since;
+  final _BrowserPoll? browser;
 
   @override
   String get reservationId => id;
@@ -653,7 +668,10 @@ final class _ReservationEntry extends _QueueEntry {
 
   @override
   bool hasSameStateAs(_QueueEntry other) =>
-      other is _ReservationEntry && id == other.id && since == other.since;
+      other is _ReservationEntry &&
+      id == other.id &&
+      since == other.since &&
+      browser?.coordinates == other.browser?.coordinates;
 
   static _ReservationEntry? fromJson(Map<String, Object?> json) {
     final id = json['id'];
@@ -662,9 +680,11 @@ final class _ReservationEntry extends _QueueEntry {
       return null;
     }
     final parsedSince = DateTime.tryParse(since);
-    return parsedSince == null
+    final rawBrowser = json['browser'];
+    final browser = _BrowserPoll.fromJson(rawBrowser);
+    return parsedSince == null || (rawBrowser != null && browser == null)
         ? null
-        : _ReservationEntry(id: id, since: parsedSince);
+        : _ReservationEntry(id: id, since: parsedSince, browser: browser);
   }
 
   @override
@@ -672,6 +692,7 @@ final class _ReservationEntry extends _QueueEntry {
     'kind': 'reservation',
     'id': id,
     'since': since.toUtc().toIso8601String(),
+    if (browser case final poll?) 'browser': poll.toJson(),
   };
 }
 

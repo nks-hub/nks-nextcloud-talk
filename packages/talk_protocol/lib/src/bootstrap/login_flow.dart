@@ -117,12 +117,49 @@ final class LoginFlowInitialization {
   final Uri pollEndpoint;
   final OpaqueLoginToken pollToken;
 
+  LoginFlowPoll get poll => LoginFlowPoll._(pollEndpoint, pollToken);
+
   Map<String, String> get pollFormFields => {'token': pollToken.value};
 
   String get pollFormBody => Uri(queryParameters: pollFormFields).query;
 
   @override
   String toString() => 'LoginFlowInitialization(<redacted>)';
+}
+
+/// Revalidates stored poll coordinates without retaining the browser URL.
+final class LoginFlowPoll {
+  const LoginFlowPoll._(this.endpoint, this.token);
+
+  factory LoginFlowPoll.parse({
+    required String endpoint,
+    required String token,
+    required ServerBase server,
+    ServerOriginPolicy policy = ServerOriginPolicy.production,
+  }) {
+    final uri = ServerBase.parse(endpoint, policy: policy).uri;
+    final base = server.basePath;
+    if (!server.hasSameOrigin(uri) ||
+        (uri.path != '$base/login/v2/poll' &&
+            uri.path != '$base/index.php/login/v2/poll')) {
+      protocolFailure(
+        TalkProtocolErrorCode.untrustedLoginEndpoint,
+        r'$.poll.endpoint',
+      );
+    }
+    return LoginFlowPoll._(
+      uri,
+      OpaqueLoginToken._parse(token, path: r'$.poll.token'),
+    );
+  }
+
+  final Uri endpoint;
+  final OpaqueLoginToken token;
+
+  String get formBody => Uri(queryParameters: {'token': token.value}).query;
+
+  @override
+  String toString() => 'LoginFlowPoll(<redacted>)';
 }
 
 /// Single-use account credentials returned by a successful Login Flow poll.

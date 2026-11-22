@@ -218,6 +218,7 @@ abstract class _HttpNextcloudApiBase {
     required Set<int> allowedStatusCodes,
     required int maximumBytes,
     Set<int>? parseBodyForStatusCodes,
+    Duration? oneShotTransportLimit,
     AccountId? sessionAccountId,
     ServerBase? sessionServer,
   }) async {
@@ -226,6 +227,7 @@ abstract class _HttpNextcloudApiBase {
       allowedStatusCodes: allowedStatusCodes,
       maximumBytes: maximumBytes,
       readBodyForStatusCodes: parseBodyForStatusCodes,
+      oneShotTransportLimit: oneShotTransportLimit,
       sessionAccountId: sessionAccountId,
       sessionServer: sessionServer,
     );
@@ -326,6 +328,7 @@ abstract class _HttpNextcloudApiBase {
     required int maximumBytes,
     Set<int>? readBodyForStatusCodes,
     Duration? timeout,
+    Duration? oneShotTransportLimit,
     AccountId? sessionAccountId,
     ServerBase? sessionServer,
     bool allowAfterClose = false,
@@ -352,7 +355,10 @@ abstract class _HttpNextcloudApiBase {
     request
       ..followRedirects = false
       ..maxRedirects = 0;
-    final effectiveTimeout = timeout ?? requestTimeout;
+    final effectiveTimeout = oneShotTransportLimit ?? timeout ?? requestTimeout;
+    final budget = oneShotTransportLimit == null
+        ? null
+        : (Stopwatch()..start());
     try {
       // `Future.timeout` gives up waiting; it does not cancel what it waited
       // for. The send keeps running, and once this side has stopped listening
@@ -443,7 +449,13 @@ abstract class _HttpNextcloudApiBase {
       }
       final bytes = BytesBuilder(copy: false);
       var length = 0;
-      await for (final chunk in response.stream.timeout(effectiveTimeout)) {
+      final body = budget == null
+          ? response.stream.timeout(effectiveTimeout)
+          : _bodyUntil(
+              response.stream,
+              () => effectiveTimeout - budget.elapsed,
+            );
+      await for (final chunk in body) {
         length += chunk.length;
         if (length > maximumBytes) {
           throw const NextcloudApiException(NextcloudApiError.responseTooLarge);
@@ -682,6 +694,20 @@ bool _startsWithSegments(List<String> actual, List<String> prefix) {
     }
   }
   return true;
+}
+
+Stream<List<int>> _bodyUntil(
+  Stream<List<int>> stream,
+  Duration Function() remaining,
+) async* {
+  final iterator = StreamIterator(stream);
+  try {
+    while (await iterator.moveNext().timeout(remaining())) {
+      yield iterator.current;
+    }
+  } finally {
+    unawaited(iterator.cancel().catchError((Object _) {}));
+  }
 }
 
 http.Request _request(String method, Uri uri, Future<void>? abortTrigger) {

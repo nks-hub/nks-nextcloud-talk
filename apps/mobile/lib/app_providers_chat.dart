@@ -82,6 +82,19 @@ Future<void> drainForBackground(ProviderContainer container) async {
   }
 }
 
+Future<void> _recoverBrowserLoginsWhileVisible(
+  AppPasswordRevocationQueue queue,
+) async {
+  bool visible() =>
+      WidgetsBinding.instance.lifecycleState == ui.AppLifecycleState.resumed;
+  if (!visible()) return;
+  try {
+    if (await queue.recoverBrowserLogins(canPoll: visible)) await queue.drain();
+  } on Object {
+    // Secure recovery state survives the current wake.
+  }
+}
+
 /// Replays queued text sends for rooms that are not open, on start and on
 /// every hint that the network is back. The room pane covers its own room.
 ///
@@ -99,8 +112,10 @@ final outboxDrainProvider = Provider<void>((ref) {
     }
     running = true;
     try {
+      final revocations = ref.read(appPasswordRevocationQueueProvider);
+      unawaited(_recoverBrowserLoginsWhileVisible(revocations));
       await chat.drainPendingSends();
-      await ref.read(appPasswordRevocationQueueProvider).drain();
+      await revocations.drain();
     } on Object {
       // A drain is best effort; the outbox keeps its rows for the next one.
     } finally {

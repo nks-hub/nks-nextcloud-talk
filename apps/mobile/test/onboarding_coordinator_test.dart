@@ -1577,7 +1577,7 @@ final class _LateGeneratedCredentialClient extends http.BaseClient {
       });
     }
     if (request.url.path == _heldPath) {
-      expect(request, isNot(isA<http.Abortable>()));
+      expect(request is http.Abortable, _heldPath.endsWith('/poll'));
       if (!requestStarted.isCompleted) {
         requestStarted.complete();
       }
