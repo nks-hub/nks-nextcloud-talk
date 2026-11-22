@@ -29,6 +29,7 @@ final class CallMediaSession {
   static const int _peerOpenConcurrency = 4;
   static const int _peerCloseConcurrency = 4;
   static const int _peerTaskConcurrency = 4;
+  static const _mcuOfferRetryDelay = Duration(seconds: 10);
 
   CallMediaSession({
     required CallSignalingUpdate initial,
@@ -105,6 +106,7 @@ final class CallMediaSession {
   /// `requestoffer`. The mesh's "one side offers" rule does not apply.
   bool _mcu = false;
   _MediaPeer? _publisher;
+  Timer? _publisherRetry;
   final Map<String, Timer> _offerRequests = <String, Timer>{};
   final CallMediaEngine _engine;
   final CallAudioInterruptions _interruptions;
@@ -313,6 +315,7 @@ final class CallMediaSession {
     }
     _mcu = update.topology == SignalingTopology.externalMcu;
     if (!update.signalingReady || !update.roomConfirmed) {
+      _cancelPublisherRetry();
       // The peers stay. A socket that is reconnecting keeps its room epoch
       // and this side's peer id, so nothing below would rebuild them — and
       // the other side saw no interruption at all, so it will not offer
@@ -334,6 +337,7 @@ final class CallMediaSession {
     final localPeerId = update.localPeerId;
     _localPeerId = localPeerId?.value;
     if (localPeerId == null) {
+      _cancelPublisherRetry();
       _emit(const CallMediaState(phase: CallMediaPhase.preparing));
       return;
     }
@@ -515,8 +519,9 @@ final class CallMediaSession {
 
   Future<void> _closeAllPeers([CallResourceCleanup? cleanup]) async {
     final resources = cleanup ?? CallResourceCleanup();
+    _cancelPublisherRetry();
     _retiredSubscriberSids.clear();
-    await _stopSharing(resources);
+    await _stopSharing(cleanup: resources);
     await _closePeers({..._peers.keys, ..._screens.keys}, resources);
     final publisher = _publisher;
     _publisher = null;

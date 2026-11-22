@@ -11,7 +11,10 @@ extension _CallMediaSessionSignaling on CallMediaSession {
     String localPeerId,
     List<CallIceServer> iceServers,
   ) async {
-    if (_publisher != null || _audio == null) {
+    if (_disposed ||
+        _publisher != null ||
+        _publisherRetry != null ||
+        _audio == null) {
       return;
     }
     final publisher = _MediaPeer(
@@ -25,11 +28,16 @@ extension _CallMediaSessionSignaling on CallMediaSession {
         iceServers: iceServers,
         audio: _audio,
         sendOnly: true,
-        onIceCandidate: (candidate) =>
-            unawaited(_enqueue(() => _sendCandidate(publisher, candidate))),
-        onConnectionState: (state) => unawaited(
+        onIceCandidate: (candidate) => unawaited(
           _enqueue(() async {
             if (identical(_publisher, publisher)) {
+              await _sendCandidate(publisher, candidate);
+            }
+          }),
+        ),
+        onConnectionState: (state) => unawaited(
+          _enqueue(() async {
+            if (!_disposed && identical(_publisher, publisher)) {
               publisher.state = state;
               _publish();
               if (state == CallMediaConnectionState.failed) {
@@ -59,11 +67,32 @@ extension _CallMediaSessionSignaling on CallMediaSession {
         }
       }
     } on CallMediaException {
-      _publisher = null;
+      await _closeFailedNegotiation(publisher);
       return;
     }
     debugPrint('[call] publisher → $localPeerId sid=${publisher.sid}');
     await _offer(publisher);
+  }
+
+  void _retryPublisher(_MediaPeer publisher) {
+    late final Timer retry;
+    retry = Timer(CallMediaSession._mcuOfferRetryDelay, () {
+      unawaited(
+        _enqueue(() async {
+          if (!identical(_publisherRetry, retry)) return;
+          _publisherRetry = null;
+          if (_mcu && _boundRoomEpoch == publisher.roomEpoch) {
+            await _ensurePublisher(publisher.peerId, _iceServers);
+          }
+        }),
+      );
+    });
+    _publisherRetry = retry;
+  }
+
+  void _cancelPublisherRetry() {
+    _publisherRetry?.cancel();
+    _publisherRetry = null;
   }
 
   /// Asks the MCU for the participant's stream. The server answers with an
@@ -79,18 +108,21 @@ extension _CallMediaSessionSignaling on CallMediaSession {
     await _requestOffer(peerId);
     if (_disposed) return;
     _offerRequests[peerId]?.cancel();
-    _offerRequests[peerId] = Timer.periodic(const Duration(seconds: 10), (_) {
-      unawaited(
-        _enqueue(() async {
-          final peer = _peers[peerId];
-          if (_disposed || peer == null || peer.connection != null) {
-            _offerRequests.remove(peerId)?.cancel();
-            return;
-          }
-          await _requestOffer(peerId);
-        }),
-      );
-    });
+    _offerRequests[peerId] = Timer.periodic(
+      CallMediaSession._mcuOfferRetryDelay,
+      (_) {
+        unawaited(
+          _enqueue(() async {
+            final peer = _peers[peerId];
+            if (_disposed || peer == null || peer.connection != null) {
+              _offerRequests.remove(peerId)?.cancel();
+              return;
+            }
+            await _requestOffer(peerId);
+          }),
+        );
+      },
+    );
   }
 
   /// Asks the MCU for a participant's stream.
@@ -156,14 +188,14 @@ extension _CallMediaSessionSignaling on CallMediaSession {
   /// Creates and sends an offer on an existing connection — the first one,
   /// a renegotiation after the video line changed, or an ICE restart after
   /// the transport failed.
-  Future<void> _offer(_MediaPeer peer, {bool iceRestart = false}) async {
+  Future<bool> _offer(_MediaPeer peer, {bool iceRestart = false}) async {
     final connection = peer.connection;
     if (_disposed || connection == null) {
-      return;
+      return false;
     }
     try {
       final offer = await connection.createOffer(iceRestart: iceRestart);
-      if (_disposed) return;
+      if (_disposed) return false;
       await connection.setLocalDescription(offer);
       peer.localOfferPending = true;
       debugPrint(
@@ -171,7 +203,7 @@ extension _CallMediaSessionSignaling on CallMediaSession {
         'video=${_video != null} iceRestart=$iceRestart '
         'lines=${_mediaLines(offer.sdp)}',
       );
-      await _send(
+      final sent = await _send(
         peerId: peer.peerId,
         type: 'offer',
         payload: _sdpPayload(offer),
@@ -179,14 +211,28 @@ extension _CallMediaSessionSignaling on CallMediaSession {
         // sid: a share and the call itself both offer to the same peer.
         via: peer,
       );
+      if (!sent && peer.publisher) await _closeFailedNegotiation(peer);
+      return sent;
     } on CallMediaException {
       await _closeFailedNegotiation(peer);
+      return false;
     }
   }
 
-  Future<void> _closeFailedNegotiation(_MediaPeer peer) => peer.ownScreen
-      ? _closeShare(peer.peerId, CallResourceCleanup())
-      : _closePeer(peer.peerId);
+  Future<void> _closeFailedNegotiation(_MediaPeer peer) async {
+    if (_disposed) return;
+    final cleanup = CallResourceCleanup();
+    if (peer.publisher) {
+      if (!identical(_publisher, peer)) return;
+      _publisher = null;
+      await _closeMediaPeer('MCU publisher', peer, cleanup);
+      if (!_disposed) _retryPublisher(peer);
+    } else if (peer.ownScreen) {
+      await _closeShare(peer.peerId, cleanup);
+    } else {
+      await _closePeer(peer.peerId, cleanup);
+    }
+  }
 
   Future<void> _receive({
     required SignalingPeerMessage message,
@@ -384,7 +430,11 @@ extension _CallMediaSessionSignaling on CallMediaSession {
       peer.remoteDescriptionSet = true;
       await _drainRemoteCandidates(peer);
     } on CallMediaException {
-      await _closeFailedNegotiation(peer);
+      if (!_disposed && _mcu && peer.ownScreen) {
+        await _stopSharing();
+      } else {
+        await _closeFailedNegotiation(peer);
+      }
     }
   }
 
@@ -506,7 +556,7 @@ extension _CallMediaSessionSignaling on CallMediaSession {
 
   /// Sends to the peer's call connection, or — with [via] — on that
   /// connection's own room type and sid (a screen share).
-  Future<void> _send({
+  Future<bool> _send({
     required String peerId,
     required String type,
     required Map<String, Object?>? payload,
@@ -516,7 +566,7 @@ extension _CallMediaSessionSignaling on CallMediaSession {
     final target = roomType == null ? via ?? _peers[peerId] : null;
     final roomEpoch = target?.roomEpoch ?? _boundRoomEpoch;
     if (_disposed || roomEpoch == null) {
-      return;
+      return false;
     }
     final SignalingPeerMessage message;
     try {
@@ -538,8 +588,10 @@ extension _CallMediaSessionSignaling on CallMediaSession {
     } on TalkProtocolException {
       throw const CallMediaException(CallMediaError.engineFailure);
     }
-    if (!await _sendMessage(message, expectedRoomEpoch: roomEpoch)) {
+    final sent = await _sendMessage(message, expectedRoomEpoch: roomEpoch);
+    if (!sent) {
       debugPrint('[call] send refused: $type → $peerId (${message.roomType})');
     }
+    return sent;
   }
 }

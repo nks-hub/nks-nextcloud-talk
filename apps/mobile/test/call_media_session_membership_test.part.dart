@@ -119,6 +119,130 @@ extension _MediaMembershipTests on _MediaSessionTests {
       expect(media.state.peers, 6);
     });
 
+    for (final failure in ['offer', 'answer']) {
+      test(
+        'MCU replaces a publisher after a failed $failure',
+        () => _withPublisherRetry((retryPublisher) async {
+          final participants = [_participant(_remote)];
+          final media = session(
+            _update(
+              localPeerId: _local,
+              topology: SignalingTopology.externalMcu,
+              participants: participants,
+              messages: [
+                _message(_remote, 'offer', {
+                  'type': 'offer',
+                  'sdp': 'subscriber-sdp',
+                }, sid: 'subscriber-sid'),
+              ],
+            ),
+            withControl: true,
+          );
+          if (failure == 'offer') {
+            engine.beforeCreateOffer = (connection) async {
+              if (connection.index == 1) {
+                throw const CallMediaException(CallMediaError.engineFailure);
+              }
+            };
+          }
+          try {
+            await media.start();
+            final [publisher, subscriber] = engine.connections;
+            if (failure == 'answer') {
+              final offer = sent.singleWhere(
+                (message) => message.type == 'offer',
+              );
+              publisher.remoteDescriptionError = CallMediaError.engineFailure;
+              updates.add(
+                _update(
+                  localPeerId: _local,
+                  topology: SignalingTopology.externalMcu,
+                  participants: participants,
+                  messages: [
+                    _message(_local, 'answer', {
+                      'type': 'answer',
+                      'sdp': 'publisher-answer',
+                    }, sid: offer.sid),
+                  ],
+                ),
+              );
+              await pumpEventQueue();
+            }
+
+            expect(publisher.closed, isTrue);
+            expect(subscriber.closed, isFalse);
+            expect(media.state.peers, 1);
+            sent.clear();
+            publisher.emitIceCandidate(
+              const CallIceCandidate(
+                candidate: 'candidate:old-publisher',
+                sdpMid: '0',
+                sdpMLineIndex: 0,
+              ),
+            );
+            await pumpEventQueue();
+            expect(
+              sent.where((message) => message.type == 'candidate'),
+              isEmpty,
+            );
+            expect(engine.connections, hasLength(2));
+
+            retryPublisher();
+            await pumpEventQueue();
+            expect(engine.connections, hasLength(3));
+            expect(subscriber.closed, isFalse);
+            final retry = sent.singleWhere(
+              (message) => message.type == 'offer',
+            );
+            expect(retry.recipient?.value, _local);
+            expect(retry.payload?.wire['sdp'], 'sdp-offer-3');
+          } finally {
+            await media.dispose();
+          }
+        }),
+      );
+    }
+
+    test(
+      'MCU publisher retry is cancelled when its room changes',
+      () => _withPublisherRetry((retryPublisher) async {
+        engine.beforeCreateOffer = (connection) async {
+          if (connection.index == 1) {
+            throw const CallMediaException(CallMediaError.engineFailure);
+          }
+        };
+        final media = session(
+          _update(localPeerId: _local, topology: SignalingTopology.externalMcu),
+          withControl: true,
+        );
+        try {
+          await media.start();
+          expect(engine.connections.single.closed, isTrue);
+          updates.add(
+            _update(
+              localPeerId: 'later-session',
+              topology: SignalingTopology.externalMcu,
+              roomEpoch: 2,
+            ),
+          );
+          await pumpEventQueue();
+          retryPublisher();
+          await pumpEventQueue();
+
+          expect(engine.connections, hasLength(2));
+          expect(
+            sent
+                .singleWhere((message) => message.type == 'offer')
+                .recipient
+                ?.value,
+            'later-session',
+          );
+        } finally {
+          await media.dispose();
+        }
+      }),
+    );
+
     for (final phase in [
       SignalingAccountPhase.terminated,
       SignalingAccountPhase.unsupported,
@@ -254,4 +378,29 @@ extension _MediaMembershipTests on _MediaSessionTests {
       },
     );
   }
+}
+
+Future<void> _withPublisherRetry(
+  Future<void> Function(VoidCallback retryPublisher) testBody,
+) {
+  Timer? retry;
+  VoidCallback? fire;
+  return runZoned(
+    () => testBody(() {
+      final timer = retry;
+      if (timer == null || !timer.isActive) return;
+      timer.cancel();
+      fire?.call();
+    }),
+    zoneSpecification: ZoneSpecification(
+      createTimer: (self, parent, zone, delay, callback) {
+        final timer = parent.createTimer(zone, delay, callback);
+        if (delay == const Duration(seconds: 10)) {
+          retry = timer;
+          fire = callback;
+        }
+        return timer;
+      },
+    ),
+  );
 }

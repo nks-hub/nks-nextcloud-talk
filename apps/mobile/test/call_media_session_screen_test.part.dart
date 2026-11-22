@@ -56,6 +56,105 @@ extension _ScreenMediaSessionTests on _MediaSessionTests {
       expect(media.state.peers, 1);
     });
 
+    for (final failure in ['connection', 'offer', 'send']) {
+      test('MCU screen startup rolls back after failed $failure', () async {
+        final media = session(
+          _update(
+            localPeerId: _local,
+            participants: [_participant(_remote)],
+            topology: SignalingTopology.externalMcu,
+          ),
+          withControl: true,
+          sendMessage: (message, {required expectedRoomEpoch}) async {
+            if (failure == 'send' &&
+                message.roomType == 'screen' &&
+                message.type == 'offer') {
+              return false;
+            }
+            sent.add(message);
+            return true;
+          },
+        );
+        addTearDown(media.dispose);
+        await media.start();
+        final publisher = engine.connections.single;
+        if (failure == 'connection') {
+          engine.connectionError = CallMediaError.engineFailure;
+        } else if (failure == 'offer') {
+          engine.beforeCreateOffer = (connection) async {
+            throw const CallMediaException(CallMediaError.engineFailure);
+          };
+        }
+
+        await expectLater(
+          media.setScreenSharing(true),
+          throwsA(isA<CallMediaException>()),
+        );
+
+        expect(media.state.screenSharing, isFalse);
+        expect(engine.screens.single.disposeCalls, 1);
+        expect(publisher.closed, isFalse);
+        if (failure != 'connection') {
+          expect(engine.connections.last.closed, isTrue);
+        }
+        expect(sent.where((message) => message.roomType == 'screen'), isEmpty);
+      });
+    }
+
+    test('MCU screen answer failure stops sharing and allows retry', () async {
+      final participants = [_participant(_remote)];
+      final media = session(
+        _update(
+          localPeerId: _local,
+          participants: participants,
+          topology: SignalingTopology.externalMcu,
+        ),
+        withControl: true,
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      await media.setScreenSharing(true);
+      final [publisher, share] = engine.connections;
+      final offer = sent.lastWhere((message) => message.type == 'offer');
+      share.remoteDescriptionError = CallMediaError.engineFailure;
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: participants,
+          topology: SignalingTopology.externalMcu,
+          messages: [
+            _message(
+              _local,
+              'answer',
+              {'type': 'answer', 'sdp': 'bad-screen-answer'},
+              sid: offer.sid,
+              roomType: 'screen',
+            ),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(media.state.screenSharing, isFalse);
+      expect(engine.screens.single.disposeCalls, 1);
+      expect(share.closed, isTrue);
+      expect(publisher.closed, isFalse);
+      expect(
+        sent
+            .where((message) => message.type == 'unshareScreen')
+            .map((message) => message.recipient?.value),
+        contains(_remote),
+      );
+
+      await media.setScreenSharing(true);
+      expect(media.state.screenSharing, isTrue);
+      expect(engine.screens, hasLength(2));
+      expect(
+        sent.lastWhere((message) => message.type == 'offer').sid,
+        isNot(offer.sid),
+      );
+    });
+
     for (final mcu in [false, true]) {
       test(
         'leaving during screen startup never publishes (MCU: $mcu)',

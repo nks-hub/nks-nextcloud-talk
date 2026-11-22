@@ -66,10 +66,17 @@ extension _CallMediaSessionScreen on CallMediaSession {
       _screen = screen;
       if (_mcu) {
         final localPeerId = _localPeerId;
-        if (localPeerId != null) {
-          await _openShare(localPeerId);
-          await _runPeerTasks(_peers.keys, _announceShare);
+        var offered = false;
+        try {
+          offered = localPeerId != null && await _openShare(localPeerId);
+        } finally {
+          if (!offered && !_disposed) await _stopSharing(notifyPeers: false);
         }
+        if (_disposed) return;
+        if (!offered) {
+          throw const CallMediaException(CallMediaError.engineFailure);
+        }
+        await _runPeerTasks(_peers.keys, _announceShare);
       } else {
         await _openShares(_peers.keys);
       }
@@ -97,10 +104,10 @@ extension _CallMediaSessionScreen on CallMediaSession {
   /// Through an MCU there is exactly one, offered to this side's own session
   /// id the way the publisher is — the media server fans it out. In the mesh
   /// there is one per participant. [peerId] is the recipient either way.
-  Future<void> _openShare(String peerId) async {
+  Future<bool> _openShare(String peerId) async {
     final screen = _screen;
     if (_disposed || screen == null || _shares.containsKey(peerId)) {
-      return;
+      return false;
     }
     final share = _MediaPeer(
       peerId,
@@ -132,16 +139,16 @@ extension _CallMediaSessionScreen on CallMediaSession {
       );
       if (!identical(_shares[peerId], share)) {
         await connection.close();
-        return;
+        return false;
       }
       share.connection = connection;
-      if (_disposed) return;
+      if (_disposed) return false;
     } on CallMediaException {
       _shares.remove(peerId);
-      return;
+      return false;
     }
     debugPrint('[call] share → $peerId sid=${share.sid}');
-    await _offer(share);
+    return _offer(share);
   }
 
   /// Tells one participant that this side is publishing a screen.
@@ -169,12 +176,15 @@ extension _CallMediaSessionScreen on CallMediaSession {
   }
 
   /// A peer that misses the stop notification still sees the track end.
-  Future<void> _stopSharing([CallResourceCleanup? cleanup]) async {
+  Future<void> _stopSharing({
+    CallResourceCleanup? cleanup,
+    bool notifyPeers = true,
+  }) async {
     final resources = cleanup ?? CallResourceCleanup();
     // Through an MCU the only share is the publish to this side's own
     // session, which tells the SERVER to drop the publisher; the other
     // participants hear nothing from it, so they are told separately.
-    if (_mcu) {
+    if (_mcu && notifyPeers) {
       await _runPeerTasks(
         _peers.keys,
         (peerId) => _notifyUnshare(peerId, resources),
@@ -184,7 +194,7 @@ extension _CallMediaSessionScreen on CallMediaSession {
     _shares.clear();
     final screen = _screen;
     _screen = null;
-    await _closeShares(shares, resources);
+    await _closeShares(shares, resources, notifyPeers: notifyPeers);
     await resources.run(screen?.dispose, label: 'screen capture');
   }
 
@@ -205,13 +215,16 @@ extension _CallMediaSessionScreen on CallMediaSession {
 
   Future<void> _closeShares(
     List<_MediaPeer> shares,
-    CallResourceCleanup cleanup,
-  ) async {
+    CallResourceCleanup cleanup, {
+    required bool notifyPeers,
+  }) async {
     var nextShare = 0;
     Future<void> closeNext() async {
       while (nextShare < shares.length) {
         final share = shares[nextShare++];
-        await _notifyUnshare(share.peerId, cleanup, share: share);
+        if (notifyPeers) {
+          await _notifyUnshare(share.peerId, cleanup, share: share);
+        }
         await cleanup.run(
           share.connection?.close,
           label: 'outgoing screen peer',
