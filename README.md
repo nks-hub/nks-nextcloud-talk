@@ -28,6 +28,7 @@ The people, rooms and server in these pictures are invented. They come from `too
 ## Features
 
 - 💬 **Chat** - Replies, threads, reactions, mentions with suggestions, editing and deleting, pinned messages, reminders, silent and scheduled sending
+- 🔎 **Search** - Message search across conversations; a result from far back in the history opens at the message itself, and scrolling loads the older and newer messages around it
 - ✍️ **Markdown** - Messages render Markdown; the composer has a formatting menu for bold, italic, strikethrough, inline code and code blocks
 - 📎 **Attachments** - Photos and files, voice messages, polls, location, contacts and GIFs; a paste longer than 4,000 characters or 40 lines becomes a `.md` or `.txt` attachment that waits in the composer until you send it
 - 📞 **Calls** - Audio and video, group calls, screen sharing, over the Talk high-performance backend or Talk's internal signalling, and through TURN when a direct path fails
@@ -85,7 +86,7 @@ The [notifications document](docs/architecture/notifications.md) describes all t
 
 ### Running the tests
 
-On 24 September 2026 `flutter analyze` reported no findings and `apps/mobile` passed 2,761 tests with 7 skipped.
+On 23 November 2026 `flutter analyze` reported no findings, `apps/mobile` passed 3,766 tests with 10 skipped and `talk_protocol` passed 1,335.
 
 ```sh
 cd apps/mobile
@@ -101,7 +102,7 @@ Some of the skipped tests are live checks against a real Nextcloud. They run whe
 
 ### Desktop keyboard test
 
-`apps/mobile/integration_test/desktop_composer_keys_test.dart` drives the real Windows app with keys sent through `SendInput`, because `tester.sendKeyEvent` bypasses the part of the engine where keyboard bugs live. Run it with `NKS_TALK_INTEGRATION_TEST=1` and `OWNTALK_ALLOW_GUI_TESTS=1`. Every integration test that opens a window calls `requireGuiTestHost` first: it exits with code 2 unless the second variable is set, and always on the owner's own PC. It refuses to send a key unless the test window is in the foreground, since `SendInput` types into whatever window is in front.
+`apps/mobile/integration_test/desktop_composer_keys_test.dart` drives the real Windows app with keys sent through `SendInput`, because `tester.sendKeyEvent` bypasses the part of the engine where keyboard bugs live. Run it with `NKS_TALK_INTEGRATION_TEST=1` and `OWNTALK_ALLOW_GUI_TESTS=1`. Every integration test that opens a window calls `requireGuiTestHost` first: it exits with code 2 unless the second variable is set, and always on a computer listed (as a SHA-256 of its name) in `integration_test/gui_test_guard.dart`. It refuses to send a key unless the test window is in the foreground, since `SendInput` types into whatever window is in front.
 
 ### macOS native suite
 
