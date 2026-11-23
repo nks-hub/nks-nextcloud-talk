@@ -61,6 +61,7 @@ part 'chat_room_pane_history_scope.part.dart';
 part 'chat_room_pane_image_geometry.part.dart';
 part 'chat_photo_album_test.part.dart';
 part 'chat_image_preview_layout_test.part.dart';
+part 'chat_image_context_menu_test.part.dart';
 
 late AppDatabase database;
 late AccountRepository accounts;
@@ -146,6 +147,8 @@ void main({bool imagesOnly = false, bool albumsOnly = false}) {
   _registerChatRoomPaneImageGeometryTests();
   _registerPhotoAlbumTests();
   _registerChatImagePreviewLayoutTests();
+  _registerImageContextMenuMatrixTests();
+  _registerSecondaryButtonKindTests();
 }
 
 /// The thread layout, for tests that walk into a thread pane from a derived
