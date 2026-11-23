@@ -174,6 +174,15 @@ void main() {
     expect(unknownScope.plan, isNull);
   });
 
+  test('reads a 503 from a proxy as a transient failure', () {
+    final response = decodeChatContextResponse(
+      request: request(),
+      statusCode: 503,
+      body: Uint8List.fromList(utf8.encode('<html>Service Unavailable</html>')),
+    );
+    expect(response.classification, ChatGetClassification.transientError);
+  });
+
   test('moves the account to re-login on a 401', () {
     final source = snapshot();
     final result = planChatContextMerge(

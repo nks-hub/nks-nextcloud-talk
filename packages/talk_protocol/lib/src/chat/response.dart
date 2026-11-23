@@ -347,7 +347,9 @@ ChatContextResponse decodeChatContextResponse({
     }
     return failure(ChatGetClassification.notModified);
   }
-  final envelope = _decodeOcsEnvelope(body);
+  // Classified before the body is read: a proxy in front of the server
+  // answers 429/503 with a body of its own, which says nothing about the
+  // message and must not make the context look unsupported.
   final errorClassification = switch (statusCode) {
     401 => ChatGetClassification.reauthenticationRequired,
     404 => ChatGetClassification.threadNotFound,
@@ -362,6 +364,7 @@ ChatContextResponse decodeChatContextResponse({
   if (errorClassification != null) {
     return failure(errorClassification);
   }
+  final envelope = _decodeOcsEnvelope(body);
   if (!envelope.isSuccess(200)) {
     return failure(ChatGetClassification.ocsError);
   }
