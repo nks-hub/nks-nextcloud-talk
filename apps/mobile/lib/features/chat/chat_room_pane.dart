@@ -1105,10 +1105,13 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       child: Stack(
         fit: StackFit.expand,
         children: [
-          IconButton.filled(
+          IconButton(
             key: const Key('send-message'),
             onPressed: _sending ? null : _send,
             tooltip: strings.sendMessage,
+            // A plain arrow in the theme colour, like the other actions in the
+            // row; the filled disc is gone.
+            color: Theme.of(context).colorScheme.primary,
             icon: _sending
                 ? const SizedBox.square(
                     dimension: 20,
