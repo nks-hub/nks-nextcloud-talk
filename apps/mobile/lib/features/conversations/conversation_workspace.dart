@@ -670,8 +670,7 @@ final class _ExpandedShell extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            // Plain icon buttons of one family; the new
-                            // conversation action is no longer a filled disc.
+                            // Plain icon buttons of one family.
                             IconButton(
                               key: const Key('open-new-conversation'),
                               onPressed: () => _openNewConversation(

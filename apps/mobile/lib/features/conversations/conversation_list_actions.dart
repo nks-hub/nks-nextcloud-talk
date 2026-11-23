@@ -294,14 +294,15 @@ final class _ConversationFilterBar extends StatelessWidget {
     return Semantics(
       container: true,
       label: strings.conversationFiltersLabel,
-      child: SingleChildScrollView(
+      child: Padding(
         key: const Key('conversation-filters'),
-        scrollDirection: Axis.horizontal,
-        // The same 12 dp inset as the search field above, so the two share
-        // their left edge; the chips keep their size and scroll sideways in a
-        // narrow pane instead of squeezing their text against the border.
+        // The same 12 dp inset as the list header's search field, so the two
+        // share their edges. The pills keep their size and wrap to a second
+        // row in a narrow pane, so none is ever hidden off to the side.
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-        child: Row(
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
             _chip(
               context,
@@ -310,7 +311,6 @@ final class _ConversationFilterBar extends StatelessWidget {
               label: Text(strings.conversationFilterUnread),
               onSelected: (_) => onToggle(_ConversationListFilter.unread),
             ),
-            const SizedBox(width: 8),
             _chip(
               context,
               key: const Key('conversation-filter-mentions'),
@@ -318,8 +318,7 @@ final class _ConversationFilterBar extends StatelessWidget {
               label: Text(strings.conversationFilterMentions),
               onSelected: (_) => onToggle(_ConversationListFilter.mentions),
             ),
-            if (showArchived) ...[
-              const SizedBox(width: 8),
+            if (showArchived)
               _chip(
                 context,
                 key: const Key('conversation-filter-archived'),
@@ -327,7 +326,6 @@ final class _ConversationFilterBar extends StatelessWidget {
                 label: Text(strings.conversationFilterArchived),
                 onSelected: (_) => onToggle(_ConversationListFilter.archived),
               ),
-            ],
           ],
         ),
       ),

@@ -87,6 +87,7 @@ void main() {
         tester.view.physicalSize = Size(width, 640);
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.reset);
+        final semantics = tester.ensureSemantics();
 
         const filterKeys = <Key>[
           Key('conversation-filter-unread'),
@@ -113,11 +114,14 @@ void main() {
             tester.getRect(find.byKey(filterKeys.first)).left - bar.left,
             12,
           );
-          for (var i = 0; i < filterKeys.length; i++) {
-            // Reachable by scrolling sideways, never clipped away.
-            await tester.ensureVisible(find.byKey(filterKeys[i]));
-            await tester.pump();
-            final chip = tester.getRect(find.byKey(filterKeys[i]));
+          final rects = [
+            for (final key in filterKeys) tester.getRect(find.byKey(key)),
+          ];
+          for (var i = 0; i < rects.length; i++) {
+            final chip = rects[i];
+            // Every pill is fully inside the bar's insets without scrolling.
+            expect(chip.left, greaterThanOrEqualTo(bar.left + 12));
+            expect(chip.right, lessThanOrEqualTo(bar.right - 12 + 0.5));
             final label = tester.getRect(
               find.descendant(
                 of: find.byKey(filterKeys[i]),
@@ -135,11 +139,28 @@ void main() {
               reason: 'text keeps room from the right border, $locale',
             );
             if (i > 0) {
-              final previous = tester.getRect(find.byKey(filterKeys[i - 1]));
-              expect(chip.left - previous.right, 8, reason: 'gap, $locale');
+              final previous = rects[i - 1];
+              if (previous.top == chip.top) {
+                expect(chip.left - previous.right, 8, reason: 'gap, $locale');
+              } else {
+                expect(chip.top - previous.bottom, greaterThanOrEqualTo(8));
+              }
             }
           }
+          // Wrapped or not, the chips never overlap each other.
+          for (var i = 0; i < rects.length; i++) {
+            for (var j = i + 1; j < rects.length; j++) {
+              expect(rects[i].overlaps(rects[j]), isFalse);
+            }
+          }
+          expect(
+            tester
+                .getSemantics(find.byKey(const Key('conversation-filters')))
+                .label,
+            matches(RegExp('ilter|iltry')),
+          );
         }
+        semantics.dispose();
       });
     }
   }
