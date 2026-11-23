@@ -355,9 +355,14 @@ ChatMergeResult _planIsland(
           _incrementDecimal(island.end.value) == oldest.start.value);
   if (joined) {
     final blocks = mergeChatBlocks(<ChatBlock>[...scope.blocks, island]);
+    // An island reaching past the newest known message moves the poll on to
+    // its end; the poll in flight then lands as stale and asks again.
+    final pastNewest = blocks.last.end.compareTo(scope.futureCursor) > 0;
     final scopes = Map<ChatScopeKey, ChatScopeState>.of(account.scopes);
     scopes[key] = scope.copyWith(
       historyCursor: blocks.first.start,
+      futureCursor: blocks.last.end,
+      futureConverged: pastNewest ? false : null,
       blocks: blocks,
     );
     account = account.copyWith(scopes: scopes);

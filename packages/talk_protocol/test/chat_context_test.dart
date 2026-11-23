@@ -170,6 +170,25 @@ void main() {
     expect(scope.futureCursor, _cursor(1100));
   });
 
+  test('an island past the newest known message carries the poll along', () {
+    // Right after opening a room the history may know less than the server:
+    // the island then reaches past it, and polling goes on from its end.
+    final source = snapshot();
+    final plan = planChatContextMerge(
+      source,
+      _decode(request(messageId: 1050), ids: [990, 1050, 1150], lastGiven: 1160),
+    ).plan!;
+    expect(plan.islandJoined, isTrue);
+    final scope = plan
+        .commit(source)
+        .accounts[account]!
+        .scopes[ChatScopeKey(roomToken: room, threadId: null)]!;
+    expect(scope.blocks, [ChatBlock(start: _cursor(990), end: _cursor(1160))]);
+    expect(scope.historyCursor, _cursor(990));
+    expect(scope.futureCursor, _cursor(1160));
+    expect(scope.futureConverged, isFalse);
+  });
+
   group('a page from an island edge', () {
     final island = ChatBlock(start: _cursor(40), end: _cursor(62));
     ChatFetchRequest page(ChatFetchDirection direction, int cursor) =>
