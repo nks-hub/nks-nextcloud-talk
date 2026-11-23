@@ -984,6 +984,239 @@ void main() {
     });
   });
 
+  group('a gap left by a jump', () {
+    // Island 30-55 from an earlier jump, the newest messages from 331, and
+    // three history pages of unknown messages between them.
+    Future<({List<Uri> context, List<Uri> history})> gapRoom(
+      WidgetTester tester, {
+      List<Override> overrides = const [],
+      Future<void>? firstPageHeld,
+    }) async {
+      for (final id in [
+        for (var id = 30; id <= 54; id++) id,
+        for (var id = 331; id <= 338; id++) id,
+      ]) {
+        await _insertMessage(database, account.id, id);
+      }
+      await _insertScope(
+        database,
+        account.id,
+        historyCursor: '30',
+        futureCursor: '338',
+        hasHistory: true,
+        blocksJson: '[["30","55"],["331","338"]]',
+      );
+      await _insertScope(
+        database,
+        account.id,
+        scopeKey: 'network-root',
+        historyCursor: '331',
+        futureCursor: '338',
+        hasHistory: true,
+        blocksJson: '[["331","338"]]',
+      );
+      final requests = (context: <Uri>[], history: <Uri>[]);
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          final capabilities = _capabilitiesResponse(
+            request,
+            messageContext: true,
+          );
+          if (capabilities != null) {
+            return capabilities;
+          }
+          if (request.url.path.endsWith('/context')) {
+            requests.context.add(request.url);
+            // The island already starts with the room.
+            return http.Response(
+              jsonEncode(_contextPage(oldest: 30, newest: 42)),
+              200,
+              headers: const <String, String>{'X-Chat-Last-Given': '43'},
+            );
+          }
+          if (request.url.queryParameters['lookIntoFuture'] == '0') {
+            requests.history.add(request.url);
+            if (requests.history.length == 1) await firstPageHeld;
+            final anchor = int.parse(
+              request.url.queryParameters['lastKnownMessageId']!,
+            );
+            final oldest = (anchor - 100).clamp(30, anchor - 1);
+            return http.Response(
+              jsonEncode(_historyPage(newest: anchor - 1, oldest: oldest)),
+              200,
+              headers: <String, String>{'X-Chat-Last-Given': '$oldest'},
+            );
+          }
+          return http.Response('', 304);
+        }),
+      );
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        _app(
+          database: database,
+          vault: vault,
+          api: api,
+          overrides: overrides,
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+          ),
+        ),
+      );
+      await _pumpUntil(
+        tester,
+        () =>
+            find.byKey(const Key('chat-message-list')).evaluate().isNotEmpty &&
+            find.byType(LinearProgressIndicator).evaluate().isEmpty,
+      );
+      return requests;
+    }
+
+    Future<void> settle(WidgetTester tester) async {
+      for (var turn = 0; turn < 20; turn++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 2)),
+        );
+      }
+    }
+
+    Future<void> closePane(WidgetTester tester) async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      for (var turn = 0; turn < 50; turn++) {
+        await tester.pump(const Duration(milliseconds: 10));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 1)),
+        );
+      }
+    }
+
+    Future<String> viewBlocks() async => (await (database.select(
+      database.chatScopes,
+    )..where((scope) => scope.scopeKey.equals('root'))).getSingle()).blocksJson;
+
+    testWidgets('closes while the reader scrolls up from the newest messages', (
+      tester,
+    ) async {
+      final requests = await gapRoom(tester);
+
+      for (
+        var turn = 0;
+        turn < 80 && await viewBlocks() != '[["30","338"]]';
+        turn++
+      ) {
+        await tester.drag(
+          find.byKey(const Key('chat-message-list')),
+          const Offset(0, 600),
+        );
+        await settle(tester);
+      }
+
+      expect(await viewBlocks(), '[["30","338"]]');
+      expect(requests.history, hasLength(3));
+      // At most the one island fetch that finds the island at the room start.
+      expect(requests.context.length, lessThanOrEqualTo(1));
+      await settle(tester);
+      expect(
+        find.byKey(const Key('chat-history-gap'), skipOffstage: false),
+        findsNothing,
+      );
+      await closePane(tester);
+    });
+
+    testWidgets('reaching the divider pages the cursor and moves no row', (
+      tester,
+    ) async {
+      final held = Completer<void>();
+      addTearDown(() {
+        if (!held.isCompleted) held.complete();
+      });
+      final requests = await gapRoom(tester, firstPageHeld: held.future);
+      final gap = find.byKey(const Key('chat-history-gap'));
+      for (var turn = 0; turn < 40 && gap.evaluate().isEmpty; turn++) {
+        await tester.timedDrag(
+          find.byKey(const Key('chat-message-list')),
+          const Offset(0, 120),
+          const Duration(milliseconds: 400),
+        );
+        await settle(tester);
+      }
+      expect(gap, findsOneWidget);
+      await _pumpUntil(tester, () => requests.history.isNotEmpty);
+      // The bubble's bottom edge: once the gap closes in front of it the row
+      // loses its divider and the bubble its author line, both above it.
+      final newestOld = find.byKey(const Key('chat-message-target-331'));
+      expect(newestOld, findsOneWidget);
+      final before = tester.getBottomLeft(newestOld).dy;
+
+      held.complete();
+      for (
+        var turn = 0;
+        turn < 100 && await viewBlocks() == '[["30","55"],["331","338"]]';
+        turn++
+      ) {
+        await settle(tester);
+      }
+      await settle(tester);
+
+      expect(await viewBlocks(), '[["30","55"],["231","338"]]');
+      expect(requests.context, isEmpty, reason: 'no island fetch on the way');
+      expect(newestOld, findsOneWidget);
+      expect(
+        tester.getBottomLeft(newestOld).dy,
+        moreOrLessEquals(before, epsilon: 1),
+      );
+      await closePane(tester);
+    });
+
+    testWidgets('a page into the gap keeps the island top on screen', (
+      tester,
+    ) async {
+      final held = Completer<void>();
+      addTearDown(() {
+        if (!held.isCompleted) held.complete();
+      });
+      // A window just big enough for the room, so a page of newer messages
+      // would push the island's oldest rows out of it.
+      final requests = await gapRoom(
+        tester,
+        firstPageHeld: held.future,
+        overrides: [chatMessageWindowProvider.overrideWith((ref, key) => 34)],
+      );
+
+      // Up to the island's oldest edge, where the reader stays while the
+      // page lands.
+      await tester.drag(
+        find.byKey(const Key('chat-message-list')),
+        const Offset(0, 6000),
+      );
+      await _pumpUntil(tester, () => requests.history.isNotEmpty);
+      await settle(tester);
+      final oldest = find.byKey(
+        const ValueKey('chat-message-account-a-rooma123-30'),
+      );
+      expect(oldest, findsOneWidget);
+
+      held.complete();
+      for (
+        var turn = 0;
+        turn < 100 && await viewBlocks() == '[["30","55"],["331","338"]]';
+        turn++
+      ) {
+        await settle(tester);
+      }
+      await settle(tester);
+
+      expect(await viewBlocks(), isNot('[["30","55"],["331","338"]]'));
+      expect(
+        oldest,
+        findsOneWidget,
+        reason: 'the cached oldest message must not drop out of the window',
+      );
+      await closePane(tester);
+    });
+  });
+
   testWidgets('a page filling the gap below the island moves no visible row', (
     tester,
   ) async {

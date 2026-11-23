@@ -459,6 +459,12 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       _scrollController.keepPositionAcrossAnchorChange();
       _update(() => _anchorMessageId = islandEnd);
     }
+    // A page of newer messages lands in a gap below the oldest rows shown;
+    // the window is widened over it so those rows stay on screen.
+    final visibleBefore = _visibleMessages();
+    final oldestShown = visibleBefore.isEmpty
+        ? null
+        : visibleBefore.first.messageId;
     _update(() => _loadingOlder = true);
     try {
       final outcome = await ref
@@ -471,6 +477,10 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
             growIsland: islandEnd != null,
           );
       if (!isCurrent()) return null;
+      if (oldestShown != null && outcome == ChatFetchOutcome.done) {
+        await _widenMessageWindowTo(oldestShown, targetKey);
+        if (!isCurrent()) return null;
+      }
       _update(() => _localError = null);
       return outcome;
     } on ChatServiceException catch (error) {
@@ -580,12 +590,85 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         _anchorMessageId = awayFromNewest ? _newestCachedMessageId() : null;
       });
     }
-    if (_loadingOlder || _jumpInProgress) {
+    if (_jumpInProgress) {
+      return;
+    }
+    final gap = _lastGapShown();
+    if (gap != null && _awayFromNewest) {
+      _anchorOnReadersSide(gap);
+    }
+    if (_loadingOlder) {
       return;
     }
     if (position.pixels >= position.maxScrollExtent - 160) {
       unawaited(_loadOlder());
+    } else if (gap != null &&
+        _scrollController.paintedRowTop(gap.below) != null) {
+      // The divider is laid out, so on or near the screen. Pages from the
+      // history cursor fill its gap from the newer side, so a reader coming
+      // up from the newest messages scrolls on into older ones as before any
+      // jump left an island behind.
+      unawaited(_loadOlder(fetchOnly: true));
     }
+  }
+
+  /// The last gap among the rows shown: the oldest row shown, the newest row
+  /// above the gap and the oldest row below it, which carries the divider.
+  /// Null without a gap.
+  ({int oldest, int above, int below})? _lastGapShown() {
+    final blocks = _decodeScopeBlocks(
+      ref.read(chatScopeProvider(_key)).valueOrNull,
+    );
+    if (blocks == null || blocks.length < 2) {
+      return null;
+    }
+    final visible = _visibleMessages();
+    for (var index = visible.length - 1; index > 0; index--) {
+      final newer = visible[index].messageId;
+      final older = visible[index - 1].messageId;
+      if (_blockIndexOf(blocks, newer) != _blockIndexOf(blocks, older)) {
+        return (oldest: visible.first.messageId, above: older, below: newer);
+      }
+    }
+    return null;
+  }
+
+  /// Keeps the anchor on the side of the gap the reader is reading. A page
+  /// filling the gap then lands on the other side of the anchor, and nothing
+  /// on screen moves. The divider's place on screen tells the side; with the
+  /// divider out of reach, the island's ends near the screen mean the island.
+  /// The margin around the middle keeps the anchor from flipping while the
+  /// divider sits there.
+  void _anchorOnReadersSide(({int oldest, int above, int below}) gap) {
+    final viewport = _scrollController.position.viewportDimension;
+    final divider = _scrollController.paintedRowTop(gap.below);
+    final bool island;
+    if (divider != null) {
+      if (divider > viewport * 0.6) {
+        island = true;
+      } else if (divider < viewport * 0.4) {
+        island = false;
+      } else {
+        return;
+      }
+    } else if (_scrollController.paintedRowTop(gap.above) != null ||
+        _scrollController.paintedRowTop(gap.oldest) != null) {
+      island = true;
+    } else {
+      // Nowhere near either end: the side has not changed.
+      return;
+    }
+    final current = _anchorMessageId;
+    final anchor = island
+        ? gap.above
+        : current != null && current >= gap.below
+        ? current
+        : _newestCachedMessageId();
+    if (anchor == current) {
+      return;
+    }
+    _scrollController.keepPositionAcrossAnchorChange();
+    _update(() => _anchorMessageId = anchor);
   }
 
   /// Where the newest row sits. The timeline is reversed, so that is offset
