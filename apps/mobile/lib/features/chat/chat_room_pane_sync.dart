@@ -352,6 +352,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         widget.jumpToMessageId == null &&
         _pendingJumpMessageId == null &&
         _jumpTargetId == null &&
+        _island == null &&
         TickerMode.valuesOf(context).enabled &&
         ModalRoute.isCurrentOf(context) != false &&
         ref.read(windowActiveProvider) &&
@@ -435,8 +436,13 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   ///
   /// Cached history the message window has not reached yet is shown first;
   /// [fetchOnly] skips that for a jump, which widens the window to its target
-  /// itself and needs the page from the server.
+  /// itself and needs the page from the server. With an island on screen the
+  /// older page comes from the island's oldest message instead.
   Future<ChatFetchOutcome?> _loadOlder({bool fetchOnly = false}) async {
+    if (_island != null) {
+      await _loadIslandPage(older: true);
+      return ChatFetchOutcome.done;
+    }
     if (_loadingOlder) {
       return null;
     }
@@ -451,20 +457,6 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     final generation = ++_historyGeneration;
     bool isCurrent() =>
         mounted && generation == _historyGeneration && targetKey == _key;
-    final islandEnd = fetchOnly ? null : _islandAtOldestEdge();
-    if (islandEnd != null && islandEnd != _anchorMessageId) {
-      // The cursor page lands in the gap below the island the reader is in.
-      // Anchored on the island's newest row, that page is laid out on the
-      // newer side of the anchor, so the rows on screen stay where they are.
-      _scrollController.keepPositionAcrossAnchorChange();
-      _update(() => _anchorMessageId = islandEnd);
-    }
-    // A page of newer messages lands in a gap below the oldest rows shown;
-    // the window is widened over it so those rows stay on screen.
-    final visibleBefore = _visibleMessages();
-    final oldestShown = visibleBefore.isEmpty
-        ? null
-        : visibleBefore.first.messageId;
     _update(() => _loadingOlder = true);
     try {
       final outcome = await ref
@@ -474,13 +466,8 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
             accountId: targetKey.accountId,
             roomToken: targetKey.roomToken,
             threadId: targetKey.threadId,
-            growIsland: islandEnd != null,
           );
       if (!isCurrent()) return null;
-      if (oldestShown != null && outcome == ChatFetchOutcome.done) {
-        await _widenMessageWindowTo(oldestShown, targetKey);
-        if (!isCurrent()) return null;
-      }
       _update(() => _localError = null);
       return outcome;
     } on ChatServiceException catch (error) {
@@ -500,21 +487,75 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     }
   }
 
-  /// The newest shown message of the oldest of several ranges with gaps
-  /// between them, when the oldest message shown belongs to it: the reader is
-  /// at the oldest edge of what a jump fetched, where older messages continue
-  /// right below. Null otherwise.
-  int? _islandAtOldestEdge() {
-    final blocks = _decodeScopeBlocks(
-      ref.read(chatScopeProvider(_key)).valueOrNull,
-    );
-    if (blocks == null || blocks.length < 2) {
-      return null;
+  /// One page from an edge of the island on screen: older messages from its
+  /// oldest end, newer ones from its newest end. The island lists only its
+  /// own range, so a page simply extends it: older rows go on top, beyond
+  /// the rows being read, and newer rows below the anchor on the island's
+  /// newest row, so nothing on screen moves. Once the island reaches the
+  /// newest messages the room's history takes it in and the view goes on
+  /// as the whole timeline (see build). A page that failed or brought
+  /// nothing pauses this edge for a few seconds instead of asking again on
+  /// every scroll tick.
+  Future<void> _loadIslandPage({required bool older}) async {
+    final island = _island;
+    if (island == null ||
+        _islandLoading ||
+        (older ? _islandAtStart : _islandAtEnd) ||
+        (_islandPause?.isActive ?? false)) {
+      return;
     }
-    final island = _visibleMessages()
-        .takeWhile((message) => _blockIndexOf(blocks, message.messageId) == 0)
-        .toList(growable: false);
-    return island.isEmpty ? null : island.last.messageId;
+    final key = _key;
+    bool isCurrent() => mounted && key == _key && identical(_island, island);
+    _islandLoading = true;
+    if (older) _update(() => _loadingOlder = true);
+    ChatIslandFetch? fetched;
+    try {
+      fetched = await ref
+          .read(chatServiceProvider)
+          .loadIslandPage(
+            readerIsActive: () => isCurrent() && _readerIsActive(),
+            accountId: key.accountId,
+            roomToken: key.roomToken,
+            threadId: key.threadId,
+            island: island,
+            older: older,
+          );
+    } on Object {
+      // Recorded as the room's error by the service; this only pauses.
+      fetched = null;
+    } finally {
+      if (mounted && key == _key) {
+        _islandLoading = false;
+        if (older) _update(() => _loadingOlder = false);
+      }
+    }
+    if (!isCurrent() || fetched?.outcome == ChatFetchOutcome.deferred) {
+      return;
+    }
+    final grown = fetched?.island;
+    if (grown != null && grown != island) {
+      // The window holds the newest cached rows; it has to reach back over
+      // the whole island, newer pages included.
+      await _widenMessageWindowTo(int.parse(grown.start.value), key);
+      if (!isCurrent()) return;
+      _update(() {
+        _island = grown;
+        _islandShown = List.unmodifiable([grown]);
+      });
+      return;
+    }
+    if (fetched?.atEnd ?? false) {
+      _update(() {
+        if (older) {
+          _islandAtStart = true;
+        } else {
+          _islandAtEnd = true;
+        }
+      });
+      return;
+    }
+    _islandPause?.cancel();
+    _islandPause = Timer(const Duration(seconds: 5), () {});
   }
 
   /// Shows the next step of cached history. False when the window already
@@ -577,9 +618,12 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       return;
     }
     final position = _scrollController.position;
+    // An island never shows the newest messages, so its reader is always
+    // away from them and keeps the anchor that holds the rows in place.
     final awayFromNewest =
+        _island != null ||
         position.pixels - _newestOffset(position) >
-        _ChatRoomPaneState._jumpToNewestThreshold;
+            _ChatRoomPaneState._jumpToNewestThreshold;
     if (awayFromNewest != _awayFromNewest) {
       _scrollController.keepPositionAcrossAnchorChange();
       _update(() {
@@ -590,192 +634,15 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         _anchorMessageId = awayFromNewest ? _newestCachedMessageId() : null;
       });
     }
-    if (_jumpInProgress) {
-      return;
-    }
-    final gap = _lastGapShown();
-    if (gap != null && _awayFromNewest) {
-      _anchorOnReadersSide(gap);
-    }
-    if (_loadingOlder || _growingIsland) {
+    if (_loadingOlder || _jumpInProgress || _islandLoading) {
       return;
     }
     if (position.pixels >= position.maxScrollExtent - 160) {
       unawaited(_loadOlder());
-    } else if (gap != null && !(_gapFillPause?.isActive ?? false)) {
-      // Pages from the history cursor fill the gap from its newer side, so a
-      // reader coming up from the newest messages scrolls on into older ones
-      // as before any jump left an island behind. Only from that side: with
-      // the reader in the island above, a page would add the gap's newest
-      // messages, far from what they read, and leave the divider where it is.
-      // On the island side the island grows towards newer messages instead.
-      final divider = _scrollController.paintedRowTop(gap.below);
-      if (divider == null) {
-        return;
-      }
-      if (divider < position.viewportDimension / 2) {
-        unawaited(_fillGap());
-      } else if (!_islandGrowthUnsupported) {
-        unawaited(_growIslandForward(gap.above));
-      }
+    } else if (_island != null &&
+        position.pixels <= _newestOffset(position) + 160) {
+      unawaited(_loadIslandPage(older: false));
     }
-  }
-
-  /// Fetches the messages that followed the island's newest one, so a reader
-  /// who jumped to an old message reads on into what came after it, until the
-  /// island meets the newest messages and the gap closes. The anchor sits on
-  /// the island, so the new rows land below the reader. A fetch that failed
-  /// or changed nothing pauses this like a gap page does.
-  Future<void> _growIslandForward(int islandEnd) async {
-    final key = _key;
-    bool isCurrent() => mounted && key == _key;
-    if (_anchorMessageId != islandEnd) {
-      _scrollController.keepPositionAcrossAnchorChange();
-      _update(() => _anchorMessageId = islandEnd);
-    }
-    final before = ref.read(chatScopeProvider(key)).valueOrNull?.blocksJson;
-    final visibleBefore = _visibleMessages();
-    final oldestShown = visibleBefore.isEmpty
-        ? null
-        : visibleBefore.first.messageId;
-    _growingIsland = true;
-    ChatFetchOutcome? outcome;
-    try {
-      outcome = await ref
-          .read(chatServiceProvider)
-          .loadMessageContext(
-            readerIsActive: () => isCurrent() && _readerIsActive(),
-            accountId: key.accountId,
-            roomToken: key.roomToken,
-            threadId: key.threadId,
-            messageId: islandEnd,
-          );
-    } on Object {
-      // Recorded as the room's error by the service; this only pauses.
-      outcome = null;
-    } finally {
-      if (isCurrent()) _growingIsland = false;
-    }
-    if (!isCurrent() || outcome == ChatFetchOutcome.deferred) {
-      return;
-    }
-    if (outcome == ChatFetchOutcome.unsupported) {
-      _islandGrowthUnsupported = true;
-      return;
-    }
-    if (outcome == ChatFetchOutcome.done) {
-      if (oldestShown != null) {
-        await _widenMessageWindowTo(oldestShown, key);
-      }
-      final after = await ref
-          .read(chatRepositoryProvider)
-          .getScope(
-            accountId: key.accountId,
-            roomToken: key.roomToken,
-            threadId: key.threadId,
-          );
-      if (!isCurrent() || after?.blocksJson != before) {
-        return;
-      }
-    }
-    _gapFillPause?.cancel();
-    _gapFillPause = Timer(const Duration(seconds: 5), () {});
-  }
-
-  /// One cursor page into the gap. After a page that failed or changed
-  /// nothing the next scroll tick would only send the same request again, so
-  /// the divider asks for nothing for a few seconds.
-  Future<void> _fillGap() async {
-    final key = _key;
-    final before = ref.read(chatScopeProvider(key)).valueOrNull?.blocksJson;
-    final outcome = await _loadOlder(fetchOnly: true);
-    if (!mounted || key != _key || outcome == ChatFetchOutcome.deferred) {
-      return;
-    }
-    if (outcome == ChatFetchOutcome.done) {
-      final after = await ref
-          .read(chatRepositoryProvider)
-          .getScope(
-            accountId: key.accountId,
-            roomToken: key.roomToken,
-            threadId: key.threadId,
-          );
-      if (!mounted || key != _key || after?.blocksJson != before) {
-        return;
-      }
-    }
-    _gapFillPause?.cancel();
-    _gapFillPause = Timer(const Duration(seconds: 5), () {});
-  }
-
-  /// The last gap among the rows shown: the oldest row shown, the newest row
-  /// above the gap and the oldest row below it, which carries the divider.
-  /// Null without a gap.
-  ({int oldest, int above, int below})? _lastGapShown() {
-    final scope = ref.read(chatScopeProvider(_key)).valueOrNull;
-    final messages = ref.read(chatMessagesProvider(_key)).valueOrNull;
-    // Asked on every scroll tick; it only changes with the rows or blocks.
-    final inputs = _gapInputs;
-    if (inputs != null &&
-        identical(inputs.messages, messages) &&
-        inputs.blocks == scope?.blocksJson) {
-      return _gap;
-    }
-    _gapInputs = (messages: messages, blocks: scope?.blocksJson);
-    return _gap = _findLastGap(_decodeScopeBlocks(scope));
-  }
-
-  ({int oldest, int above, int below})? _findLastGap(List<ChatBlock>? blocks) {
-    if (blocks == null || blocks.length < 2) {
-      return null;
-    }
-    final visible = _visibleMessages();
-    for (var index = visible.length - 1; index > 0; index--) {
-      final newer = visible[index].messageId;
-      final older = visible[index - 1].messageId;
-      if (_blockIndexOf(blocks, newer) != _blockIndexOf(blocks, older)) {
-        return (oldest: visible.first.messageId, above: older, below: newer);
-      }
-    }
-    return null;
-  }
-
-  /// Keeps the anchor on the side of the gap the reader is reading. A page
-  /// filling the gap then lands on the other side of the anchor, and nothing
-  /// on screen moves. The divider's place on screen tells the side; with the
-  /// divider out of reach, the island's ends near the screen mean the island.
-  /// The margin around the middle keeps the anchor from flipping while the
-  /// divider sits there.
-  void _anchorOnReadersSide(({int oldest, int above, int below}) gap) {
-    final viewport = _scrollController.position.viewportDimension;
-    final divider = _scrollController.paintedRowTop(gap.below);
-    final bool island;
-    if (divider != null) {
-      if (divider > viewport * 0.6) {
-        island = true;
-      } else if (divider < viewport * 0.4) {
-        island = false;
-      } else {
-        return;
-      }
-    } else if (_scrollController.paintedRowTop(gap.above) != null ||
-        _scrollController.paintedRowTop(gap.oldest) != null) {
-      island = true;
-    } else {
-      // Nowhere near either end: the side has not changed.
-      return;
-    }
-    final current = _anchorMessageId;
-    final anchor = island
-        ? gap.above
-        : current != null && current >= gap.below
-        ? current
-        : _newestCachedMessageId();
-    if (anchor == current) {
-      return;
-    }
-    _scrollController.keepPositionAcrossAnchorChange();
-    _update(() => _anchorMessageId = anchor);
   }
 
   /// Where the newest row sits. The timeline is reversed, so that is offset
@@ -790,6 +657,22 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   /// there was no way back short of scrolling the same distance again.
   Future<void> _jumpToNewest() async {
     if (!_scrollController.hasClients) {
+      return;
+    }
+    // An island never held the newest messages: the whole timeline takes
+    // its place, opened at the newest end.
+    if (_island != null) {
+      _update(() {
+        _leaveIsland();
+        _anchorMessageId = null;
+        _awayFromNewest = false;
+      });
+      _scrollController.resetExtentTracking();
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      _scrollController.jumpTo(_newestOffset(_scrollController.position));
       return;
     }
     // The anchor is the message that was newest when the reader left. What
@@ -847,6 +730,35 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     return messages.isEmpty ? null : messages.last.messageId;
   }
 
+  /// Lists [island] on its own from now on (see [_ChatRoomPaneState._island]).
+  void _enterIsland(ChatBlock island) {
+    final history = _messagesWithinBlocks(
+      ref.read(chatMessagesProvider(_key)).valueOrNull ??
+          const <CachedChatMessage>[],
+      _decodeScopeBlocks(ref.read(chatScopeProvider(_key)).valueOrNull),
+    );
+    _update(() {
+      _leaveIsland();
+      _island = island;
+      _islandShown = List.unmodifiable([island]);
+      _islandEntryNewest = history.isEmpty ? null : history.last.messageId;
+      _awayFromNewest = true;
+      // Newer pages land after the island's newest row, below this anchor,
+      // instead of pushing the rows above along.
+      _anchorMessageId = int.parse(island.end.value);
+    });
+  }
+
+  /// Back to the whole timeline. Called inside a state update or a build.
+  void _leaveIsland() {
+    _island = null;
+    _islandShown = null;
+    _islandAtStart = false;
+    _islandAtEnd = false;
+    _islandEntryNewest = null;
+    _islandPause?.cancel();
+  }
+
   void _startPendingJump() {
     final target = _pendingJumpMessageId;
     if (target == null || (_jumpDeferred && !_readerIsActive())) {
@@ -862,9 +774,10 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   ///
   /// Both entry points - a search result and a tapped quote - land here, so
   /// the fetch, the scroll and the highlight exist exactly once. A server
-  /// with `chat-get-context` returns the message with its neighbours, kept as
-  /// a block of their own; otherwise history is paged back until a block
-  /// covers the target or history runs out. Leaving the room ends either.
+  /// with `chat-get-context` returns the message with its neighbours, which
+  /// the timeline then lists on their own as an island; otherwise history is
+  /// paged back until a block covers the target or history runs out. Leaving
+  /// the room ends either.
   Future<void> _jumpToMessage(int messageId) async {
     final generation = ++_jumpGeneration;
     final key = _key;
@@ -912,8 +825,12 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       if (!_isCurrentJump(key, generation)) {
         return;
       }
-      deferred = context == ChatFetchOutcome.deferred;
-      if (context == ChatFetchOutcome.done) {
+      deferred = context?.outcome == ChatFetchOutcome.deferred;
+      final fetched = context?.island;
+      if (context?.outcome == ChatFetchOutcome.done && fetched != null) {
+        if (!context!.joined) {
+          _enterIsland(fetched);
+        }
         scope = await readScope();
         if (!_isCurrentJump(key, generation)) {
           return;
@@ -926,7 +843,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         );
       }
       final start = int.tryParse(scope?.historyCursor ?? '');
-      while (context == ChatFetchOutcome.unsupported &&
+      while (context?.outcome == ChatFetchOutcome.unsupported &&
           revealed == null &&
           scope?.hasHistory == true) {
         final before = scope?.blocksJson;
@@ -975,7 +892,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   }
 
   /// Fetches [messageId] with its neighbours. Null when the fetch failed.
-  Future<ChatFetchOutcome?> _loadJumpContext(
+  Future<ChatIslandFetch?> _loadJumpContext(
     int messageId,
     ChatRoomProviderKey key,
   ) async {
@@ -990,7 +907,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
             threadId: key.threadId,
             messageId: messageId,
           );
-      if (outcome == ChatFetchOutcome.done && isCurrent()) {
+      if (outcome.outcome == ChatFetchOutcome.done && isCurrent()) {
         _update(() => _localError = null);
       }
       return outcome;
@@ -1016,8 +933,15 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     int generation,
   ) async {
     final blocks = _decodeScopeBlocks(scope);
-    if (blocks == null || _blockIndexOf(blocks, messageId) == -1) {
+    final inHistory = blocks != null && _blockIndexOf(blocks, messageId) != -1;
+    final inIsland =
+        _island?.contains(ChatCursor.parse(messageId.toString())) ?? false;
+    if (!inHistory && !inIsland) {
       return null;
+    }
+    if (inHistory && _island != null) {
+      // The whole timeline holds the target, so it replaces the island.
+      _update(_leaveIsland);
     }
     await _widenMessageWindowTo(messageId, key);
     if (!mounted || !_isCurrentJump(key, generation)) {
@@ -1097,11 +1021,23 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   /// an index here matches an index there.
   List<CachedChatMessage> _visibleMessages() {
     final key = _key;
-    return _messagesWithinBlocks(
+    return _messagesShown(
       ref.read(chatMessagesProvider(key)).valueOrNull ??
           const <CachedChatMessage>[],
       _decodeScopeBlocks(ref.read(chatScopeProvider(key)).valueOrNull),
     );
+  }
+
+  /// The rows the timeline lists: the island's range while one is shown,
+  /// otherwise what the scope's blocks cover.
+  List<CachedChatMessage> _messagesShown(
+    List<CachedChatMessage> messages,
+    List<ChatBlock>? blocks,
+  ) {
+    final island = _island;
+    return island == null
+        ? _messagesWithinBlocks(messages, blocks)
+        : _messagesWithinBlocks(messages, [island]);
   }
 
   void _highlight(int messageId) {

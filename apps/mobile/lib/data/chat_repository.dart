@@ -729,45 +729,75 @@ final class ChatRepository {
     });
   }
 
-  /// Stores a context response's messages and shows their range in the view
-  /// of [viewThreadId] as a block of its own. The network scope keeps its
-  /// cursors, so history paging goes on exactly where it was.
-  Future<ChatMergeOutcome> applyChatContextResponse(
-    ChatContextResponse response, {
-    required int? viewThreadId,
-  }) {
+  /// Stores the messages around a jump target. Their range stays an island
+  /// the pane keeps itself; the stored scopes change only when it reaches
+  /// the oldest end of the history and joins it.
+  Future<ChatIslandApplied> applyChatContextResponse(
+    ChatContextResponse response,
+  ) => _applyIsland(
+    response.request.accountId,
+    response.request.roomToken,
+    response.request.threadId,
+    (snapshot) => planChatContextMerge(snapshot, response),
+  );
+
+  /// Stores a page fetched from one edge of [island], like
+  /// [applyChatContextResponse].
+  Future<ChatIslandApplied> applyChatIslandPage(
+    ChatGetResponse response,
+    ChatBlock island,
+  ) => _applyIsland(
+    response.request.accountId,
+    response.request.roomToken,
+    response.request.threadId,
+    (snapshot) => planChatIslandPageMerge(snapshot, response, island),
+  );
+
+  Future<ChatIslandApplied> _applyIsland(
+    AccountId account,
+    ConversationToken room,
+    int? threadId,
+    ChatMergeResult Function(ChatRuntimeSnapshot snapshot) plan,
+  ) {
     return _database.transaction(() async {
-      final request = response.request;
-      final accountId = request.accountId.value;
-      final roomToken = request.roomToken.value;
+      final accountId = account.value;
+      final roomToken = room.value;
+      final rootBackedViewThreadIds = threadId == null
+          ? await _rootBackedViewThreadIdsInCurrentTransaction(
+              accountId: accountId,
+              roomToken: roomToken,
+            )
+          : const <int>{};
       final snapshot = await _loadRuntime(accountId);
-      final result = planChatContextMerge(snapshot, response);
-      final plan = result.plan;
-      if (plan == null) {
-        return result.outcome;
+      final result = plan(snapshot);
+      final planned = result.plan;
+      if (planned == null) {
+        return (outcome: result.outcome, island: null, joined: false);
       }
       await _persistAccount(
-        plan.commit(snapshot).accounts[request.accountId]!,
-        messages: plan.messageUpserts,
+        planned.commit(snapshot).accounts[account]!,
+        messages: planned.messageUpserts,
       );
-      final island = plan.island;
-      if (island != null) {
-        await _writeNetworkBackedViewScope(
-          networkScope: (await _networkScope(
+      if (planned.islandJoined) {
+        if (threadId == null) {
+          await _projectRootNetworkStateToViewsInCurrentTransaction(
             accountId: accountId,
             roomToken: roomToken,
-            threadId: request.threadId,
-          ))!,
-          viewThreadId: viewThreadId,
-          viewScope: await _scope(
+            preservedViewThreadIds: rootBackedViewThreadIds,
+          );
+        } else {
+          await _projectNamedNetworkStateToViewInCurrentTransaction(
             accountId: accountId,
             roomToken: roomToken,
-            threadId: viewThreadId,
-          ),
-          extraBlocks: [island],
-        );
+            threadId: threadId,
+          );
+        }
       }
-      return result.outcome;
+      return (
+        outcome: result.outcome,
+        island: planned.island,
+        joined: planned.islandJoined,
+      );
     });
   }
 

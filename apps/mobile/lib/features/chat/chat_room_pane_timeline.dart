@@ -911,10 +911,9 @@ int _blockIndexWithin(
 }
 
 /// A visible divider marking a gap the client honestly knows about: two
-/// cached ranges with unfetched messages between them. It appears after a
-/// jump fetched an old message with its context (`planChatContextMerge`);
-/// loading older messages grows that range and pages the history cursor, so
-/// the gap closes by itself and needs no action of its own.
+/// cached ranges with unfetched messages between them, such as a sent
+/// message confirmed before the catch-up that joins it to the rest. A jump's
+/// island never shows here: the timeline lists it on its own.
 final class _ChatHistoryGapNotice extends StatelessWidget {
   const _ChatHistoryGapNotice({super.key});
 
@@ -1064,18 +1063,26 @@ String _formatMessageClock(BuildContext context, int unixSeconds) {
 /// It floats over the timeline rather than sitting in the column, so showing
 /// it does not reflow the messages the reader is looking at.
 final class _JumpToNewestButton extends StatelessWidget {
-  const _JumpToNewestButton({required this.onPressed});
+  const _JumpToNewestButton({required this.onPressed, this.newer = 0});
 
   final VoidCallback onPressed;
+
+  /// Messages that arrived while the reader was in an island.
+  final int newer;
 
   @override
   Widget build(BuildContext context) {
     final label = AppLocalizations.of(context).jumpToNewestMessages;
-    return FloatingActionButton.small(
-      key: const Key('chat-jump-to-newest'),
-      onPressed: onPressed,
-      tooltip: label,
-      child: Icon(Icons.arrow_downward_rounded, semanticLabel: label),
+    return Badge(
+      key: const Key('chat-jump-to-newest-count'),
+      isLabelVisible: newer > 0,
+      label: Text('$newer'),
+      child: FloatingActionButton.small(
+        key: const Key('chat-jump-to-newest'),
+        onPressed: onPressed,
+        tooltip: label,
+        child: Icon(Icons.arrow_downward_rounded, semanticLabel: label),
+      ),
     );
   }
 }

@@ -238,9 +238,8 @@ extension _ChatServiceFetch on ChatService {
     await _applyGetResponse(prepared, response);
   }
 
-  /// Fetches the messages around [messageId] into a block of the prepared
-  /// view. Returns the oldest message id it brought, null for none.
-  Future<int?> _fetchContext(
+  /// Fetches the messages around [messageId] for the prepared scope.
+  Future<ChatIslandFetch> _fetchContext(
     _PreparedChat prepared,
     int messageId, {
     Future<void>? abortTrigger,
@@ -265,11 +264,69 @@ extension _ChatServiceFetch on ChatService {
     );
     await _ensurePreparedContextCurrent(prepared);
     probe?.ensureActive();
-    final outcome = await _chat.applyChatContextResponse(
-      response,
-      viewThreadId: prepared.threadId,
+    return _islandResult(
+      response.classification,
+      await _chat.applyChatContextResponse(response),
+      fallback: null,
     );
-    switch (response.classification) {
+  }
+
+  /// Fetches a page from one edge of [island] with the ordinary chat read:
+  /// older from its oldest message, newer from its newest. The newer page
+  /// does not wait for new messages; an island that has caught up gets an
+  /// empty answer at once.
+  Future<ChatIslandFetch> _fetchIslandPage(
+    _PreparedChat prepared,
+    ChatBlock island, {
+    required bool older,
+    Future<void>? abortTrigger,
+    _ChatReadGuard? probe,
+  }) async {
+    await _ensurePreparedContextCurrent(prepared);
+    final scope = (await _chat.getNetworkScope(
+      accountId: prepared.account.id,
+      roomToken: prepared.conversation.token,
+      threadId: prepared.networkThreadId,
+    ))!;
+    probe?.ensureFetchAllowed(prepared);
+    final response = await _api.getChat(
+      chatRequest: ChatFetchRequest(
+        accountId: AccountId.parse(prepared.account.id),
+        requestId: ChatRequestId.parse(_uuid.v4()),
+        server: prepared.authority.server,
+        roomToken: prepared.room.token,
+        profile: prepared.profile,
+        direction: older
+            ? ChatFetchDirection.history
+            : ChatFetchDirection.future,
+        cursor: older ? island.start : island.end,
+        lastCommonRead: ChatCursor.parse(scope.lastCommonRead),
+        limit: ChatService._pageSize,
+        includeLastKnown: false,
+        timeoutSeconds: 0,
+        interactive: !prepared.profile.backgroundCatchUp,
+        threadId: prepared.networkThreadId,
+        futureConverged: scope.futureConverged,
+      ),
+      loginName: prepared.account.loginName,
+      appPassword: prepared.appPassword,
+      abortTrigger: abortTrigger,
+    );
+    await _ensurePreparedContextCurrent(prepared);
+    probe?.ensureActive();
+    return _islandResult(
+      response.classification,
+      await _chat.applyChatIslandPage(response, island),
+      fallback: island,
+    );
+  }
+
+  ChatIslandFetch _islandResult(
+    ChatGetClassification classification,
+    ChatIslandApplied applied, {
+    required ChatBlock? fallback,
+  }) {
+    switch (classification) {
       case ChatGetClassification.reauthenticationRequired:
         throw const ChatServiceException(
           ChatServiceError.reauthenticationRequired,
@@ -277,20 +334,39 @@ extension _ChatServiceFetch on ChatService {
       case ChatGetClassification.transientError:
         throw const ChatServiceException(ChatServiceError.serviceUnavailable);
       case ChatGetClassification.ocsError:
-      case ChatGetClassification.invisibleCursorAdvance:
       case ChatGetClassification.commonReadOnly:
         throw const ChatServiceException(ChatServiceError.invalidResponse);
       // A thread the server no longer knows holds no message to show; the
       // jump says so itself, without a broken-room error on top.
       case ChatGetClassification.threadNotFound:
       case ChatGetClassification.lobby:
+        return (
+          outcome: ChatFetchOutcome.done,
+          island: fallback,
+          joined: false,
+          atEnd: false,
+        );
       case ChatGetClassification.notModified:
-        return null;
+        return (
+          outcome: ChatFetchOutcome.done,
+          island: fallback,
+          joined: false,
+          atEnd: true,
+        );
       case ChatGetClassification.messages:
-        if (outcome == ChatMergeOutcome.rejected) {
+      case ChatGetClassification.invisibleCursorAdvance:
+        if (applied.outcome == ChatMergeOutcome.rejected) {
           throw const ChatServiceException(ChatServiceError.invalidResponse);
         }
-        return response.messages.first.messageId;
+        if (applied.outcome == ChatMergeOutcome.stale) {
+          return _islandNothing;
+        }
+        return (
+          outcome: ChatFetchOutcome.done,
+          island: applied.island ?? fallback,
+          joined: applied.joined,
+          atEnd: false,
+        );
     }
   }
 

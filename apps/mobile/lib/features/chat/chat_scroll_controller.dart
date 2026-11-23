@@ -49,16 +49,6 @@ final class ChatScrollController extends ScrollController {
     return nearestOffset! + (nearestIndex - targetIndex) * nearestHeight!;
   }
 
-  /// Where the top of [messageId]'s row was last laid out, relative to the
-  /// top of the viewport, or null while the row is not laid out at all.
-  double? paintedRowTop(int messageId) {
-    final node = _rows[messageId]?.node;
-    if (node == null || !node.attached || !node.hasSize) return null;
-    final viewport = RenderAbstractViewport.maybeOf(node);
-    if (viewport is! RenderBox) return null;
-    return node.localToGlobal(Offset.zero, ancestor: viewport).dy;
-  }
-
   @override
   ScrollPosition createScrollPosition(
     ScrollPhysics physics,

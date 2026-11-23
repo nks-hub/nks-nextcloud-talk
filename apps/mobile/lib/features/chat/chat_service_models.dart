@@ -24,6 +24,31 @@ enum ChatFetchOutcome {
   deferred,
 }
 
+/// What a fetch for a jump island came to. [island] is its range after the
+/// fetch, null when nothing arrived; [joined] when it became part of the
+/// room's history, which then shows it; [atEnd] when nothing lies beyond the
+/// fetched edge yet.
+typedef ChatIslandFetch = ({
+  ChatFetchOutcome outcome,
+  ChatBlock? island,
+  bool joined,
+  bool atEnd,
+});
+
+const ChatIslandFetch _islandNothing = (
+  outcome: ChatFetchOutcome.done,
+  island: null,
+  joined: false,
+  atEnd: false,
+);
+
+const ChatIslandFetch _islandDeferred = (
+  outcome: ChatFetchOutcome.deferred,
+  island: null,
+  joined: false,
+  atEnd: false,
+);
+
 ChatSynchronizationResult _chatReadResult(ChatMergeOutcome outcome) =>
     outcome == ChatMergeOutcome.converged
     ? ChatSynchronizationResult.converged
