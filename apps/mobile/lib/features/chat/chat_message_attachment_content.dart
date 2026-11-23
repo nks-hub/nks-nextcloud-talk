@@ -58,6 +58,15 @@ final class _ChatAttachment extends ConsumerWidget {
     final fullScreenPreviewUri = previewUri == null
         ? null
         : _fullScreenPreviewUri(previewUri);
+    final openFile = _attachmentOpenFile(
+      context,
+      ref,
+      account: account,
+      parameter: parameter,
+      roomToken: roomToken,
+      messageId: messageId,
+      index: index,
+    );
     final Future<void> Function()? openImage =
         fullScreenPreviewUri == null || originalUri == null || mimeType == null
         ? null
@@ -71,41 +80,9 @@ final class _ChatAttachment extends ConsumerWidget {
             imageName: name,
             repository: ref.read(chatMediaRepositoryProvider),
             openAppSettings: () => ref.read(appSettingsOpenerProvider).open(),
+            onOpenFile: openFile == null ? null : () => unawaited(openFile()),
+            onForward: _forwardFileAction(context, parameter),
           );
-    Future<void> openExternally() => _openDownloadedAttachment(
-      context,
-      ref,
-      account: account,
-      uri: originalUri!,
-      fileName: name,
-      contentType: mimeType!,
-      expectedBytes: _attachmentExpectedBytes(parameter),
-      repairUri: () => _repairedAttachmentUri(
-        ref,
-        account: account,
-        roomToken: roomToken,
-        messageId: messageId,
-        index: index,
-        failedUri: originalUri,
-      ),
-    );
-    // Text and Markdown are read in place; everything else still goes to the
-    // platform's own handler, which is also what a device without a text app
-    // used to fall back to and no longer needs to.
-    final Future<void> Function()? openFile =
-        originalUri == null || mimeType == null || voiceUri != null
-        ? null
-        : isReadableText(mimeType)
-        ? () => showTextAttachmentViewer(
-            context,
-            account: account,
-            uri: originalUri,
-            fileName: name,
-            contentType: mimeType,
-            repository: ref.read(chatMediaRepositoryProvider),
-            onOpenExternally: () => unawaited(openExternally()),
-          )
-        : openExternally;
     final providedOpenImage = onOpenImage;
     final Future<void> Function()? openAttachment = onOpenImage != null
         ? () async => providedOpenImage!()
@@ -860,4 +837,72 @@ Future<void> _exportDownloadedAttachment(
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
   );
+}
+
+/// What opening the file behind [parameter] does, or null when there is
+/// nothing to open: a voice message plays in place and a file without an
+/// address cannot be fetched.
+///
+/// Text and Markdown are read in place; everything else still goes to the
+/// platform's own handler, which is also what a device without a text app
+/// used to fall back to and no longer needs to.
+Future<void> Function()? _attachmentOpenFile(
+  BuildContext context,
+  WidgetRef ref, {
+  required StoredAccount account,
+  required ChatRichObjectParameter parameter,
+  required String roomToken,
+  required int messageId,
+  required int index,
+}) {
+  final name = (parameter.name ?? '').trim().isEmpty
+      ? AppLocalizations.of(context).attachment
+      : parameter.name!.trim();
+  final mimeType = _mimeType(parameter);
+  final originalUri = _davAttachment(account, parameter)?.uri;
+  if (originalUri == null ||
+      mimeType == null ||
+      mimeType.startsWith('audio/')) {
+    return null;
+  }
+  Future<void> openExternally() => _openDownloadedAttachment(
+    context,
+    ref,
+    account: account,
+    uri: originalUri,
+    fileName: name,
+    contentType: mimeType,
+    expectedBytes: _attachmentExpectedBytes(parameter),
+    repairUri: () => _repairedAttachmentUri(
+      ref,
+      account: account,
+      roomToken: roomToken,
+      messageId: messageId,
+      index: index,
+      failedUri: originalUri,
+    ),
+  );
+  return isReadableText(mimeType)
+      ? () => showTextAttachmentViewer(
+          context,
+          account: account,
+          uri: originalUri,
+          fileName: name,
+          contentType: mimeType,
+          repository: ref.read(chatMediaRepositoryProvider),
+          onOpenExternally: () => unawaited(openExternally()),
+        )
+      : openExternally;
+}
+
+/// Forwards the file behind [parameter] into another conversation, when the
+/// room offers it and Talk gave the file's own path.
+VoidCallback? _forwardFileAction(
+  BuildContext context,
+  ChatRichObjectParameter parameter,
+) {
+  final forward = ChatContextMenuScope.forwardFileOf(context);
+  final path = parameter.wire['path'];
+  if (forward == null || path is! String || path.isEmpty) return null;
+  return () => forward(path);
 }

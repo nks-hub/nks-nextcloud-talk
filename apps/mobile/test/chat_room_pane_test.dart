@@ -149,6 +149,7 @@ void main({bool imagesOnly = false, bool albumsOnly = false}) {
   _registerChatImagePreviewLayoutTests();
   _registerImageContextMenuMatrixTests();
   _registerSecondaryButtonKindTests();
+  _registerOpenedViewerMenuTests();
 }
 
 /// The thread layout, for tests that walk into a thread pane from a derived

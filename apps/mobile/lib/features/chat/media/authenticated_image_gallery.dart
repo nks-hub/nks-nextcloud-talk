@@ -32,6 +32,8 @@ Future<void> showAuthenticatedImageGallery(
   required ChatMediaRepository repository,
   Future<bool> Function()? openAppSettings,
   ValueChanged<int>? onImageActions,
+  ValueChanged<int>? onOpenFile,
+  ValueChanged<int>? onForward,
 }) => Navigator.of(context).push<void>(
   MaterialPageRoute<void>(
     settings: const RouteSettings(name: '/chat/gallery'),
@@ -43,6 +45,8 @@ Future<void> showAuthenticatedImageGallery(
       repository: repository,
       openAppSettings: openAppSettings,
       onImageActions: onImageActions,
+      onOpenFile: onOpenFile,
+      onForward: onForward,
     ),
   ),
 );
@@ -57,6 +61,8 @@ final class AuthenticatedImageGallery extends StatefulWidget {
     this.exporter = const PlatformChatImageExporter(),
     this.openAppSettings,
     this.onImageActions,
+    this.onOpenFile,
+    this.onForward,
   }) : images = List.unmodifiable(images) {
     RangeError.checkValidIndex(initialIndex, images, 'initialIndex');
   }
@@ -68,6 +74,11 @@ final class AuthenticatedImageGallery extends StatefulWidget {
   final ChatImageExporter exporter;
   final Future<bool> Function()? openAppSettings;
   final ValueChanged<int>? onImageActions;
+
+  /// Right-click commands for the picture at an index, see
+  /// [AuthenticatedImageViewer.onOpenFile].
+  final ValueChanged<int>? onOpenFile;
+  final ValueChanged<int>? onForward;
 
   @override
   State<AuthenticatedImageGallery> createState() =>
@@ -143,6 +154,12 @@ final class _AuthenticatedImageGalleryState
                   repository: widget.repository,
                   exporter: widget.exporter,
                   openAppSettings: widget.openAppSettings,
+                  onOpenFile: widget.onOpenFile == null
+                      ? null
+                      : () => widget.onOpenFile!(index),
+                  onForward: widget.onForward == null
+                      ? null
+                      : () => widget.onForward!(index),
                   onZoomChanged: (zoomed) {
                     if (index == _index && _zoomed != zoomed) {
                       setState(() => _zoomed = zoomed);

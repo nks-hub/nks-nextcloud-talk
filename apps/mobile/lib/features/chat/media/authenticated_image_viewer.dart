@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../../data/app_database.dart';
 import '../../../data/chat_media_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
+import '../chat_context_menu.dart';
 import 'chat_image_exporter.dart';
 import 'image_clipboard.dart';
 import 'proportional_image.dart';
@@ -24,6 +25,8 @@ Future<void> showAuthenticatedImageViewer(
   required ChatMediaRepository repository,
   ChatImageExporter exporter = const PlatformChatImageExporter(),
   Future<bool> Function()? openAppSettings,
+  VoidCallback? onOpenFile,
+  VoidCallback? onForward,
 }) {
   return Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
@@ -39,6 +42,8 @@ Future<void> showAuthenticatedImageViewer(
         repository: repository,
         exporter: exporter,
         openAppSettings: openAppSettings,
+        onOpenFile: onOpenFile,
+        onForward: onForward,
       ),
     ),
   );
@@ -58,6 +63,8 @@ final class AuthenticatedImageViewer extends StatefulWidget {
     this.openAppSettings,
     this.onZoomChanged,
     this.autofocus = true,
+    this.onOpenFile,
+    this.onForward,
   });
 
   final StoredAccount account;
@@ -76,6 +83,11 @@ final class AuthenticatedImageViewer extends StatefulWidget {
   final Future<bool> Function()? openAppSettings;
   final ValueChanged<bool>? onZoomChanged;
   final bool autofocus;
+
+  /// Extra right-click commands the opener can carry out for this picture:
+  /// handing the file to the platform and forwarding it to another room.
+  final VoidCallback? onOpenFile;
+  final VoidCallback? onForward;
 
   @override
   State<AuthenticatedImageViewer> createState() =>
@@ -304,6 +316,53 @@ final class _AuthenticatedImageViewerState
     }
   }
 
+  /// The right-click menu over the picture shown, the same commands the chat
+  /// bubble offers on it. Copy and save wait for the picture to be loaded.
+  void _showContextMenu(Offset position) {
+    final strings = AppLocalizations.of(context);
+    final ready = _loaded != null && !_exporting;
+    final onOpenFile = widget.onOpenFile;
+    final onForward = widget.onForward;
+    unawaited(
+      showChatContextMenu(
+        context: context,
+        position: position,
+        groups: [
+          [
+            if (ready && imageClipboardSupported)
+              ChatContextMenuEntry(
+                key: const Key('message-action-copy-image'),
+                icon: Icons.image_outlined,
+                label: strings.copyImage,
+                onSelected: () => unawaited(_copy()),
+              ),
+            if (ready)
+              ChatContextMenuEntry(
+                key: const Key('message-action-save-image'),
+                icon: Icons.save_alt_rounded,
+                label: strings.saveImage,
+                onSelected: () => unawaited(_saveToGallery()),
+              ),
+            if (onOpenFile != null)
+              ChatContextMenuEntry(
+                key: const Key('message-action-open-file'),
+                icon: Icons.open_in_new_rounded,
+                label: strings.openAttachmentFile,
+                onSelected: onOpenFile,
+              ),
+            if (onForward != null)
+              ChatContextMenuEntry(
+                key: const Key('message-action-forward'),
+                icon: Icons.forward_rounded,
+                label: strings.messageActionForward,
+                onSelected: onForward,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
   void _zoomBy(double factor) {
     final current = _transformation.value.getMaxScaleOnAxis();
     final target = (current * factor).clamp(_minimumScale, _maximumScale);
@@ -348,7 +407,14 @@ final class _AuthenticatedImageViewerState
       },
       child: Focus(
         autofocus: widget.autofocus,
-        child: _viewer(context, strings),
+        child: Listener(
+          // The whole viewer answers, also while the picture is still loading.
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (event) {
+            if (isSecondaryClick(event)) _showContextMenu(event.position);
+          },
+          child: _viewer(context, strings),
+        ),
       ),
     );
   }

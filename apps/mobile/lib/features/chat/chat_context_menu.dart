@@ -103,12 +103,21 @@ final class ChatContextMenuScope extends InheritedWidget {
     super.key,
     required this.collector,
     required super.child,
+    this.forwardFile,
   });
 
   final ChatContextMenuCollector collector;
 
+  /// Forwards the file at a Talk path into another conversation. The picture
+  /// viewer calls it, since it has no message of its own to forward.
+  final ValueChanged<String>? forwardFile;
+
   static ChatContextMenuCollector? maybeOf(BuildContext context) =>
       context.getInheritedWidgetOfExactType<ChatContextMenuScope>()?.collector;
+
+  static ValueChanged<String>? forwardFileOf(BuildContext context) => context
+      .getInheritedWidgetOfExactType<ChatContextMenuScope>()
+      ?.forwardFile;
 
   @override
   bool updateShouldNotify(ChatContextMenuScope oldWidget) =>
@@ -121,15 +130,18 @@ final class ChatContextMenuArea extends StatelessWidget {
     super.key,
     required this.collector,
     required this.child,
+    this.forwardFile,
   });
 
   final ChatContextMenuCollector collector;
   final Widget child;
+  final ValueChanged<String>? forwardFile;
 
   @override
   Widget build(BuildContext context) {
     return ChatContextMenuScope(
       collector: collector,
+      forwardFile: forwardFile,
       child: Listener(
         onPointerDown: (event) {
           collector.record(event);

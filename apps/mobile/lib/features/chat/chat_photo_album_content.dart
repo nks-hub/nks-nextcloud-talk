@@ -22,6 +22,9 @@ ChatGalleryImage? chatGalleryImage(StoredAccount account, ChatMessage message) {
   );
 }
 
+ChatRichObjectParameter _fileOf(ChatMessage message) =>
+    message.messageParameters.values.singleWhere((p) => p.type == 'file');
+
 final class ChatPhotoAlbumContent extends ConsumerWidget {
   const ChatPhotoAlbumContent({
     super.key,
@@ -66,6 +69,21 @@ final class ChatPhotoAlbumContent extends ConsumerWidget {
             navigator.pop();
             onMessageActions(messages[index]);
           },
+          onOpenFile: (index) {
+            final message = messages[index];
+            final open = _attachmentOpenFile(
+              context,
+              ref,
+              account: account,
+              parameter: _fileOf(message),
+              roomToken: message.roomToken.value,
+              messageId: message.messageId,
+              index: 0,
+            );
+            if (open != null) unawaited(open());
+          },
+          onForward: (index) =>
+              _forwardFileAction(context, _fileOf(messages[index]))?.call(),
         ),
       );
     }
@@ -99,9 +117,7 @@ final class ChatPhotoAlbumContent extends ConsumerWidget {
             ),
             itemBuilder: (context, index) {
               final message = messages[index];
-              final parameter = message.messageParameters.values.singleWhere(
-                (p) => p.type == 'file',
-              );
+              final parameter = _fileOf(message);
               return GestureDetector(
                 onLongPress: () => onMessageActions(message),
                 onSecondaryTap: () => onMessageActions(message),

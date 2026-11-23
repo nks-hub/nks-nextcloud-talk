@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -92,6 +93,97 @@ void main({bool galleryOnly = false}) {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await _pumpRouteAndFuture(tester);
     expect(find.text('3 / 4'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('right click in the gallery offers the commands of the shown '
+      'picture, also after swiping', (tester) async {
+    final repository = _repository((request) async {
+      if (request.url.path.endsWith('.png') &&
+          request.url.path.contains('photo-')) {
+        return http.StreamedResponse(
+          Stream.value(_originalPng),
+          200,
+          headers: {'content-type': 'image/png'},
+        );
+      }
+      return _imageResponse();
+    });
+    final exporter = _RecordingExporter();
+    final openedFiles = <int>[];
+    final forwarded = <int>[];
+    await tester.pumpWidget(
+      localizedTestApp(
+        home: AuthenticatedImageGallery(
+          account: _account,
+          initialIndex: 1,
+          images: List.generate(
+            4,
+            (index) => ChatGalleryImage(
+              previewUri: _previewUri.replace(
+                queryParameters: {
+                  ..._previewUri.queryParameters,
+                  'fileId': '${index + 1}',
+                },
+              ),
+              originalUri: _originalUri.resolve('photo-$index.png'),
+              contentType: 'image/png',
+              name: 'photo-$index.png',
+            ),
+          ),
+          repository: repository,
+          exporter: exporter,
+          onOpenFile: openedFiles.add,
+          onForward: forwarded.add,
+        ),
+      ),
+    );
+    await _pumpRouteAndFuture(tester);
+
+    Future<void> rightClick() async {
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('chat-gallery-pages'))),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton,
+      );
+      await gesture.up();
+      await tester.pumpAndSettle();
+    }
+
+    await rightClick();
+    for (final name in ['copy-image', 'save-image', 'open-file', 'forward']) {
+      expect(find.byKey(Key('message-action-$name')), findsOneWidget, reason: name);
+    }
+    await tester.tap(find.byKey(const Key('message-action-open-file')));
+    await tester.pumpAndSettle();
+    expect(openedFiles, [1]);
+
+    await tester.drag(
+      find.byKey(const Key('chat-gallery-pages')),
+      const Offset(-600, 0),
+    );
+    await tester.pumpAndSettle();
+    await _pumpRouteAndFuture(tester);
+    expect(find.text('3 / 4'), findsOneWidget);
+
+    await rightClick();
+    await tester.tap(find.byKey(const Key('message-action-forward')));
+    await tester.pumpAndSettle();
+    expect(forwarded, [2]);
+
+    await rightClick();
+    await tester.tap(find.byKey(const Key('message-action-save-image')));
+    await _pumpRouteAndFuture(tester);
+    expect(exporter.saved.single.fileName, 'photo-2');
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+
+    await rightClick();
+    await tester.tap(find.byKey(const Key('message-action-copy-image')));
+    await _pumpRouteAndFuture(tester);
+    expect(exporter.copied.single, _originalPng);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 

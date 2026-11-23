@@ -602,6 +602,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       TargetPlatform.windows ||
       TargetPlatform.linux => ChatContextMenuArea(
         collector: _contextMenu,
+        forwardFile: (path) => unawaited(_forwardMessage('', filePath: path)),
         child: SelectionArea(
           // The message's own right-click menu offers the selection; the
           // region's toolbar would open a second menu on top of it.
