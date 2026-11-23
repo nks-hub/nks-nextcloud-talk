@@ -7,6 +7,10 @@
 // at the pictures and at the opened viewer, and writes down whether the picture
 // menu came up. A journal and a PNG per case land next to the executable, and
 // the process exits 0 when every case passed and 1 when any failed.
+//
+// With IMGMENU_SHELL=1 in the environment the chat is hosted inside the real
+// application root (NextcloudTalkApp: shell, drop target, shortcuts, lock gate,
+// update banner) instead of a bare room screen.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi';
@@ -22,7 +26,9 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:nextcloudtalk/app.dart';
 import 'package:nextcloudtalk/app_providers.dart';
+import 'package:nextcloudtalk/core/stale_modifier_repair.dart';
 import 'package:nextcloudtalk/core/app_theme.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
@@ -42,6 +48,7 @@ final _repaint = GlobalKey();
 final _pointerSeen = <String>[];
 final _opener = _RecordingOpen();
 var _failures = 0;
+final _shell = Platform.environment['IMGMENU_SHELL'] == '1';
 
 void _note(String line) {
   final text = '${DateTime.now().toIso8601String()} $line';
@@ -127,6 +134,7 @@ Future<void> main() async {
           rawJson: jsonEncode(wire),
         ),
       );
+  await add(_textWire(99, 'Selectable sample text for the drag test'));
   await add(_imageWire(100, outgoing: false));
   await add(_imageWire(101, outgoing: true));
   await add(_imageWire(102, outgoing: false, caption: 'Nice photo'));
@@ -147,49 +155,63 @@ Future<void> main() async {
     wait: (_) async {},
   );
 
-  runApp(
-    ProviderScope(
-      overrides: [
-        appDatabaseProvider.overrideWithValue(database),
-        credentialVaultProvider.overrideWithValue(vault),
-        chatBackgroundProvider.overrideWith(
-          (ref, key) => Stream<String?>.value(null),
-        ),
-        connectivityWakeEventsProvider.overrideWithValue(
-          const Stream<void>.empty(),
-        ),
-        chatAttachmentDependenciesProvider.overrideWith(
-          (ref, key) => Future<ChatAttachmentDependencies>.error(
-            StateError('attachments are not wired in this run'),
-            StackTrace.empty,
-          ),
-        ),
-        chatMediaProvider.overrideWith((ref, key) async => preview),
-        chatMediaRepositoryProvider.overrideWithValue(media),
-        chatImageExporterProvider.overrideWithValue(_NoImageExport()),
-        chatAttachmentExportActionFactoryProvider.overrideWithValue(
-          (_) => _NoSave(),
-        ),
-        chatAttachmentOpenActionFactoryProvider.overrideWithValue(
-          (_) => _opener,
-        ),
-      ],
-      child: MaterialApp(
-        theme: AppTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        builder: (context, child) => Listener(
-          behavior: HitTestBehavior.translucent,
-          onPointerDown: (event) => _pointerSeen.add(
-            'down kind=${event.kind.name} buttons=${event.buttons} '
-            'at=${event.position}',
-          ),
-          child: RepaintBoundary(key: _repaint, child: child),
-        ),
-        home: PresenceChatRoomScreen(account: account, conversation: conversation),
+  final overrides = [
+    appDatabaseProvider.overrideWithValue(database),
+    credentialVaultProvider.overrideWithValue(vault),
+    chatBackgroundProvider.overrideWith(
+      (ref, key) => Stream<String?>.value(null),
+    ),
+    connectivityWakeEventsProvider.overrideWithValue(
+      const Stream<void>.empty(),
+    ),
+    chatAttachmentDependenciesProvider.overrideWith(
+      (ref, key) => Future<ChatAttachmentDependencies>.error(
+        StateError('attachments are not wired in this run'),
+        StackTrace.empty,
       ),
     ),
+    chatMediaProvider.overrideWith((ref, key) async => preview),
+    chatMediaRepositoryProvider.overrideWithValue(media),
+    chatImageExporterProvider.overrideWithValue(_NoImageExport()),
+    chatAttachmentExportActionFactoryProvider.overrideWithValue(
+      (_) => _NoSave(),
+    ),
+    chatAttachmentOpenActionFactoryProvider.overrideWithValue((_) => _opener),
+    clientPushEnabledProvider.overrideWithValue(false),
+  ];
+  Widget watched(Widget child) => Listener(
+    behavior: HitTestBehavior.translucent,
+    onPointerDown: (event) => _pointerSeen.add(
+      'down kind=${event.kind.name} buttons=${event.buttons} '
+      'at=${event.position}',
+    ),
+    child: RepaintBoundary(key: _repaint, child: child),
   );
+  if (_shell) {
+    staleModifierRepair.attach();
+    runApp(
+      ProviderScope(
+        overrides: overrides,
+        child: watched(const NextcloudTalkApp()),
+      ),
+    );
+  } else {
+    runApp(
+      ProviderScope(
+        overrides: overrides,
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => watched(child!),
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+          ),
+        ),
+      ),
+    );
+  }
   WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_run()));
 }
 
@@ -210,13 +232,64 @@ Future<void> _scenario() async {
   _note('window=$hwnd foreground=${_foreground() == hwnd}');
   _bringToFront(hwnd);
   await _frames(const Duration(seconds: 3));
+  if (_shell) {
+    _note('shell mode: opening the conversation with a real left click');
+    await _waitFor(const Key('conversation-tile-rooma123'), 'the conversation');
+    await _realClick(
+      hwnd,
+      await _centerOf(const Key('conversation-tile-rooma123')),
+    );
+  }
   await _waitFor(const Key('chat-image-112-0'), 'the album picture');
-  await _frames(const Duration(seconds: 1));
+  await _frames(const Duration(seconds: 2));
 
+  // First clicks after the window was just brought to the front.
   for (final id in [100, 101, 102, 103]) {
     await _pictureCase('single-$id', Key('chat-image-$id-0'), hwnd);
   }
   await _pictureCase('album-112', const Key('chat-image-112-0'), hwnd);
+
+  // After a left click somewhere else.
+  final header = find(const Key('chat-room-header'));
+  if (header != null) {
+    final box = header.renderObject! as RenderBox;
+    await _realClick(
+      hwnd,
+      box.localToGlobal(Offset(box.size.width / 2, box.size.height / 2)),
+    );
+    await _pictureCase(
+      'after-left-click-elsewhere',
+      const Key('chat-image-100-0'),
+      hwnd,
+    );
+  }
+
+  // The name and the caption under a picture belong to the bubble, not to the
+  // picture: a menu must still open, offering the message actions.
+  await _areaCase('file-name-area', hwnd, () async {
+    await _reveal(const Key('chat-image-name-100-0'));
+    return _centerOf(const Key('chat-image-name-100-0'));
+  });
+  await _areaCase('caption-area', hwnd, () async {
+    await _reveal(const Key('chat-rich-content-102'));
+    final box =
+        find(const Key('chat-rich-content-102'))!.renderObject! as RenderBox;
+    return box.localToGlobal(const Offset(24, 10));
+  });
+
+  // With text selected in another bubble.
+  await _reveal(const Key('chat-rich-content-99'));
+  final text =
+      find(const Key('chat-rich-content-99'))!.renderObject! as RenderBox;
+  final textOrigin = text.localToGlobal(Offset.zero);
+  await _realDrag(
+    hwnd,
+    textOrigin + const Offset(2, 10),
+    textOrigin + Offset(text.size.width - 4, 10),
+  );
+  await _frames(const Duration(milliseconds: 500));
+  await _shot('text-selected');
+  await _pictureCase('selection-active', const Key('chat-image-100-0'), hwnd);
 
   // The opened single picture, reached with a real left click.
   await _reveal(const Key('chat-image-100-0'));
@@ -259,6 +332,26 @@ Future<void> _pictureCase(String name, Key image, int hwnd) async {
     name,
     shown && !sheet && items.contains('message-action-open-image'),
     'menu=$shown sheet=$sheet items=$items pointer=${_pointerSeen.join('; ')}',
+  );
+  await _dismiss(hwnd);
+}
+
+Future<void> _areaCase(
+  String name,
+  int hwnd,
+  Future<Offset> Function() where,
+) async {
+  final point = await where();
+  _pointerSeen.clear();
+  await _realClick(hwnd, point, right: true);
+  await _frames(const Duration(milliseconds: 900));
+  final sheet = _exists((w) => w is BottomSheet);
+  final items = _menuKeys();
+  await _shot(name);
+  _verdict(
+    name,
+    items.isNotEmpty && !sheet,
+    'menu items=$items sheet=$sheet pointer=${_pointerSeen.join('; ')}',
   );
   await _dismiss(hwnd);
 }
@@ -358,22 +451,26 @@ String? _text(Key key) {
 Future<void> _reveal(Key key) async {
   if (find(key) == null) {
     ScrollPosition? timeline;
-    void visit(Element element) {
+    // The anchor is a picture that is always built; the timeline is the
+    // scrollable above it that can actually scroll.
+    final anchor = [
+      for (final id in [100, 101, 102, 103, 110, 111, 112, 113])
+        find(Key('chat-image-$id-0')),
+    ].firstWhere((element) => element != null, orElse: () => null);
+    anchor!.visitAncestorElements((element) {
       final widget = element.widget;
       if (widget is Scrollable &&
           (widget.axisDirection == AxisDirection.up ||
               widget.axisDirection == AxisDirection.down)) {
         final position = ((element as StatefulElement).state as ScrollableState)
             .position;
-        if (timeline == null ||
-            position.viewportDimension > timeline!.viewportDimension) {
+        if (position.maxScrollExtent > 0) {
           timeline = position;
+          return false;
         }
       }
-      element.visitChildren(visit);
-    }
-
-    WidgetsBinding.instance.rootElement!.visitChildren(visit);
+      return true;
+    });
     final position = timeline;
     if (position == null) throw StateError('no timeline to scroll');
     for (
@@ -438,6 +535,8 @@ Future<void> _shot(String name) async {
 }
 
 Future<void> _dismiss(int hwnd) async {
+  // Escape with nothing open would close the conversation in the real shell.
+  if (_menuKeys().isEmpty && !_exists((w) => w is BottomSheet)) return;
   _key(0x1B);
   await _frames(const Duration(milliseconds: 600));
   if (_menuKeys().isNotEmpty) {
@@ -448,6 +547,40 @@ Future<void> _dismiss(int hwnd) async {
 }
 
 // ---- real input ----------------------------------------------------------
+
+Future<void> _realDrag(int hwnd, Offset from, Offset to) async {
+  await _moveTo(hwnd, from);
+  _send(0, 0, 0x0002);
+  for (var step = 1; step <= 8; step++) {
+    await _moveTo(hwnd, Offset.lerp(from, to, step / 8)!, settle: 30);
+  }
+  _send(0, 0, 0x0004);
+  _note('left drag: $from -> $to');
+  await Future<void>.delayed(const Duration(milliseconds: 250));
+}
+
+Future<void> _moveTo(int hwnd, Offset logical, {int settle = 150}) async {
+  final (x, y) = _screenPoint(hwnd, logical);
+  _send(
+    x * 65535 ~/ (_getSystemMetrics(0) - 1),
+    y * 65535 ~/ (_getSystemMetrics(1) - 1),
+    0x0001 | 0x8000,
+  );
+  await Future<void>.delayed(Duration(milliseconds: settle));
+}
+
+(int, int) _screenPoint(int hwnd, Offset logical) {
+  final ratio =
+      WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
+  final origin = calloc<_Point>();
+  _clientToScreen(hwnd, origin);
+  final point = (
+    origin.ref.x + (logical.dx * ratio).round(),
+    origin.ref.y + (logical.dy * ratio).round(),
+  );
+  calloc.free(origin);
+  return point;
+}
 
 Future<void> _realClick(int hwnd, Offset logical, {bool right = false}) async {
   final ratio = WidgetsBinding.instance.platformDispatcher.views.first
@@ -632,6 +765,11 @@ Map<String, Object?> _wire(
   'isThread': false,
   'threadTitle': null,
   'threadReplies': 0,
+};
+
+Map<String, Object?> _textWire(int id, String text) => {
+  ..._wire(id, outgoing: false, message: text, file: const {}),
+  'messageParameters': const <String, Object?>{},
 };
 
 Map<String, Object?> _imageWire(
