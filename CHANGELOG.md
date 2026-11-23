@@ -14,6 +14,9 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 - While the history fills that gap, the messages on screen stay where they are.
 - The message a jump lands on is marked with a two-tone ring that stays visible on your own filled bubbles and in dark mode.
 - A jump interrupted by switching to another window finishes when you come back instead of reporting the message as unavailable.
+- The send button is a plain arrow in the theme colour, and with an empty field the quick emoji sits in the same row as the other composer icons. Holding the emoji to send it larger and long-pressing the arrow for silent or scheduled sending work as before.
+- On the desktop, new conversation and refresh sit next to the title of the chat list, the search field spans the whole width and the filters are roomier pills that wrap to a second line in a narrow sidebar.
+- On the desktop, a right click on an opened picture or on a picture in the gallery offers Copy image, Save image, Open file and Forward for the picture shown. A right click with a pen button or over a remote desktop session opens the picture menu too.
 
 ## 1.1.0 (120) — 22 November 2026
 
