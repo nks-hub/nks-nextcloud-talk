@@ -141,6 +141,31 @@ mixin _NextcloudApiChat on _HttpNextcloudApiBase {
     );
   }
 
+  Future<ChatContextResponse> getChatContext({
+    required ChatContextRequest contextRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', contextRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...contextRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _chatGetAllowedStatusCodes,
+      maximumBytes: chatMaximumResponseBytes,
+    );
+    return decodeChatContextResponse(
+      request: contextRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+      headers: ChatResponseHeaders.fromMap(payload.headers),
+    );
+  }
+
   Future<RichChatResponse> getMentionSuggestions({
     required RichChatRequest request,
     required String loginName,

@@ -349,6 +349,210 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('reaches a message far past ten pages through its context', (
+    tester,
+  ) async {
+    for (var id = 20001; id <= 20008; id++) {
+      await _insertMessage(database, account.id, id);
+    }
+    await _insertScope(
+      database,
+      account.id,
+      historyCursor: '20001',
+      futureCursor: '20008',
+      hasHistory: true,
+      blocksJson: '[["20001","20008"]]',
+    );
+    final contextRequests = <Uri>[];
+    var historyRequests = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        final capabilities = _capabilitiesResponse(
+          request,
+          messageContext: true,
+        );
+        if (capabilities != null) {
+          return capabilities;
+        }
+        if (request.url.path.endsWith('/context')) {
+          contextRequests.add(request.url);
+          final segments = request.url.pathSegments;
+          final around = int.parse(segments[segments.length - 2]);
+          return http.Response(
+            jsonEncode(_contextPage(oldest: around - 12, newest: around + 12)),
+            200,
+            headers: <String, String>{'X-Chat-Last-Given': '${around + 13}'},
+          );
+        }
+        if (request.url.queryParameters['lookIntoFuture'] == '0') {
+          historyRequests++;
+          return http.Response(
+            jsonEncode(_historyPage(newest: 20000, oldest: 19901)),
+            200,
+            headers: const <String, String>{'X-Chat-Last-Given': '19901'},
+          );
+        }
+        return http.Response('', 304);
+      }),
+    );
+    addTearDown(api.close);
+
+    await tester.pumpWidget(
+      _app(
+        database: database,
+        vault: vault,
+        api: api,
+        home: PresenceChatRoomScreen(
+          account: account,
+          conversation: conversation,
+          jumpToMessageId: 42,
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () =>
+          find
+              .byKey(const Key('chat-message-target-42'))
+              .evaluate()
+              .isNotEmpty ||
+          find.byKey(const Key('chat-jump-not-found')).evaluate().isNotEmpty,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('chat-message-target-42')), findsOneWidget);
+    expect(_highlightBorder(tester, 42), isNotNull);
+    expect(find.byKey(const Key('chat-jump-not-found')), findsNothing);
+    expect(historyRequests, 0);
+    expect(contextRequests.single.path, endsWith('/chat/rooma123/42/context'));
+    final rootView = await (database.select(
+      database.chatScopes,
+    )..where((scope) => scope.scopeKey.equals('root'))).getSingle();
+    final networkRoot = await (database.select(
+      database.chatScopes,
+    )..where((scope) => scope.scopeKey.equals('network-root'))).getSingle();
+    // The view shows the fetched range beside the newest one; paging still
+    // continues from where the network cursor left off.
+    expect(rootView.blocksJson, '[["30","55"],["20001","20008"]]');
+    expect(rootView.hasHistory, isTrue);
+    expect(networkRoot.blocksJson, '[["20001","20008"]]');
+    expect(networkRoot.historyCursor, '20001');
+    expect(networkRoot.futureCursor, '20008');
+    expect(networkRoot.hasHistory, isTrue);
+    expect(tester.takeException(), isNull);
+
+    // Loading older messages grows the island the reader is in and still
+    // pages the network cursor, so the gap between them keeps closing.
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(PresenceChatRoomScreen)),
+    );
+    var loaded = false;
+    container
+        .read(chatServiceProvider)
+        .loadOlder(accountId: account.id, roomToken: 'rooma123')
+        .whenComplete(() => loaded = true)
+        .ignore();
+    await _pumpUntil(tester, () => loaded);
+    expect(contextRequests.last.path, endsWith('/chat/rooma123/30/context'));
+    expect(historyRequests, 1);
+    final grownView = await (database.select(
+      database.chatScopes,
+    )..where((scope) => scope.scopeKey.equals('root'))).getSingle();
+    expect(grownView.blocksJson, '[["18","55"],["19901","20008"]]');
+    final networkAfter = await (database.select(
+      database.chatScopes,
+    )..where((scope) => scope.scopeKey.equals('network-root'))).getSingle();
+    expect(networkAfter.blocksJson, '[["19901","20008"]]');
+    expect(networkAfter.historyCursor, '19901');
+
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('pages past ten pages when the server has no context endpoint', (
+    tester,
+  ) async {
+    for (var id = 2001; id <= 2008; id++) {
+      await _insertMessage(database, account.id, id);
+    }
+    await _insertScope(
+      database,
+      account.id,
+      historyCursor: '2001',
+      futureCursor: '2008',
+      hasHistory: true,
+      blocksJson: '[["2001","2008"]]',
+    );
+    var historyRequests = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        final capabilities = _capabilitiesResponse(request);
+        if (capabilities != null) {
+          return capabilities;
+        }
+        if (request.url.path.endsWith('/context')) {
+          return http.Response('', 404);
+        }
+        if (request.url.queryParameters['lookIntoFuture'] == '0') {
+          historyRequests++;
+          final anchor = int.parse(
+            request.url.queryParameters['lastKnownMessageId']!,
+          );
+          final newest = anchor - 1;
+          final oldest = (anchor - 100).clamp(1, newest);
+          return http.Response(
+            jsonEncode(_historyPage(newest: newest, oldest: oldest)),
+            200,
+            headers: <String, String>{
+              'X-Chat-Last-Given': '$oldest',
+              'X-Chat-Last-Common-Read': '2001',
+            },
+          );
+        }
+        return http.Response('', 304);
+      }),
+    );
+    addTearDown(api.close);
+
+    await tester.pumpWidget(
+      _app(
+        database: database,
+        vault: vault,
+        api: api,
+        home: PresenceChatRoomScreen(
+          account: account,
+          conversation: conversation,
+          jumpToMessageId: 42,
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-jump-progress')).evaluate().isNotEmpty,
+    );
+    await _pumpUntil(
+      tester,
+      () =>
+          find
+              .byKey(const Key('chat-message-target-42'))
+              .evaluate()
+              .isNotEmpty ||
+          find.byKey(const Key('chat-jump-not-found')).evaluate().isNotEmpty,
+    );
+    await tester.pumpAndSettle();
+
+    expect(historyRequests, 20);
+    expect(find.byKey(const Key('chat-message-target-42')), findsOneWidget);
+    expect(_highlightBorder(tester, 42), isNotNull);
+    expect(find.byKey(const Key('chat-jump-not-found')), findsNothing);
+    expect(find.byKey(const Key('chat-jump-progress')), findsNothing);
+
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('says so instead of failing silently when nothing can be found', (
     tester,
   ) async {
@@ -488,15 +692,19 @@ Future<http.Response> _convergedServer(http.Request request) async {
   return _capabilitiesResponse(request) ?? http.Response('', 304);
 }
 
-http.Response? _capabilitiesResponse(http.Request request) {
+http.Response? _capabilitiesResponse(
+  http.Request request, {
+  bool messageContext = false,
+}) {
   if (request.url.path.endsWith('/cloud/capabilities')) {
     return http.Response(
       jsonEncode(
         capabilitiesJson(
-          talkFeatures: const <String>[
+          talkFeatures: <String>[
             'conversation-v4',
             'chat-v2',
             'chat-reference-id',
+            if (messageContext) 'chat-get-context',
           ],
         ),
       ),
@@ -572,6 +780,23 @@ Map<String, Object?> _historyPage({required int newest, required int oldest}) {
       },
       'data': <Object?>[
         for (var id = newest; id >= oldest; id--)
+          _messageJson(id: id, message: 'Message $id'),
+      ],
+    },
+  };
+}
+
+/// The context endpoint answers oldest first, unlike a history page.
+Map<String, Object?> _contextPage({required int oldest, required int newest}) {
+  return <String, Object?>{
+    'ocs': <String, Object?>{
+      'meta': <String, Object?>{
+        'status': 'ok',
+        'statuscode': 200,
+        'message': 'OK',
+      },
+      'data': <Object?>[
+        for (var id = oldest; id <= newest; id++)
           _messageJson(id: id, message: 'Message $id'),
       ],
     },

@@ -118,13 +118,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// Text currently selected with the mouse, offered first on a right click.
   String? _selectedText;
 
-  /// How many history pages a single jump may fetch before giving up. One
-  /// page is [ChatService] `_pageSize` messages, so this reaches roughly a
-  /// thousand messages back.
-  // ponytail: fixed page budget; make it time- or scope-aware only if real
-  // rooms turn out to need deeper jumps.
-  static const _maximumJumpPages = 10;
-
   /// How many layout passes a reveal may take. Every pass nudges the reverse
   /// list closer to the estimated offset of the target, which re-measures the
   /// children around it, so the estimate converges within a few frames.
@@ -200,6 +193,11 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   CachedChatMessage? _replyTo;
   int _jumpGeneration = 0;
   bool _jumpInProgress = false;
+
+  /// A jump is fetching its target from the server; [_jumpProgress] is how far
+  /// paging has come towards it, null while that cannot be told.
+  bool _jumpFetching = false;
+  double? _jumpProgress;
   int? _jumpTargetId;
   int? _highlightedMessageId;
   int? _pendingJumpMessageId;
@@ -396,6 +394,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _giphyGeneration++;
     _jumpGeneration++;
     _jumpInProgress = false;
+    _jumpFetching = false;
+    _jumpProgress = null;
     _highlightTimer?.cancel();
     _highlightTimer = null;
     _jumpTargetId = null;
@@ -1174,7 +1174,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
               title: Text(strings.scheduledMessagesOpen),
               onTap: () => unawaited(_openScheduledMessages()),
             ),
-          if (_syncing)
+          if (_jumpFetching)
+            LinearProgressIndicator(
+              key: const Key('chat-jump-progress'),
+              minHeight: 3,
+              value: _jumpProgress,
+              semanticsLabel: AppLocalizations.of(context).loadingOlderMessages,
+            )
+          else if (_syncing)
             LinearProgressIndicator(
               minHeight: 3,
               semanticsLabel: AppLocalizations.of(context).syncing,

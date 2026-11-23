@@ -90,10 +90,10 @@ int scheduledMessageCount(CachedConversation conversation) {
 /// ponytail: no fetch of its own. Talk has no single-message GET; the
 /// documented way to materialize an arbitrary message is
 /// `GET /chat/{token}/{messageId}/context` behind the `chat-get-context`
-/// capability. Tapping the banner instead runs the room's existing jump,
-/// which already pages history back until the message appears. Add the
-/// context fetch when a pin far outside the loaded history needs its preview
-/// visible without a tap.
+/// capability. Tapping the banner runs the room's jump, which makes that
+/// fetch (or pages history back on servers without it). Fetch on display
+/// only when a pin far outside the loaded history needs its preview visible
+/// without a tap.
 final class PinnedMessageBanner extends ConsumerStatefulWidget {
   const PinnedMessageBanner({
     super.key,

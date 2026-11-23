@@ -729,6 +729,48 @@ final class ChatRepository {
     });
   }
 
+  /// Stores a context response's messages and shows their range in the view
+  /// of [viewThreadId] as a block of its own. The network scope keeps its
+  /// cursors, so history paging goes on exactly where it was.
+  Future<ChatMergeOutcome> applyChatContextResponse(
+    ChatContextResponse response, {
+    required int? viewThreadId,
+  }) {
+    return _database.transaction(() async {
+      final request = response.request;
+      final accountId = request.accountId.value;
+      final roomToken = request.roomToken.value;
+      final snapshot = await _loadRuntime(accountId);
+      final result = planChatContextMerge(snapshot, response);
+      final plan = result.plan;
+      if (plan == null) {
+        return result.outcome;
+      }
+      await _persistAccount(
+        plan.commit(snapshot).accounts[request.accountId]!,
+        messages: plan.messageUpserts,
+      );
+      final island = plan.island;
+      if (island != null) {
+        await _writeNetworkBackedViewScope(
+          networkScope: (await _networkScope(
+            accountId: accountId,
+            roomToken: roomToken,
+            threadId: request.threadId,
+          ))!,
+          viewThreadId: viewThreadId,
+          viewScope: await _scope(
+            accountId: accountId,
+            roomToken: roomToken,
+            threadId: viewThreadId,
+          ),
+          extraBlocks: [island],
+        );
+      }
+      return result.outcome;
+    });
+  }
+
   Future<ChatMergeOutcome> applyChatReadResponse(ChatReadResponse response) =>
       _applyChatReadResponse(response);
 

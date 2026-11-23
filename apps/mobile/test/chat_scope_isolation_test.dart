@@ -650,6 +650,85 @@ void main() {
     },
   );
 
+  test(
+    'a context island lands in the thread view and moves no network cursor',
+    () async {
+      await database.delete(database.textSendOperations).go();
+      await repository.recordCapabilities(
+        accountId: 'account-a',
+        talkFeatures: const {'chat-v2', 'threads', 'chat-get-context'},
+        observedAt: DateTime.utc(2026, 1, 1),
+      );
+      for (final (scopeKey, threadId, history, future) in [
+        ('root', null, 10, 900),
+        ('network-root', null, 10, 900),
+        ('thread:20', 20, 500, 520),
+        ('network-thread:20', 20, 500, 520),
+      ]) {
+        await _insertScope(
+          database,
+          scopeKey: scopeKey,
+          threadId: threadId,
+          historyCursor: history,
+          futureCursor: future,
+        );
+      }
+      final request = ChatContextRequest(
+        accountId: AccountId.parse('account-a'),
+        requestId: ChatRequestId.parse('context-thread-20'),
+        server: ServerBase.parse('https://cloud.example.invalid'),
+        roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+        profile: ChatCapabilityProfile.fromTalkFeatures(const <String>[
+          'chat-v2',
+          'threads',
+          'chat-get-context',
+        ], federated: false),
+        messageId: 23,
+        limit: 100,
+        threadId: 20,
+      );
+      expect(request.uri.queryParameters['threadId'], '20');
+      final response = decodeChatContextResponse(
+        request: request,
+        statusCode: 200,
+        body: utf8.encode(
+          jsonEncode({
+            'ocs': {
+              'meta': {'status': 'ok', 'statuscode': 200, 'message': 'OK'},
+              'data': [
+                for (final id in [22, 23, 24])
+                  _chatMessageJson(id: id, threadId: 20, message: 'Reply $id'),
+              ],
+            },
+          }),
+        ),
+        headers: ChatResponseHeaders.fromMap(const {'X-Chat-Last-Given': '25'}),
+      );
+
+      expect(
+        await repository.applyChatContextResponse(response, viewThreadId: 20),
+        ChatMergeOutcome.applied,
+      );
+
+      final scopes = {
+        for (final row in await database.select(database.chatScopes).get())
+          row.scopeKey: row,
+      };
+      expect(scopes['thread:20']!.blocksJson, '[["22","25"],["500","520"]]');
+      expect(scopes['network-thread:20']!.blocksJson, '[["500","520"]]');
+      expect(scopes['network-thread:20']!.historyCursor, '500');
+      expect(scopes['network-thread:20']!.futureCursor, '520');
+      expect(scopes['root']!.blocksJson, '[["10","900"]]');
+      expect(scopes['network-root']!.blocksJson, '[["10","900"]]');
+      final thread = await repository.listMessages(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        threadId: 20,
+      );
+      expect(thread.map((message) => message.messageId), containsAll([22, 24]));
+    },
+  );
+
   test('room errors remain isolated between root and thread scopes', () async {
     await _insertScope(
       database,

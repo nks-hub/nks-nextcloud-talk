@@ -376,6 +376,24 @@ final class ChatService {
     bool Function()? readerIsActive,
   }) => _loadOlder(accountId, roomToken, threadId, readerIsActive);
 
+  /// Caches the messages around [messageId] and shows them in the scope's
+  /// view as a range of their own; the history cursor stays where it is.
+  /// False when the server cannot do that (no `chat-get-context`, or a thread
+  /// whose kind is not known yet), so the caller has to page history.
+  Future<bool> loadMessageContext({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+    int? threadId,
+    bool Function()? readerIsActive,
+  }) => _loadMessageContext(
+    accountId,
+    roomToken,
+    threadId,
+    messageId,
+    readerIsActive,
+  );
+
   /// Refreshes one cached message without moving cursors.
   /// Legacy servers defer this repair until the room has an active reader.
   ///

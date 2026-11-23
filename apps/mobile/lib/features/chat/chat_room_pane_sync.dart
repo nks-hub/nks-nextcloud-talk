@@ -640,14 +640,14 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     unawaited(_jumpToMessage(target));
   }
 
-  /// Reveals [messageId] inside this scope, fetching older history pages
-  /// while the message is not covered by the scope's confirmed blocks.
+  /// Reveals [messageId] inside this scope, fetching it first when the
+  /// scope's confirmed blocks do not cover it.
   ///
   /// Both entry points - a search result and a tapped quote - land here, so
-  /// the fetch, the scroll and the highlight exist exactly once. Paging back
-  /// is the only way to reach an uncached message: `planChatGetMerge` only
-  /// extends a scope at its two cursor ends, so an ad-hoc fetch anchored on
-  /// an arbitrary id would be discarded as stale rather than merged.
+  /// the fetch, the scroll and the highlight exist exactly once. A server
+  /// with `chat-get-context` returns the message with its neighbours, kept as
+  /// a block of their own; otherwise history is paged back until a block
+  /// covers the target or history runs out. Leaving the room ends either.
   Future<void> _jumpToMessage(int messageId) async {
     final generation = ++_jumpGeneration;
     final key = _key;
@@ -655,7 +655,15 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     try {
       await _resolveJump(messageId, key, generation);
     } finally {
-      if (_isCurrentJump(key, generation)) _jumpInProgress = false;
+      if (_isCurrentJump(key, generation)) {
+        _jumpInProgress = false;
+        if (_jumpFetching) {
+          _update(() {
+            _jumpFetching = false;
+            _jumpProgress = null;
+          });
+        }
+      }
     }
   }
 
@@ -665,53 +673,98 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     int generation,
   ) async {
     final chat = ref.read(chatRepositoryProvider);
-    for (var page = 0; page <= _ChatRoomPaneState._maximumJumpPages; page++) {
-      final scope = await chat.getScope(
-        accountId: key.accountId,
-        roomToken: key.roomToken,
-        threadId: key.threadId,
-      );
+    Future<StoredChatScope?> readScope() => chat.getScope(
+      accountId: key.accountId,
+      roomToken: key.roomToken,
+      threadId: key.threadId,
+    );
+    var scope = await readScope();
+    if (!_isCurrentJump(key, generation)) {
+      return;
+    }
+    var revealed = await _revealCoveredMessage(
+      scope,
+      messageId,
+      key,
+      generation,
+    );
+    if (revealed == null) {
+      _update(() => _jumpFetching = true);
+      final fetched = await _loadJumpContext(messageId, key);
       if (!_isCurrentJump(key, generation)) {
         return;
       }
-      final cachedProbe = await _revealCoveredMessage(
-        scope,
-        messageId,
-        key,
-        generation,
-      );
-      if (cachedProbe != null) {
-        if (cachedProbe) {
+      if (fetched == true) {
+        scope = await readScope();
+        if (!_isCurrentJump(key, generation)) {
           return;
         }
-        break;
+        revealed = await _revealCoveredMessage(
+          scope,
+          messageId,
+          key,
+          generation,
+        );
       }
-      if (scope?.hasHistory != true || !await _loadOlder(fetchOnly: true)) {
-        break;
-      }
-      final loadedScope = await chat.getScope(
-        accountId: key.accountId,
-        roomToken: key.roomToken,
-        threadId: key.threadId,
-      );
-      if (!_isCurrentJump(key, generation)) {
-        return;
-      }
-      final loadedProbe = await _revealCoveredMessage(
-        loadedScope,
-        messageId,
-        key,
-        generation,
-      );
-      if (loadedProbe != null) {
-        if (loadedProbe) {
+      final start = int.tryParse(scope?.historyCursor ?? '');
+      while (fetched == null && revealed == null && scope?.hasHistory == true) {
+        final before = scope?.blocksJson;
+        if (!await _loadOlder(fetchOnly: true)) {
+          break;
+        }
+        scope = await readScope();
+        if (!_isCurrentJump(key, generation)) {
           return;
         }
-        break;
+        // A page that changed nothing would only be asked for again.
+        if (scope?.blocksJson == before) {
+          break;
+        }
+        final oldest = int.tryParse(scope?.historyCursor ?? '');
+        if (start != null && oldest != null && start > messageId) {
+          _update(
+            () => _jumpProgress = ((start - oldest) / (start - messageId))
+                .clamp(0.0, 1.0),
+          );
+        }
+        revealed = await _revealCoveredMessage(
+          scope,
+          messageId,
+          key,
+          generation,
+        );
       }
     }
-    if (mounted && _isCurrentJump(key, generation)) {
+    if (revealed != true && mounted && _isCurrentJump(key, generation)) {
       _reportJumpFailed();
+    }
+  }
+
+  /// Fetches [messageId] with its neighbours. Null when the server cannot,
+  /// which leaves paging; false when the fetch failed.
+  Future<bool?> _loadJumpContext(int messageId, ChatRoomProviderKey key) async {
+    bool isCurrent() => mounted && key == _key;
+    try {
+      final supported = await ref
+          .read(chatServiceProvider)
+          .loadMessageContext(
+            readerIsActive: () => isCurrent() && _readerIsActive(),
+            accountId: key.accountId,
+            roomToken: key.roomToken,
+            threadId: key.threadId,
+            messageId: messageId,
+          );
+      if (!supported) return null;
+      if (isCurrent()) _update(() => _localError = null);
+      return true;
+    } on ChatServiceException catch (error) {
+      if (isCurrent()) _update(() => _localError = error.code);
+      return false;
+    } on Object {
+      if (isCurrent()) {
+        _update(() => _localError = ChatServiceError.invalidResponse);
+      }
+      return false;
     }
   }
 

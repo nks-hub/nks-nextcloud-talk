@@ -909,13 +909,10 @@ int _blockIndexWithin(
 }
 
 /// A visible divider marking a gap the client honestly knows about: two
-/// cached ranges with unfetched messages between them. The current fetch
-/// protocol only ever extends a scope's history/future cursor at its two
-/// ends (see `planChatGetMerge`), so there is no request that can close an
-/// interior gap; this only ever renders when a future feature (for example
-/// jumping to a specific message) caches a range disconnected from what is
-/// already known, which is why it does not offer a "load" action that
-/// would have nothing to call.
+/// cached ranges with unfetched messages between them. It appears after a
+/// jump fetched an old message with its context (`planChatContextMerge`);
+/// loading older messages grows that range and pages the history cursor, so
+/// the gap closes by itself and needs no action of its own.
 final class _ChatHistoryGapNotice extends StatelessWidget {
   const _ChatHistoryGapNotice({super.key});
 

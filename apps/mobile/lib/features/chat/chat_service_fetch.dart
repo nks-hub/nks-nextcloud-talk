@@ -238,6 +238,59 @@ extension _ChatServiceFetch on ChatService {
     await _applyGetResponse(prepared, response);
   }
 
+  /// Fetches the messages around [messageId] into a block of the prepared
+  /// view.
+  Future<void> _fetchContext(
+    _PreparedChat prepared,
+    int messageId, {
+    Future<void>? abortTrigger,
+    _ChatReadGuard? probe,
+  }) async {
+    await _ensurePreparedContextCurrent(prepared);
+    probe?.ensureFetchAllowed(prepared);
+    final response = await _api.getChatContext(
+      contextRequest: ChatContextRequest(
+        accountId: AccountId.parse(prepared.account.id),
+        requestId: ChatRequestId.parse(_uuid.v4()),
+        server: prepared.authority.server,
+        roomToken: prepared.room.token,
+        profile: prepared.profile,
+        messageId: messageId,
+        limit: ChatService._pageSize,
+        threadId: prepared.networkThreadId,
+      ),
+      loginName: prepared.account.loginName,
+      appPassword: prepared.appPassword,
+      abortTrigger: abortTrigger,
+    );
+    await _ensurePreparedContextCurrent(prepared);
+    probe?.ensureActive();
+    final outcome = await _chat.applyChatContextResponse(
+      response,
+      viewThreadId: prepared.threadId,
+    );
+    switch (response.classification) {
+      case ChatGetClassification.reauthenticationRequired:
+        throw const ChatServiceException(
+          ChatServiceError.reauthenticationRequired,
+        );
+      case ChatGetClassification.transientError:
+        throw const ChatServiceException(ChatServiceError.serviceUnavailable);
+      case ChatGetClassification.threadNotFound:
+      case ChatGetClassification.ocsError:
+      case ChatGetClassification.invisibleCursorAdvance:
+      case ChatGetClassification.commonReadOnly:
+        throw const ChatServiceException(ChatServiceError.invalidResponse);
+      case ChatGetClassification.lobby:
+      case ChatGetClassification.notModified:
+        return;
+      case ChatGetClassification.messages:
+        if (outcome == ChatMergeOutcome.rejected) {
+          throw const ChatServiceException(ChatServiceError.invalidResponse);
+        }
+    }
+  }
+
   Future<ChatSynchronizationResult> _catchUpFuture(
     _PreparedChat prepared, {
     Future<void>? abortTrigger,

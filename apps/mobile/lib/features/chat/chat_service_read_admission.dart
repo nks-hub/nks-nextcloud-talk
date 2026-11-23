@@ -104,6 +104,7 @@ extension _ChatReadAdmissionService on ChatService {
                 probe: read,
               );
             }
+            await _growOldestIsland(prepared, read);
             try {
               await _fetchHistoryPage(
                 prepared,
@@ -130,6 +131,99 @@ extension _ChatReadAdmissionService on ChatService {
       read.close();
     }
   }
+
+  Future<bool> _loadMessageContext(
+    String accountId,
+    String roomToken,
+    int? threadId,
+    int messageId,
+    bool Function()? readerIsActive,
+  ) async {
+    final read = _ChatReadAdmission(
+      this,
+      accountId,
+      roomToken,
+      readerIsActive ?? () => true,
+      requiresActiveOwner: readerIsActive != null,
+    );
+    try {
+      return await _serializeRoom<bool>(
+        _roomKey(accountId, roomToken),
+        () => _withRoomErrorPersistence(
+          accountId,
+          roomToken,
+          () => read.run(() async {
+            final prepared = await _prepare(
+              accountId,
+              roomToken,
+              threadId: threadId,
+              abortTrigger: read.abortTrigger,
+            );
+            if (!_canFetchContext(prepared)) {
+              return false;
+            }
+            await _fetchContext(
+              prepared,
+              messageId,
+              abortTrigger: read.abortTrigger,
+              probe: read,
+            );
+            return true;
+          }),
+          threadId: threadId,
+        ),
+      );
+    } on _ChatReadDeferred {
+      return true;
+    } on _ChatSynchronizationStale {
+      return true;
+    } finally {
+      read.close();
+    }
+  }
+
+  /// When the oldest block of the root view is an island below the network's
+  /// history cursor, older messages are missing in two places: right under
+  /// the island, where a reader who jumped there scrolls to, and under the
+  /// cursor. The island grows here and the caller still pages the cursor, so
+  /// the reader sees older messages and the gap between them keeps closing.
+  /// A thread view always starts with its root as the oldest block and what
+  /// it misses lies above that root, so a thread only pages the cursor.
+  Future<void> _growOldestIsland(
+    _PreparedChat prepared,
+    _ChatReadAdmission read,
+  ) async {
+    if (prepared.threadId != null || !_canFetchContext(prepared)) {
+      return;
+    }
+    final view = await _chat.getScope(
+      accountId: prepared.account.id,
+      roomToken: prepared.conversation.token,
+      threadId: null,
+    );
+    final network = await _chat.getNetworkScope(
+      accountId: prepared.account.id,
+      roomToken: prepared.conversation.token,
+      threadId: null,
+    );
+    final islandStart = int.tryParse(view?.historyCursor ?? '') ?? 0;
+    final cursor = int.tryParse(network?.historyCursor ?? '') ?? 0;
+    if (islandStart < 1 || islandStart >= cursor) {
+      return;
+    }
+    await _fetchContext(
+      prepared,
+      islandStart,
+      abortTrigger: read.abortTrigger,
+      probe: read,
+    );
+  }
+
+  /// A thread whose root is not cached yet may still turn out to be a reply
+  /// chain; only paging knows how to settle that.
+  bool _canFetchContext(_PreparedChat prepared) =>
+      prepared.profile.messageContext &&
+      (prepared.threadId == null || prepared.namedThread != null);
 
   Future<bool> _refreshMessage(
     String accountId,
