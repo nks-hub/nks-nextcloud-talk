@@ -505,63 +505,72 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       return;
     }
     final key = _key;
-    bool isCurrent() => mounted && key == _key && identical(_island, island);
+    // The island this page belongs to; the page replaces it once it lands.
+    var current = island;
+    bool isCurrent() => mounted && key == _key && identical(_island, current);
     // A message that lands while the newer end is asked for still opens
     // that end again after an empty answer.
     final newestBefore = older ? 0 : _historyNewestId() ?? 0;
     _islandLoadingOlder = older;
     if (older) _update(() => _loadingOlder = true);
-    ChatIslandFetch? fetched;
     try {
-      fetched = await _growIslandFromCache(island, older: older, key: key);
-      fetched ??= await ref
-          .read(chatServiceProvider)
-          .loadIslandPage(
-            readerIsActive: () => isCurrent() && _readerIsActive(),
-            accountId: key.accountId,
-            roomToken: key.roomToken,
-            threadId: key.threadId,
-            island: island,
-            older: older,
-          );
-    } on Object {
-      // Recorded as the room's error by the service; this only pauses.
-      fetched = null;
+      ChatIslandFetch? fetched;
+      try {
+        fetched = await _growIslandFromCache(island, older: older, key: key);
+        fetched ??= await ref
+            .read(chatServiceProvider)
+            .loadIslandPage(
+              readerIsActive: () => isCurrent() && _readerIsActive(),
+              accountId: key.accountId,
+              roomToken: key.roomToken,
+              threadId: key.threadId,
+              island: island,
+              older: older,
+            );
+      } on Object {
+        // Recorded as the room's error by the service; this only pauses.
+        fetched = null;
+      }
+      if (!isCurrent() || fetched?.outcome == ChatFetchOutcome.deferred) {
+        return;
+      }
+      final grown = fetched?.island;
+      if (grown != null && grown != island) {
+        // The window holds the newest cached rows; it has to reach back over
+        // the whole island, newer pages included. The page stays in flight
+        // until then: a scroll meanwhile would ask again from the old edge.
+        await _widenMessageWindowTo(int.parse(grown.start.value), key);
+        if (!isCurrent()) return;
+        _update(() {
+          _island = grown;
+          _islandShown = List.unmodifiable([grown]);
+        });
+        current = grown;
+        _loadAtIslandEdgesAfterLayout();
+        return;
+      }
+      if (fetched?.atEnd ?? false) {
+        _update(() {
+          if (older) {
+            _islandAtStart = true;
+          } else {
+            _islandEndedAt = math.max(
+              int.parse(island.end.value),
+              newestBefore,
+            );
+          }
+        });
+        return;
+      }
+      _islandPause?.cancel();
+      _islandPause = Timer(const Duration(seconds: 5), () {});
     } finally {
       // Leaving the island already ended this page's loading state.
-      if (mounted && key == _key && identical(_island, island)) {
+      if (isCurrent()) {
         _islandLoadingOlder = null;
         if (older) _update(() => _loadingOlder = false);
       }
     }
-    if (!isCurrent() || fetched?.outcome == ChatFetchOutcome.deferred) {
-      return;
-    }
-    final grown = fetched?.island;
-    if (grown != null && grown != island) {
-      // The window holds the newest cached rows; it has to reach back over
-      // the whole island, newer pages included.
-      await _widenMessageWindowTo(int.parse(grown.start.value), key);
-      if (!isCurrent()) return;
-      _update(() {
-        _island = grown;
-        _islandShown = List.unmodifiable([grown]);
-      });
-      _loadAtIslandEdgesAfterLayout();
-      return;
-    }
-    if (fetched?.atEnd ?? false) {
-      _update(() {
-        if (older) {
-          _islandAtStart = true;
-        } else {
-          _islandEndedAt = math.max(int.parse(island.end.value), newestBefore);
-        }
-      });
-      return;
-    }
-    _islandPause?.cancel();
-    _islandPause = Timer(const Duration(seconds: 5), () {});
   }
 
   /// Shows the next step of cached history. False when the window already
