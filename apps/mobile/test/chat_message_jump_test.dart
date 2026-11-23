@@ -12,6 +12,7 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/core/app_theme.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -617,6 +618,152 @@ void main() {
         await drag(tester, -300);
       }
       expect(bubble(338), findsOneWidget, reason: 'the island became the room');
+      expectAscending(tester);
+      await closePane(tester);
+    });
+
+    testWidgets('a swipe while a page is taken in does not stop the island', (
+      tester,
+    ) async {
+      // On a phone the cache answers from another isolate, so the timeline's
+      // rows arrive frames after a page was stored; the delay stands in.
+      for (var id = 421; id <= 700; id++) {
+        await _insertMessage(database, account.id, id);
+      }
+      await _insertScope(
+        database,
+        account.id,
+        historyCursor: '421',
+        futureCursor: '700',
+        hasHistory: true,
+        blocksJson: '[["421","700"]]',
+      );
+      final newer = <Uri>[];
+      final held = [Completer<void>(), Completer<void>()];
+      addTearDown(() {
+        for (final hold in held) {
+          if (!hold.isCompleted) hold.complete();
+        }
+      });
+      http.Response page(List<int> ids, int lastGiven) => http.Response(
+        jsonEncode(<String, Object?>{
+          'ocs': <String, Object?>{
+            'meta': <String, Object?>{
+              'status': 'ok',
+              'statuscode': 200,
+              'message': 'OK',
+            },
+            'data': <Object?>[
+              for (final id in ids)
+                _messageJson(id: id, message: 'Message $id'),
+            ],
+          },
+        }),
+        200,
+        headers: <String, String>{'X-Chat-Last-Given': '$lastGiven'},
+      );
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          final capabilities = _capabilitiesResponse(
+            request,
+            messageContext: true,
+          );
+          if (capabilities != null) {
+            return capabilities;
+          }
+          if (request.method == 'POST') {
+            return http.Response('', 404);
+          }
+          final segments = request.url.pathSegments;
+          if (request.url.path.endsWith('/context')) {
+            final around = int.parse(segments[segments.length - 2]);
+            return page([
+              for (var id = around - 12; id <= around + 12; id++) id,
+            ], around + 12);
+          }
+          final known = int.tryParse(
+            request.url.queryParameters['lastKnownMessageId'] ?? '',
+          );
+          if (known == null ||
+              known >= 700 ||
+              request.url.queryParameters['lookIntoFuture'] != '1') {
+            return http.Response('', 304);
+          }
+          newer.add(request.url);
+          if (newer.length <= held.length) {
+            await held[newer.length - 1].future;
+          }
+          return page([
+            for (var id = known + 1; id <= known + 25; id++) id,
+          ], known + 25);
+        }),
+      );
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        _app(
+          database: database,
+          vault: vault,
+          api: api,
+          overrides: [
+            chatMessagesProvider.overrideWith(
+              (ref, key) => ref
+                  .watch(chatRepositoryProvider)
+                  .watchRecentMessages(
+                    accountId: key.accountId,
+                    roomToken: key.roomToken,
+                    limit: ref.watch(chatMessageWindowProvider(key)),
+                  )
+                  .asyncMap((rows) async {
+                    await Future<void>.delayed(
+                      const Duration(milliseconds: 48),
+                    );
+                    return rows;
+                  }),
+            ),
+          ],
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+            jumpToMessageId: 100,
+          ),
+        ),
+      );
+      await _pumpUntil(tester, () => bubble(100).evaluate().isNotEmpty);
+      await _settle(tester);
+      final position = tester
+          .state<ScrollableState>(
+            find.descendant(
+              of: find.byKey(const Key('chat-message-list')),
+              matching: find.byType(Scrollable),
+            ),
+          )
+          .position;
+
+      // Near the island's newest end: the page after it is asked for.
+      position.jumpTo(position.minScrollExtent + 100);
+      await _settle(tester);
+      expect(newer, hasLength(1));
+      expect(newer.single.queryParameters['lastKnownMessageId'], '112');
+      // The page is stored; its rows are still on their way while the
+      // reader keeps moving near the same end.
+      held[0].complete();
+      for (var step = 0; step < 40 && newer.length < 2; step++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 1)),
+        );
+        await tester.pump(const Duration(milliseconds: 1));
+        position.jumpTo(position.minScrollExtent + (step.isEven ? 90 : 80));
+      }
+      expect(newer, hasLength(1), reason: 'no second ask from the same end');
+      await _settle(tester);
+      held[1].complete();
+      await _settle(tester);
+
+      for (var turn = 0; turn < 20 && bubble(140).evaluate().isEmpty; turn++) {
+        position.jumpTo(position.minScrollExtent);
+        await _settle(tester);
+      }
+      expect(bubble(140), findsOneWidget, reason: 'the island kept growing');
       expectAscending(tester);
       await closePane(tester);
     });
