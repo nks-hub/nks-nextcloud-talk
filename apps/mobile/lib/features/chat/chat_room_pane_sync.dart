@@ -542,6 +542,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         _island = grown;
         _islandShown = List.unmodifiable([grown]);
       });
+      _loadAtIslandEdgesAfterLayout();
       return;
     }
     if (fetched?.atEnd ?? false) {
@@ -634,15 +635,34 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         _anchorMessageId = awayFromNewest ? _newestCachedMessageId() : null;
       });
     }
-    if (_loadingOlder || _jumpInProgress || _islandLoading) {
+    _loadAtEdges();
+  }
+
+  /// Loads more when the reader is at an end of the list: older messages at
+  /// the top and, in an island, newer ones at the bottom.
+  void _loadAtEdges() {
+    if (!_scrollController.hasClients ||
+        _loadingOlder ||
+        _jumpInProgress ||
+        _islandLoading) {
       return;
     }
+    final position = _scrollController.position;
     if (position.pixels >= position.maxScrollExtent - 160) {
       unawaited(_loadOlder());
     } else if (_island != null &&
         position.pixels <= _newestOffset(position) + 160) {
       unawaited(_loadIslandPage(older: false));
     }
+  }
+
+  /// An island opened or grown with its end already on screen gets no
+  /// scroll event to load the next page; this asks once the frame is laid
+  /// out. Only for islands: the ordinary timeline keeps loading on scroll.
+  void _loadAtIslandEdgesAfterLayout() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _island != null) _loadAtEdges();
+    });
   }
 
   /// Where the newest row sits. The timeline is reversed, so that is offset
@@ -672,8 +692,6 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       if (!mounted || !_scrollController.hasClients) {
         return;
       }
-      _scrollController.jumpTo(_newestOffset(_scrollController.position));
-      return;
     }
     // The anchor is the message that was newest when the reader left. What
     // arrived since lies below it and is only measured once it is on screen,
@@ -793,6 +811,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
             _jumpProgress = null;
           });
         }
+        _loadAtIslandEdgesAfterLayout();
       }
     }
   }

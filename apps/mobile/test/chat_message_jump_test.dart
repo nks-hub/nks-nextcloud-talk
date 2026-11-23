@@ -667,6 +667,26 @@ void main() {
       await closePane(tester);
     });
 
+    testWidgets('an island end already on screen loads without a scroll', (
+      tester,
+    ) async {
+      // Message 2 sits at the room start, so the island's top is on screen
+      // right after the jump.
+      final requests = await islandRoom(tester, jumpTo: 2);
+      await _pumpUntil(tester, () => requests.older.isNotEmpty);
+      await _settle(tester);
+
+      // The island already starts with the first message: one ask, nothing
+      // older, and the control to load more goes away.
+      expect(requests.older, hasLength(1));
+      expect(requests.older.single.queryParameters['lastKnownMessageId'], '1');
+      expect(
+        find.byKey(const Key('chat-load-older'), skipOffstage: false),
+        findsNothing,
+      );
+      await closePane(tester);
+    });
+
     testWidgets('jump to newest leaves the island', (tester) async {
       await islandRoom(tester);
 
@@ -674,6 +694,16 @@ void main() {
       await _settle(tester);
 
       expect(bubble(338), findsOneWidget);
+      // At the very end of the list, not a few rows short of it.
+      final list = tester.getRect(find.byKey(const Key('chat-message-list')));
+      expect(
+        tester.getBottomLeft(bubble(338)).dy,
+        lessThanOrEqualTo(list.bottom),
+      );
+      expect(
+        tester.getBottomLeft(bubble(338)).dy,
+        greaterThan(list.bottom - 120),
+      );
       expect(bubble(100), findsNothing);
       expect(find.byKey(const Key('chat-jump-to-newest')), findsNothing);
       await closePane(tester);
