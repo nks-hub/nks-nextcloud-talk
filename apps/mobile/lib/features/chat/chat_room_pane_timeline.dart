@@ -553,8 +553,10 @@ final class _ChatTimeline extends StatelessWidget {
                 12,
               ),
               sliver: SliverList(
+                // This sliver grows down from the centre, so its first child
+                // sits right under the anchor: the oldest of the newer rows.
                 delegate: SliverChildBuilderDelegate(
-                  (context, index) => buildAt(context, itemCount - 1 - index),
+                  (context, index) => buildAt(context, anchorIndex + 1 + index),
                   childCount: newerCount,
                 ),
               ),
