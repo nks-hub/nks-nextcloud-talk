@@ -36,6 +36,7 @@ The people, rooms and server in these pictures are invented. They come from `too
 - 👥 **Multiple accounts** - One install signed in to several accounts on several Nextcloud servers at the same time
 - 📴 **Offline first** - The conversation list and the history load from a local database first and then update from the server; a message written without a connection waits in an ordered outbox and goes out when the connection returns
 - 🖥️ **Adaptive layout** - Single pane on phones, two or three panes on tablets and desktops; full keyboard control on the desktop
+- 🎨 **Shared conversation look** - With the optional [OwnTalk Extensions](https://github.com/nks-hub/owntalk-extensions) server app, a conversation keeps one background colour, wallpaper or photo, bubble colours and a quick emoji for every participant (see [Server extension](#server-extension))
 - 🔒 **App lock** - Lock with biometrics
 - 🌐 **Accessibility and localization** - Czech and English, light and dark themes, tested with large text and screen readers
 - ⬆️ **Self-update on desktop** - The desktop app checks the releases page for a newer build and can install it itself
@@ -53,6 +54,18 @@ Android builds go to Google Play closed testing; testers opt in at <https://play
 iOS builds go to TestFlight, by invitation.
 
 Windows, macOS and Linux builds are attached to each tagged [release](https://github.com/nks-hub/nks-nextcloud-talk/releases). The macOS app is signed with a Developer ID and notarized by Apple. The Windows installer is not code-signed, so SmartScreen warns once on the first run.
+
+## Server extension
+
+[OwnTalk Extensions](https://github.com/nks-hub/owntalk-extensions) is an optional Nextcloud app (Nextcloud 34 and 35, PHP 8.2+) that stores settings for each conversation on the server. When it is installed, OwnTalk shows them in the conversation details:
+
+- the chat background as a colour, a preset wallpaper or a photo, which the server rotates, scales to 2560 px and stores without metadata
+- the accent and bubble colours
+- a quick emoji that replaces the send button while the field is empty
+- who may change them follows the Talk roles in that conversation
+- with `notify_push` on the server, a change reaches the other participants at once instead of on the next refresh
+
+Without the app OwnTalk hides these settings and works as with any other Talk server. Other Talk clients ignore the data. The app does not read chat messages, push tokens or credentials.
 
 ## Building
 
