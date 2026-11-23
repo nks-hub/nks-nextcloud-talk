@@ -8,6 +8,13 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.1.1 (121) — 23 November 2026
+
+- A search result from far back in a conversation opens the message itself. It used to say the message was no longer available once more than about a thousand newer messages followed it. The app loads the messages around it in one request and marks the gap to the newer ones; on a server without that request it loads the history until it reaches the message, with a progress bar.
+- While the history fills that gap, the messages on screen stay where they are.
+- The message a jump lands on is marked with a two-tone ring that stays visible on your own filled bubbles and in dark mode.
+- A jump interrupted by switching to another window finishes when you come back instead of reporting the message as unavailable.
+
 ## 1.1.0 (120) — 22 November 2026
 
 - The chat list and the chat have a new look. Bubbles are rounder and join up within a run of messages, your own messages are filled with the theme colour, and an incoming run shows the avatar on its last message. Unread conversations stand out in bold on a tinted row, and avatars are larger with presence shown as a dot.
