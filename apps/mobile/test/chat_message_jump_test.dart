@@ -991,6 +991,8 @@ void main() {
       WidgetTester tester, {
       List<Override> overrides = const [],
       Future<void>? firstPageHeld,
+      http.Response? historyAnswer,
+      int? jumpTo,
     }) async {
       for (final id in [
         for (var id = 30; id <= 54; id++) id,
@@ -1037,6 +1039,7 @@ void main() {
           if (request.url.queryParameters['lookIntoFuture'] == '0') {
             requests.history.add(request.url);
             if (requests.history.length == 1) await firstPageHeld;
+            if (historyAnswer != null) return historyAnswer;
             final anchor = int.parse(
               request.url.queryParameters['lastKnownMessageId']!,
             );
@@ -1060,6 +1063,7 @@ void main() {
           home: PresenceChatRoomScreen(
             account: account,
             conversation: conversation,
+            jumpToMessageId: jumpTo,
           ),
         ),
       );
@@ -1168,6 +1172,104 @@ void main() {
       );
       await closePane(tester);
     });
+
+    testWidgets('the island side of the divider does not page the cursor', (
+      tester,
+    ) async {
+      final requests = await gapRoom(tester, jumpTo: 50);
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const Key('chat-message-target-50'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      await settle(tester);
+      final gap = find.byKey(
+        const Key('chat-history-gap'),
+        skipOffstage: false,
+      );
+      // The reader stays in the island and nudges towards the newer end,
+      // where the divider sits below them.
+      for (var turn = 0; turn < 4; turn++) {
+        await tester.timedDrag(
+          find.byKey(const Key('chat-message-list')),
+          const Offset(0, -40),
+          const Duration(milliseconds: 300),
+        );
+        await settle(tester);
+      }
+      expect(gap, findsOneWidget);
+      final viewport = tester.getRect(
+        find.byKey(const Key('chat-message-list')),
+      );
+      expect(
+        tester.getTopLeft(gap).dy,
+        greaterThan(viewport.center.dy),
+        reason: 'the divider must still sit below the middle of the list',
+      );
+      expect(
+        requests.history,
+        isEmpty,
+        reason: 'paging the cursor from here only adds the newest messages',
+      );
+      // Below the island the newer messages still read top to bottom.
+      Finder bubble(int id) =>
+          find.byKey(Key('chat-message-target-$id'), skipOffstage: false);
+      final newer = [
+        for (var id = 331; id <= 338; id++)
+          if (bubble(id).evaluate().isNotEmpty)
+            tester.getTopLeft(bubble(id)).dy,
+      ];
+      expect(newer.length, greaterThan(1));
+      expect(newer, orderedEquals([...newer]..sort()));
+      await tester.pump(const Duration(seconds: 3));
+      await closePane(tester);
+    });
+
+    for (final (label, answer) in [
+      ('a failed', http.Response('', 503)),
+      ('an empty', http.Response('', 412)),
+    ]) {
+      testWidgets('$label page is not asked for again on the next ticks', (
+        tester,
+      ) async {
+        final requests = await gapRoom(tester, historyAnswer: answer);
+        final gap = find.byKey(const Key('chat-history-gap'));
+        for (var turn = 0; turn < 40 && requests.history.isEmpty; turn++) {
+          await tester.timedDrag(
+            find.byKey(const Key('chat-message-list')),
+            const Offset(0, 60),
+            const Duration(milliseconds: 200),
+          );
+          await settle(tester);
+        }
+        expect(requests.history, hasLength(1));
+        expect(gap, findsOneWidget);
+
+        // More scroll ticks at the divider within the pause send nothing.
+        for (var turn = 0; turn < 4; turn++) {
+          await tester.timedDrag(
+            find.byKey(const Key('chat-message-list')),
+            Offset(0, turn.isEven ? 20 : -20),
+            const Duration(milliseconds: 100),
+          );
+          await settle(tester);
+        }
+        expect(requests.history, hasLength(1));
+
+        // Once the pause is over the next tick asks again.
+        await tester.pump(const Duration(seconds: 6));
+        await tester.timedDrag(
+          find.byKey(const Key('chat-message-list')),
+          const Offset(0, 20),
+          const Duration(milliseconds: 100),
+        );
+        await settle(tester);
+        expect(requests.history, hasLength(2));
+        await closePane(tester);
+      });
+    }
 
     testWidgets('a page into the gap keeps the island top on screen', (
       tester,

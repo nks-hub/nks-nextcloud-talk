@@ -189,6 +189,15 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   ChatServiceError? _localError;
   Timer? _draftTimer;
   Timer? _highlightTimer;
+
+  /// Running after a gap page that failed or changed nothing; until it ends,
+  /// scrolling at the divider asks for no page.
+  Timer? _gapFillPause;
+
+  /// The last gap among the rows shown, with the rows and blocks it was found
+  /// in (see `_lastGapShown`).
+  ({int oldest, int above, int below})? _gap;
+  ({List<CachedChatMessage>? messages, String? blocks})? _gapInputs;
   ChatRepository? _draftStore;
   CachedChatMessage? _replyTo;
   int _jumpGeneration = 0;
@@ -402,6 +411,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _jumpProgress = null;
     _jumpDeferred = false;
     _highlightTimer?.cancel();
+    _gapFillPause?.cancel();
     _highlightTimer = null;
     _jumpTargetId = null;
     _highlightedMessageId = null;
@@ -492,6 +502,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _syncLoop = null;
     _draftTimer?.cancel();
     _highlightTimer?.cancel();
+    _gapFillPause?.cancel();
     _fileShares.reset();
     _incomingAnnouncements.dispose();
     _attachmentMenuActions_.dispose();

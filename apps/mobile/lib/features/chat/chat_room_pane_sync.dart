@@ -602,23 +602,63 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     }
     if (position.pixels >= position.maxScrollExtent - 160) {
       unawaited(_loadOlder());
-    } else if (gap != null &&
-        _scrollController.paintedRowTop(gap.below) != null) {
-      // The divider is laid out, so on or near the screen. Pages from the
-      // history cursor fill its gap from the newer side, so a reader coming
-      // up from the newest messages scrolls on into older ones as before any
-      // jump left an island behind.
-      unawaited(_loadOlder(fetchOnly: true));
+    } else if (gap != null && !(_gapFillPause?.isActive ?? false)) {
+      // Pages from the history cursor fill the gap from its newer side, so a
+      // reader coming up from the newest messages scrolls on into older ones
+      // as before any jump left an island behind. Only from that side: with
+      // the reader in the island above, a page would add the gap's newest
+      // messages, far from what they read, and leave the divider where it is.
+      final divider = _scrollController.paintedRowTop(gap.below);
+      if (divider != null && divider < position.viewportDimension / 2) {
+        unawaited(_fillGap());
+      }
     }
+  }
+
+  /// One cursor page into the gap. After a page that failed or changed
+  /// nothing the next scroll tick would only send the same request again, so
+  /// the divider asks for nothing for a few seconds.
+  Future<void> _fillGap() async {
+    final key = _key;
+    final before = ref.read(chatScopeProvider(key)).valueOrNull?.blocksJson;
+    final outcome = await _loadOlder(fetchOnly: true);
+    if (!mounted || key != _key || outcome == ChatFetchOutcome.deferred) {
+      return;
+    }
+    if (outcome == ChatFetchOutcome.done) {
+      final after = await ref
+          .read(chatRepositoryProvider)
+          .getScope(
+            accountId: key.accountId,
+            roomToken: key.roomToken,
+            threadId: key.threadId,
+          );
+      if (!mounted || key != _key || after?.blocksJson != before) {
+        return;
+      }
+    }
+    _gapFillPause?.cancel();
+    _gapFillPause = Timer(const Duration(seconds: 5), () {});
   }
 
   /// The last gap among the rows shown: the oldest row shown, the newest row
   /// above the gap and the oldest row below it, which carries the divider.
   /// Null without a gap.
   ({int oldest, int above, int below})? _lastGapShown() {
-    final blocks = _decodeScopeBlocks(
-      ref.read(chatScopeProvider(_key)).valueOrNull,
-    );
+    final scope = ref.read(chatScopeProvider(_key)).valueOrNull;
+    final messages = ref.read(chatMessagesProvider(_key)).valueOrNull;
+    // Asked on every scroll tick; it only changes with the rows or blocks.
+    final inputs = _gapInputs;
+    if (inputs != null &&
+        identical(inputs.messages, messages) &&
+        inputs.blocks == scope?.blocksJson) {
+      return _gap;
+    }
+    _gapInputs = (messages: messages, blocks: scope?.blocksJson);
+    return _gap = _findLastGap(_decodeScopeBlocks(scope));
+  }
+
+  ({int oldest, int above, int below})? _findLastGap(List<ChatBlock>? blocks) {
     if (blocks == null || blocks.length < 2) {
       return null;
     }
