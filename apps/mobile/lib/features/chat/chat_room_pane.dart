@@ -194,6 +194,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// scrolling at the divider asks for no page.
   Timer? _gapFillPause;
 
+  /// A context fetch is growing the island towards newer messages; nothing
+  /// else is asked for meanwhile.
+  bool _growingIsland = false;
+
+  /// The server cannot fetch a message's context for this room, so the
+  /// island cannot grow towards newer messages and the divider stays.
+  bool _islandGrowthUnsupported = false;
+
   /// The last gap among the rows shown, with the rows and blocks it was found
   /// in (see `_lastGapShown`).
   ({int oldest, int above, int below})? _gap;
@@ -412,6 +420,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _jumpDeferred = false;
     _highlightTimer?.cancel();
     _gapFillPause?.cancel();
+    _growingIsland = false;
+    _islandGrowthUnsupported = false;
     _highlightTimer = null;
     _jumpTargetId = null;
     _highlightedMessageId = null;

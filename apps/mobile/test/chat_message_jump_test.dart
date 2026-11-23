@@ -992,6 +992,8 @@ void main() {
       List<Override> overrides = const [],
       Future<void>? firstPageHeld,
       http.Response? historyAnswer,
+      Future<http.Response> Function(int around)? contextAnswer,
+      bool messageContext = true,
       int? jumpTo,
     }) async {
       for (final id in [
@@ -1022,13 +1024,17 @@ void main() {
         client: MockClient((request) async {
           final capabilities = _capabilitiesResponse(
             request,
-            messageContext: true,
+            messageContext: messageContext,
           );
           if (capabilities != null) {
             return capabilities;
           }
           if (request.url.path.endsWith('/context')) {
             requests.context.add(request.url);
+            if (contextAnswer != null) {
+              final segments = request.url.pathSegments;
+              return contextAnswer(int.parse(segments[segments.length - 2]));
+            }
             // The island already starts with the room.
             return http.Response(
               jsonEncode(_contextPage(oldest: 30, newest: 42)),
@@ -1223,6 +1229,187 @@ void main() {
       ];
       expect(newer.length, greaterThan(1));
       expect(newer, orderedEquals([...newer]..sort()));
+      await tester.pump(const Duration(seconds: 3));
+      await closePane(tester);
+    });
+
+    // A server holding every message from 30 to 338: up to 100 at or before
+    // the asked id and up to 100 after it, oldest first.
+    Future<http.Response> serverContext(int around) async {
+      final newest = math.min(around + 100, 338);
+      return http.Response(
+        jsonEncode(
+          _contextPage(oldest: math.max(30, around - 100), newest: newest),
+        ),
+        200,
+        headers: <String, String>{'X-Chat-Last-Given': '$newest'},
+      );
+    }
+
+    testWidgets('the island grows forward from its newer end', (tester) async {
+      final firstHeld = Completer<void>();
+      addTearDown(() {
+        if (!firstHeld.isCompleted) firstHeld.complete();
+      });
+      var answered = 0;
+      final requests = await gapRoom(
+        tester,
+        jumpTo: 50,
+        contextAnswer: (around) async {
+          if (answered++ == 0) await firstHeld.future;
+          return serverContext(around);
+        },
+      );
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const Key('chat-message-target-50'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      await settle(tester);
+      Future<void> nudge() async {
+        await tester.timedDrag(
+          find.byKey(const Key('chat-message-list')),
+          const Offset(0, -60),
+          const Duration(milliseconds: 300),
+        );
+        await settle(tester);
+      }
+
+      // The reader reads on towards the newer end of the island.
+      for (var turn = 0; turn < 10 && requests.context.isEmpty; turn++) {
+        await nudge();
+      }
+      expect(requests.context, hasLength(1));
+      expect(
+        requests.context.single.path,
+        endsWith('/chat/rooma123/54/context'),
+      );
+      final row = find.byKey(const Key('chat-message-target-52'));
+      expect(row, findsOneWidget);
+      final before = tester.getBottomLeft(row).dy;
+      firstHeld.complete();
+      for (
+        var turn = 0;
+        turn < 100 && await viewBlocks() == '[["30","55"],["331","338"]]';
+        turn++
+      ) {
+        await settle(tester);
+      }
+      expect(await viewBlocks(), '[["30","154"],["331","338"]]');
+      expect(
+        tester.getBottomLeft(row).dy,
+        moreOrLessEquals(before, epsilon: 1),
+        reason: 'the newer messages land below the reader',
+      );
+
+      for (
+        var turn = 0;
+        turn < 150 && await viewBlocks() != '[["30","338"]]';
+        turn++
+      ) {
+        await nudge();
+      }
+      expect(await viewBlocks(), '[["30","338"]]');
+      expect(requests.context, hasLength(3), reason: 'one per 100 messages');
+      expect(requests.history, isEmpty);
+      final shown = [
+        for (final element
+            in find
+                .byWidgetPredicate(
+                  (widget) =>
+                      widget is GestureDetector &&
+                      widget.key is ValueKey<String> &&
+                      (widget.key! as ValueKey<String>).value.startsWith(
+                        'chat-message-target-',
+                      ),
+                )
+                .evaluate())
+          (
+            id: int.parse(
+              (element.widget.key! as ValueKey<String>).value.split('-').last,
+            ),
+            top: tester.getTopLeft(find.byWidget(element.widget)).dy,
+          ),
+      ]..sort((a, b) => a.top.compareTo(b.top));
+      final ids = [for (final row in shown) row.id];
+      expect(ids, orderedEquals([...ids]..sort()));
+      await tester.pump(const Duration(seconds: 3));
+      await closePane(tester);
+    });
+
+    testWidgets('a failed forward fetch waits before the next one', (
+      tester,
+    ) async {
+      final requests = await gapRoom(
+        tester,
+        jumpTo: 50,
+        contextAnswer: (_) async => http.Response('', 503),
+      );
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const Key('chat-message-target-50'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      await settle(tester);
+      for (var turn = 0; turn < 10 && requests.context.isEmpty; turn++) {
+        await tester.timedDrag(
+          find.byKey(const Key('chat-message-list')),
+          const Offset(0, -60),
+          const Duration(milliseconds: 300),
+        );
+        await settle(tester);
+      }
+      expect(requests.context, hasLength(1));
+      for (var turn = 0; turn < 4; turn++) {
+        await tester.timedDrag(
+          find.byKey(const Key('chat-message-list')),
+          Offset(0, turn.isEven ? -20 : 20),
+          const Duration(milliseconds: 100),
+        );
+        await settle(tester);
+      }
+      expect(requests.context, hasLength(1));
+
+      await tester.pump(const Duration(seconds: 6));
+      await tester.timedDrag(
+        find.byKey(const Key('chat-message-list')),
+        const Offset(0, -20),
+        const Duration(milliseconds: 100),
+      );
+      await settle(tester);
+      expect(requests.context, hasLength(2));
+      expect(requests.history, isEmpty);
+      await tester.pump(const Duration(seconds: 3));
+      await closePane(tester);
+    });
+
+    testWidgets('without the context endpoint the divider stays', (
+      tester,
+    ) async {
+      final requests = await gapRoom(tester, jumpTo: 50, messageContext: false);
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const Key('chat-message-target-50'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      await settle(tester);
+      for (var turn = 0; turn < 4; turn++) {
+        await tester.timedDrag(
+          find.byKey(const Key('chat-message-list')),
+          const Offset(0, -40),
+          const Duration(milliseconds: 300),
+        );
+        await settle(tester);
+      }
+      expect(requests.context, isEmpty);
+      expect(requests.history, isEmpty);
+      expect(await viewBlocks(), '[["30","55"],["331","338"]]');
       await tester.pump(const Duration(seconds: 3));
       await closePane(tester);
     });

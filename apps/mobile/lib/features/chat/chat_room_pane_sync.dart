@@ -597,7 +597,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     if (gap != null && _awayFromNewest) {
       _anchorOnReadersSide(gap);
     }
-    if (_loadingOlder) {
+    if (_loadingOlder || _growingIsland) {
       return;
     }
     if (position.pixels >= position.maxScrollExtent - 160) {
@@ -608,11 +608,78 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       // as before any jump left an island behind. Only from that side: with
       // the reader in the island above, a page would add the gap's newest
       // messages, far from what they read, and leave the divider where it is.
+      // On the island side the island grows towards newer messages instead.
       final divider = _scrollController.paintedRowTop(gap.below);
-      if (divider != null && divider < position.viewportDimension / 2) {
+      if (divider == null) {
+        return;
+      }
+      if (divider < position.viewportDimension / 2) {
         unawaited(_fillGap());
+      } else if (!_islandGrowthUnsupported) {
+        unawaited(_growIslandForward(gap.above));
       }
     }
+  }
+
+  /// Fetches the messages that followed the island's newest one, so a reader
+  /// who jumped to an old message reads on into what came after it, until the
+  /// island meets the newest messages and the gap closes. The anchor sits on
+  /// the island, so the new rows land below the reader. A fetch that failed
+  /// or changed nothing pauses this like a gap page does.
+  Future<void> _growIslandForward(int islandEnd) async {
+    final key = _key;
+    bool isCurrent() => mounted && key == _key;
+    if (_anchorMessageId != islandEnd) {
+      _scrollController.keepPositionAcrossAnchorChange();
+      _update(() => _anchorMessageId = islandEnd);
+    }
+    final before = ref.read(chatScopeProvider(key)).valueOrNull?.blocksJson;
+    final visibleBefore = _visibleMessages();
+    final oldestShown = visibleBefore.isEmpty
+        ? null
+        : visibleBefore.first.messageId;
+    _growingIsland = true;
+    ChatFetchOutcome? outcome;
+    try {
+      outcome = await ref
+          .read(chatServiceProvider)
+          .loadMessageContext(
+            readerIsActive: () => isCurrent() && _readerIsActive(),
+            accountId: key.accountId,
+            roomToken: key.roomToken,
+            threadId: key.threadId,
+            messageId: islandEnd,
+          );
+    } on Object {
+      // Recorded as the room's error by the service; this only pauses.
+      outcome = null;
+    } finally {
+      if (isCurrent()) _growingIsland = false;
+    }
+    if (!isCurrent() || outcome == ChatFetchOutcome.deferred) {
+      return;
+    }
+    if (outcome == ChatFetchOutcome.unsupported) {
+      _islandGrowthUnsupported = true;
+      return;
+    }
+    if (outcome == ChatFetchOutcome.done) {
+      if (oldestShown != null) {
+        await _widenMessageWindowTo(oldestShown, key);
+      }
+      final after = await ref
+          .read(chatRepositoryProvider)
+          .getScope(
+            accountId: key.accountId,
+            roomToken: key.roomToken,
+            threadId: key.threadId,
+          );
+      if (!isCurrent() || after?.blocksJson != before) {
+        return;
+      }
+    }
+    _gapFillPause?.cancel();
+    _gapFillPause = Timer(const Duration(seconds: 5), () {});
   }
 
   /// One cursor page into the gap. After a page that failed or changed
