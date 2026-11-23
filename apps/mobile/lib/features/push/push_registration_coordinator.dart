@@ -132,6 +132,7 @@ final class PushRegistrationCoordinator {
     _retryWake = Completer<void>();
     wake.complete();
   }
+
   Future<void>? _activeDrain;
 
   /// Feeds a freshly issued (or refreshed) provider token in. Every account

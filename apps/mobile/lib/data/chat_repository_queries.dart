@@ -141,6 +141,53 @@ extension ChatRepositoryMessageWindow on ChatRepository {
     return (await query.getSingle()).read(count) ?? 0;
   }
 
+  /// The range from the [before]th cached timeline message older than
+  /// [messageId] to the [after]th newer one, fewer where the cache ends.
+  /// [threadId] narrows it to that thread's timeline.
+  Future<({int first, int last})> cachedRangeAround({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+    int? threadId,
+    bool includeThreadReplies = false,
+    int before = 100,
+    int after = 100,
+  }) async {
+    final messages = _database.cachedChatMessages;
+    Future<int?> edge({required bool older, required int count}) async {
+      if (count < 1) return null;
+      final rows =
+          await (_database.selectOnly(messages)
+                ..addColumns([messages.messageId])
+                ..where(
+                  _timelineMessages(
+                        messages,
+                        accountId: accountId,
+                        roomToken: roomToken,
+                        threadId: threadId,
+                        includeThreadReplies: includeThreadReplies,
+                      ) &
+                      (older
+                          ? messages.messageId.isSmallerThanValue(messageId)
+                          : messages.messageId.isBiggerThanValue(messageId)),
+                )
+                ..orderBy([
+                  OrderingTerm(
+                    expression: messages.messageId,
+                    mode: older ? OrderingMode.desc : OrderingMode.asc,
+                  ),
+                ])
+                ..limit(count))
+              .get();
+      return rows.isEmpty ? null : rows.last.read(messages.messageId);
+    }
+
+    return (
+      first: await edge(older: true, count: before) ?? messageId,
+      last: await edge(older: false, count: after) ?? messageId,
+    );
+  }
+
   /// Thread replies at or after [messageId], excluding the always-visible root.
   Future<int> countThreadRepliesFrom({
     required String accountId,

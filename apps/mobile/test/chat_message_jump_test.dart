@@ -12,8 +12,6 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/core/app_theme.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
-import 'package:nextcloudtalk/data/chat_repository.dart';
-import 'package:nextcloudtalk/features/chat/chat_service.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -354,145 +352,769 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
-  testWidgets('reaches a message far past ten pages through its context', (
-    tester,
-  ) async {
-    for (var id = 20001; id <= 20008; id++) {
-      await _insertMessage(database, account.id, id);
-    }
-    await _insertScope(
-      database,
-      account.id,
-      historyCursor: '20001',
-      futureCursor: '20008',
-      hasHistory: true,
-      blocksJson: '[["20001","20008"]]',
-    );
-    final contextRequests = <Uri>[];
-    var historyRequests = 0;
-    final api = HttpNextcloudApi(
-      client: MockClient((request) async {
-        final capabilities = _capabilitiesResponse(
-          request,
-          messageContext: true,
-        );
-        if (capabilities != null) {
-          return capabilities;
-        }
-        if (request.url.path.endsWith('/context')) {
-          contextRequests.add(request.url);
-          final segments = request.url.pathSegments;
-          final around = int.parse(segments[segments.length - 2]);
-          return http.Response(
-            jsonEncode(
-              _contextPage(
-                oldest: (around - 12).clamp(1, around),
-                newest: around + 12,
-              ),
-            ),
-            200,
-            headers: <String, String>{'X-Chat-Last-Given': '${around + 13}'},
-          );
-        }
-        if (request.url.queryParameters['lookIntoFuture'] == '0') {
-          historyRequests++;
-          final anchor = int.parse(
-            request.url.queryParameters['lastKnownMessageId']!,
-          );
-          return http.Response(
-            jsonEncode(_historyPage(newest: anchor - 1, oldest: anchor - 100)),
-            200,
-            headers: <String, String>{'X-Chat-Last-Given': '${anchor - 100}'},
-          );
-        }
-        return http.Response('', 304);
-      }),
-    );
-    addTearDown(api.close);
-
-    await tester.pumpWidget(
-      _app(
-        database: database,
-        vault: vault,
-        api: api,
-        home: PresenceChatRoomScreen(
-          account: account,
-          conversation: conversation,
-          jumpToMessageId: 42,
-        ),
-      ),
-    );
-    await _pumpUntil(
-      tester,
-      () =>
-          find
-              .byKey(const Key('chat-message-target-42'))
-              .evaluate()
-              .isNotEmpty ||
-          find.byKey(const Key('chat-jump-not-found')).evaluate().isNotEmpty,
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('chat-message-target-42')), findsOneWidget);
-    expect(_highlightBorder(tester, 42), isNotNull);
-    expect(find.byKey(const Key('chat-jump-not-found')), findsNothing);
-    expect(historyRequests, 0);
-    expect(contextRequests.single.path, endsWith('/chat/rooma123/42/context'));
-    final rootView = await (database.select(
-      database.chatScopes,
-    )..where((scope) => scope.scopeKey.equals('root'))).getSingle();
-    final networkRoot = await (database.select(
-      database.chatScopes,
-    )..where((scope) => scope.scopeKey.equals('network-root'))).getSingle();
-    // The view shows the fetched range beside the newest one; paging still
-    // continues from where the network cursor left off.
-    expect(rootView.blocksJson, '[["30","55"],["20001","20008"]]');
-    expect(rootView.hasHistory, isTrue);
-    expect(networkRoot.blocksJson, '[["20001","20008"]]');
-    expect(networkRoot.historyCursor, '20001');
-    expect(networkRoot.futureCursor, '20008');
-    expect(networkRoot.hasHistory, isTrue);
-    expect(tester.takeException(), isNull);
-
-    // Scrolling to the oldest edge of the island loads older messages right
-    // there, and the network cursor is still paged, so the gap between the
-    // two keeps closing.
-    await tester.drag(
-      find.byKey(const Key('chat-message-list')),
-      const Offset(0, 4000),
-    );
-    await _pumpUntil(
-      tester,
-      () => contextRequests.length >= 2 && historyRequests >= 1,
-    );
-    await tester.pumpAndSettle();
-    expect(contextRequests[1].path, endsWith('/chat/rooma123/30/context'));
-    final grownView = await (database.select(
-      database.chatScopes,
-    )..where((scope) => scope.scopeKey.equals('root'))).getSingle();
-    final grownBlocks = decodeChatScopeBlocks(grownView.blocksJson);
-    expect(int.parse(grownBlocks.first.start.value), lessThanOrEqualTo(18));
-    Future<StoredChatScope> networkRow() => (database.select(
-      database.chatScopes,
-    )..where((scope) => scope.scopeKey.equals('network-root'))).getSingle();
-    var networkAfter = await networkRow();
-    // The page is counted when it is asked for; its merge lands a moment later.
-    for (
-      var turn = 0;
-      turn < 200 && networkAfter.historyCursor == '20001';
-      turn++
-    ) {
-      await tester.pump(const Duration(milliseconds: 10));
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 5)),
+  group('an island around a jump target', () {
+    // The server holds messages 1 to 338; the device has the newest eight.
+    // The fake server answers 25 messages a page so a test pages a few times.
+    Future<
+      ({
+        List<Uri> context,
+        List<Uri> older,
+        List<Uri> newer,
+        List<Uri> reads,
+        ProviderContainer container,
+      })
+    >
+    islandRoom(
+      WidgetTester tester, {
+      int jumpTo = 100,
+      Future<void>? heldOlder,
+      Map<int, Future<void>> heldOlderAt = const {},
+      Future<void>? heldNewer,
+      http.Response? newerAnswer,
+    }) async {
+      for (var id = 331; id <= 338; id++) {
+        await _insertMessage(database, account.id, id);
+      }
+      await _insertScope(
+        database,
+        account.id,
+        historyCursor: '331',
+        futureCursor: '338',
+        hasHistory: true,
+        blocksJson: '[["331","338"]]',
       );
-      networkAfter = await networkRow();
+      final requests = (
+        context: <Uri>[],
+        older: <Uri>[],
+        newer: <Uri>[],
+        reads: <Uri>[],
+      );
+      http.Response page(List<int> ids, int lastGiven) => http.Response(
+        jsonEncode(<String, Object?>{
+          'ocs': <String, Object?>{
+            'meta': <String, Object?>{
+              'status': 'ok',
+              'statuscode': 200,
+              'message': 'OK',
+            },
+            'data': <Object?>[
+              for (final id in ids)
+                _messageJson(id: id, message: 'Message $id'),
+            ],
+          },
+        }),
+        200,
+        headers: <String, String>{'X-Chat-Last-Given': '$lastGiven'},
+      );
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          final capabilities = _capabilitiesResponse(
+            request,
+            messageContext: true,
+          );
+          if (capabilities != null) {
+            return capabilities;
+          }
+          if (request.method == 'POST') {
+            requests.reads.add(request.url);
+            return http.Response('', 404);
+          }
+          final segments = request.url.pathSegments;
+          if (request.url.path.endsWith('/context')) {
+            requests.context.add(request.url);
+            final around = int.parse(segments[segments.length - 2]);
+            final newest = math.min(around + 12, 338);
+            return page([
+              for (var id = math.max(1, around - 12); id <= newest; id++) id,
+            ], newest);
+          }
+          final known = int.tryParse(
+            request.url.queryParameters['lastKnownMessageId'] ?? '',
+          );
+          if (known == null) {
+            return http.Response('', 304);
+          }
+          if (request.url.queryParameters['lookIntoFuture'] == '0') {
+            requests.older.add(request.url);
+            await (heldOlderAt[known] ?? heldOlder);
+            final oldest = math.max(1, known - 25);
+            return known <= 1
+                ? http.Response('', 304)
+                : page([
+                    for (var id = known - 1; id >= oldest; id--) id,
+                  ], oldest);
+          }
+          // The live poll asks after the newest message; only pages from the
+          // island's newer end are counted.
+          if (known >= 338) {
+            return http.Response('', 304);
+          }
+          requests.newer.add(request.url);
+          await heldNewer;
+          if (newerAnswer != null) return newerAnswer;
+          final newest = math.min(known + 25, 338);
+          return page([
+            for (var id = known + 1; id <= newest; id++) id,
+          ], newest);
+        }),
+      );
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        _app(
+          database: database,
+          vault: vault,
+          api: api,
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+            jumpToMessageId: jumpTo,
+          ),
+        ),
+      );
+      await _pumpUntil(
+        tester,
+        () =>
+            find
+                .byKey(Key('chat-message-target-$jumpTo'))
+                .evaluate()
+                .isNotEmpty ||
+            find.byKey(const Key('chat-jump-not-found')).evaluate().isNotEmpty,
+      );
+      await _settle(tester);
+      return (
+        context: requests.context,
+        older: requests.older,
+        newer: requests.newer,
+        reads: requests.reads,
+        container: ProviderScope.containerOf(
+          tester.element(find.byType(PresenceChatRoomScreen)),
+        ),
+      );
     }
-    expect(int.parse(networkAfter.historyCursor), lessThan(20001));
 
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    Future<void> closePane(WidgetTester tester) async {
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpWidget(const SizedBox.shrink());
+      for (var turn = 0; turn < 50; turn++) {
+        await tester.pump(const Duration(milliseconds: 10));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 1)),
+        );
+      }
+    }
+
+    Future<String> blocks(String scopeKey) async =>
+        (await (database.select(
+              database.chatScopes,
+            )..where((scope) => scope.scopeKey.equals(scopeKey))).getSingle())
+            .blocksJson;
+
+    Finder bubble(int id) =>
+        find.byKey(Key('chat-message-target-$id'), skipOffstage: false);
+
+    Future<void> drag(WidgetTester tester, double dy) async {
+      await tester.timedDrag(
+        find.byKey(const Key('chat-message-list')),
+        Offset(0, dy),
+        const Duration(milliseconds: 300),
+      );
+      await _settle(tester);
+    }
+
+    void expectAscending(WidgetTester tester) {
+      final shown = [
+        for (final element
+            in find
+                .byWidgetPredicate(
+                  (widget) =>
+                      widget is GestureDetector &&
+                      widget.key is ValueKey<String> &&
+                      (widget.key! as ValueKey<String>).value.startsWith(
+                        'chat-message-target-',
+                      ),
+                )
+                .evaluate())
+          (
+            id: int.parse(
+              (element.widget.key! as ValueKey<String>).value.split('-').last,
+            ),
+            top: tester.getTopLeft(find.byWidget(element.widget)).dy,
+          ),
+      ]..sort((a, b) => a.top.compareTo(b.top));
+      final ids = [for (final row in shown) row.id];
+      expect(ids.toSet(), hasLength(ids.length), reason: 'no row twice');
+      expect(ids, orderedEquals([...ids]..sort()));
+    }
+
+    testWidgets('a jump lists only the island around the target', (
+      tester,
+    ) async {
+      final requests = await islandRoom(tester);
+
+      expect(find.byKey(const Key('chat-message-target-100')), findsOneWidget);
+      expect(_highlightBorder(tester, 100), isNotNull);
+      expect(requests.context, hasLength(1));
+      expect(bubble(331), findsNothing, reason: 'the newest stay off');
+      expect(
+        find.byKey(const Key('chat-history-gap'), skipOffstage: false),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('chat-jump-to-newest')), findsOneWidget);
+      // The island is the pane's own; the stored history is untouched.
+      expect(await blocks('root'), '[["331","338"]]');
+      expect(await blocks('network-root'), '[["331","338"]]');
+      expect(requests.reads, isEmpty, reason: 'no read marker on old rows');
+      expectAscending(tester);
+      await closePane(tester);
+    });
+
+    testWidgets('reading down grows the island into the newest messages', (
+      tester,
+    ) async {
+      final held = Completer<void>();
+      addTearDown(() {
+        if (!held.isCompleted) held.complete();
+      });
+      final requests = await islandRoom(tester, heldNewer: held.future);
+
+      for (var turn = 0; turn < 10 && requests.newer.isEmpty; turn++) {
+        await drag(tester, -150);
+      }
+      expect(requests.newer, hasLength(1));
+      expect(
+        requests.newer.single.queryParameters['lastKnownMessageId'],
+        '112',
+      );
+      expect(requests.newer.single.queryParameters['lookIntoFuture'], '1');
+      expect(requests.newer.single.queryParameters['timeout'], '0');
+      final row = bubble(110);
+      expect(row, findsOneWidget);
+      final before = tester.getBottomLeft(row).dy;
+      held.complete();
+      await _pumpUntil(tester, () => bubble(113).evaluate().isNotEmpty);
+      await _settle(tester);
+      expect(
+        tester.getBottomLeft(row).dy,
+        moreOrLessEquals(before, epsilon: 1),
+        reason: 'newer rows land below the reader',
+      );
+
+      for (
+        var turn = 0;
+        turn < 120 && await blocks('root') == '[["331","338"]]';
+        turn++
+      ) {
+        await drag(tester, -300);
+      }
+      await _settle(tester);
+      // 112 + 9 pages of 25 reaches 337, past where the newest begin.
+      expect(requests.newer, hasLength(9));
+      expect(await blocks('network-root'), '[["88","338"]]');
+      expect(await blocks('root'), '[["88","338"]]');
+      expect(requests.older, isEmpty);
+      expect(requests.context, hasLength(1));
+      for (var turn = 0; turn < 20 && bubble(338).evaluate().isEmpty; turn++) {
+        await drag(tester, -300);
+      }
+      expect(bubble(338), findsOneWidget, reason: 'the island became the room');
+      expectAscending(tester);
+      await closePane(tester);
+    });
+
+    testWidgets('reading up grows the island down to the room start', (
+      tester,
+    ) async {
+      final held = Completer<void>();
+      addTearDown(() {
+        if (!held.isCompleted) held.complete();
+      });
+      final requests = await islandRoom(tester, heldOlder: held.future);
+
+      for (var turn = 0; turn < 10 && requests.older.isEmpty; turn++) {
+        await drag(tester, 300);
+      }
+      expect(requests.older, hasLength(1));
+      expect(requests.older.single.queryParameters['lastKnownMessageId'], '88');
+      final row = bubble(90);
+      expect(row, findsOneWidget);
+      final before = tester.getTopLeft(row).dy;
+      held.complete();
+      await _pumpUntil(tester, () => bubble(87).evaluate().isNotEmpty);
+      await _settle(tester);
+      // The island's former first row loses its date line once older rows
+      // of the same day join it, so the rows may settle by that much.
+      expect(
+        tester.getTopLeft(row).dy,
+        moreOrLessEquals(before, epsilon: 24),
+        reason: 'older rows go on top, beyond the reader',
+      );
+
+      for (var turn = 0; turn < 120 && requests.older.length < 5; turn++) {
+        await drag(tester, 600);
+      }
+      for (var turn = 0; turn < 10; turn++) {
+        await drag(tester, 600);
+      }
+      // 88 → 63 → 38 → 13 → 1, then the server has nothing older.
+      expect(requests.older, hasLength(5));
+      expect(bubble(1), findsOneWidget);
+      expect(
+        find.byKey(const Key('chat-load-older'), skipOffstage: false),
+        findsNothing,
+      );
+      expect(requests.newer, isEmpty);
+      expect(await blocks('network-root'), '[["331","338"]]');
+      expectAscending(tester);
+      await closePane(tester);
+    });
+
+    testWidgets('an island end already on screen loads without a scroll', (
+      tester,
+    ) async {
+      // Message 2 sits at the room start, so the island's top is on screen
+      // right after the jump.
+      final requests = await islandRoom(tester, jumpTo: 2);
+      await _pumpUntil(tester, () => requests.older.isNotEmpty);
+      await _settle(tester);
+
+      // The island already starts with the first message: one ask, nothing
+      // older, and the control to load more goes away.
+      expect(requests.older, hasLength(1));
+      expect(requests.older.single.queryParameters['lastKnownMessageId'], '1');
+      expect(
+        find.byKey(const Key('chat-load-older'), skipOffstage: false),
+        findsNothing,
+      );
+      await closePane(tester);
+    });
+
+    testWidgets('a jump far back in the cache lists only the rows around it', (
+      tester,
+    ) async {
+      for (var id = 1; id <= 400; id++) {
+        await _insertMessage(database, account.id, id);
+      }
+      await _insertScope(
+        database,
+        account.id,
+        historyCursor: '1',
+        futureCursor: '400',
+        hasHistory: false,
+        blocksJson: '[["1","400"]]',
+      );
+      final asked = <Uri>[];
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          final capabilities = _capabilitiesResponse(
+            request,
+            messageContext: true,
+          );
+          if (capabilities != null) {
+            return capabilities;
+          }
+          if (request.url.queryParameters['lastKnownMessageId'] != '400') {
+            asked.add(request.url);
+          }
+          return http.Response('', 304);
+        }),
+      );
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        _app(
+          database: database,
+          vault: vault,
+          api: api,
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+            jumpToMessageId: 50,
+          ),
+        ),
+      );
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const Key('chat-message-target-50'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      await _settle(tester);
+
+      expect(_highlightBorder(tester, 50), isNotNull);
+      expect(bubble(400), findsNothing, reason: 'only the rows around it');
+      expect(find.byKey(const Key('chat-jump-to-newest')), findsOneWidget);
+
+      // Reading on grows it from the cache until it meets the newest row.
+      for (var turn = 0; turn < 150 && bubble(400).evaluate().isEmpty; turn++) {
+        await drag(tester, -600);
+      }
+      expect(bubble(400), findsOneWidget);
+      expect(asked, isEmpty, reason: 'everything was in the cache');
+      expectAscending(tester);
+      await closePane(tester);
+    });
+
+    testWidgets('jump to newest leaves the island', (tester) async {
+      await islandRoom(tester);
+
+      await tester.tap(find.byKey(const Key('chat-jump-to-newest')));
+      await _settle(tester);
+
+      expect(bubble(338), findsOneWidget);
+      // At the very end of the list, not a few rows short of it.
+      final list = tester.getRect(find.byKey(const Key('chat-message-list')));
+      expect(
+        tester.getBottomLeft(bubble(338)).dy,
+        lessThanOrEqualTo(list.bottom),
+      );
+      expect(
+        tester.getBottomLeft(bubble(338)).dy,
+        greaterThan(list.bottom - 120),
+      );
+      expect(bubble(100), findsNothing);
+      expect(find.byKey(const Key('chat-jump-to-newest')), findsNothing);
+      await closePane(tester);
+    });
+
+    testWidgets('messages arriving meanwhile stay off the island and count', (
+      tester,
+    ) async {
+      await islandRoom(tester);
+      final row = bubble(100);
+      final before = tester.getTopLeft(row).dy;
+
+      // What the live poll would store: one more message after the newest.
+      await _insertMessage(database, account.id, 339);
+      await (database.update(
+        database.chatScopes,
+      )..where((scope) => scope.roomToken.equals('rooma123'))).write(
+        const ChatScopesCompanion(
+          futureCursor: Value('339'),
+          blocksJson: Value('[["331","339"]]'),
+        ),
+      );
+      await _settle(tester);
+
+      expect(bubble(339), findsNothing);
+      expect(tester.getTopLeft(row).dy, moreOrLessEquals(before, epsilon: 1));
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('chat-jump-to-newest-count')),
+          matching: find.text('1'),
+        ),
+        findsOneWidget,
+      );
+      await closePane(tester);
+    });
+
+    testWidgets('a failed island page waits before the next one', (
+      tester,
+    ) async {
+      final requests = await islandRoom(
+        tester,
+        newerAnswer: http.Response('', 503),
+      );
+      for (var turn = 0; turn < 10 && requests.newer.isEmpty; turn++) {
+        await drag(tester, -150);
+      }
+      expect(requests.newer, hasLength(1));
+      for (var turn = 0; turn < 4; turn++) {
+        await drag(tester, turn.isEven ? 30 : -30);
+      }
+      expect(requests.newer, hasLength(1));
+
+      await tester.pump(const Duration(seconds: 6));
+      await drag(tester, -40);
+      expect(requests.newer, hasLength(2));
+      await closePane(tester);
+    });
+
+    testWidgets('an island end found empty opens again when messages arrive', (
+      tester,
+    ) async {
+      final requests = await islandRoom(
+        tester,
+        newerAnswer: http.Response('', 304),
+      );
+      for (var turn = 0; turn < 10 && requests.newer.isEmpty; turn++) {
+        await drag(tester, -150);
+      }
+      expect(requests.newer, hasLength(1));
+      for (var turn = 0; turn < 3; turn++) {
+        await drag(tester, -150);
+      }
+      expect(requests.newer, hasLength(1), reason: 'nothing newer yet');
+
+      // What the live poll would store: one more message after the newest.
+      await _insertMessage(database, account.id, 339);
+      await (database.update(
+        database.chatScopes,
+      )..where((scope) => scope.roomToken.equals('rooma123'))).write(
+        const ChatScopesCompanion(
+          futureCursor: Value('339'),
+          blocksJson: Value('[["331","339"]]'),
+        ),
+      );
+      await _settle(tester);
+      await drag(tester, -150);
+      expect(requests.newer, hasLength(2));
+      await closePane(tester);
+    });
+
+    testWidgets('a message landing while the island end is asked opens it', (
+      tester,
+    ) async {
+      final held = Completer<void>();
+      addTearDown(() {
+        if (!held.isCompleted) held.complete();
+      });
+      final requests = await islandRoom(
+        tester,
+        heldNewer: held.future,
+        newerAnswer: http.Response('', 304),
+      );
+      for (var turn = 0; turn < 10 && requests.newer.isEmpty; turn++) {
+        await drag(tester, -150);
+      }
+      expect(requests.newer, hasLength(1));
+
+      // The live poll stores a newer message before the empty answer lands.
+      await _insertMessage(database, account.id, 339);
+      await (database.update(
+        database.chatScopes,
+      )..where((scope) => scope.roomToken.equals('rooma123'))).write(
+        const ChatScopesCompanion(
+          futureCursor: Value('339'),
+          blocksJson: Value('[["331","339"]]'),
+        ),
+      );
+      await _settle(tester);
+      held.complete();
+      await _settle(tester);
+      await drag(tester, -150);
+      expect(requests.newer, hasLength(2));
+      await closePane(tester);
+    });
+
+    testWidgets('leaving the island mid-page lets the timeline page alone', (
+      tester,
+    ) async {
+      final islandPage = Completer<void>();
+      final historyPage = Completer<void>();
+      addTearDown(() {
+        if (!islandPage.isCompleted) islandPage.complete();
+        if (!historyPage.isCompleted) historyPage.complete();
+      });
+      final requests = await islandRoom(
+        tester,
+        heldOlderAt: {88: islandPage.future, 331: historyPage.future},
+      );
+      for (var turn = 0; turn < 10 && requests.older.isEmpty; turn++) {
+        await drag(tester, 300);
+      }
+      expect(requests.older.single.queryParameters['lastKnownMessageId'], '88');
+
+      await tester.tap(find.byKey(const Key('chat-jump-to-newest')));
+      await _settle(tester);
+      final loadOlder = find.byKey(
+        const Key('chat-load-older'),
+        skipOffstage: false,
+      );
+      await tester.ensureVisible(loadOlder);
+      await _settle(tester);
+      await tester.tap(
+        find.descendant(of: loadOlder, matching: find.byType(TextButton)),
+      );
+      await _settle(tester);
+      final spinner = find.descendant(
+        of: loadOlder,
+        matching: find.byType(CircularProgressIndicator),
+      );
+      expect(spinner, findsOneWidget);
+
+      // The room's reads go one at a time, so the timeline's page follows
+      // the island's; the island's ending late does not end the timeline's.
+      islandPage.complete();
+      await _settle(tester);
+      expect(requests.older, hasLength(2));
+      expect(requests.older.last.queryParameters['lastKnownMessageId'], '331');
+      expect(spinner, findsOneWidget);
+      historyPage.complete();
+      await _settle(tester);
+      await closePane(tester);
+    });
+
+    Future<void> openCachedIsland(
+      WidgetTester tester, {
+      required int newest,
+      required int jumpTo,
+      required http.Client client,
+      int oldest = 1,
+      Map<int, int> quotes = const {},
+    }) async {
+      for (var id = oldest; id <= newest; id++) {
+        final quoted = quotes[id];
+        await _insertMessage(
+          database,
+          account.id,
+          id,
+          parent: quoted == null
+              ? null
+              : _messageJson(id: quoted, message: 'Message $quoted'),
+        );
+      }
+      await _insertScope(
+        database,
+        account.id,
+        historyCursor: '$oldest',
+        futureCursor: '$newest',
+        hasHistory: oldest > 1,
+        blocksJson: '[["$oldest","$newest"]]',
+      );
+      final api = HttpNextcloudApi(client: client);
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        _app(
+          database: database,
+          vault: vault,
+          api: api,
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+            jumpToMessageId: jumpTo,
+          ),
+        ),
+      );
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(Key('chat-message-target-$jumpTo'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      await _settle(tester);
+      expect(bubble(newest), findsNothing, reason: 'an island from the cache');
+    }
+
+    testWidgets('jump to newest from a cached island lets the far rows go', (
+      tester,
+    ) async {
+      await openCachedIsland(
+        tester,
+        newest: 400,
+        jumpTo: 50,
+        client: MockClient(_convergedServer),
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(PresenceChatRoomScreen)),
+      );
+      final key = (
+        accountId: account.id,
+        roomToken: conversation.token,
+        threadId: null,
+      );
+      expect(
+        container.read(chatMessageWindowProvider(key)),
+        greaterThan(chatMessageWindowStep),
+      );
+
+      await tester.tap(find.byKey(const Key('chat-jump-to-newest')));
+      await _settle(tester);
+
+      expect(bubble(400), findsOneWidget);
+      expect(
+        container.read(chatMessageWindowProvider(key)),
+        chatMessageWindowStep,
+      );
+      expect(
+        container.read(chatMessagesProvider(key)).valueOrNull,
+        hasLength(chatMessageWindowStep),
+      );
+      await closePane(tester);
+    });
+
+    testWidgets('a jump near the newest from a cached island lands on it', (
+      tester,
+    ) async {
+      await openCachedIsland(
+        tester,
+        newest: 400,
+        jumpTo: 50,
+        quotes: const {50: 390},
+        client: MockClient(_convergedServer),
+      );
+
+      await tester.tap(find.byKey(const Key('chat-reply-jump-50')));
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const Key('chat-message-target-390'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      await _settle(tester);
+
+      expect(_highlightBorder(tester, 390), isNotNull);
+      final list = tester.getRect(find.byKey(const Key('chat-message-list')));
+      final row = tester.getRect(bubble(390));
+      expect(row.top, greaterThanOrEqualTo(list.top));
+      expect(row.bottom, lessThanOrEqualTo(list.bottom));
+      expect(bubble(50), findsNothing, reason: 'the island is gone');
+      expectAscending(tester);
+      await closePane(tester);
+    });
+
+    testWidgets('a jump the server can only page to leaves the island first', (
+      tester,
+    ) async {
+      final older = <Uri>[];
+      await openCachedIsland(
+        tester,
+        oldest: 101,
+        newest: 800,
+        jumpTo: 300,
+        quotes: const {300: 50},
+        client: MockClient((request) async {
+          final capabilities = _capabilitiesResponse(request);
+          if (capabilities != null) {
+            return capabilities;
+          }
+          final known = int.tryParse(
+            request.url.queryParameters['lastKnownMessageId'] ?? '',
+          );
+          if (known == null ||
+              request.url.queryParameters['lookIntoFuture'] != '0') {
+            return http.Response('', 304);
+          }
+          older.add(request.url);
+          final oldest = math.max(1, known - 25);
+          return http.Response(
+            jsonEncode(_historyPage(newest: known - 1, oldest: oldest)),
+            200,
+            headers: <String, String>{'X-Chat-Last-Given': '$oldest'},
+          );
+        }),
+      );
+
+      await tester.tap(find.byKey(const Key('chat-reply-jump-300')));
+      await _pumpUntil(
+        tester,
+        () =>
+            find
+                .byKey(const Key('chat-message-target-50'))
+                .evaluate()
+                .isNotEmpty ||
+            find.byKey(const Key('chat-jump-not-found')).evaluate().isNotEmpty,
+      );
+      await _settle(tester);
+
+      expect(find.byKey(const Key('chat-jump-not-found')), findsNothing);
+      expect(_highlightBorder(tester, 50), isNotNull);
+      // 101 → 76 → 51 → 26, the page that holds the target.
+      expect(older, hasLength(3));
+      expectAscending(tester);
+      await closePane(tester);
+    });
   });
 
   testWidgets('pages past ten pages when the server has no context endpoint', (
@@ -813,304 +1435,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 1));
     });
   }
-
-  group('loading older below a jump island', () {
-    Future<({List<Uri> context, List<Uri> history})> islandRoom(
-      WidgetTester tester, {
-      required http.Response Function(int around) contextAnswer,
-    }) async {
-      for (final id in [
-        for (var id = 30; id <= 54; id++) id,
-        for (var id = 20001; id <= 20008; id++) id,
-      ]) {
-        await _insertMessage(database, account.id, id);
-      }
-      await _insertScope(
-        database,
-        account.id,
-        historyCursor: '30',
-        futureCursor: '20008',
-        hasHistory: true,
-        blocksJson: '[["30","55"],["20001","20008"]]',
-      );
-      await _insertScope(
-        database,
-        account.id,
-        scopeKey: 'network-root',
-        historyCursor: '20001',
-        futureCursor: '20008',
-        hasHistory: true,
-        blocksJson: '[["20001","20008"]]',
-      );
-      final requests = (context: <Uri>[], history: <Uri>[]);
-      final api = HttpNextcloudApi(
-        client: MockClient((request) async {
-          final capabilities = _capabilitiesResponse(
-            request,
-            messageContext: true,
-          );
-          if (capabilities != null) {
-            return capabilities;
-          }
-          if (request.url.path.endsWith('/context')) {
-            requests.context.add(request.url);
-            final segments = request.url.pathSegments;
-            return contextAnswer(int.parse(segments[segments.length - 2]));
-          }
-          if (request.url.queryParameters['lookIntoFuture'] == '0') {
-            requests.history.add(request.url);
-            return http.Response(
-              jsonEncode(_historyPage(newest: 20000, oldest: 19901)),
-              200,
-              headers: const <String, String>{'X-Chat-Last-Given': '19901'},
-            );
-          }
-          return http.Response('', 304);
-        }),
-      );
-      addTearDown(api.close);
-      await tester.pumpWidget(
-        _app(
-          database: database,
-          vault: vault,
-          api: api,
-          home: PresenceChatRoomScreen(
-            account: account,
-            conversation: conversation,
-          ),
-        ),
-      );
-      await _pumpUntil(
-        tester,
-        () => find.byType(LinearProgressIndicator).evaluate().isEmpty,
-      );
-      return requests;
-    }
-
-    Future<ChatFetchOutcome> loadOlder(
-      WidgetTester tester, {
-      bool growIsland = false,
-    }) async {
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(PresenceChatRoomScreen)),
-      );
-      ChatFetchOutcome? outcome;
-      container
-          .read(chatServiceProvider)
-          .loadOlder(
-            accountId: account.id,
-            roomToken: 'rooma123',
-            growIsland: growIsland,
-          )
-          .then((value) => outcome = value)
-          .ignore();
-      await _pumpUntil(tester, () => outcome != null);
-      return outcome!;
-    }
-
-    // The pane's live loop and its last writes finish on the real event loop;
-    // closing the database under them would stall the next test's database.
-    Future<void> closePane(WidgetTester tester) async {
-      await tester.pumpWidget(const SizedBox.shrink());
-      for (var turn = 0; turn < 50; turn++) {
-        await tester.pump(const Duration(milliseconds: 10));
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 1)),
-        );
-      }
-    }
-
-    testWidgets('a failing island fetch still pages the history cursor', (
-      tester,
-    ) async {
-      final requests = await islandRoom(
-        tester,
-        contextAnswer: (_) => http.Response('', 503),
-      );
-
-      expect(await loadOlder(tester, growIsland: true), ChatFetchOutcome.done);
-
-      expect(requests.context, hasLength(1));
-      expect(requests.history, hasLength(1));
-      final scopes = {
-        for (final row in await database.select(database.chatScopes).get())
-          row.scopeKey: row,
-      };
-      expect(scopes['network-root']!.blocksJson, '[["19901","20008"]]');
-      expect(scopes['root']!.blocksJson, '[["30","55"],["19901","20008"]]');
-      expect(scopes['root']!.lastSyncError, isNull);
-      expect(scopes['network-root']!.lastSyncError, isNull);
-      await closePane(tester);
-    });
-
-    testWidgets('the island grows only when the reader is at its edge', (
-      tester,
-    ) async {
-      final requests = await islandRoom(
-        tester,
-        contextAnswer: (around) => http.Response(
-          jsonEncode(_contextPage(oldest: around - 12, newest: around + 12)),
-          200,
-          headers: <String, String>{'X-Chat-Last-Given': '${around + 13}'},
-        ),
-      );
-
-      await loadOlder(tester);
-
-      expect(requests.context, isEmpty);
-      expect(requests.history, hasLength(1));
-      await closePane(tester);
-    });
-
-    testWidgets('an island at the start of the room is not asked again', (
-      tester,
-    ) async {
-      // Nothing older than 30 exists: the context starts at the island.
-      final requests = await islandRoom(
-        tester,
-        contextAnswer: (around) => http.Response(
-          jsonEncode(_contextPage(oldest: around, newest: around + 12)),
-          200,
-          headers: <String, String>{'X-Chat-Last-Given': '${around + 13}'},
-        ),
-      );
-
-      await loadOlder(tester, growIsland: true);
-      await loadOlder(tester, growIsland: true);
-
-      expect(requests.context, hasLength(1));
-      expect(requests.history, hasLength(2));
-      await closePane(tester);
-    });
-  });
-
-  testWidgets('a page filling the gap below the island moves no visible row', (
-    tester,
-  ) async {
-    for (final id in [
-      for (var id = 30; id <= 54; id++) id,
-      for (var id = 20001; id <= 20008; id++) id,
-    ]) {
-      await _insertMessage(database, account.id, id);
-    }
-    await _insertScope(
-      database,
-      account.id,
-      historyCursor: '30',
-      futureCursor: '20008',
-      hasHistory: true,
-      blocksJson: '[["30","55"],["20001","20008"]]',
-    );
-    await _insertScope(
-      database,
-      account.id,
-      scopeKey: 'network-root',
-      historyCursor: '20001',
-      futureCursor: '20008',
-      hasHistory: true,
-      blocksJson: '[["20001","20008"]]',
-    );
-    final page = Completer<http.Response>();
-    addTearDown(() {
-      if (!page.isCompleted) page.complete(http.Response('', 503));
-    });
-    var historyRequests = 0;
-    final api = HttpNextcloudApi(
-      client: MockClient((request) async {
-        final capabilities = _capabilitiesResponse(
-          request,
-          messageContext: true,
-        );
-        if (capabilities != null) {
-          return capabilities;
-        }
-        if (request.url.path.endsWith('/context')) {
-          // The island already starts with the room.
-          return http.Response(
-            jsonEncode(_contextPage(oldest: 30, newest: 42)),
-            200,
-            headers: const <String, String>{'X-Chat-Last-Given': '43'},
-          );
-        }
-        if (request.url.queryParameters['lookIntoFuture'] == '0') {
-          historyRequests++;
-          return page.future;
-        }
-        return http.Response('', 304);
-      }),
-    );
-    addTearDown(api.close);
-    await tester.pumpWidget(
-      _app(
-        database: database,
-        vault: vault,
-        api: api,
-        home: PresenceChatRoomScreen(
-          account: account,
-          conversation: conversation,
-        ),
-      ),
-    );
-    await _pumpUntil(
-      tester,
-      () =>
-          find.byKey(const Key('chat-message-list')).evaluate().isNotEmpty &&
-          find.byType(LinearProgressIndicator).evaluate().isEmpty,
-    );
-
-    // The reader scrolls up from the newest messages into the island; at its
-    // oldest edge the history cursor is paged into the gap below them.
-    await tester.drag(
-      find.byKey(const Key('chat-message-list')),
-      const Offset(0, 4000),
-    );
-    await _pumpUntil(tester, () => historyRequests == 1);
-    // Settled by frames, not pumpAndSettle: its fake minutes would time the
-    // held page request out.
-    for (var turn = 0; turn < 60; turn++) {
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    final row = find.byKey(
-      const ValueKey('chat-message-account-a-rooma123-32'),
-    );
-    expect(row, findsOneWidget);
-    final before = tester.getTopLeft(row);
-
-    page.complete(
-      http.Response(
-        jsonEncode(_historyPage(newest: 20000, oldest: 19901)),
-        200,
-        headers: const <String, String>{'X-Chat-Last-Given': '19901'},
-      ),
-    );
-    Future<String> networkCursor() async =>
-        (await (database.select(database.chatScopes)
-                  ..where((scope) => scope.scopeKey.equals('network-root')))
-                .getSingle())
-            .historyCursor;
-    for (var turn = 0; turn < 200 && await networkCursor() != '19901'; turn++) {
-      await tester.pump(const Duration(milliseconds: 10));
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 5)),
-      );
-    }
-    expect(await networkCursor(), '19901');
-    for (var turn = 0; turn < 20; turn++) {
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-
-    expect(row, findsOneWidget);
-    expect(tester.getTopLeft(row).dy, moreOrLessEquals(before.dy, epsilon: 1));
-    expect(tester.takeException(), isNull);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    for (var turn = 0; turn < 50; turn++) {
-      await tester.pump(const Duration(milliseconds: 10));
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 1)),
-      );
-    }
-  });
 
   for (final dark in [false, true]) {
     testWidgets('the jump highlight stands out on both bubbles '
@@ -1517,4 +1841,15 @@ Future<void> _insertScope(
           lastSyncedAtMillis: const Value(1724300000000),
         ),
       );
+}
+
+/// A few frames with the real event loop turning in between, for the reads
+/// and writes behind a scroll to land.
+Future<void> _settle(WidgetTester tester) async {
+  for (var turn = 0; turn < 20; turn++) {
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 2)),
+    );
+  }
 }

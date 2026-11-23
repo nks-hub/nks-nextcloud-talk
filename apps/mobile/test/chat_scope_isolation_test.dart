@@ -651,7 +651,7 @@ void main() {
   );
 
   test(
-    'a context island lands in the thread view and moves no network cursor',
+    'a thread island stays off the stored scopes until it reaches them',
     () async {
       await database.delete(database.textSendOperations).go();
       await repository.recordCapabilities(
@@ -705,27 +705,80 @@ void main() {
         headers: ChatResponseHeaders.fromMap(const {'X-Chat-Last-Given': '25'}),
       );
 
-      expect(
-        await repository.applyChatContextResponse(response, viewThreadId: 20),
-        ChatMergeOutcome.applied,
-      );
+      final profile = ChatCapabilityProfile.fromTalkFeatures(const <String>[
+        'chat-v2',
+        'threads',
+        'chat-get-context',
+      ], federated: false);
+      final context = await repository.applyChatContextResponse(response);
+      expect(context.outcome, ChatMergeOutcome.applied);
+      expect(context.joined, isFalse);
+      final island = context.island!;
+      expect(island, ChatBlock(start: _cursor(22), end: _cursor(25)));
 
-      final scopes = {
+      Future<Map<String, StoredChatScope>> scopes() async => {
         for (final row in await database.select(database.chatScopes).get())
           row.scopeKey: row,
       };
-      expect(scopes['thread:20']!.blocksJson, '[["22","25"],["500","520"]]');
-      expect(scopes['network-thread:20']!.blocksJson, '[["500","520"]]');
-      expect(scopes['network-thread:20']!.historyCursor, '500');
-      expect(scopes['network-thread:20']!.futureCursor, '520');
-      expect(scopes['root']!.blocksJson, '[["10","900"]]');
-      expect(scopes['network-root']!.blocksJson, '[["10","900"]]');
+      var stored = await scopes();
+      expect(stored['thread:20']!.blocksJson, '[["500","520"]]');
+      expect(stored['network-thread:20']!.blocksJson, '[["500","520"]]');
+      expect(stored['root']!.blocksJson, '[["10","900"]]');
+      expect(stored['network-root']!.blocksJson, '[["10","900"]]');
       final thread = await repository.listMessages(
         accountId: 'account-a',
         roomToken: 'rooma123',
         threadId: 20,
       );
       expect(thread.map((message) => message.messageId), containsAll([22, 24]));
+
+      // A newer page from the island's end that reaches the thread's history.
+      final pageRequest = ChatFetchRequest(
+        accountId: AccountId.parse('account-a'),
+        requestId: ChatRequestId.parse('island-thread-20'),
+        server: ServerBase.parse('https://cloud.example.invalid'),
+        roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+        profile: profile,
+        direction: ChatFetchDirection.future,
+        cursor: island.end,
+        lastCommonRead: _cursor(0),
+        limit: 100,
+        includeLastKnown: false,
+        timeoutSeconds: 0,
+        interactive: true,
+        threadId: 20,
+      );
+      final page = await repository.applyChatIslandPage(
+        decodeChatGetResponse(
+          request: pageRequest,
+          statusCode: 200,
+          body: utf8.encode(
+            jsonEncode({
+              'ocs': {
+                'meta': {'status': 'ok', 'statuscode': 200, 'message': 'OK'},
+                'data': [
+                  for (final id in [26, 499, 500])
+                    _chatMessageJson(
+                      id: id,
+                      threadId: 20,
+                      message: 'Reply $id',
+                    ),
+                ],
+              },
+            }),
+          ),
+          headers: ChatResponseHeaders.fromMap(const {
+            'X-Chat-Last-Given': '500',
+          }),
+        ),
+        island,
+      );
+      expect(page.joined, isTrue);
+      stored = await scopes();
+      expect(stored['network-thread:20']!.blocksJson, '[["22","520"]]');
+      expect(stored['network-thread:20']!.historyCursor, '22');
+      expect(stored['thread:20']!.blocksJson, '[["22","520"]]');
+      expect(stored['network-root']!.blocksJson, '[["10","900"]]');
     },
   );
 
@@ -1042,3 +1095,5 @@ Future<void> _insertScope(
         ),
       );
 }
+
+ChatCursor _cursor(int value) => ChatCursor.parse(value.toString());

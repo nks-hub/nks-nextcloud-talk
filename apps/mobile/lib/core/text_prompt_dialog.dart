@@ -116,9 +116,8 @@ final class _TextPromptDialogState extends State<_TextPromptDialog> {
         ),
         validator: emptyErrorText == null
             ? null
-            : (value) => value == null || value.trim().isEmpty
-                  ? emptyErrorText
-                  : null,
+            : (value) =>
+                  value == null || value.trim().isEmpty ? emptyErrorText : null,
         onFieldSubmitted: (_) => _confirm(),
       ),
     );
@@ -130,9 +129,7 @@ final class _TextPromptDialogState extends State<_TextPromptDialog> {
       return Dialog.fullscreen(
         child: Scaffold(
           appBar: AppBar(
-            leading: CloseButton(
-              onPressed: () => Navigator.of(context).pop(),
-            ),
+            leading: CloseButton(onPressed: () => Navigator.of(context).pop()),
             title: Text(widget.title),
             actions: [
               TextButton(

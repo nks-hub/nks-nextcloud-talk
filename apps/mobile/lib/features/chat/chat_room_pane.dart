@@ -118,6 +118,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// Text currently selected with the mouse, offered first on a right click.
   String? _selectedText;
 
+  /// A cached jump target further back than this many rows is shown as an
+  /// island of its own (see `_cachedIslandAround`).
+  static const _deepJumpRows = 300;
+
   /// How many layout passes a reveal may take. Every pass nudges the reverse
   /// list closer to the estimated offset of the target, which re-measures the
   /// children around it, so the estimate converges within a few frames.
@@ -189,6 +193,36 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   ChatServiceError? _localError;
   Timer? _draftTimer;
   Timer? _highlightTimer;
+
+  /// The range around a jump target the timeline lists instead of the whole
+  /// history: fetched from the server when the history does not reach it, or
+  /// taken from the cache when it lies far back. Paging extends it at both
+  /// ends, from the cache where it can; once it reaches the newest message
+  /// the timeline goes on as usual.
+  ChatBlock? _island;
+
+  /// [_island] as the block list the timeline filters by, kept with it.
+  List<ChatBlock>? _islandShown;
+
+  /// Nothing lies beyond the island's oldest end.
+  bool _islandAtStart = false;
+
+  /// Set when the server had nothing past the island's newest end: that end,
+  /// or the newest history message when the page was asked for if it was
+  /// newer (one the server no longer has). A newer message opens it again.
+  int? _islandEndedAt;
+
+  /// The island page on its way, true for an older one; nothing else is
+  /// asked for meanwhile.
+  bool? _islandLoadingOlder;
+
+  /// Newest message of the whole timeline when the island opened; what
+  /// arrives after it counts on the jump-to-newest control.
+  int? _islandEntryNewest;
+
+  /// Running after an island page that failed or brought nothing; until it
+  /// ends, scrolling to the island's edges asks for no page.
+  Timer? _islandPause;
   ChatRepository? _draftStore;
   CachedChatMessage? _replyTo;
   int _jumpGeneration = 0;
@@ -402,6 +436,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _jumpProgress = null;
     _jumpDeferred = false;
     _highlightTimer?.cancel();
+    _leaveIsland();
     _highlightTimer = null;
     _jumpTargetId = null;
     _highlightedMessageId = null;
@@ -492,6 +527,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _syncLoop = null;
     _draftTimer?.cancel();
     _highlightTimer?.cancel();
+    _islandPause?.cancel();
     _fileShares.reset();
     _incomingAnnouncements.dispose();
     _attachmentMenuActions_.dispose();
@@ -894,11 +930,32 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     // contiguous with what is shown around it.
     final cachedMessages =
         messagesValue.valueOrNull ?? const <CachedChatMessage>[];
-    final messages = _timelineCache.visible((cachedMessages, scopeBlocks), () {
-      final visible = _messagesWithinBlocks(cachedMessages, scopeBlocks);
+    // Once the island reaches the newest message of the history, the whole
+    // timeline goes on from it with the same anchor, so nothing moves.
+    final history = _island == null
+        ? const <CachedChatMessage>[]
+        : _messagesWithinBlocks(cachedMessages, scopeBlocks);
+    final island = _island;
+    if (island != null && history.isNotEmpty) {
+      final newest = history.last.messageId;
+      if (island.contains(ChatCursor.parse('$newest'))) {
+        _leaveIsland();
+      } else if (newest > (_islandEndedAt ?? newest)) {
+        _islandEndedAt = null;
+        _loadAtIslandEdgesAfterLayout();
+      }
+    }
+    final shownBlocks = _islandShown ?? scopeBlocks;
+    final messages = _timelineCache.visible((cachedMessages, shownBlocks), () {
+      final visible = _messagesWithinBlocks(cachedMessages, shownBlocks);
       _timelineCache.retain(visible);
       return visible;
     });
+    final newerThanIsland = _island == null
+        ? 0
+        : history
+              .where((message) => message.messageId > (_islandEntryNewest ?? 0))
+              .length;
     final operations = _withOwnReplies(
       operationsValue.valueOrNull ?? const <StoredTextSendOperation>[],
     );
@@ -1225,21 +1282,24 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                               ref.watch(replyLayoutProvider) ==
                               ReplyLayout.inline,
                           messages: messages,
-                          blocks: scopeBlocks,
+                          blocks: shownBlocks,
                           pending: pending,
                           attachments: pendingAttachments,
-                          hasOlder:
-                              (scope?.hasHistory ?? false) ||
-                              (inRootRoom
-                                      ? cachedMessages.length
-                                      : cachedMessages
-                                            .where(
-                                              (row) =>
-                                                  row.messageId !=
-                                                  widget.threadId,
-                                            )
-                                            .length) >=
-                                  ref.watch(chatMessageWindowProvider(_key)),
+                          hasOlder: _island != null
+                              ? !_islandAtStart
+                              : (scope?.hasHistory ?? false) ||
+                                    (inRootRoom
+                                            ? cachedMessages.length
+                                            : cachedMessages
+                                                  .where(
+                                                    (row) =>
+                                                        row.messageId !=
+                                                        widget.threadId,
+                                                  )
+                                                  .length) >=
+                                        ref.watch(
+                                          chatMessageWindowProvider(_key),
+                                        ),
                           loadingOlder: _loadingOlder,
                           controller: _scrollController,
                           onLoadOlder: () => unawaited(_loadOlder()),
@@ -1267,6 +1327,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                           bottom: 16,
                           child: _JumpToNewestButton(
                             onPressed: () => unawaited(_jumpToNewest()),
+                            newer: newerThanIsland,
                           ),
                         ),
                     ],

@@ -122,10 +122,6 @@ final class ChatService {
   final Map<String, _ChatRetryWake> _retryTimers = {};
   int _retryGeneration = 0;
   final Set<_ChatReadAdmission> _readAdmissions = {};
-
-  /// Island starts below which a context fetch found nothing older: the
-  /// island already begins with the room, so asking again brings nothing.
-  final Set<String> _islandsAtRoomStart = {};
   final _readerWakes =
       StreamController<({String accountId, String roomToken})>.broadcast();
   bool _closed = false;
@@ -373,29 +369,20 @@ final class ChatService {
     );
   }
 
-  /// Pages history back from the history cursor. [growIsland] says the
-  /// reader asked from the oldest edge of a range a jump fetched, which then
-  /// grows as well (see `_growOldestIsland`).
+  /// Pages history back from the history cursor.
   Future<ChatFetchOutcome> loadOlder({
     required String accountId,
     required String roomToken,
     int? threadId,
     bool Function()? readerIsActive,
-    bool growIsland = false,
-  }) => _loadOlder(
-    accountId,
-    roomToken,
-    threadId,
-    readerIsActive,
-    growIsland: growIsland,
-  );
+  }) => _loadOlder(accountId, roomToken, threadId, readerIsActive);
 
-  /// Caches the messages around [messageId] and shows them in the scope's
-  /// view as a range of their own; the history cursor stays where it is.
+  /// Caches the messages around [messageId], the island a jump shows. The
+  /// room's history takes it in only once the two touch.
   /// [ChatFetchOutcome.unsupported] when the server cannot do that (no
   /// `chat-get-context`, a thread whose kind is not known yet, or an answer
   /// outside the documented shape), so the caller has to page history.
-  Future<ChatFetchOutcome> loadMessageContext({
+  Future<ChatIslandFetch> loadMessageContext({
     required String accountId,
     required String roomToken,
     required int messageId,
@@ -406,6 +393,24 @@ final class ChatService {
     roomToken,
     threadId,
     messageId,
+    readerIsActive,
+  );
+
+  /// Fetches a page from one edge of [island]: older messages from its
+  /// oldest end when [older], newer ones from its newest end otherwise.
+  Future<ChatIslandFetch> loadIslandPage({
+    required String accountId,
+    required String roomToken,
+    required ChatBlock island,
+    required bool older,
+    int? threadId,
+    bool Function()? readerIsActive,
+  }) => _loadIslandPage(
+    accountId,
+    roomToken,
+    threadId,
+    island,
+    older,
     readerIsActive,
   );
 

@@ -154,6 +154,134 @@ void main() {
     );
   });
 
+  test('an island reaching the oldest history joins it', () {
+    final source = snapshot();
+    final plan = planChatContextMerge(
+      source,
+      _decode(request(messageId: 950), ids: [900, 950, 999], lastGiven: 999),
+    ).plan!;
+    expect(plan.islandJoined, isTrue);
+    final scope = plan
+        .commit(source)
+        .accounts[account]!
+        .scopes[ChatScopeKey(roomToken: room, threadId: null)]!;
+    expect(scope.historyCursor, _cursor(900));
+    expect(scope.blocks, [ChatBlock(start: _cursor(900), end: _cursor(1100))]);
+    expect(scope.futureCursor, _cursor(1100));
+  });
+
+  test('an island past the newest known message carries the poll along', () {
+    // Right after opening a room the history may know less than the server:
+    // the island then reaches past it, and polling goes on from its end.
+    final source = snapshot();
+    final plan = planChatContextMerge(
+      source,
+      _decode(request(messageId: 1050), ids: [990, 1050, 1150], lastGiven: 1160),
+    ).plan!;
+    expect(plan.islandJoined, isTrue);
+    final scope = plan
+        .commit(source)
+        .accounts[account]!
+        .scopes[ChatScopeKey(roomToken: room, threadId: null)]!;
+    expect(scope.blocks, [ChatBlock(start: _cursor(990), end: _cursor(1160))]);
+    expect(scope.historyCursor, _cursor(990));
+    expect(scope.futureCursor, _cursor(1160));
+    expect(scope.futureConverged, isFalse);
+  });
+
+  group('a page from an island edge', () {
+    final island = ChatBlock(start: _cursor(40), end: _cursor(62));
+    ChatFetchRequest page(ChatFetchDirection direction, int cursor) =>
+        ChatFetchRequest(
+          accountId: account,
+          requestId: ChatRequestId.parse('island-page'),
+          server: server,
+          roomToken: room,
+          profile: profile,
+          direction: direction,
+          cursor: _cursor(cursor),
+          lastCommonRead: _cursor(0),
+          limit: 100,
+          includeLastKnown: false,
+          timeoutSeconds: 0,
+          interactive: true,
+        );
+    ChatGetResponse answer(
+      ChatFetchRequest request,
+      List<int> ids,
+      int lastGiven,
+    ) => decodeChatGetResponse(
+      request: request,
+      statusCode: 200,
+      body: _ocs([for (final id in ids) _messageWire(id)]),
+      headers: ChatResponseHeaders.fromMap(<String, String>{
+        'X-Chat-Last-Given': '$lastGiven',
+      }),
+    );
+
+    test('grows the island older and newer, scope untouched', () {
+      final source = snapshot();
+      final older = planChatIslandPageMerge(
+        source,
+        answer(page(ChatFetchDirection.history, 40), [39, 35, 31], 30),
+        island,
+      ).plan!;
+      expect(older.island, ChatBlock(start: _cursor(30), end: _cursor(62)));
+      expect(older.islandJoined, isFalse);
+      expect(older.messageUpserts, hasLength(3));
+      final newer = planChatIslandPageMerge(
+        source,
+        answer(page(ChatFetchDirection.future, 62), [63, 70], 71),
+        island,
+      ).plan!;
+      expect(newer.island, ChatBlock(start: _cursor(40), end: _cursor(71)));
+      final scope = newer
+          .commit(source)
+          .accounts[account]!
+          .scopes[ChatScopeKey(roomToken: room, threadId: null)]!;
+      expect(scope.historyCursor, _cursor(1000));
+      expect(scope.blocks, [
+        ChatBlock(start: _cursor(1000), end: _cursor(1100)),
+      ]);
+    });
+
+    test('joins the history once the newer page reaches it', () {
+      final source = snapshot();
+      final plan = planChatIslandPageMerge(
+        source,
+        answer(page(ChatFetchDirection.future, 62), [63, 999, 1000], 1000),
+        island,
+      ).plan!;
+      expect(plan.islandJoined, isTrue);
+      final scope = plan
+          .commit(source)
+          .accounts[account]!
+          .scopes[ChatScopeKey(roomToken: room, threadId: null)]!;
+      expect(scope.historyCursor, _cursor(40));
+      expect(scope.blocks, [ChatBlock(start: _cursor(40), end: _cursor(1100))]);
+    });
+
+    test('an empty answer says the edge is the end, a moved edge is stale', () {
+      final empty = planChatIslandPageMerge(
+        snapshot(),
+        decodeChatGetResponse(
+          request: page(ChatFetchDirection.history, 40),
+          statusCode: 304,
+          body: Uint8List(0),
+        ),
+        island,
+      );
+      expect(empty.outcome, ChatMergeOutcome.historyExhausted);
+      expect(empty.plan, isNull);
+      final stale = planChatIslandPageMerge(
+        snapshot(),
+        answer(page(ChatFetchDirection.history, 41), [39], 39),
+        island,
+      );
+      expect(stale.outcome, ChatMergeOutcome.stale);
+    });
+  });
+
   test('plans nothing for an empty answer or an unknown scope', () {
     final empty = planChatContextMerge(
       snapshot(),
@@ -174,6 +302,15 @@ void main() {
     expect(unknownScope.plan, isNull);
   });
 
+  test('reads a 503 from a proxy as a transient failure', () {
+    final response = decodeChatContextResponse(
+      request: request(),
+      statusCode: 503,
+      body: Uint8List.fromList(utf8.encode('<html>Service Unavailable</html>')),
+    );
+    expect(response.classification, ChatGetClassification.transientError);
+  });
+
   test('moves the account to re-login on a 401', () {
     final source = snapshot();
     final result = planChatContextMerge(
@@ -192,6 +329,24 @@ void main() {
     );
   });
 }
+
+Map<String, Object?> _messageWire(int id, {int? threadId}) => <String, Object?>{
+  'id': id,
+  'token': 'rooma123',
+  'actorType': 'users',
+  'actorId': 'someone-else',
+  'actorDisplayName': 'Other person',
+  'timestamp': 1724300000 + id,
+  'systemMessage': '',
+  'messageType': 'comment',
+  'isReplyable': true,
+  'referenceId': 'reference-$id',
+  'message': 'Message $id',
+  'messageParameters': <String, Object?>{},
+  'markdown': false,
+  'reactions': <String, Object?>{},
+  'threadId': ?threadId,
+};
 
 ChatContextResponse _decode(
   ChatContextRequest request, {

@@ -34,16 +34,20 @@ final class ChatMergePlan {
     this._candidate, {
     required this.messageUpserts,
     this.island,
+    this.islandJoined = false,
   });
 
   final ChatRuntimeSnapshot _source;
   final ChatRuntimeSnapshot _candidate;
   final List<ChatMessage> messageUpserts;
 
-  /// The range a context fetch made known. It belongs to no cursor: the
-  /// scope's cursors still mark where paging continues, so it is kept as a
-  /// separate block of the view that shows it, beside the scope's own.
+  /// The range around a jump target the reader is shown, after this fetch.
+  /// It is not part of the scope's history unless [islandJoined].
   final ChatBlock? island;
+
+  /// The island reached the oldest end of the scope's history and became
+  /// part of it, so the scope's blocks and history cursor now include it.
+  final bool islandJoined;
   bool _consumed = false;
 
   ChatRuntimeSnapshot commit(ChatRuntimeSnapshot current) {
@@ -217,9 +221,10 @@ ChatMergeResult planChatGetMerge(
   );
 }
 
-/// Plans a context response. Unlike [planChatGetMerge] it leaves the scope's
-/// cursors, blocks and history flag alone and hands the covered range back as
-/// [ChatMergePlan.island]; the scope must exist.
+/// Plans a context response: the messages around one message, shown as an
+/// island until it reaches the scope's history. The scope's cursors and
+/// blocks stay as they are unless the island touches the oldest end of its
+/// history, where it joins (see [ChatMergePlan.islandJoined]).
 ChatMergeResult planChatContextMerge(
   ChatRuntimeSnapshot snapshot,
   ChatContextResponse response,
@@ -231,15 +236,7 @@ ChatMergeResult planChatContextMerge(
   }
   switch (response.classification) {
     case ChatGetClassification.reauthenticationRequired:
-      return _planned(
-        snapshot,
-        snapshot.replaceAccount(
-          binding.account.copyWith(
-            lane: ChatAccountLane.reauthenticationRequired,
-          ),
-        ),
-        ChatMergeOutcome.reauthenticationRequired,
-      );
+      return _reauthentication(snapshot, binding);
     case ChatGetClassification.lobby:
       return _lobby;
     case ChatGetClassification.notModified:
@@ -253,39 +250,145 @@ ChatMergeResult planChatContextMerge(
     case ChatGetClassification.ocsError:
       return _rejected;
   }
-  final key = ChatScopeKey(
-    roomToken: request.roomToken,
-    threadId: request.threadId,
+  return _planIsland(
+    snapshot,
+    binding,
+    key: ChatScopeKey(roomToken: request.roomToken, threadId: request.threadId),
+    accountId: request.accountId,
+    server: request.server,
+    messages: response.messages,
+    island: ChatBlock(
+      start: ChatCursor.parse(
+        response.messages.first.messageId.toString(),
+        code: TalkProtocolErrorCode.invalidChatMerge,
+      ),
+      end: response.lastGiven!,
+    ),
   );
-  if (binding.account.scopes[key] == null) {
+}
+
+/// Plans a page fetched from one edge of [island]: older messages from its
+/// oldest end, newer ones from its newest end. The page extends the island
+/// and joins it to the scope's history once the two touch. An empty answer
+/// means nothing lies beyond that edge yet ([ChatMergeOutcome.historyExhausted]
+/// or [ChatMergeOutcome.converged]).
+ChatMergeResult planChatIslandPageMerge(
+  ChatRuntimeSnapshot snapshot,
+  ChatGetResponse response,
+  ChatBlock island,
+) {
+  final request = response.request;
+  final binding = _bind(snapshot, request.accountId, request.server);
+  if (binding == null) {
     return _rejected;
   }
-  final account = reconcileTextSendOperations(
+  final history = request.direction == ChatFetchDirection.history;
+  if (request.cursor != (history ? island.start : island.end)) {
+    return _stale;
+  }
+  switch (response.classification) {
+    case ChatGetClassification.reauthenticationRequired:
+      return _reauthentication(snapshot, binding);
+    case ChatGetClassification.lobby:
+      return _lobby;
+    case ChatGetClassification.notModified:
+      return ChatMergeResult._(
+        outcome: history
+            ? ChatMergeOutcome.historyExhausted
+            : ChatMergeOutcome.converged,
+        plan: null,
+      );
+    case ChatGetClassification.messages:
+    case ChatGetClassification.invisibleCursorAdvance:
+      break;
+    case ChatGetClassification.commonReadOnly:
+    case ChatGetClassification.threadNotFound:
+    case ChatGetClassification.transientError:
+    case ChatGetClassification.ocsError:
+      return _rejected;
+  }
+  final cursor = response.cursor!;
+  return _planIsland(
+    snapshot,
+    binding,
+    key: ChatScopeKey(roomToken: request.roomToken, threadId: request.threadId),
+    accountId: request.accountId,
+    server: request.server,
+    messages: response.messages,
+    island: mergeChatBlocks(<ChatBlock>[
+      island,
+      history
+          ? ChatBlock(start: cursor, end: request.cursor)
+          : ChatBlock(start: request.cursor, end: cursor),
+    ]).single,
+  );
+}
+
+ChatMergeResult _planIsland(
+  ChatRuntimeSnapshot snapshot,
+  _AccountBinding binding, {
+  required ChatScopeKey key,
+  required AccountId accountId,
+  required ServerBase server,
+  required List<ChatMessage> messages,
+  required ChatBlock island,
+}) {
+  final scope = binding.account.scopes[key];
+  if (scope == null) {
+    return _rejected;
+  }
+  var account = reconcileTextSendOperations(
     binding.account,
-    response.messages.map(
+    messages.map(
       (message) => ChatMessageConfirmation.fromMessage(
         message,
-        accountId: request.accountId,
-        server: request.server,
+        accountId: accountId,
+        server: server,
       ),
     ),
   );
+  final oldest = scope.blocks.first;
+  // Older than the history and reaching it, so nothing lies between them.
+  final joined =
+      island.start.compareTo(oldest.start) < 0 &&
+      (island.end.compareTo(oldest.start) >= 0 ||
+          _incrementDecimal(island.end.value) == oldest.start.value);
+  if (joined) {
+    final blocks = mergeChatBlocks(<ChatBlock>[...scope.blocks, island]);
+    // An island reaching past the newest known message moves the poll on to
+    // its end; the poll in flight then lands as stale and asks again.
+    final pastNewest = blocks.last.end.compareTo(scope.futureCursor) > 0;
+    final scopes = Map<ChatScopeKey, ChatScopeState>.of(account.scopes);
+    scopes[key] = scope.copyWith(
+      historyCursor: blocks.first.start,
+      futureCursor: blocks.last.end,
+      futureConverged: pastNewest ? false : null,
+      blocks: blocks,
+    );
+    account = account.copyWith(scopes: scopes);
+  }
   return ChatMergeResult._(
     outcome: ChatMergeOutcome.applied,
     plan: ChatMergePlan._(
       snapshot,
       snapshot.replaceAccount(account),
-      messageUpserts: response.messages,
-      island: ChatBlock(
-        start: ChatCursor.parse(
-          response.messages.first.messageId.toString(),
-          code: TalkProtocolErrorCode.invalidChatMerge,
-        ),
-        end: response.lastGiven!,
-      ),
+      messageUpserts: messages,
+      island: island,
+      islandJoined: joined,
     ),
   );
 }
+
+ChatMergeResult _reauthentication(
+  ChatRuntimeSnapshot snapshot,
+  _AccountBinding binding,
+) => _planned(
+  snapshot,
+  snapshot.replaceAccount(
+    binding.account.copyWith(lane: ChatAccountLane.reauthenticationRequired),
+  ),
+  ChatMergeOutcome.reauthenticationRequired,
+);
 
 ChatMergeResult planChatReadMerge(
   ChatRuntimeSnapshot snapshot,

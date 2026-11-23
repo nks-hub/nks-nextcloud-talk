@@ -97,6 +97,15 @@ ChatSendRequest _restoreSendRequest({
 /// with a hole in between, instead of gluing them together.
 List<ChatBlock> decodeChatScopeBlocks(String source) => _decodeBlocks(source);
 
+/// What storing a jump island's fetch came to: [island] is its range after
+/// it, null when nothing was stored; [joined] when it became part of the
+/// scope's history.
+typedef ChatIslandApplied = ({
+  ChatMergeOutcome outcome,
+  ChatBlock? island,
+  bool joined,
+});
+
 String _encodeBlocks(Iterable<ChatBlock> blocks) => jsonEncode(
   blocks
       .map((block) => [block.start.value, block.end.value])
