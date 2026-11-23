@@ -207,12 +207,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// Nothing lies beyond the island's oldest end.
   bool _islandAtStart = false;
 
-  /// Set when the server had nothing past the island's newest end, to the
-  /// newest history message at the time; a newer one opens that end again.
+  /// Set when the server had nothing past the island's newest end: that end,
+  /// or the newest history message when the page was asked for if it was
+  /// newer (one the server no longer has). A newer message opens it again.
   int? _islandEndedAt;
 
-  /// An island page is on its way; nothing else is asked for meanwhile.
-  bool _islandLoading = false;
+  /// The island page on its way, true for an older one; nothing else is
+  /// asked for meanwhile.
+  bool? _islandLoadingOlder;
 
   /// Newest message of the whole timeline when the island opened; what
   /// arrives after it counts on the jump-to-newest control.

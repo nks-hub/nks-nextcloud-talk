@@ -499,14 +499,17 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   Future<void> _loadIslandPage({required bool older}) async {
     final island = _island;
     if (island == null ||
-        _islandLoading ||
+        _islandLoadingOlder != null ||
         (older ? _islandAtStart : _islandEndedAt != null) ||
         (_islandPause?.isActive ?? false)) {
       return;
     }
     final key = _key;
     bool isCurrent() => mounted && key == _key && identical(_island, island);
-    _islandLoading = true;
+    // A message that lands while the newer end is asked for still opens
+    // that end again after an empty answer.
+    final newestBefore = older ? 0 : _historyNewestId() ?? 0;
+    _islandLoadingOlder = older;
     if (older) _update(() => _loadingOlder = true);
     ChatIslandFetch? fetched;
     try {
@@ -525,9 +528,9 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       // Recorded as the room's error by the service; this only pauses.
       fetched = null;
     } finally {
-      if (mounted && key == _key) {
-        // Leaving the island already let a new one load.
-        if (identical(_island, island)) _islandLoading = false;
+      // Leaving the island already ended this page's loading state.
+      if (mounted && key == _key && identical(_island, island)) {
+        _islandLoadingOlder = null;
         if (older) _update(() => _loadingOlder = false);
       }
     }
@@ -552,7 +555,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         if (older) {
           _islandAtStart = true;
         } else {
-          _islandEndedAt = _historyNewestId() ?? 0;
+          _islandEndedAt = math.max(int.parse(island.end.value), newestBefore);
         }
       });
       return;
@@ -691,7 +694,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     if (!_scrollController.hasClients ||
         _loadingOlder ||
         _jumpInProgress ||
-        _islandLoading) {
+        _islandLoadingOlder != null) {
       return;
     }
     final position = _scrollController.position;
@@ -821,7 +824,8 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     _islandShown = null;
     _islandAtStart = false;
     _islandEndedAt = null;
-    _islandLoading = false;
+    if (_islandLoadingOlder ?? false) _loadingOlder = false;
+    _islandLoadingOlder = null;
     _islandEntryNewest = null;
     _islandPause?.cancel();
   }

@@ -368,6 +368,7 @@ void main() {
       WidgetTester tester, {
       int jumpTo = 100,
       Future<void>? heldOlder,
+      Map<int, Future<void>> heldOlderAt = const {},
       Future<void>? heldNewer,
       http.Response? newerAnswer,
     }) async {
@@ -435,7 +436,7 @@ void main() {
           }
           if (request.url.queryParameters['lookIntoFuture'] == '0') {
             requests.older.add(request.url);
-            await heldOlder;
+            await (heldOlderAt[known] ?? heldOlder);
             final oldest = math.max(1, known - 25);
             return known <= 1
                 ? http.Response('', 304)
@@ -857,6 +858,89 @@ void main() {
       await _settle(tester);
       await drag(tester, -150);
       expect(requests.newer, hasLength(2));
+      await closePane(tester);
+    });
+
+    testWidgets('a message landing while the island end is asked opens it', (
+      tester,
+    ) async {
+      final held = Completer<void>();
+      addTearDown(() {
+        if (!held.isCompleted) held.complete();
+      });
+      final requests = await islandRoom(
+        tester,
+        heldNewer: held.future,
+        newerAnswer: http.Response('', 304),
+      );
+      for (var turn = 0; turn < 10 && requests.newer.isEmpty; turn++) {
+        await drag(tester, -150);
+      }
+      expect(requests.newer, hasLength(1));
+
+      // The live poll stores a newer message before the empty answer lands.
+      await _insertMessage(database, account.id, 339);
+      await (database.update(
+        database.chatScopes,
+      )..where((scope) => scope.roomToken.equals('rooma123'))).write(
+        const ChatScopesCompanion(
+          futureCursor: Value('339'),
+          blocksJson: Value('[["331","339"]]'),
+        ),
+      );
+      await _settle(tester);
+      held.complete();
+      await _settle(tester);
+      await drag(tester, -150);
+      expect(requests.newer, hasLength(2));
+      await closePane(tester);
+    });
+
+    testWidgets('leaving the island mid-page lets the timeline page alone', (
+      tester,
+    ) async {
+      final islandPage = Completer<void>();
+      final historyPage = Completer<void>();
+      addTearDown(() {
+        if (!islandPage.isCompleted) islandPage.complete();
+        if (!historyPage.isCompleted) historyPage.complete();
+      });
+      final requests = await islandRoom(
+        tester,
+        heldOlderAt: {88: islandPage.future, 331: historyPage.future},
+      );
+      for (var turn = 0; turn < 10 && requests.older.isEmpty; turn++) {
+        await drag(tester, 300);
+      }
+      expect(requests.older.single.queryParameters['lastKnownMessageId'], '88');
+
+      await tester.tap(find.byKey(const Key('chat-jump-to-newest')));
+      await _settle(tester);
+      final loadOlder = find.byKey(
+        const Key('chat-load-older'),
+        skipOffstage: false,
+      );
+      await tester.ensureVisible(loadOlder);
+      await _settle(tester);
+      await tester.tap(
+        find.descendant(of: loadOlder, matching: find.byType(TextButton)),
+      );
+      await _settle(tester);
+      final spinner = find.descendant(
+        of: loadOlder,
+        matching: find.byType(CircularProgressIndicator),
+      );
+      expect(spinner, findsOneWidget);
+
+      // The room's reads go one at a time, so the timeline's page follows
+      // the island's; the island's ending late does not end the timeline's.
+      islandPage.complete();
+      await _settle(tester);
+      expect(requests.older, hasLength(2));
+      expect(requests.older.last.queryParameters['lastKnownMessageId'], '331');
+      expect(spinner, findsOneWidget);
+      historyPage.complete();
+      await _settle(tester);
       await closePane(tester);
     });
 
