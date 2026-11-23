@@ -10,8 +10,8 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## 1.1.1 (121) — 23 November 2026
 
-- A search result from far back in a conversation opens the message itself. It used to say the message was no longer available once more than about a thousand newer messages followed it. The app loads the messages around it in one request and marks the gap to the newer ones; on a server without that request it loads the history until it reaches the message, with a progress bar.
-- While the history fills that gap, the messages on screen stay where they are.
+- A search result from far back in a conversation opens the message itself. It used to say the message was no longer available once more than about a thousand newer messages followed it. The app loads the messages around it in one request, about 1.5 s on a Galaxy S9+; on a server without that request it loads the history until it reaches the message, with a progress bar.
+- After such a jump the chat shows only the messages around the target. Scrolling up loads older ones and scrolling down loads newer ones until they meet the latest messages, without the screen jumping. Jump to newest returns to the latest messages, and messages that arrive meanwhile are counted on that button.
 - The message a jump lands on is marked with a two-tone ring that stays visible on your own filled bubbles and in dark mode.
 - A jump interrupted by switching to another window finishes when you come back instead of reporting the message as unavailable.
 - The send button is a plain arrow in the theme colour, and with an empty field the quick emoji sits in the same row as the other composer icons. Holding the emoji to send it larger and long-pressing the arrow for silent or scheduled sending work as before.
