@@ -500,7 +500,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     final island = _island;
     if (island == null ||
         _islandLoading ||
-        (older ? _islandAtStart : _islandAtEnd) ||
+        (older ? _islandAtStart : _islandEndedAt != null) ||
         (_islandPause?.isActive ?? false)) {
       return;
     }
@@ -526,7 +526,8 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       fetched = null;
     } finally {
       if (mounted && key == _key) {
-        _islandLoading = false;
+        // Leaving the island already let a new one load.
+        if (identical(_island, island)) _islandLoading = false;
         if (older) _update(() => _loadingOlder = false);
       }
     }
@@ -551,7 +552,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         if (older) {
           _islandAtStart = true;
         } else {
-          _islandAtEnd = true;
+          _islandEndedAt = _historyNewestId() ?? 0;
         }
       });
       return;
@@ -728,12 +729,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     // An island never held the newest messages: the whole timeline takes
     // its place, opened at the newest end.
     if (_island != null) {
-      _update(() {
-        _leaveIsland();
-        _anchorMessageId = null;
-        _awayFromNewest = false;
-      });
-      _scrollController.resetExtentTracking();
+      _dropIsland();
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted || !_scrollController.hasClients) {
         return;
@@ -794,18 +790,24 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     return messages.isEmpty ? null : messages.last.messageId;
   }
 
-  /// Lists [island] on its own from now on (see [_ChatRoomPaneState._island]).
-  void _enterIsland(ChatBlock island) {
+  /// Newest loaded message of the whole timeline, island or not.
+  int? _historyNewestId() {
     final history = _messagesWithinBlocks(
       ref.read(chatMessagesProvider(_key)).valueOrNull ??
           const <CachedChatMessage>[],
       _decodeScopeBlocks(ref.read(chatScopeProvider(_key)).valueOrNull),
     );
+    return history.isEmpty ? null : history.last.messageId;
+  }
+
+  /// Lists [island] on its own from now on (see [_ChatRoomPaneState._island]).
+  void _enterIsland(ChatBlock island) {
+    final newest = _historyNewestId();
     _update(() {
       _leaveIsland();
       _island = island;
       _islandShown = List.unmodifiable([island]);
-      _islandEntryNewest = history.isEmpty ? null : history.last.messageId;
+      _islandEntryNewest = newest;
       _awayFromNewest = true;
       // Newer pages land after the island's newest row, below this anchor,
       // instead of pushing the rows above along.
@@ -818,9 +820,25 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     _island = null;
     _islandShown = null;
     _islandAtStart = false;
-    _islandAtEnd = false;
+    _islandEndedAt = null;
+    _islandLoading = false;
     _islandEntryNewest = null;
     _islandPause?.cancel();
+  }
+
+  /// Leaves the island for the newest end of the whole timeline, where a
+  /// jump or the reader goes on from. The window the island was widened to
+  /// would keep every row from it to the newest loaded, and its anchor would
+  /// point at a row that is no longer listed.
+  void _dropIsland() {
+    _update(() {
+      _leaveIsland();
+      _anchorMessageId = null;
+      _awayFromNewest = false;
+    });
+    _scrollController.resetExtentTracking();
+    ref.read(chatMessageWindowProvider(_key).notifier).state =
+        chatMessageWindowStep;
   }
 
   void _startPendingJump() {
@@ -906,6 +924,11 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
           key,
           generation,
         );
+      }
+      // Paging reaches the target through the whole timeline; an island on
+      // screen would only page itself.
+      if (context?.outcome == ChatFetchOutcome.unsupported && _island != null) {
+        _dropIsland();
       }
       final start = int.tryParse(scope?.historyCursor ?? '');
       while (context?.outcome == ChatFetchOutcome.unsupported &&
@@ -1017,7 +1040,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         _enterIsland(range);
       } else if (_island != null) {
         // The whole timeline holds the target, so it replaces the island.
-        _update(_leaveIsland);
+        _dropIsland();
       }
     }
     await _widenMessageWindowTo(messageId, key);
