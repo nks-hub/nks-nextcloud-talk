@@ -122,6 +122,10 @@ final class ChatService {
   final Map<String, _ChatRetryWake> _retryTimers = {};
   int _retryGeneration = 0;
   final Set<_ChatReadAdmission> _readAdmissions = {};
+
+  /// Island starts below which a context fetch found nothing older: the
+  /// island already begins with the room, so asking again brings nothing.
+  final Set<String> _islandsAtRoomStart = {};
   final _readerWakes =
       StreamController<({String accountId, String roomToken})>.broadcast();
   bool _closed = false;
@@ -369,18 +373,29 @@ final class ChatService {
     );
   }
 
-  Future<void> loadOlder({
+  /// Pages history back from the history cursor. [growIsland] says the
+  /// reader asked from the oldest edge of a range a jump fetched, which then
+  /// grows as well (see `_growOldestIsland`).
+  Future<ChatFetchOutcome> loadOlder({
     required String accountId,
     required String roomToken,
     int? threadId,
     bool Function()? readerIsActive,
-  }) => _loadOlder(accountId, roomToken, threadId, readerIsActive);
+    bool growIsland = false,
+  }) => _loadOlder(
+    accountId,
+    roomToken,
+    threadId,
+    readerIsActive,
+    growIsland: growIsland,
+  );
 
   /// Caches the messages around [messageId] and shows them in the scope's
   /// view as a range of their own; the history cursor stays where it is.
-  /// False when the server cannot do that (no `chat-get-context`, or a thread
-  /// whose kind is not known yet), so the caller has to page history.
-  Future<bool> loadMessageContext({
+  /// [ChatFetchOutcome.unsupported] when the server cannot do that (no
+  /// `chat-get-context`, a thread whose kind is not known yet, or an answer
+  /// outside the documented shape), so the caller has to page history.
+  Future<ChatFetchOutcome> loadMessageContext({
     required String accountId,
     required String roomToken,
     required int messageId,

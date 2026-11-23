@@ -11,6 +11,19 @@ enum ChatSynchronizationResult {
   deferred,
 }
 
+/// What a read asked for by the reader came to.
+enum ChatFetchOutcome {
+  /// The read ran; whatever it brought is in the cache.
+  done,
+
+  /// The server cannot answer this kind of read; page history instead.
+  unsupported,
+
+  /// The reader left before the read finished. Nothing is wrong; ask again
+  /// when they are back.
+  deferred,
+}
+
 ChatSynchronizationResult _chatReadResult(ChatMergeOutcome outcome) =>
     outcome == ChatMergeOutcome.converged
     ? ChatSynchronizationResult.converged

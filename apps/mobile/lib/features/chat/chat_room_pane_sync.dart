@@ -436,49 +436,65 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   /// Cached history the message window has not reached yet is shown first;
   /// [fetchOnly] skips that for a jump, which widens the window to its target
   /// itself and needs the page from the server.
-  Future<bool> _loadOlder({bool fetchOnly = false}) async {
+  Future<ChatFetchOutcome?> _loadOlder({bool fetchOnly = false}) async {
     if (_loadingOlder) {
-      return false;
+      return null;
     }
     if (!fetchOnly && _widenMessageWindow()) {
-      return true;
+      return ChatFetchOutcome.done;
     }
     final scope = ref.read(chatScopeProvider(_key)).valueOrNull;
     if (scope?.hasHistory != true) {
-      return false;
+      return null;
     }
     final targetKey = _key;
     final generation = ++_historyGeneration;
     bool isCurrent() =>
         mounted && generation == _historyGeneration && targetKey == _key;
+    final growIsland = !fetchOnly && _oldestEdgeIsIsland();
     _update(() => _loadingOlder = true);
     try {
-      await ref
+      final outcome = await ref
           .read(chatServiceProvider)
           .loadOlder(
             readerIsActive: () => isCurrent() && _readerIsActive(),
             accountId: targetKey.accountId,
             roomToken: targetKey.roomToken,
             threadId: targetKey.threadId,
+            growIsland: growIsland,
           );
-      if (!isCurrent()) return false;
+      if (!isCurrent()) return null;
       _update(() => _localError = null);
-      return true;
+      return outcome;
     } on ChatServiceException catch (error) {
       if (isCurrent()) {
         _update(() => _localError = error.code);
       }
-      return false;
+      return null;
     } on Object {
       if (isCurrent()) {
         _update(() => _localError = ChatServiceError.invalidResponse);
       }
-      return false;
+      return null;
     } finally {
       if (isCurrent()) {
         _update(() => _loadingOlder = false);
       }
     }
+  }
+
+  /// Whether the oldest message on screen belongs to the oldest of several
+  /// ranges with gaps between them: the reader is at the oldest edge of what
+  /// a jump fetched, where older messages continue right below.
+  bool _oldestEdgeIsIsland() {
+    final blocks = _decodeScopeBlocks(
+      ref.read(chatScopeProvider(_key)).valueOrNull,
+    );
+    final visible = _visibleMessages();
+    return blocks != null &&
+        blocks.length > 1 &&
+        visible.isNotEmpty &&
+        _blockIndexOf(blocks, visible.first.messageId) == 0;
   }
 
   /// Shows the next step of cached history. False when the window already
@@ -633,10 +649,11 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
 
   void _startPendingJump() {
     final target = _pendingJumpMessageId;
-    if (target == null) {
+    if (target == null || (_jumpDeferred && !_readerIsActive())) {
       return;
     }
     _pendingJumpMessageId = null;
+    _jumpDeferred = false;
     unawaited(_jumpToMessage(target));
   }
 
@@ -688,13 +705,15 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       key,
       generation,
     );
+    var deferred = false;
     if (revealed == null) {
       _update(() => _jumpFetching = true);
-      final fetched = await _loadJumpContext(messageId, key);
+      final context = await _loadJumpContext(messageId, key);
       if (!_isCurrentJump(key, generation)) {
         return;
       }
-      if (fetched == true) {
+      deferred = context == ChatFetchOutcome.deferred;
+      if (context == ChatFetchOutcome.done) {
         scope = await readScope();
         if (!_isCurrentJump(key, generation)) {
           return;
@@ -707,9 +726,16 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         );
       }
       final start = int.tryParse(scope?.historyCursor ?? '');
-      while (fetched == null && revealed == null && scope?.hasHistory == true) {
+      while (context == ChatFetchOutcome.unsupported &&
+          revealed == null &&
+          scope?.hasHistory == true) {
         final before = scope?.blocksJson;
-        if (!await _loadOlder(fetchOnly: true)) {
+        final page = await _loadOlder(fetchOnly: true);
+        if (page == ChatFetchOutcome.deferred) {
+          deferred = true;
+          break;
+        }
+        if (page == null) {
           break;
         }
         scope = await readScope();
@@ -735,17 +761,27 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         );
       }
     }
-    if (revealed != true && mounted && _isCurrentJump(key, generation)) {
-      _reportJumpFailed();
+    if (revealed == true || !_isCurrentJump(key, generation)) {
+      return;
     }
+    if (deferred) {
+      // The reader left before the fetch finished, which says nothing about
+      // the message; the jump resumes once they are back.
+      _pendingJumpMessageId = messageId;
+      _jumpDeferred = true;
+      return;
+    }
+    _reportJumpFailed();
   }
 
-  /// Fetches [messageId] with its neighbours. Null when the server cannot,
-  /// which leaves paging; false when the fetch failed.
-  Future<bool?> _loadJumpContext(int messageId, ChatRoomProviderKey key) async {
+  /// Fetches [messageId] with its neighbours. Null when the fetch failed.
+  Future<ChatFetchOutcome?> _loadJumpContext(
+    int messageId,
+    ChatRoomProviderKey key,
+  ) async {
     bool isCurrent() => mounted && key == _key;
     try {
-      final supported = await ref
+      final outcome = await ref
           .read(chatServiceProvider)
           .loadMessageContext(
             readerIsActive: () => isCurrent() && _readerIsActive(),
@@ -754,17 +790,18 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
             threadId: key.threadId,
             messageId: messageId,
           );
-      if (!supported) return null;
-      if (isCurrent()) _update(() => _localError = null);
-      return true;
+      if (outcome == ChatFetchOutcome.done && isCurrent()) {
+        _update(() => _localError = null);
+      }
+      return outcome;
     } on ChatServiceException catch (error) {
       if (isCurrent()) _update(() => _localError = error.code);
-      return false;
+      return null;
     } on Object {
       if (isCurrent()) {
         _update(() => _localError = ChatServiceError.invalidResponse);
       }
-      return false;
+      return null;
     }
   }
 

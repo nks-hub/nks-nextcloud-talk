@@ -198,6 +198,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// paging has come towards it, null while that cannot be told.
   bool _jumpFetching = false;
   double? _jumpProgress;
+
+  /// The pending jump stopped because the reader left mid-fetch, so it waits
+  /// for them to be back rather than for the next sync round.
+  bool _jumpDeferred = false;
   int? _jumpTargetId;
   int? _highlightedMessageId;
   int? _pendingJumpMessageId;
@@ -396,6 +400,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _jumpInProgress = false;
     _jumpFetching = false;
     _jumpProgress = null;
+    _jumpDeferred = false;
     _highlightTimer?.cancel();
     _highlightTimer = null;
     _jumpTargetId = null;
@@ -442,6 +447,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         _liveBinding?.setReaderActive(
           visible && ref.read(windowActiveProvider),
         );
+        if (_jumpDeferred) _startPendingJump();
       }
     });
   }
@@ -734,6 +740,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   Widget build(BuildContext context) {
     ref.listen(windowActiveProvider, (_, _) {
       _liveBinding?.setReaderActive(_readerIsActive());
+      if (_jumpDeferred) _startPendingJump();
     });
     final interactionKey = _key;
     final messagesValue = ref.watch(chatMessagesProvider(_key));

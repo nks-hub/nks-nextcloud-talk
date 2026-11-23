@@ -69,12 +69,13 @@ final class _ChatReadAdmission implements _ChatReadGuard {
 }
 
 extension _ChatReadAdmissionService on ChatService {
-  Future<void> _loadOlder(
+  Future<ChatFetchOutcome> _loadOlder(
     String accountId,
     String roomToken,
     int? threadId,
-    bool Function()? readerIsActive,
-  ) async {
+    bool Function()? readerIsActive, {
+    required bool growIsland,
+  }) async {
     final read = _ChatReadAdmission(
       this,
       accountId,
@@ -82,57 +83,67 @@ extension _ChatReadAdmissionService on ChatService {
       readerIsActive ?? () => true,
       requiresActiveOwner: readerIsActive != null,
     );
-    try {
-      await _serializeRoom<void>(
-        _roomKey(accountId, roomToken),
-        () => _withRoomErrorPersistence(
-          accountId,
-          roomToken,
-          () => read.run(() async {
-            var prepared = await _prepare(
-              accountId,
-              roomToken,
-              threadId: threadId,
+    // One turn on the room lane per request, so a live round can land
+    // between growing the island and paging the cursor.
+    Future<void> inRoomLane(
+      Future<void> Function(_PreparedChat prepared) step,
+    ) => _serializeRoom<void>(
+      _roomKey(accountId, roomToken),
+      () => _withRoomErrorPersistence(
+        accountId,
+        roomToken,
+        () => read.run(() async {
+          var prepared = await _prepare(
+            accountId,
+            roomToken,
+            threadId: threadId,
+            abortTrigger: read.abortTrigger,
+          );
+          if (prepared.threadId != null &&
+              prepared.namedThread == null &&
+              prepared.networkThreadId == null) {
+            prepared = await _hydrateUnknownThreadFromRoot(
+              prepared,
               abortTrigger: read.abortTrigger,
+              probe: read,
             );
-            if (prepared.threadId != null &&
-                prepared.namedThread == null &&
-                prepared.networkThreadId == null) {
-              prepared = await _hydrateUnknownThreadFromRoot(
-                prepared,
-                abortTrigger: read.abortTrigger,
-                probe: read,
-              );
-            }
-            await _growOldestIsland(prepared, read);
-            try {
-              await _fetchHistoryPage(
-                prepared,
-                includeLastKnown: false,
-                abortTrigger: read.abortTrigger,
-                probe: read,
-              );
-            } on _UnknownThreadNotFound {
-              await _hydrateUnknownThreadFromRoot(
-                prepared,
-                abortTrigger: read.abortTrigger,
-                probe: read,
-              );
-            }
-          }),
-          threadId: threadId,
-        ),
-      );
+          }
+          await step(prepared);
+        }),
+        threadId: threadId,
+      ),
+    );
+    try {
+      if (growIsland && threadId == null) {
+        await inRoomLane((prepared) => _growOldestIsland(prepared, read));
+      }
+      await inRoomLane((prepared) async {
+        try {
+          await _fetchHistoryPage(
+            prepared,
+            includeLastKnown: false,
+            abortTrigger: read.abortTrigger,
+            probe: read,
+          );
+        } on _UnknownThreadNotFound {
+          await _hydrateUnknownThreadFromRoot(
+            prepared,
+            abortTrigger: read.abortTrigger,
+            probe: read,
+          );
+        }
+      });
+      return ChatFetchOutcome.done;
     } on _ChatReadDeferred {
-      return;
+      return ChatFetchOutcome.deferred;
     } on _ChatSynchronizationStale {
-      return;
+      return ChatFetchOutcome.deferred;
     } finally {
       read.close();
     }
   }
 
-  Future<bool> _loadMessageContext(
+  Future<ChatFetchOutcome> _loadMessageContext(
     String accountId,
     String roomToken,
     int? threadId,
@@ -147,7 +158,7 @@ extension _ChatReadAdmissionService on ChatService {
       requiresActiveOwner: readerIsActive != null,
     );
     try {
-      return await _serializeRoom<bool>(
+      return await _serializeRoom<ChatFetchOutcome>(
         _roomKey(accountId, roomToken),
         () => _withRoomErrorPersistence(
           accountId,
@@ -160,23 +171,30 @@ extension _ChatReadAdmissionService on ChatService {
               abortTrigger: read.abortTrigger,
             );
             if (!_canFetchContext(prepared)) {
-              return false;
+              return ChatFetchOutcome.unsupported;
             }
-            await _fetchContext(
-              prepared,
-              messageId,
-              abortTrigger: read.abortTrigger,
-              probe: read,
-            );
-            return true;
+            try {
+              await _fetchContext(
+                prepared,
+                messageId,
+                abortTrigger: read.abortTrigger,
+                probe: read,
+              );
+            } on TalkProtocolException {
+              // An answer outside the documented shape (a threadId ignored,
+              // no X-Chat-Last-Given) says nothing about the message itself;
+              // paging still reaches it.
+              return ChatFetchOutcome.unsupported;
+            }
+            return ChatFetchOutcome.done;
           }),
           threadId: threadId,
         ),
       );
     } on _ChatReadDeferred {
-      return true;
+      return ChatFetchOutcome.deferred;
     } on _ChatSynchronizationStale {
-      return true;
+      return ChatFetchOutcome.deferred;
     } finally {
       read.close();
     }
@@ -184,16 +202,15 @@ extension _ChatReadAdmissionService on ChatService {
 
   /// When the oldest block of the root view is an island below the network's
   /// history cursor, older messages are missing in two places: right under
-  /// the island, where a reader who jumped there scrolls to, and under the
-  /// cursor. The island grows here and the caller still pages the cursor, so
-  /// the reader sees older messages and the gap between them keeps closing.
-  /// A thread view always starts with its root as the oldest block and what
-  /// it misses lies above that root, so a thread only pages the cursor.
+  /// the island, where the reader who asked is, and under the cursor. This
+  /// grows the island; the caller still pages the cursor, so the gap between
+  /// them keeps closing. A failure here costs only the growth: the cursor
+  /// page does not depend on it.
   Future<void> _growOldestIsland(
     _PreparedChat prepared,
     _ChatReadAdmission read,
   ) async {
-    if (prepared.threadId != null || !_canFetchContext(prepared)) {
+    if (!_canFetchContext(prepared)) {
       return;
     }
     final view = await _chat.getScope(
@@ -208,15 +225,31 @@ extension _ChatReadAdmissionService on ChatService {
     );
     final islandStart = int.tryParse(view?.historyCursor ?? '') ?? 0;
     final cursor = int.tryParse(network?.historyCursor ?? '') ?? 0;
-    if (islandStart < 1 || islandStart >= cursor) {
+    final island =
+        '${_roomKey(prepared.account.id, prepared.conversation.token)}'
+        '/$islandStart';
+    if (islandStart < 1 ||
+        islandStart >= cursor ||
+        _islandsAtRoomStart.contains(island)) {
       return;
     }
-    await _fetchContext(
-      prepared,
-      islandStart,
-      abortTrigger: read.abortTrigger,
-      probe: read,
-    );
+    try {
+      final oldest = await _fetchContext(
+        prepared,
+        islandStart,
+        abortTrigger: read.abortTrigger,
+        probe: read,
+      );
+      if (oldest != null && oldest >= islandStart) {
+        _islandsAtRoomStart.add(island);
+      }
+    } on ChatServiceException {
+      return;
+    } on NextcloudApiException {
+      return;
+    } on TalkProtocolException {
+      return;
+    }
   }
 
   /// A thread whose root is not cached yet may still turn out to be a reply

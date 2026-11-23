@@ -239,8 +239,8 @@ extension _ChatServiceFetch on ChatService {
   }
 
   /// Fetches the messages around [messageId] into a block of the prepared
-  /// view.
-  Future<void> _fetchContext(
+  /// view. Returns the oldest message id it brought, null for none.
+  Future<int?> _fetchContext(
     _PreparedChat prepared,
     int messageId, {
     Future<void>? abortTrigger,
@@ -276,18 +276,21 @@ extension _ChatServiceFetch on ChatService {
         );
       case ChatGetClassification.transientError:
         throw const ChatServiceException(ChatServiceError.serviceUnavailable);
-      case ChatGetClassification.threadNotFound:
       case ChatGetClassification.ocsError:
       case ChatGetClassification.invisibleCursorAdvance:
       case ChatGetClassification.commonReadOnly:
         throw const ChatServiceException(ChatServiceError.invalidResponse);
+      // A thread the server no longer knows holds no message to show; the
+      // jump says so itself, without a broken-room error on top.
+      case ChatGetClassification.threadNotFound:
       case ChatGetClassification.lobby:
       case ChatGetClassification.notModified:
-        return;
+        return null;
       case ChatGetClassification.messages:
         if (outcome == ChatMergeOutcome.rejected) {
           throw const ChatServiceException(ChatServiceError.invalidResponse);
         }
+        return response.messages.first.messageId;
     }
   }
 
