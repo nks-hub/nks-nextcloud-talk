@@ -687,6 +687,72 @@ void main() {
       await closePane(tester);
     });
 
+    testWidgets('a jump far back in the cache lists only the rows around it', (
+      tester,
+    ) async {
+      for (var id = 1; id <= 400; id++) {
+        await _insertMessage(database, account.id, id);
+      }
+      await _insertScope(
+        database,
+        account.id,
+        historyCursor: '1',
+        futureCursor: '400',
+        hasHistory: false,
+        blocksJson: '[["1","400"]]',
+      );
+      final asked = <Uri>[];
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          final capabilities = _capabilitiesResponse(
+            request,
+            messageContext: true,
+          );
+          if (capabilities != null) {
+            return capabilities;
+          }
+          if (request.url.queryParameters['lastKnownMessageId'] != '400') {
+            asked.add(request.url);
+          }
+          return http.Response('', 304);
+        }),
+      );
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        _app(
+          database: database,
+          vault: vault,
+          api: api,
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+            jumpToMessageId: 50,
+          ),
+        ),
+      );
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const Key('chat-message-target-50'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      await _settle(tester);
+
+      expect(_highlightBorder(tester, 50), isNotNull);
+      expect(bubble(400), findsNothing, reason: 'only the rows around it');
+      expect(find.byKey(const Key('chat-jump-to-newest')), findsOneWidget);
+
+      // Reading on grows it from the cache until it meets the newest row.
+      for (var turn = 0; turn < 150 && bubble(400).evaluate().isEmpty; turn++) {
+        await drag(tester, -600);
+      }
+      expect(bubble(400), findsOneWidget);
+      expect(asked, isEmpty, reason: 'everything was in the cache');
+      expectAscending(tester);
+      await closePane(tester);
+    });
+
     testWidgets('jump to newest leaves the island', (tester) async {
       await islandRoom(tester);
 

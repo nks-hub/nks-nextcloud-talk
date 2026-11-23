@@ -510,7 +510,8 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     if (older) _update(() => _loadingOlder = true);
     ChatIslandFetch? fetched;
     try {
-      fetched = await ref
+      fetched = await _growIslandFromCache(island, older: older, key: key);
+      fetched ??= await ref
           .read(chatServiceProvider)
           .loadIslandPage(
             readerIsActive: () => isCurrent() && _readerIsActive(),
@@ -612,6 +613,51 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     } on Object {
       // The reveal below reports a target that never shows up.
     }
+  }
+
+  /// Grows [island] from the cached history when the history holds what
+  /// lies past its edge; null when the server has to be asked.
+  Future<ChatIslandFetch?> _growIslandFromCache(
+    ChatBlock island, {
+    required bool older,
+    required ChatRoomProviderKey key,
+  }) async {
+    final edge = int.parse((older ? island.start : island.end).value);
+    final beyond = ChatCursor.parse('${older ? edge - 1 : edge + 1}');
+    final history = _decodeScopeBlocks(
+      ref.read(chatScopeProvider(key)).valueOrNull,
+    );
+    if ((older && edge < 2) ||
+        !(history?.any((b) => b.contains(beyond)) ?? false)) {
+      return null;
+    }
+    final range = await ref
+        .read(chatRepositoryProvider)
+        .cachedRangeAround(
+          accountId: key.accountId,
+          roomToken: key.roomToken,
+          threadId: key.threadId,
+          messageId: edge,
+          includeThreadReplies:
+              ref.read(replyLayoutProvider) == ReplyLayout.inline,
+          before: older ? 100 : 0,
+          after: older ? 0 : 100,
+        );
+    final next = older ? range.first : range.last;
+    if (next == edge) {
+      return null;
+    }
+    return (
+      outcome: ChatFetchOutcome.done,
+      island: mergeChatBlocks([
+        island,
+        older
+            ? ChatBlock(start: ChatCursor.parse('$next'), end: island.start)
+            : ChatBlock(start: island.end, end: ChatCursor.parse('$next')),
+      ]).single,
+      joined: false,
+      atEnd: false,
+    );
   }
 
   void _handleScroll() {
@@ -958,15 +1004,65 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     if (!inHistory && !inIsland) {
       return null;
     }
-    if (inHistory && _island != null) {
-      // The whole timeline holds the target, so it replaces the island.
-      _update(_leaveIsland);
+    if (inHistory && !inIsland) {
+      final range = await _cachedIslandAround(messageId, key);
+      if (!mounted || !_isCurrentJump(key, generation)) {
+        return true;
+      }
+      if (range != null) {
+        // Far back in the cached history: listing all of it down to the
+        // newest message would lay out every row on the way. The rows
+        // around the target are shown on their own instead, like an island
+        // the server sent, and grow from the cache as the reader scrolls.
+        _enterIsland(range);
+      } else if (_island != null) {
+        // The whole timeline holds the target, so it replaces the island.
+        _update(_leaveIsland);
+      }
     }
     await _widenMessageWindowTo(messageId, key);
     if (!mounted || !_isCurrentJump(key, generation)) {
       return true;
     }
     return _revealMessage(messageId, key, generation);
+  }
+
+  /// The cached rows around [messageId] when it lies more than
+  /// [_ChatRoomPaneState._deepJumpRows] rows back from the newest message;
+  /// null when it is close enough to list the whole timeline.
+  Future<ChatBlock?> _cachedIslandAround(
+    int messageId,
+    ChatRoomProviderKey key,
+  ) async {
+    final repository = ref.read(chatRepositoryProvider);
+    final inline = ref.read(replyLayoutProvider) == ReplyLayout.inline;
+    final newer = key.threadId == null
+        ? await repository.countMessagesFrom(
+            accountId: key.accountId,
+            roomToken: key.roomToken,
+            messageId: messageId,
+            includeThreadReplies: inline,
+          )
+        : await repository.countThreadRepliesFrom(
+            accountId: key.accountId,
+            roomToken: key.roomToken,
+            threadId: key.threadId!,
+            messageId: messageId,
+          );
+    if (newer <= _ChatRoomPaneState._deepJumpRows) {
+      return null;
+    }
+    final range = await repository.cachedRangeAround(
+      accountId: key.accountId,
+      roomToken: key.roomToken,
+      threadId: key.threadId,
+      messageId: messageId,
+      includeThreadReplies: inline,
+    );
+    return ChatBlock(
+      start: ChatCursor.parse(range.first.toString()),
+      end: ChatCursor.parse(range.last.toString()),
+    );
   }
 
   /// Scrolls the target into view and highlights it. Returns `false` only

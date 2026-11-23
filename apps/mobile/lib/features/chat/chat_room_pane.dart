@@ -118,6 +118,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// Text currently selected with the mouse, offered first on a right click.
   String? _selectedText;
 
+  /// A cached jump target further back than this many rows is shown as an
+  /// island of its own (see `_cachedIslandAround`).
+  static const _deepJumpRows = 300;
+
   /// How many layout passes a reveal may take. Every pass nudges the reverse
   /// list closer to the estimated offset of the target, which re-measures the
   /// children around it, so the estimate converges within a few frames.
@@ -919,11 +923,15 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     // contiguous with what is shown around it.
     final cachedMessages =
         messagesValue.valueOrNull ?? const <CachedChatMessage>[];
-    // The history has taken the island in once it covers the island's start:
-    // from here the whole timeline goes on, with the same anchor.
+    // Once the island reaches the newest message of the history, the whole
+    // timeline goes on from it with the same anchor, so nothing moves.
+    final history = _island == null
+        ? const <CachedChatMessage>[]
+        : _messagesWithinBlocks(cachedMessages, scopeBlocks);
     final island = _island;
     if (island != null &&
-        (scopeBlocks?.any((block) => block.contains(island.start)) ?? false)) {
+        history.isNotEmpty &&
+        island.contains(ChatCursor.parse('${history.last.messageId}'))) {
       _leaveIsland();
     }
     final shownBlocks = _islandShown ?? scopeBlocks;
@@ -934,7 +942,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     });
     final newerThanIsland = _island == null
         ? 0
-        : _messagesWithinBlocks(cachedMessages, scopeBlocks)
+        : history
               .where((message) => message.messageId > (_islandEntryNewest ?? 0))
               .length;
     final operations = _withOwnReplies(
