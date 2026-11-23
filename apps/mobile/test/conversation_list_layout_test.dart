@@ -64,24 +64,6 @@ void main() {
     );
   });
 
-  testWidgets('filters switch from tight to regular chips at a 340 dp bar', (
-    tester,
-  ) async {
-    double? labelSize() => tester
-        .widget<FilterChip>(find.byKey(const Key('conversation-filter-unread')))
-        .labelStyle
-        ?.fontSize;
-    final rows = [_conversation('room-a', 'Synthetic peer')];
-
-    // The bar is the pane minus 16 dp of padding.
-    for (final locale in const [Locale('en'), Locale('cs')]) {
-      await pump(tester, rows, width: 355, locale: locale);
-      expect(labelSize(), 11, reason: '339 dp bar, $locale');
-      await pump(tester, rows, width: 357, locale: locale);
-      expect(labelSize(), 14, reason: '341 dp bar, $locale');
-    }
-  });
-
   testWidgets('the presence mark sits on the avatar corner, not in the title', (
     tester,
   ) async {

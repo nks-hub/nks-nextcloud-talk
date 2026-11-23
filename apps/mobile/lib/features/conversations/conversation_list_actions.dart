@@ -294,89 +294,72 @@ final class _ConversationFilterBar extends StatelessWidget {
     return Semantics(
       container: true,
       label: strings.conversationFiltersLabel,
-      child: Padding(
+      child: SingleChildScrollView(
         key: const Key('conversation-filters'),
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-        // Under 340 dp three Czech labels only fit with the tight chip, so
-        // that is what a squeezed list pane gets; a phone gets the regular one.
-        child: LayoutBuilder(
-          builder: (context, box) =>
-              _chips(context, strings, box.maxWidth < 340),
+        scrollDirection: Axis.horizontal,
+        // The same 12 dp inset as the search field above, so the two share
+        // their left edge; the chips keep their size and scroll sideways in a
+        // narrow pane instead of squeezing their text against the border.
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+        child: Row(
+          children: [
+            _chip(
+              context,
+              key: const Key('conversation-filter-unread'),
+              selected: selected.contains(_ConversationListFilter.unread),
+              label: Text(strings.conversationFilterUnread),
+              onSelected: (_) => onToggle(_ConversationListFilter.unread),
+            ),
+            const SizedBox(width: 8),
+            _chip(
+              context,
+              key: const Key('conversation-filter-mentions'),
+              selected: selected.contains(_ConversationListFilter.mentions),
+              label: Text(strings.conversationFilterMentions),
+              onSelected: (_) => onToggle(_ConversationListFilter.mentions),
+            ),
+            if (showArchived) ...[
+              const SizedBox(width: 8),
+              _chip(
+                context,
+                key: const Key('conversation-filter-archived'),
+                selected: selected.contains(_ConversationListFilter.archived),
+                label: Text(strings.conversationFilterArchived),
+                onSelected: (_) => onToggle(_ConversationListFilter.archived),
+              ),
+            ],
+          ],
         ),
       ),
     );
   }
 
-  Widget _chips(BuildContext context, AppLocalizations strings, bool compact) {
-    return Wrap(
-      spacing: 4,
-      runSpacing: 4,
-      children: [
-        _chip(
-          context,
-          compact: compact,
-          key: const Key('conversation-filter-unread'),
-          selected: selected.contains(_ConversationListFilter.unread),
-          label: Text(strings.conversationFilterUnread),
-          onSelected: (_) => onToggle(_ConversationListFilter.unread),
-        ),
-        _chip(
-          context,
-          compact: compact,
-          key: const Key('conversation-filter-mentions'),
-          selected: selected.contains(_ConversationListFilter.mentions),
-          label: Text(strings.conversationFilterMentions),
-          onSelected: (_) => onToggle(_ConversationListFilter.mentions),
-        ),
-        if (showArchived)
-          _chip(
-            context,
-            compact: compact,
-            key: const Key('conversation-filter-archived'),
-            selected: selected.contains(_ConversationListFilter.archived),
-            label: Text(strings.conversationFilterArchived),
-            onSelected: (_) => onToggle(_ConversationListFilter.archived),
-          ),
-      ],
-    );
-  }
-
   Widget _chip(
     BuildContext context, {
-    required bool compact,
     required Key key,
     required bool selected,
     required Widget label,
     required ValueChanged<bool> onSelected,
   }) {
     final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     return FilterChip(
       key: key,
       selected: selected,
       label: label,
       onSelected: onSelected,
       showCheckmark: false,
+      shape: const StadiumBorder(),
       materialTapTargetSize: MaterialTapTargetSize.padded,
-      visualDensity: compact
-          ? VisualDensity(
-              horizontal: -4,
-              vertical: Theme.of(context).visualDensity.vertical,
-            )
-          : null,
-      padding: compact ? EdgeInsets.zero : null,
-      labelPadding: compact ? const EdgeInsets.symmetric(horizontal: 2) : null,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 6),
       side: BorderSide(
         color: selected ? scheme.tertiary : scheme.outlineVariant,
       ),
       selectedColor: scheme.tertiaryContainer,
-      labelStyle: (compact ? textTheme.labelSmall : textTheme.labelLarge)
-          ?.copyWith(
-            color: selected
-                ? scheme.onTertiaryContainer
-                : scheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
-          ),
+      labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+        color: selected ? scheme.onTertiaryContainer : scheme.onSurfaceVariant,
+        fontWeight: FontWeight.w600,
+      ),
     );
   }
 }
