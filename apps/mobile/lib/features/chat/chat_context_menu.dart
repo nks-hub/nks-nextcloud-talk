@@ -43,7 +43,7 @@ final class ChatContextMenuCollector {
   /// Remembers a right click; any other press forgets it, so a click that
   /// opened no menu cannot turn a later long press into one.
   void record(PointerDownEvent event) {
-    _click = _isSecondary(event) ? _Click.of(event) : null;
+    _click = isSecondaryClick(event) ? _Click.of(event) : null;
   }
 
   /// The position and target commands of the right click being handled, or
@@ -89,9 +89,13 @@ final class _Click {
   int get hashCode => Object.hash(pointer, timeStamp);
 }
 
-bool _isSecondary(PointerDownEvent event) =>
-    event.kind == PointerDeviceKind.mouse &&
-    event.buttons & kSecondaryMouseButton != 0;
+/// Whether [event] pressed the secondary button, from whatever device.
+///
+/// Windows reports a pen, a touch screen and a remote session's pointer as
+/// touch while still sending the right button, so the device kind says nothing
+/// about it; a finger itself never sets the secondary bit.
+bool isSecondaryClick(PointerDownEvent event) =>
+    event.buttons & kSecondaryButton != 0;
 
 /// Makes [collector] reachable from the message content below it.
 final class ChatContextMenuScope extends InheritedWidget {
@@ -99,12 +103,21 @@ final class ChatContextMenuScope extends InheritedWidget {
     super.key,
     required this.collector,
     required super.child,
+    this.forwardFile,
   });
 
   final ChatContextMenuCollector collector;
 
+  /// Forwards the file at a Talk path into another conversation. The picture
+  /// viewer calls it, since it has no message of its own to forward.
+  final ValueChanged<String>? forwardFile;
+
   static ChatContextMenuCollector? maybeOf(BuildContext context) =>
       context.getInheritedWidgetOfExactType<ChatContextMenuScope>()?.collector;
+
+  static ValueChanged<String>? forwardFileOf(BuildContext context) => context
+      .getInheritedWidgetOfExactType<ChatContextMenuScope>()
+      ?.forwardFile;
 
   @override
   bool updateShouldNotify(ChatContextMenuScope oldWidget) =>
@@ -117,15 +130,18 @@ final class ChatContextMenuArea extends StatelessWidget {
     super.key,
     required this.collector,
     required this.child,
+    this.forwardFile,
   });
 
   final ChatContextMenuCollector collector;
   final Widget child;
+  final ValueChanged<String>? forwardFile;
 
   @override
   Widget build(BuildContext context) {
     return ChatContextMenuScope(
       collector: collector,
+      forwardFile: forwardFile,
       child: Listener(
         onPointerDown: (event) {
           collector.record(event);
@@ -159,7 +175,7 @@ final class ChatContextMenuSource extends StatelessWidget {
     if (collector == null) return child;
     return Listener(
       onPointerDown: (event) {
-        if (_isSecondary(event)) {
+        if (isSecondaryClick(event)) {
           collector.offer(event, entries(), picture: picture);
         }
       },

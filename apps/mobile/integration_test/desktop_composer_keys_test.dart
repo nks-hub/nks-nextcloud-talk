@@ -27,6 +27,7 @@ import 'package:nextcloudtalk/network/nextcloud_api.dart';
 
 import '../test/test_support.dart';
 import 'desktop_app_support.dart';
+import 'gui_test_guard.dart';
 
 /// Enter and Ctrl+V in the composer, typed through Windows' own input queue.
 ///
@@ -41,6 +42,7 @@ import 'desktop_app_support.dart';
 /// `flutter test integration_test/desktop_composer_keys_test.dart -d windows`
 /// with `NKS_TALK_INTEGRATION_TEST=1`.
 void main() {
+  requireGuiTestHost();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('Enter sends and Ctrl+V pastes after typing during a send', (

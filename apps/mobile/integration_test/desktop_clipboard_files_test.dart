@@ -13,8 +13,10 @@ import 'package:pasteboard/pasteboard.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../test/test_support.dart';
+import 'gui_test_guard.dart';
 
 void main() {
+  requireGuiTestHost();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('Windows clipboard files become separate pending attachments', (

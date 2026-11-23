@@ -13,6 +13,7 @@ import 'package:nextcloudtalk/features/chat/composer/pasted_image.dart';
 import 'package:pasteboard/pasteboard.dart';
 
 import '../test/test_support.dart';
+import 'gui_test_guard.dart';
 
 /// Off, the test copies the images itself, which iOS never asks about. On
 /// (`--dart-define=CLIP_EXTERNAL=true`), the clip comes from another app: the
@@ -133,6 +134,7 @@ final class _CountedSource implements ClipboardImageSource {
 }
 
 void main() {
+  requireGuiTestHost();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   late FocusNode focus;

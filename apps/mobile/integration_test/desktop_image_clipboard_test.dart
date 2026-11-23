@@ -8,8 +8,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_image_exporter.dart';
 import 'package:pasteboard/pasteboard.dart';
+import 'gui_test_guard.dart';
 
 void main() {
+  requireGuiTestHost();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('copied image can be read from the Windows clipboard', (_) async {

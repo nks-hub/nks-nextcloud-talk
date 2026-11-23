@@ -12,6 +12,7 @@ import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../test/test_support.dart';
+import 'gui_test_guard.dart';
 
 /// The desktop input the widget suite can only assert about a headless tree.
 /// Here the same keyboard and pointer go through a REAL engine on a real
@@ -19,6 +20,7 @@ import '../test/test_support.dart';
 /// way to drive a Mac is synthetic keys through System Events, and that needs
 /// an Accessibility grant nobody can give from a shell.
 void main() {
+  requireGuiTestHost();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   const room = 'roomone';

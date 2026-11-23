@@ -9,6 +9,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:nextcloudtalk/app.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:path_provider/path_provider.dart';
+import 'gui_test_guard.dart';
 
 /// Store screenshots for the 13-inch iPad, taken from the real app signed in
 /// to the screenshot rig.
@@ -24,6 +25,7 @@ import 'package:path_provider/path_provider.dart';
 /// engine at the store's exact size, 2064 x 2752, written to
 /// `~/nctalk-shots` on the Mac, and their paths printed after `STORE-SHOT`.
 void main() {
+  requireGuiTestHost();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   Future<void> waitFor(

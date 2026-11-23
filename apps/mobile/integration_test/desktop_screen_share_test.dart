@@ -10,6 +10,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:nextcloudtalk/app.dart';
 
 import 'desktop_app_support.dart';
+import 'gui_test_guard.dart';
 
 /// Sharing a real screen, and then a real window, out of a real call.
 ///
@@ -26,6 +27,7 @@ import 'desktop_app_support.dart';
 /// Run on demand with `NKS_CALL_ROOM` naming a room the other client is in:
 /// `flutter test integration_test/desktop_screen_share_test.dart -d windows`
 void main() {
+  requireGuiTestHost();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   final roomToken = Platform.environment['NKS_CALL_ROOM'];

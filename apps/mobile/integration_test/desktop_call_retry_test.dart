@@ -10,6 +10,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:nextcloudtalk/app.dart';
 
 import 'desktop_app_support.dart';
+import 'gui_test_guard.dart';
 
 /// A call that fails to join, and then joins when asked again.
 ///
@@ -23,6 +24,7 @@ import 'desktop_app_support.dart';
 /// Handshake: the test writes `<journal>.failed` when the first attempt has
 /// visibly failed, and waits for `<journal>.unblocked` before trying again.
 void main() {
+  requireGuiTestHost();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   final roomToken = Platform.environment['NKS_CALL_ROOM'];

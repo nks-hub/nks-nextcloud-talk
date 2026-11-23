@@ -11,8 +11,10 @@ import 'package:nextcloudtalk/features/chat/media/image_clipboard.dart';
 
 import '../test/clipboard_image_test_support.dart';
 import '../test/test_support.dart';
+import 'gui_test_guard.dart';
 
 void main() {
+  requireGuiTestHost();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
