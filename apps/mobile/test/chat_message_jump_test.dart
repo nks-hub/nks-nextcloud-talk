@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter/material.dart';
@@ -7,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nextcloudtalk/app_providers.dart';
+import 'package:nextcloudtalk/core/app_theme.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_repository.dart';
@@ -981,6 +984,204 @@ void main() {
     });
   });
 
+  testWidgets('a page filling the gap below the island moves no visible row', (
+    tester,
+  ) async {
+    for (final id in [
+      for (var id = 30; id <= 54; id++) id,
+      for (var id = 20001; id <= 20008; id++) id,
+    ]) {
+      await _insertMessage(database, account.id, id);
+    }
+    await _insertScope(
+      database,
+      account.id,
+      historyCursor: '30',
+      futureCursor: '20008',
+      hasHistory: true,
+      blocksJson: '[["30","55"],["20001","20008"]]',
+    );
+    await _insertScope(
+      database,
+      account.id,
+      scopeKey: 'network-root',
+      historyCursor: '20001',
+      futureCursor: '20008',
+      hasHistory: true,
+      blocksJson: '[["20001","20008"]]',
+    );
+    final page = Completer<http.Response>();
+    addTearDown(() {
+      if (!page.isCompleted) page.complete(http.Response('', 503));
+    });
+    var historyRequests = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        final capabilities = _capabilitiesResponse(
+          request,
+          messageContext: true,
+        );
+        if (capabilities != null) {
+          return capabilities;
+        }
+        if (request.url.path.endsWith('/context')) {
+          // The island already starts with the room.
+          return http.Response(
+            jsonEncode(_contextPage(oldest: 30, newest: 42)),
+            200,
+            headers: const <String, String>{'X-Chat-Last-Given': '43'},
+          );
+        }
+        if (request.url.queryParameters['lookIntoFuture'] == '0') {
+          historyRequests++;
+          return page.future;
+        }
+        return http.Response('', 304);
+      }),
+    );
+    addTearDown(api.close);
+    await tester.pumpWidget(
+      _app(
+        database: database,
+        vault: vault,
+        api: api,
+        home: PresenceChatRoomScreen(
+          account: account,
+          conversation: conversation,
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () =>
+          find.byKey(const Key('chat-message-list')).evaluate().isNotEmpty &&
+          find.byType(LinearProgressIndicator).evaluate().isEmpty,
+    );
+
+    // The reader scrolls up from the newest messages into the island; at its
+    // oldest edge the history cursor is paged into the gap below them.
+    await tester.drag(
+      find.byKey(const Key('chat-message-list')),
+      const Offset(0, 4000),
+    );
+    await _pumpUntil(tester, () => historyRequests == 1);
+    // Settled by frames, not pumpAndSettle: its fake minutes would time the
+    // held page request out.
+    for (var turn = 0; turn < 60; turn++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    final row = find.byKey(
+      const ValueKey('chat-message-account-a-rooma123-32'),
+    );
+    expect(row, findsOneWidget);
+    final before = tester.getTopLeft(row);
+
+    page.complete(
+      http.Response(
+        jsonEncode(_historyPage(newest: 20000, oldest: 19901)),
+        200,
+        headers: const <String, String>{'X-Chat-Last-Given': '19901'},
+      ),
+    );
+    Future<String> networkCursor() async =>
+        (await (database.select(database.chatScopes)
+                  ..where((scope) => scope.scopeKey.equals('network-root')))
+                .getSingle())
+            .historyCursor;
+    for (var turn = 0; turn < 200 && await networkCursor() != '19901'; turn++) {
+      await tester.pump(const Duration(milliseconds: 10));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 5)),
+      );
+    }
+    expect(await networkCursor(), '19901');
+    for (var turn = 0; turn < 20; turn++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    expect(row, findsOneWidget);
+    expect(tester.getTopLeft(row).dy, moreOrLessEquals(before.dy, epsilon: 1));
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    for (var turn = 0; turn < 50; turn++) {
+      await tester.pump(const Duration(milliseconds: 10));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 1)),
+      );
+    }
+  });
+
+  for (final dark in [false, true]) {
+    testWidgets('the jump highlight stands out on both bubbles '
+        '(${dark ? 'dark' : 'light'})', (tester) async {
+      for (var id = 101; id <= 130; id++) {
+        await _insertMessage(
+          database,
+          account.id,
+          id,
+          actorId: id.isEven ? 'fixture-user' : 'someone-else',
+        );
+      }
+      await _insertScope(
+        database,
+        account.id,
+        historyCursor: '101',
+        futureCursor: '130',
+        hasHistory: false,
+        blocksJson: '[["101","130"]]',
+      );
+      final theme = dark ? AppTheme.dark() : AppTheme.light();
+      final scheme = theme.colorScheme;
+      // 105 is someone else's, 106 the reader's own.
+      for (final target in [105, 106]) {
+        final api = HttpNextcloudApi(client: MockClient(_convergedServer));
+        await tester.pumpWidget(
+          _app(
+            database: database,
+            vault: vault,
+            api: api,
+            theme: theme,
+            home: PresenceChatRoomScreen(
+              key: ValueKey(target),
+              account: account,
+              conversation: conversation,
+              jumpToMessageId: target,
+            ),
+          ),
+        );
+        await _pumpUntil(
+          tester,
+          () =>
+              find
+                  .byKey(Key('chat-message-target-$target'))
+                  .evaluate()
+                  .isNotEmpty &&
+              _highlightBorder(tester, target) != null,
+        );
+        final decoration = _bubbleDecoration(tester, target);
+        final bubble = decoration.color!;
+        final ring = (decoration.border! as Border).top.color;
+        expect(
+          _contrast(ring, bubble),
+          greaterThanOrEqualTo(3),
+          reason: 'the ring must show against the bubble ($target)',
+        );
+        final halo = decoration.boxShadow;
+        expect(halo, isNotEmpty, reason: 'nothing marks the bubble outside');
+        expect(
+          _contrast(halo!.first.color, scheme.surface),
+          greaterThanOrEqualTo(3),
+          reason: 'the halo must show against the room behind ($target)',
+        );
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(milliseconds: 1));
+        api.close();
+      }
+    });
+  }
+
   testWidgets('says so instead of failing silently when nothing can be found', (
     tester,
   ) async {
@@ -1095,6 +1296,7 @@ Widget _app({
   required HttpNextcloudApi api,
   required Widget home,
   List<Override> overrides = const [],
+  ThemeData? theme,
 }) {
   return ProviderScope(
     overrides: [
@@ -1112,8 +1314,14 @@ Widget _app({
         ),
       ),
     ],
-    child: localizedTestApp(home: home),
+    child: localizedTestApp(home: home, theme: theme),
   );
+}
+
+double _contrast(Color a, Color b) {
+  final first = a.computeLuminance();
+  final second = b.computeLuminance();
+  return (math.max(first, second) + 0.05) / (math.min(first, second) + 0.05);
 }
 
 /// A server that only ever reports "nothing new", so a test can exercise the
@@ -1146,6 +1354,17 @@ http.Response? _capabilitiesResponse(
   }
   return null;
 }
+
+BoxDecoration _bubbleDecoration(WidgetTester tester, int messageId) =>
+    tester
+            .widget<AnimatedContainer>(
+              find.descendant(
+                of: find.byKey(Key('chat-message-target-$messageId')),
+                matching: find.byType(AnimatedContainer),
+              ),
+            )
+            .decoration!
+        as BoxDecoration;
 
 Border? _highlightBorder(WidgetTester tester, int messageId) {
   final container = tester.widget<AnimatedContainer>(
@@ -1180,12 +1399,13 @@ Map<String, Object?> _messageJson({
   required int id,
   required String message,
   Map<String, Object?>? parent,
+  String actorId = 'someone-else',
 }) {
   return <String, Object?>{
     'id': id,
     'token': 'rooma123',
     'actorType': 'users',
-    'actorId': 'someone-else',
+    'actorId': actorId,
     'actorDisplayName': 'Other person',
     'timestamp': 1724300000 + id,
     'systemMessage': '',
@@ -1239,11 +1459,13 @@ Future<void> _insertMessage(
   int messageId, {
   Map<String, Object?>? parent,
   String? text,
+  String actorId = 'someone-else',
 }) {
   final wire = _messageJson(
     id: messageId,
     message: text ?? 'Message $messageId',
     parent: parent,
+    actorId: actorId,
   );
   return database
       .into(database.cachedChatMessages)

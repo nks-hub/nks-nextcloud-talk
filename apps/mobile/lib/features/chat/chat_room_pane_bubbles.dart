@@ -198,17 +198,25 @@ final class _MessageBubble extends StatelessWidget {
                                 groupedWithPrevious: groupedWithPrevious,
                                 groupEnd: groupEnd,
                               ),
+                              // A jump target gets two rings: the bubble's own
+                              // text colour against the bubble, and outside it
+                              // the tertiary colour against the room, so the
+                              // mark shows on light, dark and wallpaper alike.
                               border: highlighted
                                   ? Border.all(
-                                      // The tertiary ring has the same tone
-                                      // as the primary outgoing fill.
-                                      color: outgoing
-                                          ? colors.foreground
-                                          : scheme.tertiary,
+                                      color: colors.foreground,
                                       width: 2,
                                     )
                                   : isThreadRoot
                                   ? Border.all(color: scheme.outlineVariant)
+                                  : null,
+                              boxShadow: highlighted
+                                  ? [
+                                      BoxShadow(
+                                        color: scheme.tertiary,
+                                        spreadRadius: 2,
+                                      ),
+                                    ]
                                   : null,
                             ),
                             child: DefaultSelectionStyle(

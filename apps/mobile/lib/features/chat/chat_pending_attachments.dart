@@ -279,8 +279,12 @@ class _PendingAttachmentBubbleState
         decoration: BoxDecoration(
           color: scheme.primaryContainer,
           borderRadius: BorderRadius.circular(18),
+          // The same two rings a jump target gets in a message bubble.
           border: widget.highlighted
-              ? Border.all(color: scheme.primary, width: 2)
+              ? Border.all(color: scheme.onPrimaryContainer, width: 2)
+              : null,
+          boxShadow: widget.highlighted
+              ? [BoxShadow(color: scheme.tertiary, spreadRadius: 2)]
               : null,
         ),
         child: Column(
