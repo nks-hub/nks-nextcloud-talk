@@ -1,11 +1,21 @@
+import 'dart:convert';
 import 'dart:io';
 
-/// The computer whose desktop must never be driven by a GUI test.
-const guiTestForbiddenComputer = 'DESKTOP-HD73V8A';
+import 'package:crypto/crypto.dart';
+
+/// SHA-256 of the upper-case name of each computer whose desktop must never be
+/// driven by a GUI test. Hashed so the public repository does not name the
+/// machine.
+const guiTestForbiddenComputerHashes = {
+  '08664814b84053f8b61bf511d598aa4218765f542e153e575d917704b967aa50',
+};
 
 /// The environment variable a machine has to set to say that opening a window
 /// and sending real input there is intended.
 const guiTestAllowVariable = 'OWNTALK_ALLOW_GUI_TESTS';
+
+String _computerHash(String name) =>
+    sha256.convert(utf8.encode(name.toUpperCase())).toString();
 
 /// Why a GUI test must not start on this machine, or null when it may.
 ///
@@ -14,14 +24,16 @@ const guiTestAllowVariable = 'OWNTALK_ALLOW_GUI_TESTS';
 String? guiTestRefusal({
   required String hostname,
   required Map<String, String> environment,
+  Set<String> forbiddenHashes = guiTestForbiddenComputerHashes,
 }) {
   final names = {hostname, environment['COMPUTERNAME'] ?? ''}
     ..removeWhere((name) => name.isEmpty);
-  if (names.any(
-    (name) => name.toUpperCase() == guiTestForbiddenComputer,
-  )) {
-    return 'Refusing to run: $guiTestForbiddenComputer is the owner\'s own '
-        'computer and a GUI test would drive its desktop.';
+  final forbidden = names.where(
+    (name) => forbiddenHashes.contains(_computerHash(name)),
+  );
+  if (forbidden.isNotEmpty) {
+    return 'Refusing to run: ${forbidden.first} is a computer whose desktop a '
+        'GUI test must never drive.';
   }
   if (environment[guiTestAllowVariable] != '1') {
     return 'Refusing to run: this test opens a real window and may send real '

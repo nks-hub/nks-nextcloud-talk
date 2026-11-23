@@ -1,16 +1,21 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../integration_test/gui_test_guard.dart';
 
 void main() {
+  final ownerPc = {sha256.convert(utf8.encode('OWNER-PC')).toString()};
+
   test('refuses without the opt-in variable', () {
     expect(
-      guiTestRefusal(hostname: 'DESKTOP-KR5NK4H', environment: const {}),
+      guiTestRefusal(hostname: 'TEST-VM-01', environment: const {}),
       contains('OWNTALK_ALLOW_GUI_TESTS'),
     );
     expect(
       guiTestRefusal(
-        hostname: 'DESKTOP-KR5NK4H',
+        hostname: 'TEST-VM-01',
         environment: const {'OWNTALK_ALLOW_GUI_TESTS': '0'},
       ),
       isNotNull,
@@ -20,24 +25,29 @@ void main() {
   test('allows an opted-in machine', () {
     expect(
       guiTestRefusal(
-        hostname: 'DESKTOP-KR5NK4H',
+        hostname: 'TEST-VM-01',
         environment: const {
           'OWNTALK_ALLOW_GUI_TESTS': '1',
-          'COMPUTERNAME': 'DESKTOP-KR5NK4H',
+          'COMPUTERNAME': 'TEST-VM-01',
         },
+        forbiddenHashes: ownerPc,
       ),
       isNull,
     );
   });
 
-  test("always refuses the owner's computer, even when opted in", () {
+  test('always refuses a forbidden computer, even when opted in', () {
     for (final environment in [
       const {'OWNTALK_ALLOW_GUI_TESTS': '1'},
-      const {'OWNTALK_ALLOW_GUI_TESTS': '1', 'COMPUTERNAME': 'desktop-hd73v8a'},
+      const {'OWNTALK_ALLOW_GUI_TESTS': '1', 'COMPUTERNAME': 'owner-pc'},
     ]) {
       expect(
-        guiTestRefusal(hostname: 'desktop-hd73v8a', environment: environment),
-        contains('owner'),
+        guiTestRefusal(
+          hostname: 'owner-pc',
+          environment: environment,
+          forbiddenHashes: ownerPc,
+        ),
+        contains('must never drive'),
       );
     }
     expect(
@@ -45,10 +55,19 @@ void main() {
         hostname: 'something-else',
         environment: const {
           'OWNTALK_ALLOW_GUI_TESTS': '1',
-          'COMPUTERNAME': 'DESKTOP-HD73V8A',
+          'COMPUTERNAME': 'OWNER-PC',
         },
+        forbiddenHashes: ownerPc,
       ),
-      contains('owner'),
+      contains('must never drive'),
+    );
+  });
+
+  test('the built-in list holds one hashed computer name', () {
+    expect(guiTestForbiddenComputerHashes, hasLength(1));
+    expect(
+      guiTestForbiddenComputerHashes.single,
+      matches(RegExp(r'^[0-9a-f]{64}$')),
     );
   });
 }
