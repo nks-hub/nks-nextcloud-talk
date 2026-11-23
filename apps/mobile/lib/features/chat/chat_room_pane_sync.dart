@@ -451,7 +451,14 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     final generation = ++_historyGeneration;
     bool isCurrent() =>
         mounted && generation == _historyGeneration && targetKey == _key;
-    final growIsland = !fetchOnly && _oldestEdgeIsIsland();
+    final islandEnd = fetchOnly ? null : _islandAtOldestEdge();
+    if (islandEnd != null && islandEnd != _anchorMessageId) {
+      // The cursor page lands in the gap below the island the reader is in.
+      // Anchored on the island's newest row, that page is laid out on the
+      // newer side of the anchor, so the rows on screen stay where they are.
+      _scrollController.keepPositionAcrossAnchorChange();
+      _update(() => _anchorMessageId = islandEnd);
+    }
     _update(() => _loadingOlder = true);
     try {
       final outcome = await ref
@@ -461,7 +468,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
             accountId: targetKey.accountId,
             roomToken: targetKey.roomToken,
             threadId: targetKey.threadId,
-            growIsland: growIsland,
+            growIsland: islandEnd != null,
           );
       if (!isCurrent()) return null;
       _update(() => _localError = null);
@@ -483,18 +490,21 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     }
   }
 
-  /// Whether the oldest message on screen belongs to the oldest of several
-  /// ranges with gaps between them: the reader is at the oldest edge of what
-  /// a jump fetched, where older messages continue right below.
-  bool _oldestEdgeIsIsland() {
+  /// The newest shown message of the oldest of several ranges with gaps
+  /// between them, when the oldest message shown belongs to it: the reader is
+  /// at the oldest edge of what a jump fetched, where older messages continue
+  /// right below. Null otherwise.
+  int? _islandAtOldestEdge() {
     final blocks = _decodeScopeBlocks(
       ref.read(chatScopeProvider(_key)).valueOrNull,
     );
-    final visible = _visibleMessages();
-    return blocks != null &&
-        blocks.length > 1 &&
-        visible.isNotEmpty &&
-        _blockIndexOf(blocks, visible.first.messageId) == 0;
+    if (blocks == null || blocks.length < 2) {
+      return null;
+    }
+    final island = _visibleMessages()
+        .takeWhile((message) => _blockIndexOf(blocks, message.messageId) == 0)
+        .toList(growable: false);
+    return island.isEmpty ? null : island.last.messageId;
   }
 
   /// Shows the next step of cached history. False when the window already
