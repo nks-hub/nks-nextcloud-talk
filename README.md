@@ -16,12 +16,12 @@ It is an independent client, not an app from Nextcloud GmbH. Until version 1.0.1
 <p>
   <img src="docs/screenshots/phone-conversations.png" width="260" alt="Conversation list on a phone">
   <img src="docs/screenshots/phone-chat.png" width="260" alt="Chat on a phone">
-  <img src="docs/screenshots/phone-details.png" width="260" alt="Conversation settings on a phone">
+  <img src="docs/screenshots/phone-details.png" width="260" alt="Conversation details on a phone with the shared appearance from OwnTalk Extensions">
 </p>
 
-![Conversation details and the account menu on a desktop](docs/screenshots/desktop-details.png)
+![Conversation details on a desktop](docs/screenshots/desktop-details.png)
 
-The people, rooms and server in these pictures are invented. They come from `tool/store_screenshot_server.py`, a stand-in Talk server used only for screenshots, so no real account ever appears in them.
+The people, rooms and server in these pictures are invented. `apps/mobile/test/readme_screenshots_test.dart` renders them off-screen from fake data when `OWNTALK_README_SHOTS=1` is set, so no real account ever appears in them.
 
 ---
 
