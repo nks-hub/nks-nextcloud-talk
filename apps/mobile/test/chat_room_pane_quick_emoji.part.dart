@@ -57,10 +57,7 @@ void _registerChatRoomPaneQuickEmojiTests() {
       () => find.byKey(const Key('send-quick-emoji')).evaluate().isNotEmpty,
     );
     expect(find.byKey(const Key('send-message')), findsNothing);
-    expect(
-      find.byTooltip(RegExp(r'^Send emoji \S')),
-      findsOneWidget,
-    );
+    expect(find.byTooltip(RegExp(r'^Send emoji \S')), findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('chat-composer')), 'hello');
     await tester.pump();
@@ -96,10 +93,18 @@ void _registerChatRoomPaneQuickEmojiTests() {
     );
     expect(
       tester
-          .widget<IconButton>(find.byKey(const Key('send-quick-emoji')))
-          .style,
-      isNull,
-      reason: 'a plain IconButton, not filled or tonal',
+          .widget<Material>(
+            find
+                .descendant(
+                  of: find.byKey(const Key('send-quick-emoji')),
+                  matching: find.byType(Material),
+                )
+                .first,
+          )
+          .color
+          ?.a,
+      anyOf(isNull, 0),
+      reason: 'a plain IconButton paints no filled or tonal disc',
     );
 
     // Text: the send arrow in the primary colour, also plain.
@@ -112,7 +117,20 @@ void _registerChatRoomPaneQuickEmojiTests() {
       tester.element(find.byKey(const Key('send-message'))),
     ).colorScheme;
     expect(send.color, scheme.primary);
-    expect(send.style, isNull);
+    expect(
+      tester
+          .widget<Material>(
+            find
+                .descendant(
+                  of: find.byKey(const Key('send-message')),
+                  matching: find.byType(Material),
+                )
+                .first,
+          )
+          .color
+          ?.a,
+      anyOf(isNull, 0),
+    );
     expect(
       tester.getSize(find.byKey(const Key('send-message'))),
       const Size.square(48),

@@ -150,8 +150,8 @@ final class _QuickEmojiHoldButtonState extends State<QuickEmojiHoldButton>
                 ),
                 duration: snap,
                 curve: Curves.easeOutCubic,
-                // Starts as the button's own disc and swells out of it; the
-                // fixed radius turns the circle into a rounded tile.
+                // Starts as a tile just larger than the glyph and swells from
+                // there; the fixed radius turns the circle into a rounded tile.
                 builder: (context, fontSize, _) => Material(
                   elevation: 3,
                   color: scheme.surfaceContainerHigh,
