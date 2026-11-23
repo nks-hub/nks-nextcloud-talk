@@ -195,9 +195,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   Timer? _highlightTimer;
 
   /// The range around a jump target the timeline lists instead of the whole
-  /// history, while that history has not reached it. Paging extends it at
-  /// both ends; once it touches the newest messages the history takes it in
-  /// and the timeline goes on as usual.
+  /// history: fetched from the server when the history does not reach it, or
+  /// taken from the cache when it lies far back. Paging extends it at both
+  /// ends, from the cache where it can; once it reaches the newest message
+  /// the timeline goes on as usual.
   ChatBlock? _island;
 
   /// [_island] as the block list the timeline filters by, kept with it.
