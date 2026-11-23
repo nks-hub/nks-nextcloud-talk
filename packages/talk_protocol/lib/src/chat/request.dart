@@ -163,6 +163,62 @@ final class ChatFetchRequest extends ChatRequest {
       'threadScoped: ${threadId != null})';
 }
 
+/// The messages around [messageId]: up to [limit] at or before it and up to
+/// [limit] after it, oldest first. Unlike a history page it can start
+/// anywhere, so it reaches an old message without paging down to it.
+final class ChatContextRequest extends ChatRequest {
+  ChatContextRequest({
+    required super.accountId,
+    required super.requestId,
+    required super.server,
+    required super.roomToken,
+    required this.profile,
+    required this.messageId,
+    required this.limit,
+    this.threadId,
+    super.userAgent,
+  }) {
+    if (!profile.messageContext) {
+      _requestFailure(r'$.capabilities.chat-get-context');
+    }
+    if (messageId < 1) {
+      _requestFailure(r'$.path.messageId');
+    }
+    // The server caps the limit at 100 per direction.
+    if (limit < 1 || limit > 100) {
+      _requestFailure(r'$.query.limit');
+    }
+    if (threadId != null && (threadId! < 1 || !profile.threadFetch)) {
+      _requestFailure(r'$.query.threadId');
+    }
+  }
+
+  final ChatCapabilityProfile profile;
+  final int messageId;
+  final int limit;
+  final int? threadId;
+
+  @override
+  Object? get formBody => null;
+
+  @override
+  ChatHttpMethod get method => ChatHttpMethod.get;
+
+  @override
+  Map<String, String> get queryParameters => UnmodifiableMapView({
+    'format': 'json',
+    'limit': limit.toString(),
+    if (threadId != null) 'threadId': threadId.toString(),
+  });
+
+  @override
+  String get requestPath => '$chatV1Path/${roomToken.value}/$messageId/context';
+
+  @override
+  String toString() =>
+      'ChatContextRequest(limit: $limit, threadScoped: ${threadId != null})';
+}
+
 final class SharedItemsOverviewRequest extends ChatRequest {
   SharedItemsOverviewRequest({
     required super.accountId,

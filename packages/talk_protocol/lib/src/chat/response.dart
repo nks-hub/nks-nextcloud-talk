@@ -296,6 +296,111 @@ ChatGetResponse decodeChatGetResponse({
   );
 }
 
+final class ChatContextResponse {
+  const ChatContextResponse._({
+    required this.request,
+    required this.classification,
+    required this.messages,
+    required this.lastGiven,
+    this.retryAfterSeconds,
+  });
+
+  final ChatContextRequest request;
+
+  /// [ChatGetClassification.messages] or one of the failures a history page
+  /// can also end with; an empty context is
+  /// [ChatGetClassification.notModified].
+  final ChatGetClassification classification;
+
+  /// Oldest first.
+  final List<ChatMessage> messages;
+
+  /// The newest message id the server looked at, visible or not. Everything
+  /// from the oldest returned message up to it is known.
+  final ChatCursor? lastGiven;
+  final int? retryAfterSeconds;
+
+  @override
+  String toString() =>
+      'ChatContextResponse(classification: ${classification.name}, '
+      'messageCount: ${messages.length})';
+}
+
+ChatContextResponse decodeChatContextResponse({
+  required ChatContextRequest request,
+  required int statusCode,
+  required Uint8List body,
+  ChatResponseHeaders? headers,
+}) {
+  final responseHeaders = headers ?? ChatResponseHeaders.fromMap(const {});
+  ChatContextResponse failure(ChatGetClassification classification) =>
+      ChatContextResponse._(
+        request: request,
+        classification: classification,
+        messages: const [],
+        lastGiven: null,
+        retryAfterSeconds: responseHeaders.retryAfterSeconds,
+      );
+  if (statusCode == 304) {
+    if (body.isNotEmpty) {
+      _responseFailure(r'$.body');
+    }
+    return failure(ChatGetClassification.notModified);
+  }
+  final envelope = _decodeOcsEnvelope(body);
+  final errorClassification = switch (statusCode) {
+    401 => ChatGetClassification.reauthenticationRequired,
+    404 => ChatGetClassification.threadNotFound,
+    412 => ChatGetClassification.lobby,
+    429 || 503 => ChatGetClassification.transientError,
+    200 => null,
+    _ => throw TalkProtocolException(
+      TalkProtocolErrorCode.unsupportedHttpStatus,
+      path: r'$.statusCode',
+    ),
+  };
+  if (errorClassification != null) {
+    return failure(errorClassification);
+  }
+  if (!envelope.isSuccess(200)) {
+    return failure(ChatGetClassification.ocsError);
+  }
+  final rawMessages = requireList(
+    envelope.data,
+    path: r'$.ocs.data',
+    code: TalkProtocolErrorCode.invalidChatResponse,
+  );
+  if (rawMessages.length > 2 * request.limit + 1) {
+    _responseFailure(r'$.ocs.data');
+  }
+  final messages = rawMessages
+      .map(ChatMessage.fromJson)
+      .toList(growable: false);
+  _validateMessageOrder(
+    roomToken: request.roomToken,
+    threadId: request.threadId,
+    newestFirst: false,
+    messages: messages,
+  );
+  if (messages.isEmpty) {
+    return failure(ChatGetClassification.notModified);
+  }
+  final lastGiven = responseHeaders.cursor('X-Chat-Last-Given');
+  if (lastGiven == null ||
+      lastGiven.compareTo(
+            ChatCursor.parse(messages.last.messageId.toString()),
+          ) <
+          0) {
+    _responseFailure(r'$.headers.X-Chat-Last-Given');
+  }
+  return ChatContextResponse._(
+    request: request,
+    classification: ChatGetClassification.messages,
+    messages: List.unmodifiable(messages),
+    lastGiven: lastGiven,
+  );
+}
+
 /// The chat payload the High Performance Backend relays over the signaling
 /// websocket, decoded from the raw `data.chat` object of a room message event.
 ///
@@ -664,24 +769,35 @@ ChatSendResponse _sendResult(
   retryAfterSeconds: retryAfterSeconds,
 );
 
-void _validateMessages(ChatFetchRequest request, List<ChatMessage> messages) {
+void _validateMessages(ChatFetchRequest request, List<ChatMessage> messages) =>
+    _validateMessageOrder(
+      roomToken: request.roomToken,
+      threadId: request.threadId,
+      newestFirst: request.direction == ChatFetchDirection.history,
+      messages: messages,
+    );
+
+void _validateMessageOrder({
+  required ConversationToken roomToken,
+  required int? threadId,
+  required bool newestFirst,
+  required List<ChatMessage> messages,
+}) {
   final ids = <int>{};
   int? previousId;
   for (final message in messages) {
-    if (message.roomToken != request.roomToken) {
+    if (message.roomToken != roomToken) {
       _responseFailure(r'$.ocs.data[].token');
     }
-    if (request.threadId != null && message.threadId != request.threadId) {
+    if (threadId != null && message.threadId != threadId) {
       _responseFailure(r'$.ocs.data[].threadId');
     }
     if (!ids.add(message.messageId)) {
       _responseFailure(r'$.ocs.data[].id');
     }
     if (previousId != null &&
-        ((request.direction == ChatFetchDirection.history &&
-                message.messageId >= previousId) ||
-            (request.direction == ChatFetchDirection.future &&
-                message.messageId <= previousId))) {
+        ((newestFirst && message.messageId >= previousId) ||
+            (!newestFirst && message.messageId <= previousId))) {
       _responseFailure(r'$.ocs.data');
     }
     previousId = message.messageId;

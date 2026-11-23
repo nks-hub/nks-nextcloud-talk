@@ -15,6 +15,7 @@ final class ChatCapabilityProfile {
     required this.markUnread,
     required this.commonReadStatus,
     required this.silentSend,
+    required this.messageContext,
   });
 
   factory ChatCapabilityProfile.fromSnapshot(
@@ -79,6 +80,7 @@ final class ChatCapabilityProfile {
           readPrivacyIsPublic &&
           !federated,
       silentSend: sendText && features.contains('silent-send'),
+      messageContext: read && features.contains('chat-get-context'),
     );
   }
 
@@ -95,6 +97,10 @@ final class ChatCapabilityProfile {
 
   /// Whether the server accepts a message that raises no notification.
   final bool silentSend;
+
+  /// Whether the server returns the messages around any message id, which
+  /// is the only way to reach an old message without paging all history.
+  final bool messageContext;
 
   @override
   String toString() =>

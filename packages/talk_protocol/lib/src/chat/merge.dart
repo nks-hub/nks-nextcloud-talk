@@ -33,11 +33,17 @@ final class ChatMergePlan {
     this._source,
     this._candidate, {
     required this.messageUpserts,
+    this.island,
   });
 
   final ChatRuntimeSnapshot _source;
   final ChatRuntimeSnapshot _candidate;
   final List<ChatMessage> messageUpserts;
+
+  /// The range a context fetch made known. It belongs to no cursor: the
+  /// scope's cursors still mark where paging continues, so it is kept as a
+  /// separate block of the view that shows it, beside the scope's own.
+  final ChatBlock? island;
   bool _consumed = false;
 
   ChatRuntimeSnapshot commit(ChatRuntimeSnapshot current) {
@@ -208,6 +214,76 @@ ChatMergeResult planChatGetMerge(
     snapshot.replaceAccount(candidateAccount),
     outcome,
     messageUpserts: response.messages,
+  );
+}
+
+/// Plans a context response. Unlike [planChatGetMerge] it leaves the scope's
+/// cursors, blocks and history flag alone and hands the covered range back as
+/// [ChatMergePlan.island]; the scope must exist.
+ChatMergeResult planChatContextMerge(
+  ChatRuntimeSnapshot snapshot,
+  ChatContextResponse response,
+) {
+  final request = response.request;
+  final binding = _bind(snapshot, request.accountId, request.server);
+  if (binding == null) {
+    return _rejected;
+  }
+  switch (response.classification) {
+    case ChatGetClassification.reauthenticationRequired:
+      return _planned(
+        snapshot,
+        snapshot.replaceAccount(
+          binding.account.copyWith(
+            lane: ChatAccountLane.reauthenticationRequired,
+          ),
+        ),
+        ChatMergeOutcome.reauthenticationRequired,
+      );
+    case ChatGetClassification.lobby:
+      return _lobby;
+    case ChatGetClassification.notModified:
+      return _stale;
+    case ChatGetClassification.messages:
+      break;
+    case ChatGetClassification.invisibleCursorAdvance:
+    case ChatGetClassification.commonReadOnly:
+    case ChatGetClassification.threadNotFound:
+    case ChatGetClassification.transientError:
+    case ChatGetClassification.ocsError:
+      return _rejected;
+  }
+  final key = ChatScopeKey(
+    roomToken: request.roomToken,
+    threadId: request.threadId,
+  );
+  if (binding.account.scopes[key] == null) {
+    return _rejected;
+  }
+  final account = reconcileTextSendOperations(
+    binding.account,
+    response.messages.map(
+      (message) => ChatMessageConfirmation.fromMessage(
+        message,
+        accountId: request.accountId,
+        server: request.server,
+      ),
+    ),
+  );
+  return ChatMergeResult._(
+    outcome: ChatMergeOutcome.applied,
+    plan: ChatMergePlan._(
+      snapshot,
+      snapshot.replaceAccount(account),
+      messageUpserts: response.messages,
+      island: ChatBlock(
+        start: ChatCursor.parse(
+          response.messages.first.messageId.toString(),
+          code: TalkProtocolErrorCode.invalidChatMerge,
+        ),
+        end: response.lastGiven!,
+      ),
+    ),
   );
 }
 
