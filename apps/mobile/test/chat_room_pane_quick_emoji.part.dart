@@ -57,10 +57,7 @@ void _registerChatRoomPaneQuickEmojiTests() {
       () => find.byKey(const Key('send-quick-emoji')).evaluate().isNotEmpty,
     );
     expect(find.byKey(const Key('send-message')), findsNothing);
-    expect(
-      find.byTooltip(RegExp(r'^Send emoji \S')),
-      findsOneWidget,
-    );
+    expect(find.byTooltip(RegExp(r'^Send emoji \S')), findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('chat-composer')), 'hello');
     await tester.pump();
@@ -71,6 +68,92 @@ void _registerChatRoomPaneQuickEmojiTests() {
     await tester.pump();
     expect(find.byKey(const Key('send-quick-emoji')), findsOneWidget);
     await unmountPane(tester);
+  });
+
+  testWidgets('the quick emoji and the send arrow are plain glyphs, no disc', (
+    tester,
+  ) async {
+    final server = FakeOwnTalkServer()
+      ..setExternally({'composer.quickEmoji': '\u{1F44D}'});
+    await openPane(tester, server: server);
+    await pumpUntilCondition(
+      tester,
+      () => find.byKey(const Key('send-quick-emoji')).evaluate().isNotEmpty,
+    );
+
+    // Empty field: the emoji as text, 28 dp, in a 48 dp slot, on no disc.
+    final emoji = find.descendant(
+      of: find.byKey(const Key('send-quick-emoji')),
+      matching: find.text('\u{1F44D}'),
+    );
+    expect(tester.widget<Text>(emoji).style!.fontSize, 28);
+    expect(
+      tester.getSize(find.byKey(const Key('quick-emoji-hold-gesture'))),
+      const Size.square(48),
+    );
+    expect(
+      tester
+          .widget<Material>(
+            find
+                .descendant(
+                  of: find.byKey(const Key('send-quick-emoji')),
+                  matching: find.byType(Material),
+                )
+                .first,
+          )
+          .color
+          ?.a,
+      anyOf(isNull, 0),
+      reason: 'a plain IconButton paints no filled or tonal disc',
+    );
+
+    // Text: the send arrow in the primary colour, also plain.
+    await tester.enterText(find.byKey(const Key('chat-composer')), 'hello');
+    await tester.pump();
+    final send = tester.widget<IconButton>(
+      find.byKey(const Key('send-message')),
+    );
+    final scheme = Theme.of(
+      tester.element(find.byKey(const Key('send-message'))),
+    ).colorScheme;
+    expect(send.color, scheme.primary);
+    expect(
+      tester
+          .widget<Material>(
+            find
+                .descendant(
+                  of: find.byKey(const Key('send-message')),
+                  matching: find.byType(Material),
+                )
+                .first,
+          )
+          .color
+          ?.a,
+      anyOf(isNull, 0),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('send-message'))),
+      const Size.square(48),
+    );
+    expect(find.byIcon(Icons.send_rounded), findsOneWidget);
+    await unmountPane(tester);
+  });
+
+  test('the send arrow reaches 3:1 on the composer field in both themes', () {
+    for (final theme in [AppTheme.light(), AppTheme.dark()]) {
+      final scheme = theme.colorScheme;
+      // The field fill the composer container draws.
+      final field = Color.lerp(
+        scheme.surface,
+        scheme.surfaceContainerHighest,
+        0.45,
+      )!;
+      expect(
+        chatBackgroundContrast(scheme.primary, field),
+        greaterThanOrEqualTo(3),
+        reason: theme.brightness.name,
+      );
+    }
   });
 
   testWidgets('without the capability the composer is unchanged', (

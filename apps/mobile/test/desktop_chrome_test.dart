@@ -188,6 +188,84 @@ void main() {
       expect(overflows, isEmpty, reason: overflows.join('\n'));
     }
   });
+
+  for (final width in [280.0, 300.0, 360.0]) {
+    for (final scale in [1.0, 2.0]) {
+      testWidgets('the list header is calm at ${width.toInt()} px and '
+          '${(scale * 100).toInt()} % text', (tester) async {
+        final searchable = StoredAccount(
+          id: 'account-a',
+          serverUrl: 'https://account-a.example.invalid',
+          loginName: 'user-a',
+          serverProductName: 'Nextcloud',
+          talkFeaturesJson: '["unified-search","archived-conversations-v2"]',
+          selected: true,
+          createdAtMillis: 1767225600000,
+        );
+        tester.view.physicalSize = const Size(1400, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final overflows = await overflowsWhile(
+          () => _pumpShell(
+            tester,
+            accounts: [searchable],
+            listWidth: width,
+            textScale: scale,
+          ),
+        );
+        expect(overflows, isEmpty, reason: overflows.join(' | '));
+
+        final pane = tester.getRect(
+          find.byKey(const Key('conversation-list-pane')),
+        );
+        final search = tester.getRect(
+          find.byKey(const Key('open-message-search')),
+        );
+        final add = tester.getRect(
+          find.byKey(const Key('open-new-conversation')),
+        );
+        final refresh = tester.getRect(
+          find.byKey(const Key('refresh-conversations')),
+        );
+        final title = tester.getRect(find.text('Conversations'));
+
+        // Search is full width below the title row, on the 12 px insets.
+        expect(search.left - pane.left, 12);
+        expect(pane.right - search.right, 12);
+        expect(search.top, greaterThan(title.bottom));
+        // The actions share the title's row, on the right, as plain buttons
+        // with a 48 px target.
+        for (final action in [add, refresh]) {
+          expect(action.width, greaterThanOrEqualTo(48));
+          expect(action.height, greaterThanOrEqualTo(48));
+          expect(action.center.dy, lessThan(search.top));
+          expect(action.left, greaterThan(title.left));
+        }
+        expect(refresh.right, lessThanOrEqualTo(pane.right - 12 + 0.5));
+        expect(add.right, lessThanOrEqualTo(refresh.left + 0.5));
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('open-new-conversation')),
+            matching: find.byType(Material),
+          ),
+          findsWidgets,
+        );
+        final fill = tester
+            .widget<Material>(
+              find
+                  .descendant(
+                    of: find.byKey(const Key('open-new-conversation')),
+                    matching: find.byType(Material),
+                  )
+                  .first,
+            )
+            .color;
+        expect(fill?.a ?? 0, 0, reason: 'no filled disc behind the action');
+        expect(find.byTooltip('New conversation'), findsOneWidget);
+        expect(find.byTooltip('Refresh'), findsOneWidget);
+      });
+    }
+  }
 }
 
 Future<void> _pumpWide(
@@ -215,11 +293,19 @@ Future<void> _pumpShell(
   bool listCollapsed = false,
   bool loading = false,
   ValueChanged<double>? onResizeList,
+  double? listWidth,
+  double textScale = 1,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       child: MaterialApp(
         theme: AppTheme.light(),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: ConversationWorkspace(
@@ -237,6 +323,7 @@ Future<void> _pumpShell(
           onSelectConversation: (_) {},
           listCollapsed: listCollapsed,
           onResizeList: onResizeList,
+          listWidth: listWidth,
         ),
       ),
     ),

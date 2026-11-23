@@ -1105,10 +1105,13 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       child: Stack(
         fit: StackFit.expand,
         children: [
-          IconButton.filled(
+          IconButton(
             key: const Key('send-message'),
             onPressed: _sending ? null : _send,
             tooltip: strings.sendMessage,
+            // A plain arrow in the theme colour, like the other actions in the
+            // row; the filled disc is gone.
+            color: Theme.of(context).colorScheme.primary,
             icon: _sending
                 ? const SizedBox.square(
                     dimension: 20,
@@ -1116,19 +1119,31 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                   )
                 : const Icon(Icons.send_rounded),
           ),
-          GestureDetector(
-            key: const Key('send-message-gesture'),
-            behavior: HitTestBehavior.opaque,
-            excludeFromSemantics: true,
-            onTap: _sending ? null : _send,
-            onLongPress: _sending
-                ? null
-                : () => unawaited(
-                    _openSendOptions(
-                      canSendSilently: canSendSilently,
-                      canSchedule: profileCanSchedule,
-                    ),
-                  ),
+          MouseRegion(
+            // The overlay takes every pointer, so the button underneath never
+            // sees a hover; the cursor and the tooltip are given back here.
+            cursor: _sending
+                ? SystemMouseCursors.basic
+                : SystemMouseCursors.click,
+            child: Tooltip(
+              message: strings.sendMessage,
+              excludeFromSemantics: true,
+              triggerMode: TooltipTriggerMode.manual,
+              child: GestureDetector(
+                key: const Key('send-message-gesture'),
+                behavior: HitTestBehavior.opaque,
+                excludeFromSemantics: true,
+                onTap: _sending ? null : _send,
+                onLongPress: _sending
+                    ? null
+                    : () => unawaited(
+                        _openSendOptions(
+                          canSendSilently: canSendSilently,
+                          canSchedule: profileCanSchedule,
+                        ),
+                      ),
+              ),
+            ),
           ),
         ],
       ),

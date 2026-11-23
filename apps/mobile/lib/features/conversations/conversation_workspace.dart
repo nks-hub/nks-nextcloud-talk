@@ -617,7 +617,7 @@ final class _ExpandedShell extends StatelessWidget {
                     minHeight: context.paneHeaderHeight,
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 8, 10),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -670,45 +670,8 @@ final class _ExpandedShell extends StatelessWidget {
                                 ),
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            if (_hasUnifiedSearch(account))
-                              Expanded(
-                                child: TextButton.icon(
-                                  key: const Key('open-message-search'),
-                                  onPressed: () =>
-                                      openMessageSearch(context, account.id),
-                                  style: TextButton.styleFrom(
-                                    minimumSize: const Size(0, 48),
-                                    alignment: AlignmentDirectional.centerStart,
-                                    foregroundColor: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                    backgroundColor: Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainerHighest,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  icon: const Icon(Icons.search_rounded),
-                                  label: Text(
-                                    strings.searchMessagesTooltip,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              )
-                            else
-                              const Spacer(),
-                            const SizedBox(width: 4),
-                            IconButton.filled(
+                            // Plain icon buttons of one family.
+                            IconButton(
                               key: const Key('open-new-conversation'),
                               onPressed: () => _openNewConversation(
                                 context,
@@ -722,12 +685,44 @@ final class _ExpandedShell extends StatelessWidget {
                               ),
                             ),
                             IconButton(
+                              key: const Key('refresh-conversations'),
                               onPressed: syncing ? null : onRefresh,
                               tooltip: strings.refresh,
                               icon: const Icon(Icons.refresh_rounded),
                             ),
                           ],
                         ),
+                        if (_hasUnifiedSearch(account)) ...[
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: TextButton.icon(
+                              key: const Key('open-message-search'),
+                              onPressed: () =>
+                                  openMessageSearch(context, account.id),
+                              style: TextButton.styleFrom(
+                                minimumSize: const Size(0, 48),
+                                alignment: AlignmentDirectional.centerStart,
+                                foregroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                                backgroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                shape: const StadiumBorder(),
+                              ),
+                              icon: const Icon(Icons.search_rounded),
+                              label: Text(
+                                strings.searchMessagesTooltip,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

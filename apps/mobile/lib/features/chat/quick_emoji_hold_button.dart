@@ -6,7 +6,7 @@ import 'package:talk_protocol/talk_protocol.dart' show ChatEmojiSizeReference;
 
 import 'emoji_only_message.dart';
 
-/// The conversation's quick emoji on a tonal disc the size of the send button.
+/// The conversation's quick emoji as a plain glyph in the send button's slot.
 ///
 /// A tap sends it at the ordinary size. Press and hold grows a preview of the
 /// emoji over [growDuration]; releasing sends it at the size step reached
@@ -42,7 +42,7 @@ final class QuickEmojiHoldButton extends StatefulWidget {
 final class _QuickEmojiHoldButtonState extends State<QuickEmojiHoldButton>
     with SingleTickerProviderStateMixin {
   static const double _slot = 48;
-  static const double _glyphSize = 24;
+  static const double _glyphSize = 28;
   static const double _previewPadding = 8;
   static const int _maxStep = ChatEmojiSizeReference.maxStep;
 
@@ -150,8 +150,8 @@ final class _QuickEmojiHoldButtonState extends State<QuickEmojiHoldButton>
                 ),
                 duration: snap,
                 curve: Curves.easeOutCubic,
-                // Starts as the button's own disc and swells out of it; the
-                // fixed radius turns the circle into a rounded tile.
+                // Starts as a tile just larger than the glyph and swells from
+                // there; the fixed radius turns the circle into a rounded tile.
                 builder: (context, fontSize, _) => Material(
                   elevation: 3,
                   color: scheme.surfaceContainerHigh,
@@ -191,11 +191,11 @@ final class _QuickEmojiHoldButtonState extends State<QuickEmojiHoldButton>
           child: Tooltip(
             message: widget.tooltip,
             triggerMode: TooltipTriggerMode.manual,
-            // Same box and disc as the send button it stands in for, so the
-            // two swap without moving anything in the row.
+            // Same 48 dp slot as the send icon it stands in for, so the two
+            // swap without moving anything in the row.
             child: SizedBox.square(
               dimension: _slot,
-              child: IconButton.filledTonal(
+              child: IconButton(
                 key: const Key('send-quick-emoji'),
                 onPressed: widget.enabled
                     ? () => widget.onSend(widget.emoji, null)
@@ -207,7 +207,7 @@ final class _QuickEmojiHoldButtonState extends State<QuickEmojiHoldButton>
                     child: Text(
                       widget.emoji,
                       textAlign: TextAlign.center,
-                      // The disc does not grow with the text scale, so the
+                      // The slot does not grow with the text scale, so the
                       // glyph may only grow as far as still fits inside it.
                       textScaler: MediaQuery.textScalerOf(
                         context,

@@ -78,73 +78,92 @@ void main() {
     expect(cache.entryCount, 2);
   });
 
-  testWidgets('three localized filters fit a 300 dp pane or reflow', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(300, 640);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+  for (final width in [280.0, 300.0, 360.0]) {
+    for (final scale in [1.0, 2.0]) {
+      testWidgets('three localized filters are comfortable pills at '
+          '${width.toInt()} dp and ${(scale * 100).toInt()} % text', (
+        tester,
+      ) async {
+        tester.view.physicalSize = Size(width, 640);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final semantics = tester.ensureSemantics();
 
-    Future<void> pumpAt(double textScale, Locale locale) => tester.pumpWidget(
-      _app(
-        account: _account(withArchiveCapability: true),
-        conversations: [_conversation(token: 'room0001')],
-        locale: locale,
-        textScale: textScale,
-      ),
-    );
+        const filterKeys = <Key>[
+          Key('conversation-filter-unread'),
+          Key('conversation-filter-mentions'),
+          Key('conversation-filter-archived'),
+        ];
+        for (final locale in const [Locale('en'), Locale('cs')]) {
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pumpWidget(
+            _app(
+              account: _account(withArchiveCapability: true),
+              conversations: [_conversation(token: 'room0001')],
+              locale: locale,
+              textScale: scale,
+            ),
+          );
+          expect(tester.takeException(), isNull, reason: '$locale');
 
-    const filterKeys = <Key>[
-      Key('conversation-filter-unread'),
-      Key('conversation-filter-mentions'),
-      Key('conversation-filter-archived'),
-    ];
-
-    await pumpAt(1, const Locale('en'));
-
-    final filterBounds = tester.getRect(
-      find.byKey(const Key('conversation-filters')),
-    );
-    final regularBounds = [
-      for (final key in filterKeys) tester.getRect(find.byKey(key)),
-    ];
-    for (final bounds in regularBounds) {
-      expect(bounds.left, greaterThanOrEqualTo(filterBounds.left));
-      expect(bounds.right, lessThanOrEqualTo(filterBounds.right));
+          final bar = tester.getRect(
+            find.byKey(const Key('conversation-filters')),
+          );
+          // Same 12 dp inset as the search field above the list.
+          expect(
+            tester.getRect(find.byKey(filterKeys.first)).left - bar.left,
+            12,
+          );
+          final rects = [
+            for (final key in filterKeys) tester.getRect(find.byKey(key)),
+          ];
+          for (var i = 0; i < rects.length; i++) {
+            final chip = rects[i];
+            // Every pill is fully inside the bar's insets without scrolling.
+            expect(chip.left, greaterThanOrEqualTo(bar.left + 12));
+            expect(chip.right, lessThanOrEqualTo(bar.right - 12 + 0.5));
+            final label = tester.getRect(
+              find.descendant(
+                of: find.byKey(filterKeys[i]),
+                matching: find.byType(Text),
+              ),
+            );
+            expect(
+              label.left - chip.left,
+              greaterThanOrEqualTo(12),
+              reason: 'text keeps room from the left border, $locale',
+            );
+            expect(
+              chip.right - label.right,
+              greaterThanOrEqualTo(12),
+              reason: 'text keeps room from the right border, $locale',
+            );
+            if (i > 0) {
+              final previous = rects[i - 1];
+              if (previous.top == chip.top) {
+                expect(chip.left - previous.right, 8, reason: 'gap, $locale');
+              } else {
+                expect(chip.top - previous.bottom, greaterThanOrEqualTo(8));
+              }
+            }
+          }
+          // Wrapped or not, the chips never overlap each other.
+          for (var i = 0; i < rects.length; i++) {
+            for (var j = i + 1; j < rects.length; j++) {
+              expect(rects[i].overlaps(rects[j]), isFalse);
+            }
+          }
+          expect(
+            tester
+                .getSemantics(find.byKey(const Key('conversation-filters')))
+                .label,
+            matches(RegExp('ilter|iltry')),
+          );
+        }
+        semantics.dispose();
+      });
     }
-    expect(
-      regularBounds.map((bounds) => bounds.top).toSet(),
-      hasLength(1),
-      reason:
-          'The normal labels should stay in one compact row: $regularBounds',
-    );
-    expect(find.text('Unread'), findsOneWidget);
-    expect(find.text('Mentions'), findsOneWidget);
-    expect(find.text('Archived'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-
-    await pumpAt(2, const Locale('cs'));
-
-    final scaledFilterBounds = tester.getRect(
-      find.byKey(const Key('conversation-filters')),
-    );
-    final scaledBounds = [
-      for (final key in filterKeys) tester.getRect(find.byKey(key)),
-    ];
-    for (final bounds in scaledBounds) {
-      expect(bounds.left, greaterThanOrEqualTo(scaledFilterBounds.left));
-      expect(bounds.right, lessThanOrEqualTo(scaledFilterBounds.right));
-    }
-    expect(
-      scaledBounds.map((bounds) => bounds.top).toSet().length,
-      greaterThan(1),
-      reason: 'Large localized labels should reflow instead of clipping.',
-    );
-    expect(find.text('Nepřečtené'), findsOneWidget);
-    expect(find.text('Zmínky'), findsOneWidget);
-    expect(find.text('Archivované'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  }
 
   testWidgets('unread and mention filters combine without exposing archives', (
     tester,
