@@ -49,7 +49,13 @@ final _repaint = GlobalKey();
 final _pointerSeen = <String>[];
 final _opener = _RecordingOpen();
 var _failures = 0;
+var _errors = 0;
 final _shell = Platform.environment['IMGMENU_SHELL'] == '1';
+
+/// How long a right click holds the button. A person holds it past the 100 ms
+/// tap deadline, where the selection region reacts to the press on its own.
+final _rightHoldMs =
+    int.tryParse(Platform.environment['IMGMENU_HOLD_MS'] ?? '') ?? 70;
 
 void _note(String line) {
   final text = '${DateTime.now().toIso8601String()} $line';
@@ -70,6 +76,12 @@ Future<void> main() async {
   )..createSync(recursive: true);
   _journalFile = File('${_out.path}\\journal.txt')..writeAsStringSync('');
   _note('start pid=$pid');
+  // A release build only logs an exception thrown in a gesture callback; the
+  // user sees nothing happen, so the journal has to say what was thrown.
+  FlutterError.onError = (details) {
+    _errors++;
+    _note('FLUTTER ERROR ${details.exceptionAsString()}\n${details.stack}');
+  };
   unawaited(
     Future<void>.delayed(const Duration(seconds: 170), () {
       _note('WATCHDOG timeout');
@@ -85,7 +97,7 @@ Future<void> main() async {
     serverUrl: 'https://cloud.example.invalid',
     loginName: 'fixture-user',
     serverProductName: 'Nextcloud',
-    talkFeatures: const {},
+    talkFeatures: _serverFeatures.toSet(),
     createdAt: DateTime.utc(2026, 1, 1),
   );
   vault.values[account.id] = 'fixture-password';
@@ -158,6 +170,18 @@ Future<void> main() async {
   );
 
   final overrides = [
+    // The actions a moderator has on a current server: reply (and with it the
+    // swipe to reply), reactions, edit, delete, pins, reminders, translation.
+    chatMessageActionsProfileProvider.overrideWith(
+      (ref, key) async => RichChatCapabilityProfile.fromTalkFeatures(
+        talkFeatures: _serverFeatures,
+        talkLocalFeatures: const <String>[],
+        federated: false,
+        moderator: true,
+        participantPermissions: 510,
+        translationAvailable: true,
+      ),
+    ),
     appDatabaseProvider.overrideWithValue(database),
     credentialVaultProvider.overrideWithValue(vault),
     chatBackgroundProvider.overrideWith(
@@ -224,9 +248,9 @@ Future<void> _run() async {
     _failures++;
     _note('FAIL harness: $error\n$stack');
   }
-  _note('done failures=$_failures');
+  _note('done failures=$_failures errors=$_errors');
   await Future<void>.delayed(const Duration(milliseconds: 300));
-  exit(_failures == 0 ? 0 : 1);
+  exit(_failures == 0 && _errors == 0 ? 0 : 1);
 }
 
 Future<void> _scenario() async {
@@ -302,7 +326,10 @@ Future<void> _scenario() async {
   );
   await _frames(const Duration(seconds: 2));
   await _viewerCase('viewer-single', hwnd);
-  await _realClick(hwnd, await _centerOf(const Key('authenticated-image-close')));
+  await _realClick(
+    hwnd,
+    await _centerOf(const Key('authenticated-image-close')),
+  );
   await _frames(const Duration(seconds: 1));
 
   // The opened album at its second picture, then at the next one.
@@ -359,7 +386,8 @@ Future<void> _areaCase(
 }
 
 Future<void> _viewerCase(String name, int hwnd, {String? pickFile}) async {
-  final target = find(const Key('authenticated-image-fullscreen')) ??
+  final target =
+      find(const Key('authenticated-image-fullscreen')) ??
       find(const Key('chat-gallery-pages'));
   final box = target!.renderObject! as RenderBox;
   final point = box.localToGlobal(box.size.center(Offset.zero));
@@ -376,8 +404,7 @@ Future<void> _viewerCase(String name, int hwnd, {String? pickFile}) async {
       shown &&
       items.contains('message-action-save-image') &&
       items.contains('message-action-open-file');
-  var detail =
-      'menu=$shown items=$items pointer=${_pointerSeen.join('; ')}';
+  var detail = 'menu=$shown items=$items pointer=${_pointerSeen.join('; ')}';
   if (shown && pickFile != null) {
     _opener.uris.clear();
     await _realClick(
@@ -464,8 +491,8 @@ Future<void> _reveal(Key key) async {
       if (widget is Scrollable &&
           (widget.axisDirection == AxisDirection.up ||
               widget.axisDirection == AxisDirection.down)) {
-        final position = ((element as StatefulElement).state as ScrollableState)
-            .position;
+        final position =
+            ((element as StatefulElement).state as ScrollableState).position;
         if (position.maxScrollExtent > 0) {
           timeline = position;
           return false;
@@ -480,7 +507,9 @@ Future<void> _reveal(Key key) async {
       find(key) == null && offset <= position.maxScrollExtent + 300;
       offset += 300
     ) {
-      position.jumpTo(offset.clamp(position.minScrollExtent, position.maxScrollExtent));
+      position.jumpTo(
+        offset.clamp(position.minScrollExtent, position.maxScrollExtent),
+      );
       await _frames(const Duration(milliseconds: 200));
     }
   }
@@ -490,7 +519,11 @@ Future<void> _reveal(Key key) async {
 Future<void> _ensureVisible(Key key) async {
   final element = find(key);
   if (element == null) throw StateError('no widget $key');
-  await Scrollable.ensureVisible(element, alignment: 0.5, duration: Duration.zero);
+  await Scrollable.ensureVisible(
+    element,
+    alignment: 0.5,
+    duration: Duration.zero,
+  );
   await _frames(const Duration(milliseconds: 500));
 }
 
@@ -530,9 +563,7 @@ Future<void> _shot(String name) async {
       _repaint.currentContext!.findRenderObject()! as RenderRepaintBoundary;
   final image = await boundary.toImage();
   final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-  File('${_out.path}\\$name.png').writeAsBytesSync(
-    bytes!.buffer.asUint8List(),
-  );
+  File('${_out.path}\\$name.png').writeAsBytesSync(bytes!.buffer.asUint8List());
   image.dispose();
 }
 
@@ -585,8 +616,8 @@ Future<void> _moveTo(int hwnd, Offset logical, {int settle = 150}) async {
 }
 
 Future<void> _realClick(int hwnd, Offset logical, {bool right = false}) async {
-  final ratio = WidgetsBinding.instance.platformDispatcher.views.first
-      .devicePixelRatio;
+  final ratio =
+      WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
   final origin = calloc<_Point>();
   _clientToScreen(hwnd, origin);
   final x = origin.ref.x + (logical.dx * ratio).round();
@@ -609,7 +640,7 @@ Future<void> _realClick(int hwnd, Offset logical, {bool right = false}) async {
   );
   calloc.free(cursor);
   _send(0, 0, right ? 0x0008 : 0x0002);
-  await Future<void>.delayed(const Duration(milliseconds: 70));
+  await Future<void>.delayed(Duration(milliseconds: right ? _rightHoldMs : 70));
   _send(0, 0, right ? 0x0010 : 0x0004);
   await Future<void>.delayed(const Duration(milliseconds: 250));
 }
@@ -655,11 +686,14 @@ final int Function(int, Pointer<_Point>) _clientToScreen = _user32
       int Function(int, Pointer<_Point>)
     >('ClientToScreen');
 final int Function(Pointer<_Point>) _getCursorPos = _user32
-    .lookupFunction<Int32 Function(Pointer<_Point>), int Function(Pointer<_Point>)>(
-      'GetCursorPos',
-    );
+    .lookupFunction<
+      Int32 Function(Pointer<_Point>),
+      int Function(Pointer<_Point>)
+    >('GetCursorPos');
 final int Function(int) _getSystemMetrics = _user32
-    .lookupFunction<Int32 Function(Int32), int Function(int)>('GetSystemMetrics');
+    .lookupFunction<Int32 Function(Int32), int Function(int)>(
+      'GetSystemMetrics',
+    );
 final int Function(int, int, Pointer<Utf16>, Pointer<Utf16>) _findWindowEx =
     _user32.lookupFunction<
       IntPtr Function(IntPtr, IntPtr, Pointer<Utf16>, Pointer<Utf16>),
@@ -896,3 +930,113 @@ final class _RecordingOpen implements ChatAttachmentOpenAction {
     return ChatAttachmentOpenResult.opened;
   }
 }
+
+/// `spreed.features` of a Nextcloud 34 server with Talk 24.0.8.
+const _serverFeatures = <String>[
+  'audio',
+  'video',
+  'chat-v2',
+  'conversation-v4',
+  'guest-signaling',
+  'empty-group-room',
+  'guest-display-names',
+  'multi-room-users',
+  'favorites',
+  'last-room-activity',
+  'no-ping',
+  'system-messages',
+  'delete-messages',
+  'mention-flag',
+  'in-call-flags',
+  'conversation-call-flags',
+  'notification-levels',
+  'invite-groups-and-mails',
+  'locked-one-to-one-rooms',
+  'read-only-rooms',
+  'listable-rooms',
+  'chat-read-marker',
+  'chat-unread',
+  'webinary-lobby',
+  'start-call-flag',
+  'chat-replies',
+  'circles-support',
+  'force-mute',
+  'sip-support',
+  'sip-support-nopin',
+  'chat-read-status',
+  'phonebook-search',
+  'raise-hand',
+  'room-description',
+  'rich-object-sharing',
+  'temp-user-avatar-api',
+  'geo-location-sharing',
+  'voice-message-sharing',
+  'signaling-v3',
+  'publishing-permissions',
+  'clear-history',
+  'direct-mention-flag',
+  'notification-calls',
+  'conversation-permissions',
+  'rich-object-list-media',
+  'rich-object-delete',
+  'unified-search',
+  'chat-permission',
+  'react-permission',
+  'silent-send',
+  'silent-call',
+  'send-call-notification',
+  'talk-polls',
+  'breakout-rooms-v1',
+  'recording-v1',
+  'avatar',
+  'chat-get-context',
+  'single-conversation-status',
+  'chat-keep-notifications',
+  'typing-privacy',
+  'remind-me-later',
+  'bots-v1',
+  'markdown-messages',
+  'media-caption',
+  'session-state',
+  'note-to-self',
+  'recording-consent',
+  'sip-support-dialout',
+  'delete-messages-unlimited',
+  'edit-messages',
+  'silent-send-state',
+  'chat-read-last',
+  'federation-v1',
+  'federation-v2',
+  'ban-v1',
+  'chat-reference-id',
+  'mention-permissions',
+  'edit-messages-note-to-self',
+  'archived-conversations-v2',
+  'talk-polls-drafts',
+  'download-call-participants',
+  'email-csv-import',
+  'conversation-creation-password',
+  'call-notification-state-api',
+  'schedule-meeting',
+  'edit-draft-poll',
+  'conversation-creation-all',
+  'important-conversations',
+  'unbind-conversation',
+  'sip-direct-dialin',
+  'dashboard-event-rooms',
+  'mutual-calendar-events',
+  'upcoming-reminders',
+  'sensitive-conversations',
+  'threads',
+  'pinned-messages',
+  'federated-shared-items',
+  'scheduled-messages',
+  'conversation-presets',
+  'private-reply',
+  'conversation-tags',
+  'bot-features-api',
+  'message-expiration',
+  'reactions',
+  'call-end-to-end-encryption',
+  'recording-chunked-upload',
+];
