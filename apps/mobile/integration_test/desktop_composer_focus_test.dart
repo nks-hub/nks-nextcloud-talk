@@ -10,6 +10,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:nextcloudtalk/app.dart';
 
 import 'desktop_app_support.dart';
+import 'gui_test_guard.dart';
 
 /// Typing right after the window comes back, on a real Windows window.
 ///
@@ -26,6 +27,7 @@ import 'desktop_app_support.dart';
 /// `flutter test integration_test/desktop_composer_focus_test.dart -d windows`
 /// with `NKS_CALL_ROOM` naming a conversation this account may post to.
 void main() {
+  requireGuiTestHost();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   final roomToken = Platform.environment['NKS_CALL_ROOM'];

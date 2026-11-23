@@ -101,7 +101,7 @@ Some of the skipped tests are live checks against a real Nextcloud. They run whe
 
 ### Desktop keyboard test
 
-`apps/mobile/integration_test/desktop_composer_keys_test.dart` drives the real Windows app with keys sent through `SendInput`, because `tester.sendKeyEvent` bypasses the part of the engine where keyboard bugs live. Run it with `NKS_TALK_INTEGRATION_TEST=1`. It refuses to send a key unless the test window is in the foreground, since `SendInput` types into whatever window is in front.
+`apps/mobile/integration_test/desktop_composer_keys_test.dart` drives the real Windows app with keys sent through `SendInput`, because `tester.sendKeyEvent` bypasses the part of the engine where keyboard bugs live. Run it with `NKS_TALK_INTEGRATION_TEST=1` and `OWNTALK_ALLOW_GUI_TESTS=1`. Every integration test that opens a window calls `requireGuiTestHost` first: it exits with code 2 unless the second variable is set, and always on the owner's own PC. It refuses to send a key unless the test window is in the foreground, since `SendInput` types into whatever window is in front.
 
 ### macOS native suite
 

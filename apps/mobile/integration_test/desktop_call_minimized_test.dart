@@ -15,6 +15,7 @@ import 'package:nextcloudtalk/features/calls/call_join_controller.dart';
 
 import 'desktop_app_support.dart';
 import 'desktop_call_fixture.dart';
+import 'gui_test_guard.dart';
 
 /// A real call, started from the real desktop client against the real server,
 /// held while the operating system minimizes the window.
@@ -37,6 +38,7 @@ import 'desktop_call_fixture.dart';
 /// dedicated account with an in-memory database and temporary file storage.
 /// Missing capture hardware fails the preflight; it is not a completed call test.
 void main() {
+  requireGuiTestHost();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   final roomToken = Platform.environment['NKS_CALL_ROOM'];

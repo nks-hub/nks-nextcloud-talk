@@ -12,6 +12,7 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_signaling.dart';
 
 import 'desktop_app_support.dart';
+import 'gui_test_guard.dart';
 
 /// A forgotten window stops telling the room somebody is there.
 ///
@@ -27,6 +28,7 @@ import 'desktop_app_support.dart';
 /// `flutter test integration_test/desktop_idle_presence_test.dart -d windows`
 /// with `NKS_CALL_ROOM` naming the conversation to open.
 void main() {
+  requireGuiTestHost();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   final roomToken = Platform.environment['NKS_CALL_ROOM'];

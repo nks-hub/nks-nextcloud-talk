@@ -7,8 +7,10 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:integration_test/integration_test.dart';
 import 'package:nextcloudtalk/features/calls/call_media_engine.dart';
 import 'package:nextcloudtalk/features/calls/call_media_engine_webrtc.dart';
+import 'gui_test_guard.dart';
 
 void main() {
+  requireGuiTestHost();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('a host without audio input reports microphone unavailable', (

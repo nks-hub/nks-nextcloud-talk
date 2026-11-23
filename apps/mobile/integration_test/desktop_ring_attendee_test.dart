@@ -10,6 +10,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:nextcloudtalk/app.dart';
 
 import 'desktop_app_support.dart';
+import 'gui_test_guard.dart';
 
 /// Rings one absent participant from a real call, so a second device can be
 /// watched for what it does about it.
@@ -23,6 +24,7 @@ import 'desktop_app_support.dart';
 ///
 /// `NKS_CALL_ROOM` names the room, `NKS_RING_ATTENDEE` the participant to ring.
 void main() {
+  requireGuiTestHost();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   final roomToken = Platform.environment['NKS_CALL_ROOM'];

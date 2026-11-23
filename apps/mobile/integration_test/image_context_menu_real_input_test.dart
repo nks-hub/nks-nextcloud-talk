@@ -41,6 +41,7 @@ import 'package:nextcloudtalk/features/chat/media/chat_image_exporter.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/l10n/generated/app_localizations.dart';
 import 'package:talk_protocol/talk_protocol.dart';
+import 'gui_test_guard.dart';
 
 late final Directory _out;
 late final File _journalFile;
@@ -62,6 +63,7 @@ void _verdict(String name, bool pass, String detail) {
 }
 
 Future<void> main() async {
+  requireGuiTestHost();
   WidgetsFlutterBinding.ensureInitialized();
   _out = Directory(
     '${File(Platform.resolvedExecutable).parent.path}\\image-menu-run',
