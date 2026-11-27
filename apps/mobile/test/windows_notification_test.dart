@@ -245,7 +245,7 @@ void main() {
                 MethodCall('notificationOpened', <String, Object>{
                   'accountId': 'account-b',
                   'roomToken': 'shared-host-room',
-                  if (id != null) 'messageId': id,
+                  'messageId': ?id,
                 }),
               ),
               (_) {},
