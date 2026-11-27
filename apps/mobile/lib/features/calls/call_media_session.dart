@@ -419,6 +419,11 @@ final class CallMediaSession {
     if (_mcu) {
       await _ensurePublisher(localPeerId.value, iceServers);
     }
+    final retryOffers = <_MediaPeer>[
+      if (!_mcu)
+        for (final peer in _peers.values)
+          if (peer.deferredMeshOffer?.sent == false) peer,
+    ];
     final missingPeers = expected
         .where((peerId) => !_peers.containsKey(peerId))
         .toList(growable: false);
@@ -470,7 +475,7 @@ final class CallMediaSession {
     if (screenAnswers.isNotEmpty) {
       await _runPeerTasks(screenAnswers.entries, _retryMcuScreenAnswer);
     }
-    if (!_mcu) await _retryMeshCameraOffers();
+    await _retryMeshOffers(retryOffers);
     _publish();
   }
 
@@ -776,7 +781,7 @@ final class _MediaPeer {
   CallRemoteVideo? video;
   bool localOfferPending = false;
   ({CallSessionDescription description, bool videoOn, bool sent})?
-  deferredCameraOffer;
+  deferredMeshOffer;
   _PendingMcuScreenAnswer? pendingMcuScreenAnswer;
   bool remoteDescriptionSet = false;
   CallMediaConnectionState state = CallMediaConnectionState.connecting;

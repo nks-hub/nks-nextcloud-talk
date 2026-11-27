@@ -353,6 +353,7 @@ final class _FakeConnection implements CallPeerConnection {
       onStatusMessage?.call(type, payload);
 
   int createdOffers = 0;
+  String? nextOfferSdp;
   int createdAnswers = 0;
   bool closed = false;
   StateError? closeFailure;
@@ -384,7 +385,7 @@ final class _FakeConnection implements CallPeerConnection {
     if (iceRestart) {
       iceRestarts++;
     }
-    return (type: 'offer', sdp: 'sdp-offer-$index');
+    return (type: 'offer', sdp: nextOfferSdp ?? 'sdp-offer-$index');
   }
 
   @override

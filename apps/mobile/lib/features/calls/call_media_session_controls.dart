@@ -43,7 +43,7 @@ extension _CallMediaSessionControls on CallMediaSession {
           // Glare guard: a peer whose offer of ours is still unanswered gets
           // the change with the next negotiation instead of a second offer.
           if (!peer.localOfferPending) {
-            await _offer(peer, retryCameraOffer: !_mcu);
+            await _offer(peer);
           }
         },
       );

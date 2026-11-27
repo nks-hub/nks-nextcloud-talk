@@ -2,6 +2,81 @@ part of 'call_media_session_test.dart';
 
 extension _MediaMembershipTests on _MediaSessionTests {
   void _registerMembership() {
+    for (final leaves in [false, true]) {
+      test(
+        leaves
+            ? 'leaving drops an unsent mesh restart'
+            : 'resume sends only the latest mesh restart to its peer',
+        () async {
+          const other = 'zephyr-peer';
+          final participants = [_participant(_remote), _participant(other)];
+          final active = _update(
+            localPeerId: _local,
+            participants: participants,
+          );
+          var online = true;
+          final media = session(
+            active,
+            sendMessage: (message, {required expectedRoomEpoch}) async {
+              if (!online) return false;
+              sent.add(message);
+              return true;
+            },
+          );
+          addTearDown(media.dispose);
+          await media.start();
+          final first = sent.firstWhere(
+            (message) =>
+                message.type == 'offer' && message.recipient?.value == _remote,
+          );
+          final connection = engine.connections.singleWhere(
+            (item) =>
+                item.localDescriptions.single.sdp == first.payload!.wire['sdp'],
+          );
+          updates.add(
+            _update(
+              localPeerId: _local,
+              participants: participants,
+              phase: SignalingAccountPhase.reconnectWaiting,
+            ),
+          );
+          await pumpEventQueue();
+          online = false;
+          connection.nextOfferSdp = 'first-restart';
+          connection.emitConnectionState(CallMediaConnectionState.failed);
+          await pumpEventQueue();
+          connection.nextOfferSdp = 'latest-restart';
+          connection.emitConnectionState(CallMediaConnectionState.connecting);
+          connection.emitConnectionState(CallMediaConnectionState.failed);
+          await pumpEventQueue();
+          expect(connection.iceRestarts, 2);
+          sent.clear();
+          online = true;
+          final after = leaves
+              ? _update(
+                  localPeerId: _local,
+                  participants: [_participant(other)],
+                )
+              : active;
+          updates.add(after);
+          updates.add(after);
+          await pumpEventQueue();
+          final offers = sent
+              .where((message) => message.type == 'offer')
+              .toList();
+          if (leaves) {
+            expect(offers, isEmpty);
+            expect(connection.closed, isTrue);
+          } else {
+            expect(offers.single.recipient?.value, _remote);
+            expect(offers.single.sid, first.sid);
+            expect(offers.single.payload?.wire['sdp'], 'latest-restart');
+            expect(connection.createdOffers, 3);
+          }
+        },
+      );
+    }
+
     test(
       'an internal pull drops a departed screen-only sender and its queued offer',
       () async {

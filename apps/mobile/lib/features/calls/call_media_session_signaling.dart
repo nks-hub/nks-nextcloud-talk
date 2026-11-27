@@ -207,11 +207,7 @@ extension _CallMediaSessionSignaling on CallMediaSession {
   /// Creates and sends an offer on an existing connection — the first one,
   /// a renegotiation after the video line changed, or an ICE restart after
   /// the transport failed.
-  Future<bool> _offer(
-    _MediaPeer peer, {
-    bool iceRestart = false,
-    bool retryCameraOffer = false,
-  }) async {
+  Future<bool> _offer(_MediaPeer peer, {bool iceRestart = false}) async {
     final connection = peer.connection;
     if (_disposed || connection == null) {
       return false;
@@ -221,7 +217,7 @@ extension _CallMediaSessionSignaling on CallMediaSession {
       if (_disposed) return false;
       await connection.setLocalDescription(offer);
       peer.localOfferPending = true;
-      peer.deferredCameraOffer = null;
+      peer.deferredMeshOffer = null;
       debugPrint(
         '[call] offer → ${peer.peerId} sid=${peer.sid} '
         'video=${_video != null} iceRestart=$iceRestart '
@@ -231,10 +227,10 @@ extension _CallMediaSessionSignaling on CallMediaSession {
       if (!sent) {
         if (peer.publisher) {
           await _closeFailedNegotiation(peer);
-        } else if (retryCameraOffer &&
-            peer.remoteDescriptionSet &&
-            !_disposed) {
-          peer.deferredCameraOffer = (
+        } else if (!_mcu &&
+            !_disposed &&
+            identical(_peers[peer.peerId], peer)) {
+          peer.deferredMeshOffer = (
             description: offer,
             videoOn: _video != null,
             sent: false,
@@ -257,24 +253,28 @@ extension _CallMediaSessionSignaling on CallMediaSession {
         via: peer,
       );
 
-  Future<void> _retryMeshCameraOffers() => _runPeerTasks(
-    _peers.values.where((peer) => peer.deferredCameraOffer?.sent == false),
-    (peer) async {
-      final pending = peer.deferredCameraOffer!;
-      // WebRTC is already waiting for the answer to this exact SDP.
-      try {
-        if (await _sendOffer(peer, pending.description)) {
-          peer.deferredCameraOffer = (
-            description: pending.description,
-            videoOn: pending.videoOn,
-            sent: true,
-          );
+  Future<void> _retryMeshOffers(List<_MediaPeer> peers) =>
+      _runPeerTasks(peers, (peer) async {
+        final pending = peer.deferredMeshOffer;
+        if (_disposed ||
+            !identical(_peers[peer.peerId], peer) ||
+            pending == null ||
+            pending.sent) {
+          return;
         }
-      } on CallMediaException {
-        await _closeFailedNegotiation(peer);
-      }
-    },
-  );
+        // WebRTC is already waiting for the answer to this exact SDP.
+        try {
+          if (await _sendOffer(peer, pending.description)) {
+            peer.deferredMeshOffer = (
+              description: pending.description,
+              videoOn: pending.videoOn,
+              sent: true,
+            );
+          }
+        } on CallMediaException {
+          await _closeFailedNegotiation(peer);
+        }
+      });
 
   Future<void> _closeFailedNegotiation(_MediaPeer peer) async {
     if (_disposed) return;
@@ -475,7 +475,10 @@ extension _CallMediaSessionSignaling on CallMediaSession {
     SignalingOpaquePayload? payload,
   ) async {
     final connection = peer?.connection;
-    if (peer == null || connection == null || !peer.localOfferPending) {
+    if (peer == null ||
+        connection == null ||
+        !peer.localOfferPending ||
+        peer.deferredMeshOffer?.sent == false) {
       return;
     }
     final senderId = peer.peerId;
@@ -489,13 +492,13 @@ extension _CallMediaSessionSignaling on CallMediaSession {
     try {
       await connection.setRemoteDescription(sdp);
       peer.localOfferPending = false;
-      final deferred = peer.deferredCameraOffer;
-      peer.deferredCameraOffer = null;
+      final deferred = peer.deferredMeshOffer;
+      peer.deferredMeshOffer = null;
       peer.remoteDescriptionSet = true;
       if (_isCurrentMcuScreenPublisher(peer)) _cancelScreenAnswerTimer();
       await _drainRemoteCandidates(peer);
       if (!_mcu && deferred != null && deferred.videoOn != (_video != null)) {
-        await _offer(peer, retryCameraOffer: true);
+        await _offer(peer);
       }
     } on CallMediaException {
       if (!_disposed && _mcu && peer.ownScreen) {
