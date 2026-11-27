@@ -1207,7 +1207,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           ChatTypingBanner(names: typingNames),
           _ChatComposer(
             replyTo: _replyTo,
-            onCancelReply: () => setState(() => _replyTo = null),
+            onCancelReply: _cancelComposerReply,
             onDismissPicker: _emojiPickerOpen ? _closeEmojiPicker : null,
             controller: _composer,
             focusNode: _composerFocusNode,
