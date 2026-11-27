@@ -68,8 +68,8 @@ mixin _NextcloudApiOwnTalkExtensions on _HttpNextcloudApiBase {
     }
     final payload = await _sendJson(
       request,
-      allowedStatusCodes: const {200},
-      maximumBytes: 16384,
+      allowedStatusCodes: const {200, 201},
+      maximumBytes: chatMaximumResponseBytes,
     );
     final envelope = payload.json;
     if (envelope case {

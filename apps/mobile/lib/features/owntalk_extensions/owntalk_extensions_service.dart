@@ -34,12 +34,17 @@ enum OwnTalkExtensionsError {
 }
 
 final class OwnTalkExtensionsException implements Exception {
-  const OwnTalkExtensionsException(this.code, {this.retryAfter});
+  const OwnTalkExtensionsException(
+    this.code, {
+    this.retryAfter,
+    this.statusCode,
+  });
 
   final OwnTalkExtensionsError code;
 
   /// How long the server asked to wait, for [OwnTalkExtensionsError.rateLimited].
   final Duration? retryAfter;
+  final int? statusCode;
 
   @override
   String toString() => 'OwnTalkExtensionsException(${code.name})';
@@ -258,38 +263,84 @@ final class OwnTalkExtensionsService {
     String method = 'GET',
     Map<String, Object?>? values,
   }) async {
-    final session = await _availableSession(accountId);
-    if (session.snapshot.ownTalkExtensions?.supportsFeature(tool.feature) !=
-        true) {
-      throw const OwnTalkExtensionsException(
-        OwnTalkExtensionsError.unavailable,
-      );
-    }
     final room = ConversationToken.parse(roomToken, path: 'roomToken');
     if (messageId < 1 || !const {'GET', 'PUT', 'DELETE'}.contains(method)) {
       throw const OwnTalkExtensionsException(
         OwnTalkExtensionsError.invalidResponse,
       );
     }
-    final server = session.server;
-    final endpoint = server.uri.replace(
-      path:
-          '${server.basePath}/ocs/v2.php/apps/owntalk_extensions/api/v1/room/${room.value}/${tool.path}/$messageId',
-      queryParameters: const {'format': 'json'},
+    final response = await featureRequest(
+      accountId: accountId,
+      feature: tool.feature,
+      path: ['room', room.value, tool.path, '$messageId'],
+      method: method,
+      values: values,
     );
-    final response = await _call(
+    if (tool == RoomMessageTool.followup &&
+        (!response.containsKey('dueAt') ||
+            (response['dueAt'] != null && response['dueAt'] is! int))) {
+      throw const OwnTalkExtensionsException(
+        OwnTalkExtensionsError.invalidResponse,
+      );
+    }
+    return response;
+  }
+
+  Future<bool> supports(String accountId, String feature) async {
+    final session = await _session(accountId);
+    return session.snapshot.ownTalkExtensions?.supportsFeature(feature) == true;
+  }
+
+  Future<Map<String, dynamic>> featureRequest({
+    required String accountId,
+    required String feature,
+    required List<String> path,
+    String method = 'GET',
+    Map<String, String>? query,
+    Map<String, Object?>? values,
+  }) async {
+    final session = await _availableSession(accountId);
+    if (session.snapshot.ownTalkExtensions?.supportsFeature(feature) != true) {
+      throw const OwnTalkExtensionsException(
+        OwnTalkExtensionsError.unavailable,
+      );
+    }
+    if (path.isEmpty ||
+        path.any(
+          (part) =>
+              part.isEmpty ||
+              part == '.' ||
+              part == '..' ||
+              part.contains('/') ||
+              part.contains(r'\'),
+        ) ||
+        !const {'GET', 'PUT', 'POST', 'DELETE'}.contains(method)) {
+      throw const OwnTalkExtensionsException(
+        OwnTalkExtensionsError.invalidResponse,
+      );
+    }
+    final uri = session.server.uri.replace(
+      pathSegments: [
+        ...session.server.uri.pathSegments.where((s) => s.isNotEmpty),
+        'ocs',
+        'v2.php',
+        'apps',
+        'owntalk_extensions',
+        'api',
+        'v1',
+        ...path,
+      ],
+      queryParameters: {...?query, 'format': 'json'},
+    );
+    return _call(
       () => _api.callOwnTalkRoomTool(
-        uri: endpoint,
+        uri: uri,
         method: method,
         loginName: session.loginName,
         appPassword: session.appPassword,
         values: values,
       ),
     );
-    if (tool == RoomMessageTool.followup && (!response.containsKey('dueAt') || (response['dueAt'] != null && response['dueAt'] is! int))) {
-      throw const OwnTalkExtensionsException(OwnTalkExtensionsError.invalidResponse);
-    }
-    return response;
   }
 
   Future<_Session> _availableSession(String accountId) async {
@@ -342,16 +393,20 @@ final class OwnTalkExtensionsService {
     try {
       return await action();
     } on NextcloudApiException catch (error) {
-      throw OwnTalkExtensionsException(switch (error.code) {
-        NextcloudApiError.unexpectedStatus when error.statusCode == 401 =>
-          OwnTalkExtensionsError.reauthenticationRequired,
-        NextcloudApiError.unexpectedStatus when error.statusCode == 429 =>
-          OwnTalkExtensionsError.rateLimited,
-        NextcloudApiError.network ||
-        NextcloudApiError.timeout ||
-        NextcloudApiError.cancelled => OwnTalkExtensionsError.network,
-        _ => OwnTalkExtensionsError.invalidResponse,
-      }, retryAfter: error.retryAfter);
+      throw OwnTalkExtensionsException(
+        switch (error.code) {
+          NextcloudApiError.unexpectedStatus when error.statusCode == 401 =>
+            OwnTalkExtensionsError.reauthenticationRequired,
+          NextcloudApiError.unexpectedStatus when error.statusCode == 429 =>
+            OwnTalkExtensionsError.rateLimited,
+          NextcloudApiError.network ||
+          NextcloudApiError.timeout ||
+          NextcloudApiError.cancelled => OwnTalkExtensionsError.network,
+          _ => OwnTalkExtensionsError.invalidResponse,
+        },
+        retryAfter: error.retryAfter,
+        statusCode: error.statusCode,
+      );
     } on TalkProtocolException {
       throw const OwnTalkExtensionsException(
         OwnTalkExtensionsError.invalidResponse,
