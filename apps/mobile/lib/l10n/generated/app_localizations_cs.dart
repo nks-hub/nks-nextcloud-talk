@@ -373,6 +373,18 @@ class AppLocalizationsCs extends AppLocalizations {
   String get emojiNoFavorites => 'Žádné oblíbené emoji';
 
   @override
+  String get emojiComposerCategories => 'Kategorie emoji';
+
+  @override
+  String get emojiComposerDone => 'Hotovo';
+
+  @override
+  String get emojiComposerFavoriteError => 'Oblíbené se nepodařilo uložit.';
+
+  @override
+  String get emojiComposerSearchFavorites => 'Hledat v oblíbených';
+
+  @override
   String get emojiCategoryFavorites => 'Oblíbené';
 
   @override

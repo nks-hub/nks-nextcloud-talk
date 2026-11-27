@@ -369,6 +369,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emojiNoFavorites => 'No favourite emoji';
 
   @override
+  String get emojiComposerCategories => 'Emoji categories';
+
+  @override
+  String get emojiComposerDone => 'Done';
+
+  @override
+  String get emojiComposerFavoriteError => 'Could not save favourites.';
+
+  @override
+  String get emojiComposerSearchFavorites => 'Search favourites';
+
+  @override
   String get emojiCategoryFavorites => 'Favourites';
 
   @override

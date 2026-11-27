@@ -273,6 +273,7 @@ final class _ChatComposer extends ConsumerWidget {
     required this.buildMediaComposer,
     required this.replyTo,
     required this.onCancelReply,
+    required this.onDismissPicker,
     required this.mentionSource,
     required this.onSubmit,
     required this.onPasteImage,
@@ -319,6 +320,7 @@ final class _ChatComposer extends ConsumerWidget {
   bool get readOnly => postingBlock != null;
   final CachedChatMessage? replyTo;
   final VoidCallback onCancelReply;
+  final VoidCallback? onDismissPicker;
   final MentionSuggestionSource? mentionSource;
 
   /// Whether a picked or pasted file is waiting to be sent with this message.
@@ -432,11 +434,12 @@ final class _ChatComposer extends ConsumerWidget {
     // Before Shift is read for Enter and before the shortcuts above this
     // field match Ctrl+V: both go wrong on a modifier that is stuck down.
     staleModifierRepair.repair();
-    // Escape backs out of the reply, on every platform with a keyboard: the
-    // banner's own close button is a mouse target, and nothing else here
-    // wants the key. With no reply open it is left alone, so it can still
-    // reach whatever does want it.
     if (key == LogicalKeyboardKey.escape) {
+      final dismissPicker = onDismissPicker;
+      if (dismissPicker != null) {
+        dismissPicker();
+        return KeyEventResult.handled;
+      }
       if (replyTo == null) {
         return KeyEventResult.ignored;
       }

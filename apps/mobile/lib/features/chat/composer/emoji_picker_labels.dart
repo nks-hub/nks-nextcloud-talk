@@ -15,6 +15,10 @@ EmojiPickerLabels emojiPickerLabelsFor(AppLocalizations strings) {
     noResults: strings.emojiNoResults,
     noRecents: strings.emojiNoRecents,
     noFavorites: strings.emojiNoFavorites,
+    composerCategories: strings.emojiComposerCategories,
+    composerDone: strings.emojiComposerDone,
+    composerFavoriteError: strings.emojiComposerFavoriteError,
+    composerSearchFavorites: strings.emojiComposerSearchFavorites,
     categoryLabels: <EmojiCategory, String>{
       EmojiCategory.favorites: strings.emojiCategoryFavorites,
       EmojiCategory.recent: strings.emojiCategoryRecent,

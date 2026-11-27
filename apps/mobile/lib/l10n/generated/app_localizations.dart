@@ -740,6 +740,30 @@ abstract class AppLocalizations {
   /// **'No favourite emoji'**
   String get emojiNoFavorites;
 
+  /// No description provided for @emojiComposerCategories.
+  ///
+  /// In en, this message translates to:
+  /// **'Emoji categories'**
+  String get emojiComposerCategories;
+
+  /// No description provided for @emojiComposerDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get emojiComposerDone;
+
+  /// No description provided for @emojiComposerFavoriteError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save favourites.'**
+  String get emojiComposerFavoriteError;
+
+  /// No description provided for @emojiComposerSearchFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Search favourites'**
+  String get emojiComposerSearchFavorites;
+
   /// No description provided for @emojiCategoryFavorites.
   ///
   /// In en, this message translates to:

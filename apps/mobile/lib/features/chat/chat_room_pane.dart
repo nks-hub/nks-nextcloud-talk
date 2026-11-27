@@ -1267,12 +1267,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           _ChatComposer(
             replyTo: _replyTo,
             onCancelReply: () => setState(() => _replyTo = null),
+            onDismissPicker: _emojiPickerOpen ? _closeEmojiPicker : null,
             controller: _composer,
             focusNode: _composerFocusNode,
-            // A thread opens beside an existing conversation instead of
-            // replacing it, so it reads as a reply the user is about to type —
-            // but only where a hardware keyboard is the norm. Auto-raising the
-            // soft keyboard on a phone would be hostile.
+            // Focus a new thread on desktop. On a phone, leave the keyboard closed.
             autofocus: widget.threadId != null && context.sendsOnEnter,
             sending: _sending,
             hasAttachment: () => _mediaComposerController.hasPreparedAttachment,

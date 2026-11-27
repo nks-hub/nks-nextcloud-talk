@@ -585,20 +585,14 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       _emojiPickerPending = false;
       return;
     }
-    if (!_emojiPickerOpen) {
-      // The soft keyboard and the panel want the same space; the panel wins
-      // while it is open, exactly as the keyboard does while it is up. A
-      // hardware-keyboard desktop has no such conflict, so the caret stays
-      // put and picking does not interrupt typing.
-      if (!context.sendsOnEnter) {
-        FocusManager.instance.primaryFocus?.unfocus();
-        if (View.of(context).viewInsets.bottom > 0) {
-          _emojiPickerPending = true;
-          return;
-        }
-      }
-    } else if (context.sendsOnEnter) {
+    if (context.sendsOnEnter) {
       _composerFocusNode.requestFocus();
+    } else if (!_emojiPickerOpen) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      if (View.of(context).viewInsets.bottom > 0) {
+        _emojiPickerPending = true;
+        return;
+      }
     }
     _update(() => _emojiPickerOpen = !_emojiPickerOpen);
   }

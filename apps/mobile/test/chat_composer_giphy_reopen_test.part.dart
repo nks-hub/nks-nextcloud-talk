@@ -73,6 +73,122 @@ void _registerGiphyReopenTests() {
     }
   });
 
+  testWidgets('Giphy selection sends a reference and keeps the composer', (
+    tester,
+  ) async {
+    final harness = (await tester.runAsync(_ComposerHarness.create))!;
+    _addHarnessTearDown(tester, harness);
+    final giphy = _giphyRepository();
+    addTearDown(giphy.close);
+    final usage = FileEmojiUsageStore(directory: harness.attachmentRoot);
+
+    await tester.pumpWidget(
+      harness.app(
+        overrides: <Override>[
+          emojiUsageStoreProvider.overrideWithValue(usage),
+          giphyRepositoryProvider.overrideWith((ref, accountId) async {
+            expect(accountId, harness.account.id);
+            return giphy;
+          }),
+        ],
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+    );
+
+    await tester.enterText(find.byKey(const Key('chat-composer')), 'Hi  there');
+    _composer(tester).selection = const TextSelection.collapsed(offset: 3);
+    await _openEmojiPanel(tester);
+    expect(find.byKey(const Key('inline-emoji-panel')), findsOneWidget);
+    expect(find.byKey(const Key('chat-composer')), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const Key('inline-emoji-panel'))).dy,
+      lessThan(tester.getTopLeft(find.byKey(const Key('chat-composer'))).dy),
+    );
+    await tester.enterText(
+      find.byKey(const Key('emoji-search')),
+      'waving hand',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('emoji-choice-waving-hand')));
+    await _pumpTransition(tester);
+    expect(_composer(tester).text, 'Hi 👋 there');
+    expect(find.byKey(const Key('emoji-close')), findsOneWidget);
+    await _pumpUntil(tester, () => _sendButtonEnabled(tester));
+    await tester.tap(find.byKey(const Key('send-message-gesture')));
+    await _pumpUntil(
+      tester,
+      () => harness.sentMessages.length == 1 && _composer(tester).text.isEmpty,
+    );
+    await _pumpTransition(tester);
+    expect(harness.sentMessages, <String>['Hi 👋 there']);
+    expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
+    await _openEmojiPanel(tester);
+    final recent = find.byKey(const Key('emoji-recent-choice-waving-hand'));
+    final catalog = find.byKey(const Key('emoji-choice-grinning-face'));
+    await _pumpUntil(tester, () => recent.hitTestable().evaluate().isNotEmpty);
+    expect(catalog.hitTestable(), findsOneWidget);
+    expect(
+      tester.getRect(recent).bottom,
+      lessThanOrEqualTo(tester.getRect(catalog).top),
+    );
+    await tester.tap(recent);
+    await _pumpTransition(tester);
+    await tester.tap(find.byKey(const Key('emoji-close')));
+    await _pumpTransition(tester);
+    expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
+
+    await _tapGiphy(tester);
+    final gif = find.byKey(
+      const ValueKey<String>('giphy-thumbnail-https://giphy.com/gifs/wave'),
+    );
+    await _pumpUntil(tester, () => gif.evaluate().isNotEmpty);
+    await _pumpTransition(tester);
+    final thumbnailImage = tester.widget<Image>(
+      find.descendant(of: gif, matching: find.byType(Image)),
+    );
+    final resizedThumbnail = thumbnailImage.image as ResizeImage;
+    expect(resizedThumbnail.width, 480);
+    expect(resizedThumbnail.height, 480);
+    final picker = find.descendant(
+      of: find.byKey(const Key('inline-emoji-panel')),
+      matching: find.byType(GiphyPicker),
+    );
+    expect(
+      tester.getBottomLeft(picker).dy,
+      lessThanOrEqualTo(
+        tester.getTopLeft(find.byKey(const Key('chat-composer'))).dy,
+      ),
+    );
+    await tester.ensureVisible(gif);
+    await tester.pump();
+    await tester.tap(gif);
+    await _pumpTransition(tester);
+    await _pumpUntil(tester, () => harness.sentMessages.length == 2);
+
+    // The GIF travels as a reference the bubble renders, so nothing is
+    // uploaded into the user's own storage.
+    expect(harness.sentMessages.last, 'https://giphy.com/gifs/wave');
+    expect(harness.uploadedAttachments, isEmpty);
+    expect(harness.finalizedFileNames, isEmpty);
+    // Text already typed must survive sending a GIF.
+    expect(_composer(tester).text, '👋');
+
+    await _pumpUntil(tester, () => _sendButtonEnabled(tester));
+    await tester.tap(find.byKey(const Key('send-message-gesture')));
+    await _pumpUntil(
+      tester,
+      () => harness.sentMessages.length == 3 && _composer(tester).text.isEmpty,
+    );
+
+    expect(harness.sentMessages.last, '👋');
+    expect(_composer(tester).text, isEmpty);
+    expect(tester.takeException(), isNull);
+    await _unmountComposer(tester);
+  });
+
   testWidgets('reopened Giphy picker is warm and keeps attachment access', (
     tester,
   ) async {
@@ -218,6 +334,11 @@ void _registerGiphyReopenTests() {
         await tester.enterText(find.byKey(const Key('chat-composer')), 'Draft');
         await _openEmojiPanel(tester);
         expect(requested, isFalse);
+        final search = find.byKey(const Key('emoji-search'));
+        if (!closePanel) {
+          await tester.enterText(search, 'waving hand');
+          await tester.pump();
+        }
         await tester.tap(find.byKey(const Key('open-giphy-picker')));
         await _pumpUntil(tester, () => requested);
         await tester.tap(
@@ -235,8 +356,13 @@ void _registerGiphyReopenTests() {
           closePanel ? findsNothing : findsOneWidget,
         );
         if (!closePanel) {
+          expect(search.hitTestable(), findsOneWidget);
           expect(
-            find.byKey(const Key('emoji-search')).hitTestable(),
+            tester.widget<TextField>(search).controller!.text,
+            'waving hand',
+          );
+          expect(
+            find.byKey(const Key('emoji-choice-waving-hand')).hitTestable(),
             findsOneWidget,
           );
         }

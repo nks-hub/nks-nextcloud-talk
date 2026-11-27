@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:emojis/emoji.dart' as unicode;
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -8,6 +9,7 @@ import '../../../platform/emoji_glyph_support.dart';
 import 'emoji_usage_store.dart';
 
 part 'emoji_czech_names.g.dart';
+part 'composer_emoji_browser.dart';
 
 enum EmojiCategory {
   favorites,
@@ -138,6 +140,10 @@ final class EmojiPickerLabels {
     required this.noRecents,
     required this.noFavorites,
     required this.categoryLabels,
+    this.composerCategories,
+    this.composerDone,
+    this.composerFavoriteError,
+    this.composerSearchFavorites,
   });
 
   final String title;
@@ -152,6 +158,10 @@ final class EmojiPickerLabels {
   final String noRecents;
   final String noFavorites;
   final Map<EmojiCategory, String> categoryLabels;
+  final String? composerCategories;
+  final String? composerDone;
+  final String? composerFavoriteError;
+  final String? composerSearchFavorites;
 }
 
 final class EmojiPicker extends StatefulWidget {
@@ -165,7 +175,7 @@ final class EmojiPicker extends StatefulWidget {
     this.glyphSupport,
     this.selectedGlyph,
     this.recordUsage = true,
-    this.headerTabs,
+    this.composer = false,
     super.key,
   });
 
@@ -175,7 +185,7 @@ final class EmojiPicker extends StatefulWidget {
   final VoidCallback onClose;
   final ValueChanged<EmojiChoice> onSelected;
   final EmojiCatalog? catalog;
-  final Widget? headerTabs;
+  final bool composer;
 
   /// Decides which emoji the device font cannot draw; defaults to the system.
   final EmojiGlyphSupport? glyphSupport;
@@ -192,7 +202,7 @@ final class EmojiPicker extends StatefulWidget {
 }
 
 final class _EmojiPickerState extends State<EmojiPicker> {
-  late final TextEditingController _searchController;
+  TextEditingController? _pickerSearchController;
   EmojiCategory? _category;
   EmojiUsage _usage = EmojiUsage.empty;
   bool _usageLoaded = false;
@@ -203,6 +213,9 @@ final class _EmojiPickerState extends State<EmojiPicker> {
   Set<String>? _unsupported;
 
   EmojiCatalog get _catalog => widget.catalog ?? EmojiCatalog.standard();
+  TextEditingController get _searchController =>
+      _pickerSearchController ??= TextEditingController()
+        ..addListener(_onSearchChanged);
 
   List<EmojiCategory> get _categories => <EmojiCategory>[
     EmojiCategory.favorites,
@@ -213,7 +226,6 @@ final class _EmojiPickerState extends State<EmojiPicker> {
   @override
   void initState() {
     super.initState();
-    _searchController = TextEditingController()..addListener(_onSearchChanged);
     _category = _catalog.categories.firstOrNull;
     unawaited(_loadUsage());
     unawaited(_loadGlyphSupport());
@@ -226,6 +238,7 @@ final class _EmojiPickerState extends State<EmojiPicker> {
         oldWidget.usageStore != widget.usageStore) {
       _usage = EmojiUsage.empty;
       _usageLoaded = false;
+      _updatingUsage = false;
       _category = _catalog.categories.firstOrNull;
       _categoryExplicitlySelected = false;
       unawaited(_loadUsage());
@@ -237,8 +250,8 @@ final class _EmojiPickerState extends State<EmojiPicker> {
 
   @override
   void dispose() {
-    _searchController
-      ..removeListener(_onSearchChanged)
+    _pickerSearchController
+      ?..removeListener(_onSearchChanged)
       ..dispose();
     super.dispose();
   }
@@ -312,35 +325,55 @@ final class _EmojiPickerState extends State<EmojiPicker> {
       return;
     }
     if (_managingFavorites) {
-      setState(() => _updatingUsage = true);
-      try {
-        final usage = await widget.usageStore.toggleFavorite(
-          widget.accountId,
-          choice.glyph,
-        );
-        if (mounted) {
-          setState(() => _usage = usage);
-        }
-      } on Object {
-        // A preference write must never break the picker.
-      } finally {
-        if (mounted) {
-          setState(() => _updatingUsage = false);
-        }
-      }
-      return;
+      await _toggleFavorite(choice);
+    } else {
+      await _select(choice);
     }
+  }
 
-    widget.onSelected(choice);
-    if (!widget.recordUsage) {
+  Future<void> _toggleFavorite(EmojiChoice choice) async {
+    if (_updatingUsage || !_usageLoaded) {
       return;
     }
+    final generation = _loadGeneration;
+    setState(() => _updatingUsage = true);
     try {
-      final usage = await widget.usageStore.recordSelection(
+      final usage = await widget.usageStore.toggleFavorite(
         widget.accountId,
         choice.glyph,
       );
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _usage = usage);
+      }
+    } on Object {
+      if (mounted && generation == _loadGeneration && widget.composer) {
+        final message = widget.labels.composerFavoriteError;
+        if (message != null) {
+          ScaffoldMessenger.maybeOf(
+            context,
+          )?.showSnackBar(SnackBar(content: Text(message)));
+        }
+      }
+    } finally {
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _updatingUsage = false);
+      }
+    }
+  }
+
+  Future<void> _select(EmojiChoice choice) async {
+    final generation = _loadGeneration;
+    final account = widget.accountId;
+    final store = widget.usageStore;
+    final updateGrid = !widget.composer;
+    final record = widget.recordUsage;
+    widget.onSelected(choice);
+    if (!record) {
+      return;
+    }
+    try {
+      final usage = await store.recordSelection(account, choice.glyph);
+      if (updateGrid && mounted && generation == _loadGeneration) {
         setState(() => _usage = usage);
       }
     } on Object {
@@ -354,6 +387,19 @@ final class _EmojiPickerState extends State<EmojiPicker> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.composer) {
+      return _ComposerEmojiBrowser(
+        key: ValueKey((widget.accountId, widget.usageStore)),
+        catalog: _catalog,
+        labels: widget.labels,
+        usage: _usage,
+        usageLoaded: _usageLoaded,
+        updatingFavorites: _updatingUsage,
+        unsupported: _unsupported,
+        onSelected: (choice) => unawaited(_select(choice)),
+        onToggleFavorite: (choice) => unawaited(_toggleFavorite(choice)),
+      );
+    }
     final locale = Localizations.maybeLocaleOf(context);
     final query = _searchController.text.trim();
     final choices = _visibleChoices(query);
@@ -425,9 +471,7 @@ final class _EmojiPickerState extends State<EmojiPicker> {
       ),
       IconButton(
         key: const Key('emoji-close'),
-        tooltip: widget.headerTabs == null
-            ? widget.labels.closeTooltip
-            : MaterialLocalizations.of(context).closeButtonTooltip,
+        tooltip: widget.labels.closeTooltip,
         onPressed: widget.onClose,
         icon: const Icon(Icons.close_rounded),
       ),
@@ -477,21 +521,19 @@ final class _EmojiPickerState extends State<EmojiPicker> {
     );
     return Column(
       children: [
-        if (!tight || widget.headerTabs != null) ...[
+        if (!tight) ...[
           SizedBox(
             height: compact ? 48 : 56,
             child: Row(
               children: [
                 Expanded(
-                  child:
-                      widget.headerTabs ??
-                      Padding(
-                        padding: const EdgeInsetsDirectional.only(start: 16),
-                        child: Text(
-                          widget.labels.title,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
+                  child: Padding(
+                    padding: const EdgeInsetsDirectional.only(start: 16),
+                    child: Text(
+                      widget.labels.title,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
                 ),
                 ...actions,
               ],
@@ -510,7 +552,7 @@ final class _EmojiPickerState extends State<EmojiPicker> {
                 Expanded(
                   child: query.isEmpty ? categories : const SizedBox.shrink(),
                 ),
-                if (widget.headerTabs == null) ...actions,
+                ...actions,
               ],
             ),
           ),

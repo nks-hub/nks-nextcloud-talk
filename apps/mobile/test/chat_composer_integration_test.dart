@@ -26,6 +26,7 @@ import 'package:nextcloudtalk/features/chat/composer/chat_media_composer.dart';
 import 'package:nextcloudtalk/features/chat/media/image_attachment_upload_panel.dart';
 import 'package:nextcloudtalk/features/chat/composer/clipboard_image_offer.dart';
 import 'package:nextcloudtalk/features/chat/composer/clipboard_image_source.dart';
+import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy_attachment.dart';
 import 'package:nextcloudtalk/features/chat/emoji_only_message.dart';
@@ -147,109 +148,6 @@ void main() {
     timeout: const Timeout(Duration(seconds: 20)),
   );
 
-  testWidgets('Giphy selection sends a reference and keeps the composer', (
-    tester,
-  ) async {
-    final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    _addHarnessTearDown(tester, harness);
-    final giphy = _giphyRepository();
-    addTearDown(giphy.close);
-
-    await tester.pumpWidget(
-      harness.app(
-        overrides: <Override>[
-          giphyRepositoryProvider.overrideWith((ref, accountId) async {
-            expect(accountId, harness.account.id);
-            return giphy;
-          }),
-        ],
-      ),
-    );
-    await _pumpUntil(
-      tester,
-      () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
-    );
-
-    await _openEmojiPanel(tester);
-    expect(find.byKey(const Key('inline-emoji-panel')), findsOneWidget);
-    expect(find.byKey(const Key('chat-composer')), findsOneWidget);
-    expect(
-      tester.getTopLeft(find.byKey(const Key('inline-emoji-panel'))).dy,
-      lessThan(tester.getTopLeft(find.byKey(const Key('chat-composer'))).dy),
-    );
-    await tester.tap(find.byKey(const Key('emoji-category-people')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('emoji-choice-waving-hand')));
-    await _pumpTransition(tester);
-    expect(_composer(tester).text, '👋');
-    expect(find.byKey(const Key('emoji-close')), findsOneWidget);
-    await _pumpUntil(tester, () => _sendButtonEnabled(tester));
-    await tester.tap(find.byKey(const Key('send-message-gesture')));
-    await _pumpUntil(
-      tester,
-      () => harness.sentMessages.length == 1 && _composer(tester).text.isEmpty,
-    );
-    await _pumpTransition(tester);
-    expect(harness.sentMessages, <String>['👋']);
-    expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
-    await _openEmojiPanel(tester);
-    await tester.tap(find.byKey(const Key('emoji-category-people')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('emoji-choice-waving-hand')));
-    await _pumpTransition(tester);
-    await tester.tap(find.byKey(const Key('emoji-close')));
-    await _pumpTransition(tester);
-    expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
-
-    await _tapGiphy(tester);
-    final gif = find.byKey(
-      const ValueKey<String>('giphy-thumbnail-https://giphy.com/gifs/wave'),
-    );
-    await _pumpUntil(tester, () => gif.evaluate().isNotEmpty);
-    await _pumpTransition(tester);
-    final thumbnailImage = tester.widget<Image>(
-      find.descendant(of: gif, matching: find.byType(Image)),
-    );
-    final resizedThumbnail = thumbnailImage.image as ResizeImage;
-    expect(resizedThumbnail.width, 480);
-    expect(resizedThumbnail.height, 480);
-    final picker = find.descendant(
-      of: find.byKey(const Key('inline-emoji-panel')),
-      matching: find.byType(GiphyPicker),
-    );
-    expect(
-      tester.getBottomLeft(picker).dy,
-      lessThanOrEqualTo(
-        tester.getTopLeft(find.byKey(const Key('chat-composer'))).dy,
-      ),
-    );
-    await tester.ensureVisible(gif);
-    await tester.pump();
-    await tester.tap(gif);
-    await _pumpTransition(tester);
-    await _pumpUntil(tester, () => harness.sentMessages.length == 2);
-
-    // The GIF travels as a reference the bubble renders, so nothing is
-    // uploaded into the user's own storage.
-    expect(harness.sentMessages.last, 'https://giphy.com/gifs/wave');
-    expect(harness.uploadedAttachments, isEmpty);
-    expect(harness.finalizedFileNames, isEmpty);
-    // Text already typed must survive sending a GIF.
-    expect(_composer(tester).text, '👋');
-
-    await _pumpUntil(tester, () => _sendButtonEnabled(tester));
-    await tester.tap(find.byKey(const Key('send-message-gesture')));
-    await _pumpUntil(
-      tester,
-      () => harness.sentMessages.length == 3 && _composer(tester).text.isEmpty,
-    );
-
-    expect(harness.sentMessages.last, '👋');
-    expect(_composer(tester).text, isEmpty);
-    expect(tester.takeException(), isNull);
-    await _unmountComposer(tester);
-  });
-
   testWidgets(
     'unavailable GIFs are explained in the panel and emoji still work',
     (tester) async {
@@ -276,7 +174,10 @@ void main() {
       await tester.tap(find.byKey(const Key('composer-emoji-tab')));
       await tester.pump();
       expect(explanation, findsNothing);
-      await tester.tap(find.byKey(const Key('emoji-category-people')));
+      await tester.enterText(
+        find.byKey(const Key('emoji-search')),
+        'waving hand',
+      );
       await tester.pump();
       await tester.tap(find.byKey(const Key('emoji-choice-waving-hand')));
       await tester.pump();
@@ -448,40 +349,52 @@ void main() {
     await _unmountComposer(tester);
     debugDefaultTargetPlatformOverride = null;
   });
-  testWidgets('Escape backs out of a reply', (tester) async {
-    final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    _addHarnessTearDown(tester, harness);
-    await tester.runAsync(harness.seedReplyMessage);
+  testWidgets(
+    'Escape closes the picker before cancelling a reply',
+    (tester) async {
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      _addHarnessTearDown(tester, harness);
+      await tester.runAsync(harness.seedReplyMessage);
 
-    await tester.pumpWidget(harness.app());
-    await _pumpUntil(
-      tester,
-      () =>
-          find
-              .byKey(const Key('chat-message-target-109'))
-              .evaluate()
-              .isNotEmpty &&
-          find.byType(ChatMediaComposer).evaluate().isNotEmpty,
-    );
-    await tester.longPress(find.byKey(const Key('chat-message-target-109')));
-    await _pumpTransition(tester);
-    await tester.tap(find.byKey(const Key('message-action-reply')));
-    await _pumpTransition(tester);
-    expect(find.byKey(const Key('chat-reply-banner')), findsOneWidget);
+      await tester.pumpWidget(harness.app());
+      await _pumpUntil(
+        tester,
+        () =>
+            find
+                .byKey(const Key('chat-message-target-109'))
+                .evaluate()
+                .isNotEmpty &&
+            find.byType(ChatMediaComposer).evaluate().isNotEmpty,
+      );
+      await tester.longPress(find.byKey(const Key('chat-message-target-109')));
+      await _pumpTransition(tester);
+      await tester.tap(find.byKey(const Key('message-action-reply')));
+      await _pumpTransition(tester);
+      expect(find.byKey(const Key('chat-reply-banner')), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('chat-composer')));
-    await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await _pumpUntil(
-      tester,
-      () => find.byKey(const Key('chat-reply-banner')).evaluate().isEmpty,
-    );
+      await tester.tap(find.byKey(const Key('chat-composer')));
+      await tester.pump();
+      final panel = find.byKey(const Key('inline-emoji-panel'));
+      await _openEmojiPanel(tester);
+      expect(panel, findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(panel, findsNothing);
+      expect(find.byKey(const Key('chat-reply-banner')), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-reply-banner')).evaluate().isEmpty,
+      );
 
-    expect(find.byKey(const Key('chat-reply-banner')), findsNothing);
-    expect(harness.sentMessages, isEmpty);
-    expect(tester.takeException(), isNull);
-    await _unmountComposer(tester);
-  }, timeout: const Timeout(Duration(seconds: 20)));
+      expect(find.byKey(const Key('chat-reply-banner')), findsNothing);
+      expect(harness.sentMessages, isEmpty);
+      expect(tester.takeException(), isNull);
+      await _unmountComposer(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 20)),
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
 }
 
 TextEditingController _composer(WidgetTester tester) {

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -421,6 +422,40 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 30)),
   );
+  testWidgets(
+    'Escape closes the picker and returns to the desktop draft',
+    (tester) async {
+      await pumpRoom(tester, desktop: true);
+      final composer = find.byKey(const Key('chat-composer'));
+      final panel = find.byKey(const Key('inline-emoji-panel'));
+      final controller = tester.widget<TextField>(composer).controller!;
+      await tester.enterText(composer, 'A draft');
+      const cursor = TextSelection.collapsed(offset: 2);
+      controller.selection = cursor;
+      for (final focusSearch in [false, true]) {
+        await tester.tap(find.byKey(const Key('open-emoji-picker')));
+        await tester.pump();
+        expect(panel, findsOneWidget);
+        if (focusSearch) {
+          await tester.enterText(
+            find.byKey(const Key('emoji-search')),
+            'smile',
+          );
+          await tester.pump();
+        }
+        expect(composerHasFocus(tester), !focusSearch);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump();
+        expect(panel, findsNothing);
+        expect(composerHasFocus(tester), isTrue);
+        expect(controller.text, 'A draft');
+        expect(controller.selection, cursor);
+      }
+      await settle(tester);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
+
   testWidgets(
     'the emoji panel fits a short phone window',
     (tester) async {

@@ -10,6 +10,7 @@ extension _ChatRoomExpressionPicker on _ChatRoomPaneState {
     final generation = _textSendGeneration;
     final strings = AppLocalizations.of(context);
     return _ExpressionPicker(
+      key: ValueKey(room),
       accountId: AccountId.parse(room.accountId),
       usageStore: ref.read(emojiUsageStoreProvider),
       onClose: _closeEmojiPicker,
@@ -110,6 +111,7 @@ final class _ExpressionPicker extends StatefulWidget {
     required this.onEmoji,
     required this.onShowGifs,
     required this.buildGifs,
+    super.key,
   });
 
   final AccountId accountId;
@@ -124,79 +126,98 @@ final class _ExpressionPicker extends StatefulWidget {
 }
 
 final class _ExpressionPickerState extends State<_ExpressionPicker> {
-  bool _gifs = false;
+  _ExpressionTab _tab = _ExpressionTab.emoji;
 
-  void _select(bool gifs) {
-    if (_gifs == gifs) return;
-    if (gifs) widget.onShowGifs();
-    setState(() => _gifs = gifs);
+  void _select(Set<_ExpressionTab> selection) {
+    final next = selection.single;
+    if (next == _tab) return;
+    if (next == _ExpressionTab.gifs) widget.onShowGifs();
+    setState(() => _tab = next);
   }
 
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
-    final tabs = SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Row(
-        children: [
-          ChoiceChip(
-            key: const Key('composer-emoji-tab'),
-            label: Text(strings.emojiPickerTitle),
-            selected: !_gifs,
-            showCheckmark: false,
-            onSelected: (_) => _select(false),
-          ),
-          const SizedBox(width: 4),
-          ChoiceChip(
-            key: const Key('open-giphy-picker'),
-            label: Text(strings.gifTab),
-            selected: _gifs,
-            showCheckmark: false,
-            onSelected: (_) => _select(true),
-          ),
-        ],
-      ),
-    );
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      child: SizedBox(
-        key: const Key('inline-emoji-panel'),
-        child: _gifs
-            ? Column(
-                children: [
-                  SizedBox(
-                    height: 48,
-                    child: Row(
-                      children: [
-                        Expanded(child: tabs),
-                        IconButton(
-                          key: const Key('emoji-close'),
-                          tooltip: MaterialLocalizations.of(
-                            context,
-                          ).closeButtonTooltip,
-                          icon: const Icon(Icons.close_rounded),
-                          onPressed: widget.onClose,
+    final scheme = Theme.of(context).colorScheme;
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): widget.onClose,
+      },
+      child: Material(
+        color: scheme.surfaceContainerLow,
+        child: Column(
+          key: const Key('inline-emoji-panel'),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: SegmentedButton<_ExpressionTab>(
+                      showSelectedIcon: false,
+                      style: SegmentedButton.styleFrom(
+                        selectedBackgroundColor: scheme.primaryContainer,
+                        selectedForegroundColor: scheme.onPrimaryContainer,
+                      ),
+                      segments: [
+                        ButtonSegment(
+                          value: _ExpressionTab.emoji,
+                          label: Text(
+                            strings.emojiPickerTitle,
+                            key: const Key('composer-emoji-tab'),
+                          ),
+                        ),
+                        ButtonSegment(
+                          value: _ExpressionTab.gifs,
+                          label: Text(
+                            strings.gifTab,
+                            key: const Key('open-giphy-picker'),
+                          ),
                         ),
                       ],
+                      selected: {_tab},
+                      onSelectionChanged: _select,
                     ),
                   ),
-                  const Divider(height: 1),
-                  Expanded(child: widget.buildGifs()),
+                ),
+                IconButton(
+                  key: const Key('emoji-close'),
+                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: widget.onClose,
+                ),
+              ],
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Visibility(
+                    visible: _tab == _ExpressionTab.emoji,
+                    maintainState: true,
+                    child: EmojiPicker(
+                      accountId: widget.accountId,
+                      usageStore: widget.usageStore,
+                      labels: emojiPickerLabelsFor(strings),
+                      onClose: widget.onClose,
+                      onSelected: widget.onEmoji,
+                      composer: true,
+                    ),
+                  ),
+                  if (_tab == _ExpressionTab.gifs) widget.buildGifs(),
                 ],
-              )
-            : EmojiPicker(
-                accountId: widget.accountId,
-                usageStore: widget.usageStore,
-                labels: emojiPickerLabelsFor(strings),
-                onClose: widget.onClose,
-                onSelected: widget.onEmoji,
-                headerTabs: tabs,
               ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
+
+enum _ExpressionTab { emoji, gifs }
 
 final class _ComposerGifs extends StatefulWidget {
   const _ComposerGifs({
