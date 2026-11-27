@@ -4564,4 +4564,32 @@ class AppLocalizationsEn extends AppLocalizations {
   String giphySendResult(String title) {
     return 'Send GIF: $title';
   }
+
+  @override
+  String get sharedItemsOpenSourceMessage => 'Open original message';
+
+  @override
+  String get searchMessagesSender => 'Sender';
+
+  @override
+  String get searchMessagesPeriod => 'Date range';
+
+  @override
+  String get searchMessagesFindPerson => 'Find a person';
+
+  @override
+  String get searchMessagesLoadMore => 'Load more results';
+
+  @override
+  String get searchMessagesLoadMoreError => 'Couldn\'t load more results.';
+
+  @override
+  String get searchMessagesPreviousMatch => 'Previous match';
+
+  @override
+  String get searchMessagesNextMatch => 'Next match';
+
+  @override
+  String get unansweredReminderAlreadyAnswered =>
+      'A reply has already arrived.';
 }

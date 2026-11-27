@@ -1646,5 +1646,14 @@
         "type": "String"
       }
     }
-  }
+  },
+  "sharedItemsOpenSourceMessage": "Otevřít původní zprávu",
+  "searchMessagesSender": "Odesílatel",
+  "searchMessagesPeriod": "Období",
+  "searchMessagesFindPerson": "Najít osobu",
+  "searchMessagesLoadMore": "Načíst další shody",
+  "searchMessagesLoadMoreError": "Další shody se nepodařilo načíst.",
+  "searchMessagesPreviousMatch": "Předchozí shoda",
+  "searchMessagesNextMatch": "Další shoda",
+  "unansweredReminderAlreadyAnswered": "Odpověď už přišla."
 }

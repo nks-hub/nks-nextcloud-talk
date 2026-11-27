@@ -4573,4 +4573,31 @@ class AppLocalizationsCs extends AppLocalizations {
   String giphySendResult(String title) {
     return 'Odeslat GIF: $title';
   }
+
+  @override
+  String get sharedItemsOpenSourceMessage => 'Otevřít původní zprávu';
+
+  @override
+  String get searchMessagesSender => 'Odesílatel';
+
+  @override
+  String get searchMessagesPeriod => 'Období';
+
+  @override
+  String get searchMessagesFindPerson => 'Najít osobu';
+
+  @override
+  String get searchMessagesLoadMore => 'Načíst další shody';
+
+  @override
+  String get searchMessagesLoadMoreError => 'Další shody se nepodařilo načíst.';
+
+  @override
+  String get searchMessagesPreviousMatch => 'Předchozí shoda';
+
+  @override
+  String get searchMessagesNextMatch => 'Další shoda';
+
+  @override
+  String get unansweredReminderAlreadyAnswered => 'Odpověď už přišla.';
 }

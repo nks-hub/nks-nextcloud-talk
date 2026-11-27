@@ -2216,5 +2216,14 @@
         "type": "String"
       }
     }
-  }
+  },
+  "sharedItemsOpenSourceMessage": "Open original message",
+  "searchMessagesSender": "Sender",
+  "searchMessagesPeriod": "Date range",
+  "searchMessagesFindPerson": "Find a person",
+  "searchMessagesLoadMore": "Load more results",
+  "searchMessagesLoadMoreError": "Couldn't load more results.",
+  "searchMessagesPreviousMatch": "Previous match",
+  "searchMessagesNextMatch": "Next match",
+  "unansweredReminderAlreadyAnswered": "A reply has already arrived."
 }

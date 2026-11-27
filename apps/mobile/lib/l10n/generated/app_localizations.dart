@@ -8167,6 +8167,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Send GIF: {title}'**
   String giphySendResult(String title);
+
+  /// No description provided for @sharedItemsOpenSourceMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Open original message'**
+  String get sharedItemsOpenSourceMessage;
+
+  /// No description provided for @searchMessagesSender.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender'**
+  String get searchMessagesSender;
+
+  /// No description provided for @searchMessagesPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'Date range'**
+  String get searchMessagesPeriod;
+
+  /// No description provided for @searchMessagesFindPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Find a person'**
+  String get searchMessagesFindPerson;
+
+  /// No description provided for @searchMessagesLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more results'**
+  String get searchMessagesLoadMore;
+
+  /// No description provided for @searchMessagesLoadMoreError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load more results.'**
+  String get searchMessagesLoadMoreError;
+
+  /// No description provided for @searchMessagesPreviousMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous match'**
+  String get searchMessagesPreviousMatch;
+
+  /// No description provided for @searchMessagesNextMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Next match'**
+  String get searchMessagesNextMatch;
+
+  /// No description provided for @unansweredReminderAlreadyAnswered.
+  ///
+  /// In en, this message translates to:
+  /// **'A reply has already arrived.'**
+  String get unansweredReminderAlreadyAnswered;
 }
 
 class _AppLocalizationsDelegate
