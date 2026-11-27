@@ -473,8 +473,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get outboxRetryable => 'Waiting for a connection';
 
   @override
-  String get outboxAwaitingConfirmation =>
-      'The server may already have received this message.';
+  String get inboxMessages => 'Messages';
+
+  @override
+  String get composerTools => 'Message tools';
+
+  @override
+  String get inboxAll => 'All';
+
+  @override
+  String get inboxNoActiveCalls => 'No active calls';
+
+  @override
+  String get inboxThreadRooms => 'Choose a conversation to view its threads';
+
+  @override
+  String get replyInThread => 'Reply in thread';
+
+  @override
+  String get outboxAwaitingConfirmation => 'Awaiting confirmation';
 
   @override
   String get outboxFailed => 'Message could not be sent';

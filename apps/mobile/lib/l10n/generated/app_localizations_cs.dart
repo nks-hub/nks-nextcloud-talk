@@ -477,8 +477,25 @@ class AppLocalizationsCs extends AppLocalizations {
   String get outboxRetryable => 'Čeká na připojení';
 
   @override
-  String get outboxAwaitingConfirmation =>
-      'Server už mohl tuto zprávu přijmout.';
+  String get inboxMessages => 'Zprávy';
+
+  @override
+  String get composerTools => 'Nástroje zprávy';
+
+  @override
+  String get inboxAll => 'Vše';
+
+  @override
+  String get inboxNoActiveCalls => 'Žádné probíhající hovory';
+
+  @override
+  String get inboxThreadRooms => 'Vyberte konverzaci pro zobrazení vláken';
+
+  @override
+  String get replyInThread => 'Odpovědět ve vlákně';
+
+  @override
+  String get outboxAwaitingConfirmation => 'Čeká na potvrzení';
 
   @override
   String get outboxFailed => 'Zprávu se nepodařilo odeslat';

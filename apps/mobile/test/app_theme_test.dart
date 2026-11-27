@@ -59,34 +59,30 @@ void main() {
     }
   });
 
-  test('the default theme has no pink or violet role', () {
-    for (final theme in <ThemeData>[AppTheme.light(), AppTheme.dark()]) {
-      final s = theme.colorScheme;
-      final roles = {
-        'primary': s.primary,
-        'primaryContainer': s.primaryContainer,
-        'secondary': s.secondary,
-        'secondaryContainer': s.secondaryContainer,
-        'tertiary': s.tertiary,
-        'tertiaryContainer': s.tertiaryContainer,
-        'surfaceContainerLow': s.surfaceContainerLow,
-        'surfaceContainer': s.surfaceContainer,
-        'surface': s.surface,
-      };
-      for (final entry in roles.entries) {
-        final hsl = HSLColor.fromColor(entry.value);
-        // Violet to magenta to pink is 250 to 345 degrees; a grey has no hue.
-        final tinted = hsl.saturation > 0.08;
-        expect(
-          tinted && hsl.hue >= 250 && hsl.hue <= 345,
-          isFalse,
-          reason: '${entry.key} in ${s.brightness.name}: hue ${hsl.hue}',
-        );
-      }
+  test('the default and stock server share the OwnTalk primary colour', () {
+    for (final brightness in Brightness.values) {
+      final make = brightness == Brightness.dark
+          ? AppTheme.dark
+          : AppTheme.light;
+      final scheme = make().colorScheme;
+      expect(
+        scheme.primary,
+        brightness == Brightness.dark
+            ? const Color(0xFFBCA3F5)
+            : const Color(0xFF694798),
+      );
+      expect(
+        make(seedColor: const Color(0xFF00679E)).colorScheme.primary,
+        scheme.primary,
+      );
+      expect(
+        make(seedColor: const Color(0xFF1976D2)).colorScheme.primary,
+        isNot(scheme.primary),
+      );
     }
   });
 
-  test('a stock or blue server colour yields no violet or pink role', () {
+  test('a stock or blue server keeps distinct supporting roles', () {
     bool violet(Color color) {
       final hsl = HSLColor.fromColor(color);
       return hsl.saturation > 0.08 && hsl.hue >= 250 && hsl.hue <= 345;

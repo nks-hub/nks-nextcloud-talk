@@ -60,9 +60,14 @@ void main() {
 
         expect(find.text('OB'), findsOneWidget);
         expect(find.byType(Image), findsNothing);
-        final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
+        final tile = tester.widget<ColoredBox>(
+          find
+              .ancestor(of: find.text('OB'), matching: find.byType(ColoredBox))
+              .first,
+        );
+        final initials = tester.widget<Text>(find.text('OB'));
         expect(
-          _contrast(avatar.foregroundColor!, avatar.backgroundColor!),
+          _contrast(initials.style!.color!, tile.color),
           greaterThanOrEqualTo(4.5),
         );
         expect(

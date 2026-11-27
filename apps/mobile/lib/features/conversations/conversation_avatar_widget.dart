@@ -47,27 +47,35 @@ final class ConversationAvatar extends ConsumerWidget {
       image: true,
       label: conversation.displayName,
       child: ExcludeSemantics(
-        child: switch (source) {
-          LocalConversationAvatar(:final icon) => _LocalAvatar(
-            icon: icon,
-            displayName: conversation.displayName,
-            radius: radius,
-          ),
-          NetworkConversationAvatar() => _NetworkAvatar(
-            source: source,
-            image: ref.watch(
-              conversationAvatarProvider(
-                ConversationAvatarProviderKey(
-                  account: account,
-                  uri: source.uri,
-                  versioned: source.versioned,
-                ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radius * 0.52),
+          child: SizedBox.square(
+            dimension: radius * 2,
+            child: switch (source) {
+              LocalConversationAvatar(:final icon) => _LocalAvatar(
+                icon: icon,
+                displayName: conversation.displayName,
+                roomToken: conversation.token,
+                radius: radius,
               ),
-            ),
-            displayName: conversation.displayName,
-            radius: radius,
+              NetworkConversationAvatar() => _NetworkAvatar(
+                source: source,
+                image: ref.watch(
+                  conversationAvatarProvider(
+                    ConversationAvatarProviderKey(
+                      account: account,
+                      uri: source.uri,
+                      versioned: source.versioned,
+                    ),
+                  ),
+                ),
+                displayName: conversation.displayName,
+                roomToken: conversation.token,
+                radius: radius,
+              ),
+            },
           ),
-        },
+        ),
       ),
     );
   }
@@ -78,30 +86,29 @@ final class _NetworkAvatar extends StatelessWidget {
     required this.source,
     required this.image,
     required this.displayName,
+    required this.roomToken,
     required this.radius,
   });
 
   final NetworkConversationAvatar source;
   final AsyncValue<ConversationAvatarImage?> image;
   final String displayName;
+  final String roomToken;
   final double radius;
 
   @override
   Widget build(BuildContext context) {
     final loaded = image.valueOrNull;
-    if (loaded == null || loaded.isCustomAvatar == false) {
-      return _LocalAvatar(
-        icon: source.fallback,
-        displayName: displayName,
-        radius: radius,
-      );
-    }
     final fallback = _LocalAvatar(
       icon: source.fallback,
       displayName: displayName,
+      roomToken: roomToken,
       radius: radius,
     );
-    final content = loaded.contentType == 'image/svg+xml'
+    if (loaded == null || loaded.isCustomAvatar == false) {
+      return fallback;
+    }
+    return loaded.contentType == 'image/svg+xml'
         ? SvgPicture.memory(
             loaded.body,
             fit: BoxFit.cover,
@@ -116,9 +123,6 @@ final class _NetworkAvatar extends StatelessWidget {
             gaplessPlayback: true,
             errorBuilder: (_, _, _) => fallback,
           );
-    return ClipOval(
-      child: SizedBox.square(dimension: radius * 2, child: content),
-    );
   }
 }
 
@@ -126,41 +130,58 @@ final class _LocalAvatar extends StatelessWidget {
   const _LocalAvatar({
     required this.icon,
     required this.displayName,
+    required this.roomToken,
     required this.radius,
   });
 
   final ConversationAvatarIcon icon;
   final String displayName;
+  final String roomToken;
   final double radius;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    if (icon == ConversationAvatarIcon.group) {
+      const covers = ['folds', 'knot', 'stripes'];
+      final index = roomToken.codeUnits.fold(
+        0,
+        (value, unit) => (value * 31 + unit) % covers.length,
+      );
+      return Image.asset(
+        'assets/rooms/${covers[index]}.webp',
+        fit: BoxFit.cover,
+      );
+    }
     final initials = icon == ConversationAvatarIcon.user
         ? _initials(displayName)
         : '';
-    return CircleAvatar(
-      radius: radius,
-      backgroundColor: scheme.primaryContainer,
-      foregroundColor: scheme.onPrimaryContainer,
-      child: initials.isEmpty
-          ? Icon(_iconData(icon), size: radius)
-          : Padding(
-              padding: EdgeInsets.all(radius * 0.2),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  initials,
-                  maxLines: 1,
-                  style: TextStyle(
-                    color: scheme.onPrimaryContainer,
-                    fontSize: radius * 0.8,
-                    fontWeight: FontWeight.w700,
-                    height: 1,
+    return ColoredBox(
+      color: scheme.primaryContainer,
+      child: Center(
+        child: initials.isEmpty
+            ? Icon(
+                _iconData(icon),
+                size: radius,
+                color: scheme.onPrimaryContainer,
+              )
+            : Padding(
+                padding: EdgeInsets.all(radius * 0.2),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    initials,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: scheme.onPrimaryContainer,
+                      fontSize: radius * 0.8,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                    ),
                   ),
                 ),
               ),
-            ),
+      ),
     );
   }
 }

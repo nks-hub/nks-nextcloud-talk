@@ -322,7 +322,10 @@ void main() {
       tester.getSemantics(find.byType(ChatParticipantAvatar)),
       matchesSemantics(label: 'Visible Name', isImage: true),
     );
-    expect(tester.getSize(find.byType(CircleAvatar)), const Size.square(32));
+    expect(
+      tester.getSize(find.byType(ChatParticipantAvatar)),
+      const Size.square(32),
+    );
     semantics.dispose();
   });
 
@@ -401,7 +404,10 @@ void main() {
     );
 
     expect(find.text('AL'), findsOneWidget);
-    expect(tester.getSize(find.byType(CircleAvatar)), const Size.square(32));
+    expect(
+      tester.getSize(find.byType(ChatParticipantAvatar)),
+      const Size.square(32),
+    );
     expect(tester.takeException(), isNull);
   });
 }

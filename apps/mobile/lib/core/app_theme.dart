@@ -2,11 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 abstract final class AppTheme {
-  static const Color _seed = Color(0xFF00679E);
+  static const Color _stockServerBlue = Color(0xFF00679E);
+  static const Color _brandSeed = Color(0xFF9470D9);
   static const Color _secondarySeed = Color(0xFF4F6A7D);
   static const Color _tertiarySeed = Color(0xFF17616D);
-  static const Color _lightSurface = Color(0xFFFAF8F5);
-  static const Color _darkSurface = Color(0xFF13161B);
+  static const Color _lightSurface = Color(0xFFFAF9FC);
+  static const Color _darkSurface = Color(0xFF101014);
 
   /// Mouse and keyboard do not need the touch target minimum, and Nextcloud's
   /// own clients size their controls around `--default-clickable-area: 34px`.
@@ -79,7 +80,7 @@ abstract final class AppTheme {
     Brightness brightness,
     Color? seedColor,
   ) {
-    if (seedColor == null || seedColor == _seed) {
+    if (seedColor == null || seedColor == _stockServerBlue) {
       return _withTertiary(_withSecondary(generated, brightness), brightness);
     }
     if (_isVioletOrPink(generated.tertiaryContainer) &&
@@ -110,28 +111,39 @@ abstract final class AppTheme {
     final filledPadding = pointer
         ? const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
         : const EdgeInsets.symmetric(horizontal: 20, vertical: 14);
+    final branded = seedColor == null || seedColor == _stockServerBlue;
     final generated = ColorScheme.fromSeed(
-      seedColor: seedColor ?? _seed,
+      seedColor: branded ? _brandSeed : seedColor,
       brightness: brightness,
     );
     final roles = _roles(generated, brightness, seedColor);
     final scheme = roles.copyWith(
+      primary: branded
+          ? (isDark ? const Color(0xFFBCA3F5) : const Color(0xFF694798))
+          : roles.primary,
+      onPrimary: branded && isDark ? const Color(0xFF20142F) : roles.onPrimary,
       surface: isDark ? _darkSurface : _lightSurface,
-      // Fills inputs and the cards inside bubbles. Near-black in the dark theme
-      // read as a hole in a bubble, so it stops a step short of that.
-      surfaceContainerLowest: isDark ? const Color(0xFF101319) : Colors.white,
+      surfaceContainerLowest: isDark ? const Color(0xFF141418) : Colors.white,
       surfaceContainerLow: isDark
-          ? const Color(0xFF172331)
-          : const Color(0xFFECF3FA),
+          ? const Color(0xFF1B1B20)
+          : const Color(0xFFF4F2F6),
       surfaceContainer: isDark
-          ? const Color(0xFF202C39)
-          : const Color(0xFFE3EBF5),
-      outline: isDark ? const Color(0xFF6A7886) : const Color(0xFF66717D),
-      // 3:1 against the surface or better, with headroom: the shared chat
-      // background is a tint of the surface and has to keep that ratio too.
+          ? const Color(0xFF212127)
+          : const Color(0xFFEDEBF1),
+      surfaceContainerHigh: isDark
+          ? const Color(0xFF29292F)
+          : const Color(0xFFE8E6ED),
+      surfaceContainerHighest: isDark
+          ? const Color(0xFF33333B)
+          : const Color(0xFFE1DEE7),
+      onSurface: isDark ? const Color(0xFFF5F3F7) : const Color(0xFF1C1A21),
+      onSurfaceVariant: isDark
+          ? const Color(0xFFC4C0CB)
+          : const Color(0xFF514D58),
+      outline: isDark ? const Color(0xFF89858F) : const Color(0xFF706D77),
       outlineVariant: isDark
-          ? const Color(0xFF617080)
-          : const Color(0xFF7A8693),
+          ? const Color(0xFF73717C)
+          : const Color(0xFF817C87),
     );
     final base = ThemeData(
       useMaterial3: true,
@@ -151,6 +163,10 @@ abstract final class AppTheme {
     });
     return base.copyWith(
       textTheme: base.textTheme.copyWith(
+        titleLarge: base.textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.4,
+        ),
         bodyLarge: base.textTheme.bodyLarge?.copyWith(height: 1.5),
         bodyMedium: base.textTheme.bodyMedium?.copyWith(height: 1.45),
         bodySmall: base.textTheme.bodySmall?.copyWith(height: 1.4),
@@ -241,9 +257,7 @@ abstract final class AppTheme {
           color: chipLabelColor,
         ),
       ),
-      // Content scrolling under a bar must not tint it: the tint turns the
-      // bar blue-grey against the warm surface. The bottom line keeps the
-      // full outlineVariant, the 3:1 boundary the chat background relies on.
+      // Keep the header on the same surface when content scrolls underneath.
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,

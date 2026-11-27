@@ -944,10 +944,46 @@ abstract class AppLocalizations {
   /// **'Waiting for a connection'**
   String get outboxRetryable;
 
+  /// No description provided for @inboxMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get inboxMessages;
+
+  /// No description provided for @composerTools.
+  ///
+  /// In en, this message translates to:
+  /// **'Message tools'**
+  String get composerTools;
+
+  /// No description provided for @inboxAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get inboxAll;
+
+  /// No description provided for @inboxNoActiveCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'No active calls'**
+  String get inboxNoActiveCalls;
+
+  /// No description provided for @inboxThreadRooms.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a conversation to view its threads'**
+  String get inboxThreadRooms;
+
+  /// No description provided for @replyInThread.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply in thread'**
+  String get replyInThread;
+
   /// No description provided for @outboxAwaitingConfirmation.
   ///
   /// In en, this message translates to:
-  /// **'The server may already have received this message.'**
+  /// **'Awaiting confirmation'**
   String get outboxAwaitingConfirmation;
 
   /// No description provided for @outboxFailed.

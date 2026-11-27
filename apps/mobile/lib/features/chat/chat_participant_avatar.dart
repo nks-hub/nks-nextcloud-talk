@@ -76,7 +76,12 @@ final class ChatParticipantAvatar extends ConsumerWidget {
     return Semantics(
       image: true,
       label: semanticsLabel,
-      child: ExcludeSemantics(child: avatar),
+      child: ExcludeSemantics(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(size * 0.26),
+          child: SizedBox.square(dimension: size, child: avatar),
+        ),
+      ),
     );
   }
 }
@@ -111,7 +116,7 @@ final class _NetworkParticipantAvatar extends StatelessWidget {
       return fallback;
     }
 
-    final content = loaded.contentType == 'image/svg+xml'
+    return loaded.contentType == 'image/svg+xml'
         ? SvgPicture.memory(
             loaded.body,
             fit: BoxFit.cover,
@@ -126,9 +131,6 @@ final class _NetworkParticipantAvatar extends StatelessWidget {
                 .round(),
             errorBuilder: (_, _, _) => fallback,
           );
-    return ClipOval(
-      child: SizedBox.square(dimension: size, child: content),
-    );
   }
 }
 
@@ -148,22 +150,26 @@ final class _ParticipantFallback extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final icon = _iconForActorType(actorType);
     final initials = icon == null ? _initials(displayName) : '';
-    return CircleAvatar(
-      radius: size / 2,
-      backgroundColor: scheme.secondaryContainer,
-      foregroundColor: scheme.onSecondaryContainer,
-      child: icon != null || initials.isEmpty
-          ? Icon(icon ?? Icons.person_rounded, size: size * 0.55)
-          : Text(
-              initials,
-              maxLines: 1,
-              style: TextStyle(
+    return ColoredBox(
+      color: scheme.secondaryContainer,
+      child: Center(
+        child: icon != null || initials.isEmpty
+            ? Icon(
+                icon ?? Icons.person_rounded,
+                size: size * 0.55,
                 color: scheme.onSecondaryContainer,
-                fontSize: size * 0.38,
-                fontWeight: FontWeight.w700,
-                height: 1,
+              )
+            : Text(
+                initials,
+                maxLines: 1,
+                style: TextStyle(
+                  color: scheme.onSecondaryContainer,
+                  fontSize: size * 0.38,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
               ),
-            ),
+      ),
     );
   }
 }
