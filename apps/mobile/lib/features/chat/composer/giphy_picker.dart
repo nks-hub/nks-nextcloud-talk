@@ -190,6 +190,7 @@ final class GiphyPickerLabels {
     required this.retry,
     required this.loadMore,
     required this.poweredByGiphy,
+    this.sendResult,
   });
 
   final String searchHint;
@@ -197,19 +198,32 @@ final class GiphyPickerLabels {
   final String retry;
   final String loadMore;
   final String poweredByGiphy;
+  final String Function(String title)? sendResult;
 }
 
 typedef GiphyThumbnailBuilder =
     Widget Function(BuildContext context, GiphyEntry entry);
 typedef GiphyAttributionOpener = Future<void> Function(Uri uri);
 
-final class GiphyPicker extends StatelessWidget {
+typedef GiphyPickerFavorites = ({
+  List<GiphyEntry> entries,
+  bool loading,
+  String label,
+  String searchHint,
+  String emptyHint,
+  GiphyThumbnailBuilder buttonBuilder,
+});
+
+final class GiphyPicker extends StatefulWidget {
   const GiphyPicker({
     required this.controller,
     required this.labels,
     required this.thumbnailBuilder,
     required this.onSelected,
     required this.onAttributionPressed,
+    this.desktop = false,
+    this.showAttribution = true,
+    this.favorites,
     super.key,
   });
 
@@ -218,67 +232,146 @@ final class GiphyPicker extends StatelessWidget {
   final GiphyThumbnailBuilder thumbnailBuilder;
   final ValueChanged<GiphyEntry> onSelected;
   final GiphyAttributionOpener onAttributionPressed;
+  final bool desktop;
+  final bool showAttribution;
+  final GiphyPickerFavorites? favorites;
+
+  @override
+  State<GiphyPicker> createState() => _GiphyPickerState();
+}
+
+final class _GiphyPickerState extends State<GiphyPicker> {
+  static const _gridPadding = EdgeInsets.fromLTRB(8, 4, 8, 8);
+  static const _gap = 8.0;
+
+  final _query = TextEditingController();
+  final _scrollStorage = PageStorageBucket();
+  bool _favoritesOnly = false;
+
+  GiphyController get _controller => widget.controller;
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  void _searchChanged(String value) {
+    setState(() {});
+    if (!_favoritesOnly) _controller.searchAsTyped(value);
+  }
+
+  void _toggleFavorites() {
+    setState(() => _favoritesOnly = !_favoritesOnly);
+    if (!_favoritesOnly) _controller.searchAsTyped(_query.text);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final window = MediaQuery.sizeOf(context);
-    final compact = window.width > window.height && window.height < 520;
-    final search = Padding(
-      padding: EdgeInsets.all(compact ? 4 : 8),
-      child: TextField(
-        key: const Key('giphy-search'),
-        textInputAction: TextInputAction.search,
-        decoration: InputDecoration(
-          hintText: labels.searchHint,
-          prefixIcon: const Icon(Icons.search_rounded),
-          border: const OutlineInputBorder(),
-          isDense: compact,
-        ),
-        onChanged: controller.searchAsTyped,
-        onSubmitted: controller.search,
-      ),
-    );
-    final attribution = _GiphyAttributionLink(
-      repository: controller.repository,
-      label: labels.poweredByGiphy,
-      onPressed: onAttributionPressed,
-    );
+    final scheme = Theme.of(context).colorScheme;
+    final favorites = widget.favorites;
+    final labels = widget.labels;
     return Column(
       children: [
-        if (compact)
-          Row(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+          child: Row(
             children: [
-              Expanded(child: search),
-              Flexible(child: attribution),
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: TextField(
+                    key: const Key('giphy-search'),
+                    controller: _query,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: _favoritesOnly
+                          ? favorites?.searchHint ?? labels.searchHint
+                          : labels.searchHint,
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                      suffixIcon: _query.text.isEmpty
+                          ? null
+                          : IconButton(
+                              key: const Key('giphy-clear-search'),
+                              tooltip: MaterialLocalizations.of(
+                                context,
+                              ).deleteButtonTooltip,
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                              onPressed: () {
+                                _query.clear();
+                                _searchChanged('');
+                              },
+                            ),
+                      filled: true,
+                      fillColor: scheme.surfaceContainerHigh,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                      isDense: true,
+                    ),
+                    onChanged: _searchChanged,
+                    onSubmitted: _favoritesOnly ? null : _controller.search,
+                  ),
+                ),
+              ),
+              if (favorites != null) ...[
+                const SizedBox(width: 4),
+                SizedBox.square(
+                  dimension: 48,
+                  child: IconButton(
+                    key: const Key('giphy-my-gifs'),
+                    tooltip: favorites.label,
+                    isSelected: _favoritesOnly,
+                    icon: const Icon(Icons.star_border_rounded),
+                    selectedIcon: const Icon(Icons.star_rounded),
+                    onPressed: _toggleFavorites,
+                  ),
+                ),
+              ],
+              if (widget.showAttribution)
+                GiphyAttributionLink(
+                  repository: _controller.repository,
+                  label: labels.poweredByGiphy,
+                  onPressed: widget.onAttributionPressed,
+                ),
             ],
-          )
-        else
-          search,
+          ),
+        ),
         Expanded(
           child: LayoutBuilder(
             builder: (context, bounds) => AnimatedBuilder(
-              animation: controller,
-              builder: (context, _) => _buildResults(
-                context,
-                tileHeight: compact
-                    ? (bounds.maxHeight - 8).clamp(48.0, 120.0)
-                    : null,
-              ),
+              animation: _controller,
+              builder: (context, _) => _buildResults(bounds),
             ),
           ),
         ),
-        if (!compact) attribution,
       ],
     );
   }
 
-  Widget _buildResults(BuildContext context, {required double? tileHeight}) {
-    if (controller.phase == GiphyLoadPhase.loading &&
-        controller.entries.isEmpty) {
+  Widget _buildResults(BoxConstraints bounds) {
+    final controller = _controller;
+    final labels = widget.labels;
+    final filtered = _favoritesOnly ? widget.favorites : null;
+    final query = _query.text.trim().toLowerCase();
+    final entries = filtered == null
+        ? controller.entries
+        : filtered.entries
+              .where(
+                (entry) =>
+                    entry.title.toLowerCase().contains(query) ||
+                    entry.subline.toLowerCase().contains(query),
+              )
+              .toList(growable: false);
+    if (entries.isEmpty &&
+        (filtered?.loading ?? controller.phase == GiphyLoadPhase.loading)) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (controller.phase == GiphyLoadPhase.error &&
-        controller.entries.isEmpty) {
+    if (filtered == null &&
+        controller.phase == GiphyLoadPhase.error &&
+        entries.isEmpty) {
       return Center(
         child: FilledButton(
           onPressed: controller.term == null
@@ -288,51 +381,101 @@ final class GiphyPicker extends StatelessWidget {
         ),
       );
     }
-    if (controller.entries.isEmpty) {
-      return Center(child: Text(labels.noResults));
+    if (entries.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            filtered != null && filtered.entries.isEmpty
+                ? filtered.emptyHint
+                : labels.noResults,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
     }
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.all(8),
-          sliver: SliverGrid.builder(
-            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 240,
-              mainAxisExtent: tileHeight,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
+    final columns = switch (bounds.maxWidth) {
+      >= 400 when widget.desktop => 4,
+      >= 280 => 3,
+      >= 176 => 2,
+      _ => 1,
+    };
+    final tileHeight = ((bounds.maxHeight - _gridPadding.top - _gap) / 2).clamp(
+      48.0,
+      widget.desktop ? 103.0 : 90.0,
+    );
+    return PageStorage(
+      bucket: _scrollStorage,
+      child: CustomScrollView(
+        key: PageStorageKey<String>(
+          filtered == null ? 'giphy-grid' : 'giphy-favorites-grid',
+        ),
+        slivers: [
+          SliverPadding(
+            padding: _gridPadding,
+            sliver: SliverGrid.builder(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                mainAxisExtent: tileHeight,
+                mainAxisSpacing: _gap,
+                crossAxisSpacing: _gap,
+              ),
+              itemCount: entries.length,
+              itemBuilder: (context, index) =>
+                  _buildTile(context, entries[index]),
             ),
-            itemCount: controller.entries.length,
-            itemBuilder: (context, index) {
-              final entry = controller.entries[index];
-              return Semantics(
-                button: true,
-                label: entry.title,
-                child: InkWell(
-                  onTap: () => onSelected(entry),
-                  child: thumbnailBuilder(context, entry),
+          ),
+          if (filtered == null)
+            SliverToBoxAdapter(
+              child: Center(
+                child: TextButton(
+                  onPressed: controller.phase == GiphyLoadPhase.loading
+                      ? null
+                      : controller.loadMore,
+                  child: Text(labels.loadMore),
                 ),
-              );
-            },
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: Center(
-            child: TextButton(
-              onPressed: controller.phase == GiphyLoadPhase.loading
-                  ? null
-                  : controller.loadMore,
-              child: Text(labels.loadMore),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTile(BuildContext context, GiphyEntry entry) {
+    final favorites = widget.favorites;
+    final label = widget.labels.sendResult?.call(entry.title) ?? entry.title;
+    return Stack(
+      key: ValueKey(entry.resourceUrl),
+      fit: StackFit.expand,
+      children: [
+        Semantics(
+          button: true,
+          label: label,
+          child: Tooltip(
+            message: label,
+            excludeFromSemantics: true,
+            triggerMode: TooltipTriggerMode.manual,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => widget.onSelected(entry),
+              child: widget.thumbnailBuilder(context, entry),
             ),
           ),
         ),
+        if (favorites != null)
+          PositionedDirectional(
+            top: 0,
+            end: 0,
+            child: favorites.buttonBuilder(context, entry),
+          ),
       ],
     );
   }
 }
 
-final class _GiphyAttributionLink extends StatefulWidget {
-  const _GiphyAttributionLink({
+final class GiphyAttributionLink extends StatefulWidget {
+  const GiphyAttributionLink({
+    super.key,
     required this.repository,
     required this.label,
     required this.onPressed,
@@ -343,10 +486,10 @@ final class _GiphyAttributionLink extends StatefulWidget {
   final GiphyAttributionOpener onPressed;
 
   @override
-  State<_GiphyAttributionLink> createState() => _GiphyAttributionLinkState();
+  State<GiphyAttributionLink> createState() => _GiphyAttributionLinkState();
 }
 
-final class _GiphyAttributionLinkState extends State<_GiphyAttributionLink> {
+final class _GiphyAttributionLinkState extends State<GiphyAttributionLink> {
   late Future<GiphyAttributionAsset> _asset;
   Completer<void>? _abort;
 
@@ -357,7 +500,7 @@ final class _GiphyAttributionLinkState extends State<_GiphyAttributionLink> {
   }
 
   @override
-  void didUpdateWidget(covariant _GiphyAttributionLink oldWidget) {
+  void didUpdateWidget(covariant GiphyAttributionLink oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.repository, widget.repository)) {
       _load();
@@ -395,6 +538,8 @@ final class _GiphyAttributionLinkState extends State<_GiphyAttributionLink> {
     final scheme = Theme.of(context).colorScheme;
     final fallback = Text(
       widget.label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
       style: Theme.of(context).textTheme.labelLarge?.copyWith(
         color: scheme.primary,
         decoration: TextDecoration.underline,
@@ -404,12 +549,13 @@ final class _GiphyAttributionLinkState extends State<_GiphyAttributionLink> {
     return Tooltip(
       message: widget.label,
       child: Material(
-        color: scheme.surface,
+        color: Colors.transparent,
         child: InkWell(
           key: const Key('giphy-attribution-link'),
           onTap: () => unawaited(_open()),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48, minWidth: 160),
+          child: SizedBox(
+            height: 48,
+            width: 104,
             child: Center(
               child: FutureBuilder<GiphyAttributionAsset>(
                 future: _asset,
@@ -423,7 +569,8 @@ final class _GiphyAttributionLinkState extends State<_GiphyAttributionLink> {
                   return Image.memory(
                     asset.body,
                     key: const Key('giphy-attribution-image'),
-                    height: 30,
+                    width: 96,
+                    height: 22,
                     fit: BoxFit.contain,
                     gaplessPlayback: true,
                     filterQuality: FilterQuality.low,

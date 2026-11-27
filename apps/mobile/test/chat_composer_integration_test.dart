@@ -21,11 +21,13 @@ import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
+import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
 import 'package:nextcloudtalk/features/chat/composer/chat_media_composer.dart';
 import 'package:nextcloudtalk/features/chat/media/image_attachment_upload_panel.dart';
 import 'package:nextcloudtalk/features/chat/composer/clipboard_image_offer.dart';
 import 'package:nextcloudtalk/features/chat/composer/clipboard_image_source.dart';
 import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
+import 'package:nextcloudtalk/features/chat/composer/gif_favorites.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy_attachment.dart';
 import 'package:nextcloudtalk/features/chat/composer/reply_templates.dart';
@@ -46,6 +48,7 @@ import 'test_support.dart';
 
 part 'chat_composer_location_test.part.dart';
 part 'chat_composer_giphy_reopen_test.part.dart';
+part 'chat_composer_giphy_gallery_test.part.dart';
 part 'chat_composer_nonblocking_test.part.dart';
 part 'chat_composer_quick_emoji_test.part.dart';
 part 'chat_composer_clipboard_offer_test.part.dart';
@@ -63,6 +66,7 @@ typedef _ShortComposerGeometry = ({
 });
 
 void main() {
+  _registerGiphyGalleryTests();
   _registerComposerFeatureTests();
   for (final geometry in <_ShortComposerGeometry>[
     (

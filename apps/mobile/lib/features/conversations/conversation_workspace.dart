@@ -257,7 +257,10 @@ final class _CompactShell extends StatelessWidget {
       return PopScope(
         canPop: false,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) {
+          if (didPop) return;
+          if (ModalRoute.of(context)?.willHandlePopInternally == true) {
+            Navigator.of(context).pop();
+          } else {
             onCloseConversation();
           }
         },

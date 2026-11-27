@@ -1,6 +1,24 @@
 part of 'chat_room_pane.dart';
 
 extension _ChatRoomExpressionPicker on _ChatRoomPaneState {
+  Widget _expressionPickerButton(AppLocalizations strings, Widget? picker) {
+    final button = IconButton(
+      key: const Key('open-emoji-picker'),
+      onPressed: _sending ? null : _toggleEmojiPicker,
+      tooltip: strings.emojiAndGifs,
+      isSelected: _emojiPickerOpen,
+      icon: const Icon(Icons.emoji_emotions_outlined),
+      selectedIcon: const Icon(Icons.emoji_emotions),
+    );
+    return picker == null
+        ? button
+        : _DesktopExpressionPicker(
+            paneKey: _expressionPaneKey,
+            picker: picker,
+            anchor: button,
+          );
+  }
+
   Widget _expressionPicker(
     AsyncValue<HttpGiphyRepository?>? giphy, {
     required bool checkingAttachments,
@@ -9,12 +27,20 @@ extension _ChatRoomExpressionPicker on _ChatRoomPaneState {
     final room = _key;
     final generation = _textSendGeneration;
     final strings = AppLocalizations.of(context);
+    final repository = giphy?.asData?.value;
     return _ExpressionPicker(
       key: ValueKey(room),
       accountId: AccountId.parse(room.accountId),
       usageStore: ref.read(emojiUsageStoreProvider),
       onClose: _closeEmojiPicker,
       onEmoji: _insertEmoji,
+      attribution: repository == null
+          ? null
+          : GiphyAttributionLink(
+              repository: repository,
+              label: strings.giphyPoweredBy,
+              onPressed: _openGiphyAttribution,
+            ),
       onShowGifs: () {
         if (!_giphyRequested) _update(() => _giphyRequested = true);
       },
@@ -40,6 +66,8 @@ extension _ChatRoomExpressionPicker on _ChatRoomPaneState {
               : _ComposerGifs(
                   key: ObjectKey(repository),
                   repository: repository,
+                  accountId: AccountId.parse(room.accountId),
+                  favoritesStore: ref.read(gifFavoritesStoreProvider),
                   onSelected: (entry) {
                     if (!mounted ||
                         !_emojiPickerOpen ||
@@ -71,6 +99,10 @@ extension _ChatRoomExpressionPicker on _ChatRoomPaneState {
   }
 }
 
+Future<void> _openGiphyAttribution(Uri uri) async {
+  await launchUrl(uri, mode: LaunchMode.externalApplication);
+}
+
 final class _TimelineWithExpressionPicker extends StatelessWidget {
   const _TimelineWithExpressionPicker({required this.timeline, this.picker});
 
@@ -79,26 +111,111 @@ final class _TimelineWithExpressionPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final panel = picker;
     return LayoutBuilder(
       builder: (context, bounds) {
-        final height = math.min(
+        final preferred = (MediaQuery.sizeOf(context).height * 0.45).clamp(
+          _ExpressionViewport.minimumHeight,
           320.0,
-          MediaQuery.sizeOf(context).height * 0.45,
         );
         return Column(
           children: [
             Expanded(child: timeline),
-            if (picker != null)
-              SizedBox(
-                height: math.min(height, bounds.maxHeight),
-                child: SingleChildScrollView(
-                  primary: false,
-                  child: SizedBox(height: height, child: picker),
-                ),
+            if (panel != null)
+              _ExpressionViewport(
+                height: math.min(preferred, bounds.maxHeight),
+                child: panel,
               ),
           ],
         );
       },
+    );
+  }
+}
+
+final class _ExpressionViewport extends StatelessWidget {
+  const _ExpressionViewport({required this.height, required this.child});
+
+  static const minimumHeight = 152.0;
+
+  final double height;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      child: height < minimumHeight
+          ? SingleChildScrollView(
+              primary: false,
+              child: SizedBox(height: minimumHeight, child: child),
+            )
+          : child,
+    );
+  }
+}
+
+final class _DesktopExpressionPicker extends StatefulWidget {
+  const _DesktopExpressionPicker({
+    required this.paneKey,
+    required this.picker,
+    required this.anchor,
+  });
+
+  final GlobalKey paneKey;
+  final Widget picker;
+  final Widget anchor;
+
+  @override
+  State<_DesktopExpressionPicker> createState() =>
+      _DesktopExpressionPickerState();
+}
+
+final class _DesktopExpressionPickerState
+    extends State<_DesktopExpressionPicker> {
+  final _portal = OverlayPortalController()..show();
+
+  @override
+  Widget build(BuildContext context) {
+    return OverlayPortal.overlayChildLayoutBuilder(
+      controller: _portal,
+      overlayChildBuilder: _buildPanel,
+      child: widget.anchor,
+    );
+  }
+
+  Widget _buildPanel(BuildContext context, OverlayChildLayoutInfo layout) {
+    final pane = widget.paneKey.currentContext?.findRenderObject();
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (pane is! RenderBox || !pane.hasSize || overlay == null) {
+      return const SizedBox.shrink();
+    }
+    final paneBounds = MatrixUtils.transformRect(
+      pane.getTransformTo(overlay),
+      Offset.zero & pane.size,
+    ).intersect(Offset.zero & layout.overlaySize);
+    final anchor = MatrixUtils.transformRect(
+      layout.childPaintTransform,
+      Offset.zero & layout.childSize,
+    );
+    final bottom = math.min(paneBounds.bottom, anchor.top - 8);
+    final width = math.min(420.0, paneBounds.width);
+    final height = math.min(360.0, bottom - paneBounds.top);
+    if (height <= 0 || width <= 0) return const SizedBox.shrink();
+    final left = (anchor.right - width).clamp(
+      paneBounds.left,
+      paneBounds.right - width,
+    );
+    return Stack(
+      children: [
+        Positioned(
+          left: left,
+          top: bottom - height,
+          width: width,
+          height: height,
+          child: _ExpressionViewport(height: height, child: widget.picker),
+        ),
+      ],
     );
   }
 }
@@ -111,6 +228,7 @@ final class _ExpressionPicker extends StatefulWidget {
     required this.onEmoji,
     required this.onShowGifs,
     required this.buildGifs,
+    required this.attribution,
     super.key,
   });
 
@@ -120,101 +238,198 @@ final class _ExpressionPicker extends StatefulWidget {
   final ValueChanged<EmojiChoice> onEmoji;
   final VoidCallback onShowGifs;
   final Widget Function() buildGifs;
+  final Widget? attribution;
 
   @override
   State<_ExpressionPicker> createState() => _ExpressionPickerState();
 }
 
 final class _ExpressionPickerState extends State<_ExpressionPicker> {
+  final _emojiFocus = FocusScopeNode();
+  final _gifFocus = FocusScopeNode();
   _ExpressionTab _tab = _ExpressionTab.emoji;
+  bool _openedGifs = false;
+  ModalRoute<dynamic>? _route;
+  LocalHistoryEntry? _history;
 
-  void _select(Set<_ExpressionTab> selection) {
-    final next = selection.single;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (identical(_route, route)) return;
+    _removeHistory();
+    _route = route;
+    if (route == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !identical(_route, route) || !route.isActive) return;
+      late final LocalHistoryEntry entry;
+      entry = LocalHistoryEntry(
+        impliesAppBarDismissal: false,
+        onRemove: () {
+          if (!identical(_history, entry)) return;
+          _history = null;
+          if (mounted) _close();
+        },
+      );
+      _history = entry;
+      route.addLocalHistoryEntry(entry);
+    });
+  }
+
+  void _removeHistory() {
+    final entry = _history;
+    _history = null;
+    entry?.remove();
+  }
+
+  @override
+  void dispose() {
+    _removeHistory();
+    _emojiFocus.dispose();
+    _gifFocus.dispose();
+    super.dispose();
+  }
+
+  void _close() {
+    if (_emojiFocus.hasFocus) _emojiFocus.unfocus();
+    if (_gifFocus.hasFocus) _gifFocus.unfocus();
+    widget.onClose();
+  }
+
+  void _select(int index) {
+    final next = _ExpressionTab.values[index];
     if (next == _tab) return;
-    if (next == _ExpressionTab.gifs) widget.onShowGifs();
+    final previousFocus = _tab == _ExpressionTab.emoji
+        ? _emojiFocus
+        : _gifFocus;
+    if (previousFocus.hasFocus) previousFocus.unfocus();
+    if (next == _ExpressionTab.gifs && !_openedGifs) {
+      widget.onShowGifs();
+      _openedGifs = true;
+    }
     setState(() => _tab = next);
   }
 
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final desktop = context.sendsOnEnter;
+    final gifTab = _tab == _ExpressionTab.gifs;
     return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): widget.onClose,
-      },
+      bindings: {const SingleActivator(LogicalKeyboardKey.escape): _close},
       child: Material(
         color: scheme.surfaceContainerLow,
-        child: Column(
-          key: const Key('inline-emoji-panel'),
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: SegmentedButton<_ExpressionTab>(
-                      showSelectedIcon: false,
-                      style: SegmentedButton.styleFrom(
-                        selectedBackgroundColor: scheme.primaryContainer,
-                        selectedForegroundColor: scheme.onPrimaryContainer,
-                      ),
-                      segments: [
-                        ButtonSegment(
-                          value: _ExpressionTab.emoji,
-                          label: Text(
+        elevation: desktop ? 8 : 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(12)),
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: DefaultTabController(
+          length: _ExpressionTab.values.length,
+          child: Column(
+            key: const Key('inline-emoji-panel'),
+            children: [
+              SizedBox(
+                height: 48,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TabBar(
+                        isScrollable: true,
+                        tabAlignment: TabAlignment.start,
+                        dividerHeight: 0,
+                        indicatorWeight: 2,
+                        indicatorColor: scheme.primary,
+                        labelStyle: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                        unselectedLabelStyle: theme.textTheme.labelLarge,
+                        labelPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                        ),
+                        onTap: _select,
+                        tabs: [
+                          _tabLabel(
                             strings.emojiPickerTitle,
-                            key: const Key('composer-emoji-tab'),
+                            const Key('composer-emoji-tab'),
                           ),
-                        ),
-                        ButtonSegment(
-                          value: _ExpressionTab.gifs,
-                          label: Text(
+                          _tabLabel(
                             strings.gifTab,
-                            key: const Key('open-giphy-picker'),
+                            const Key('open-giphy-picker'),
                           ),
-                        ),
-                      ],
-                      selected: {_tab},
-                      onSelectionChanged: _select,
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-                IconButton(
-                  key: const Key('emoji-close'),
-                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: widget.onClose,
-                ),
-              ],
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Visibility(
-                    visible: _tab == _ExpressionTab.emoji,
-                    maintainState: true,
-                    child: EmojiPicker(
-                      accountId: widget.accountId,
-                      usageStore: widget.usageStore,
-                      labels: emojiPickerLabelsFor(strings),
-                      onClose: widget.onClose,
-                      onSelected: widget.onEmoji,
-                      composer: true,
+                    if (widget.attribution case final attribution?
+                        when _openedGifs)
+                      Visibility(
+                        visible: gifTab,
+                        maintainState: true,
+                        child: attribution,
+                      ),
+                    SizedBox.square(
+                      dimension: 48,
+                      child: IconButton(
+                        key: const Key('emoji-close'),
+                        tooltip: MaterialLocalizations.of(
+                          context,
+                        ).closeButtonTooltip,
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: _close,
+                      ),
                     ),
-                  ),
-                  if (_tab == _ExpressionTab.gifs) widget.buildGifs(),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              const Divider(height: 1),
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Visibility(
+                      visible: !gifTab,
+                      maintainState: true,
+                      child: FocusScope(
+                        node: _emojiFocus,
+                        child: EmojiPicker(
+                          accountId: widget.accountId,
+                          usageStore: widget.usageStore,
+                          labels: emojiPickerLabelsFor(strings),
+                          onClose: _close,
+                          onSelected: widget.onEmoji,
+                          composer: true,
+                        ),
+                      ),
+                    ),
+                    if (_openedGifs)
+                      Visibility(
+                        visible: gifTab,
+                        maintainState: true,
+                        child: FocusScope(
+                          node: _gifFocus,
+                          child: widget.buildGifs(),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  Widget _tabLabel(String label, Key key) => Tab(
+    height: 48,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 40),
+      child: Center(child: Text(label, key: key)),
+    ),
+  );
 }
 
 enum _ExpressionTab { emoji, gifs }
@@ -222,11 +437,15 @@ enum _ExpressionTab { emoji, gifs }
 final class _ComposerGifs extends StatefulWidget {
   const _ComposerGifs({
     required this.repository,
+    required this.accountId,
+    required this.favoritesStore,
     required this.onSelected,
     super.key,
   });
 
   final HttpGiphyRepository repository;
+  final AccountId accountId;
+  final GifFavoritesStore favoritesStore;
   final ValueChanged<GiphyEntry> onSelected;
 
   @override
@@ -252,22 +471,36 @@ final class _ComposerGifsState extends State<_ComposerGifs> {
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
-    return GiphyPicker(
-      controller: _controller,
-      labels: GiphyPickerLabels(
-        searchHint: strings.giphySearchHint,
-        noResults: strings.giphyNoResults,
-        retry: strings.retry,
-        loadMore: strings.giphyLoadMore,
-        poweredByGiphy: strings.giphyPoweredBy,
+    return GifFavoritesScope(
+      accountId: widget.accountId,
+      store: widget.favoritesStore,
+      builder: (context, favorites) => GiphyPicker(
+        controller: _controller,
+        labels: GiphyPickerLabels(
+          searchHint: strings.giphySearchHint,
+          noResults: strings.giphyNoResults,
+          retry: strings.retry,
+          loadMore: strings.giphyLoadMore,
+          poweredByGiphy: strings.giphyPoweredBy,
+          sendResult: strings.giphySendResult,
+        ),
+        desktop: context.sendsOnEnter,
+        showAttribution: false,
+        favorites: (
+          entries: favorites.entries,
+          loading: favorites.loading,
+          label: strings.giphyMyGifs,
+          searchHint: strings.giphySearchMyGifs,
+          emptyHint: strings.giphyMyGifsEmpty,
+          buttonBuilder: (_, entry) =>
+              GifFavoriteButton(entry: entry, favorites: favorites),
+        ),
+        thumbnailBuilder: (_, entry) => ExcludeSemantics(
+          child: _GiphyThumbnail(repository: widget.repository, entry: entry),
+        ),
+        onAttributionPressed: _openGiphyAttribution,
+        onSelected: widget.onSelected,
       ),
-      thumbnailBuilder: (_, entry) => ExcludeSemantics(
-        child: _GiphyThumbnail(repository: widget.repository, entry: entry),
-      ),
-      onAttributionPressed: (uri) async {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      },
-      onSelected: widget.onSelected,
     );
   }
 }

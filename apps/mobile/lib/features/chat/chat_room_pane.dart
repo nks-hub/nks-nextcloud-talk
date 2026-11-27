@@ -82,6 +82,7 @@ import 'composer/emoji_picker.dart';
 import 'composer/emoji_picker_labels.dart';
 import 'composer/emoji_usage_store.dart';
 import 'composer/giphy.dart';
+import 'composer/gif_favorites.dart';
 import 'composer/mention_suggestions.dart';
 import 'composer/reply_templates.dart';
 
@@ -154,6 +155,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   final FocusNode _composerFocusNode = FocusNode();
   int _composerFocusGeneration = 0;
   bool _emojiPickerOpen = false;
+  final _expressionPaneKey = GlobalKey();
   bool _emojiPickerPending = false;
   ui.FlutterView? _view;
   final ChatScrollController _scrollController = ChatScrollController();
@@ -977,15 +979,16 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final leadingComposerAction = ComposerActionMenuButton(
       actions: _attachmentMenuActions_,
     );
+    final expressionPicker = _emojiPickerOpen && !readOnly
+        ? _expressionPicker(
+            giphy,
+            checkingAttachments: attachmentDependencies?.isLoading ?? false,
+            fileAttachmentSupported: fileAttachmentSupported,
+          )
+        : null;
+    final desktop = context.sendsOnEnter;
     final idleComposerActions = <Widget>[
-      IconButton(
-        key: const Key('open-emoji-picker'),
-        onPressed: _sending ? null : _toggleEmojiPicker,
-        tooltip: strings.emojiAndGifs,
-        isSelected: _emojiPickerOpen,
-        icon: const Icon(Icons.emoji_emotions_outlined),
-        selectedIcon: const Icon(Icons.emoji_emotions),
-      ),
+      _expressionPickerButton(strings, desktop ? expressionPicker : null),
     ];
     final quickEmoji =
         _timelineCache.canShare(
@@ -1078,6 +1081,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     );
 
     return PollInteractionScope(
+      key: _expressionPaneKey,
       roomKey: interactionKey,
       isCurrent: () => mounted && _key == interactionKey,
       child: Column(
@@ -1119,14 +1123,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           if (error != null) _ChatErrorNotice(error: error, onRetry: _sync),
           Expanded(
             child: _TimelineWithExpressionPicker(
-              picker: _emojiPickerOpen && !readOnly
-                  ? _expressionPicker(
-                      giphy,
-                      checkingAttachments:
-                          attachmentDependencies?.isLoading ?? false,
-                      fileAttachmentSupported: fileAttachmentSupported,
-                    )
-                  : null,
+              picker: desktop ? null : expressionPicker,
               timeline: showInitialLoading
                   ? const Center(child: CircularProgressIndicator())
                   : Stack(
