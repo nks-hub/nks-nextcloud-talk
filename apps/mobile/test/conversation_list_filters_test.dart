@@ -120,9 +120,7 @@ void main() {
           ];
           for (var i = 0; i < rects.length; i++) {
             final chip = rects[i];
-            // Every tab is fully inside the bar's insets without scrolling.
-            expect(chip.left, greaterThanOrEqualTo(bar.left + 12));
-            expect(chip.right, lessThanOrEqualTo(bar.right - 12 + 0.5));
+            expect(chip.center.dy, rects.first.center.dy, reason: '$locale');
             final label = tester.getRect(
               find.descendant(
                 of: find.byKey(filterKeys[i]),
@@ -141,19 +139,20 @@ void main() {
             );
             if (i > 0) {
               final previous = rects[i - 1];
-              if (previous.top == chip.top) {
-                expect(chip.left - previous.right, 4, reason: 'gap, $locale');
-              } else {
-                expect(chip.top - previous.bottom, greaterThanOrEqualTo(2));
-              }
+              expect(chip.left - previous.right, 4, reason: 'gap, $locale');
             }
           }
-          // Wrapped or not, the chips never overlap each other.
-          for (var i = 0; i < rects.length; i++) {
-            for (var j = i + 1; j < rects.length; j++) {
-              expect(rects[i].overlaps(rects[j]), isFalse);
-            }
+          final archived = find.byKey(filterKeys.last);
+          if (rects.last.right > bar.right - 12) {
+            await tester.drag(
+              find.byKey(const Key('conversation-filters')),
+              Offset(-rects.last.right, 0),
+            );
+            await tester.pumpAndSettle();
           }
+          await tester.tap(archived.hitTestable());
+          await tester.pump();
+          expect(tester.widget<FilterChip>(archived).selected, isTrue);
           expect(
             tester
                 .getSemantics(find.byKey(const Key('conversation-filters')))

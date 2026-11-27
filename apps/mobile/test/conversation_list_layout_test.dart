@@ -14,6 +14,9 @@ void main() {
     WidgetTester tester,
     List<CachedConversation> conversations, {
     ValueChanged<CachedConversation>? onSelect,
+    VoidCallback? onMessageSearch,
+    StoredAccount account = _account,
+    double? paneWidth,
     double textScale = 1,
     double width = 900,
     Locale locale = const Locale('en'),
@@ -31,12 +34,19 @@ void main() {
           textScale: textScale,
           locale: locale,
           home: Scaffold(
-            body: ConversationListView(
-              account: _account,
-              conversations: conversations,
-              loading: false,
-              onRefresh: () async {},
-              onSelect: onSelect ?? (_) {},
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: paneWidth ?? width,
+                child: ConversationListView(
+                  account: account,
+                  conversations: conversations,
+                  loading: false,
+                  onRefresh: () async {},
+                  onSelect: onSelect ?? (_) {},
+                  onMessageSearch: onMessageSearch,
+                ),
+              ),
             ),
           ),
         ),
@@ -51,7 +61,7 @@ void main() {
       final selected = <String>[];
       await pump(tester, [
         _conversation('room-a', 'Project A', favorite: true),
-        _conversation('room-b', 'Supply order'),
+        _conversation('room-b', 'Supply order', type: 6),
         _conversation('room-c', 'Archived', favorite: true, archived: true),
       ], onSelect: (room) => selected.add(room.token));
       expect(find.byKey(const Key('favorite-room-room-c')), findsNothing);
@@ -63,7 +73,7 @@ void main() {
       await tester.enterText(search, ' UNKNOWN ');
       await tester.pump();
       expect(find.byKey(const Key('conversation-tile-room-a')), findsNothing);
-      expect(find.byKey(const Key('favorite-conversations')), findsNothing);
+      expect(find.byKey(const Key('favorite-room-room-a')), findsNothing);
       expect(tester.testTextInput.isVisible, isTrue);
 
       await tester.enterText(search, ' SuPPly ');
@@ -74,6 +84,84 @@ void main() {
       expect(find.byKey(const Key('conversation-tile-room-a')), findsOneWidget);
       expect(find.byKey(const Key('favorite-room-room-a')), findsOneWidget);
     },
+  );
+
+  testWidgets(
+    'Windows sidebar keeps search, notes and filters on one row',
+    (tester) async {
+      final selected = <String>[];
+      var searches = 0;
+      Finder control(String key) => find.byKey(Key(key));
+      await pump(
+        tester,
+        [
+          _conversation('notes', 'Poznámka pro mě', type: 6, favorite: true),
+          _conversation('star', 'Oblíbená místnost', favorite: true),
+          _conversation(
+            'archive',
+            'Archiv',
+            archived: true,
+          ).copyWith(unreadMessages: 1),
+        ],
+        width: 1280,
+        paneWidth: 317,
+        locale: const Locale('cs'),
+        textScale: 2,
+        account: _account.copyWith(
+          talkFeaturesJson: '["archived-conversations-v2"]',
+        ),
+        onSelect: (room) => selected.add(room.token),
+        onMessageSearch: () => searches++,
+      );
+      final search = control('conversation-name-search');
+      final note = control('favorite-room-notes');
+      final messages = control('open-message-search');
+      final filters = control('conversation-filter-menu');
+      final field = tester.getRect(search);
+      for (final action in [note, messages, filters]) {
+        expect(tester.getCenter(action).dy, closeTo(field.center.dy, 0.5));
+        expect(action.hitTestable(), findsOneWidget);
+      }
+      expect(field.width, greaterThan(130));
+      expect(
+        tester.getRect(control('conversation-tile-notes')).top - field.bottom,
+        inInclusiveRange(0, 8),
+      );
+      expect(control('conversation-filters'), findsNothing);
+      await tester.tap(note);
+      await tester.tap(messages);
+      expect(selected, ['notes']);
+      expect(searches, 1);
+      await tester.tap(filters);
+      await tester.pumpAndSettle();
+      Finder option(String id) => find.byWidgetPredicate(
+        (widget) =>
+            widget is CheckboxMenuButton &&
+            widget.key == Key('conversation-filter-$id'),
+      );
+      final unread = option('unread');
+      final archived = option('archived');
+      await tester.tap(unread);
+      await tester.pumpAndSettle();
+      await tester.tap(archived);
+      await tester.pumpAndSettle();
+      expect(tester.widget<CheckboxMenuButton>(unread).value, isTrue);
+      expect(tester.widget<CheckboxMenuButton>(archived).value, isTrue);
+      expect(tester.widget<IconButton>(filters).isSelected, isTrue);
+      expect(control('conversation-tile-notes'), findsNothing);
+      expect(control('conversation-tile-archive'), findsOneWidget);
+      await tester.tap(option('all'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<IconButton>(filters).isSelected, isFalse);
+      expect(control('conversation-tile-notes'), findsOneWidget);
+      await tester.tap(control('favorite-conversations-menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(control('favorite-room-star').hitTestable());
+      await tester.pumpAndSettle();
+      expect(selected, ['notes', 'star']);
+      expect(tester.takeException(), isNull);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
   );
 
   testWidgets('the date sits at the right edge of a wide row', (tester) async {

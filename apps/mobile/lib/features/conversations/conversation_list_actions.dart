@@ -2,11 +2,11 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import '../../core/desktop_metrics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
+import '../../core/desktop_metrics.dart';
 import '../../core/giphy_reference.dart';
 import '../../core/tonal_state_icon.dart';
 import '../../data/app_database.dart';
@@ -17,6 +17,7 @@ import '../rooms/room_settings_service.dart';
 import 'conversation_avatar.dart' show ConversationRoomType;
 import 'conversation_avatar_widget.dart';
 import 'conversation_delivery.dart';
+import 'conversation_header_actions.dart' show actionExtentOf;
 import 'conversation_presence.dart';
 import 'conversation_sync_service.dart';
 
@@ -42,8 +43,6 @@ final class ConversationListView extends ConsumerStatefulWidget {
     required this.onSelect,
     this.selectedToken,
     this.bottomInset = 0,
-    this.heading,
-    this.inlineFavorites = false,
     this.onMessageSearch,
   });
 
@@ -54,8 +53,6 @@ final class ConversationListView extends ConsumerStatefulWidget {
   final ValueChanged<CachedConversation> onSelect;
   final String? selectedToken;
 
-  final Widget? heading;
-  final bool inlineFavorites;
   final VoidCallback? onMessageSearch;
 
   /// Room to leave under the last row for whatever floats over the list.
@@ -246,9 +243,17 @@ final class _ConversationListViewState
         )
         .toList(growable: false);
 
-    final favorites = filters.isEmpty && _query.isEmpty
-        ? shown.where((room) => room.favorite).toList(growable: false)
+    final desktop = context.usesDesktopDensity;
+    final shortcuts = desktop || (filters.isEmpty && _query.isEmpty)
+        ? widget.conversations
+              .where((room) => room.favorite && !room.isArchived)
+              .toList(growable: false)
         : const <CachedConversation>[];
+    final preferred =
+        shortcuts
+            .where((room) => room.roomType == ConversationRoomType.noteToSelf)
+            .firstOrNull ??
+        (shortcuts.length == 1 ? shortcuts.first : null);
 
     return RefreshIndicator(
       key: ValueKey<String>('conversation-list-${widget.account.id}'),
@@ -259,47 +264,33 @@ final class _ConversationListViewState
         itemCount: shown.isEmpty ? 2 : shown.length + 1,
         itemBuilder: (context, index) {
           if (index == 0) {
-            final compact = widget.heading != null;
-            final shortcuts = _FavoriteConversations(
-              account: widget.account,
-              rooms: favorites,
-              onSelect: widget.onSelect,
-              compact: compact,
+            final filterControls = _ConversationFilters(
+              selected: filters,
+              showArchived: canViewArchived,
+              onToggle: _toggleFilter,
+              onClear: () => setState(() {
+                _filters.clear();
+                _unreadMentions.clear();
+              }),
+              otherRooms: shortcuts.where((room) => room != preferred),
+              onSelectRoom: widget.onSelect,
             );
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (widget.heading != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                    child: widget.heading,
-                  ),
-                if (compact && favorites.isNotEmpty) shortcuts,
                 _ConversationSearch(
+                  account: widget.account,
+                  shortcuts: shortcuts,
+                  preferred: preferred,
+                  onSelect: widget.onSelect,
+                  filterMenu: desktop ? filterControls : null,
                   controller: _search,
                   onChanged: (value) => setState(() {
                     _query = value.trim().toLowerCase();
                   }),
                   onMessageSearch: widget.onMessageSearch,
-                  favorites: widget.inlineFavorites && favorites.isNotEmpty
-                      ? _InlineFavorites(
-                          account: widget.account,
-                          rooms: favorites,
-                          onSelect: widget.onSelect,
-                        )
-                      : null,
                 ),
-                if (!compact && !widget.inlineFavorites && favorites.isNotEmpty)
-                  shortcuts,
-                _ConversationFilterBar(
-                  selected: filters,
-                  showArchived: canViewArchived,
-                  onToggle: _toggleFilter,
-                  onClear: () => setState(() {
-                    _filters.clear();
-                    _unreadMentions.clear();
-                  }),
-                ),
+                if (!desktop) filterControls,
               ],
             );
           }
