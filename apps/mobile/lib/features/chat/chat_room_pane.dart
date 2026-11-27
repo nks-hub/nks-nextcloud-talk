@@ -87,6 +87,7 @@ import 'composer/emoji_picker_labels.dart';
 import 'composer/emoji_usage_store.dart';
 import 'composer/giphy.dart';
 import 'composer/gif_favorites.dart';
+import 'composer/gif_favorites_sync.dart';
 import 'composer/mention_suggestions.dart';
 import 'composer/reply_templates.dart';
 

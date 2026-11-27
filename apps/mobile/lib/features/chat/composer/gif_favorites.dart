@@ -8,9 +8,11 @@ import 'giphy.dart';
 
 export 'gif_favorites_store.dart';
 
-final gifFavoritesStoreProvider = Provider<GifFavoritesStore>(
-  (ref) => GifFavoritesStore(),
-);
+final gifFavoritesStoreProvider = Provider<GifFavoritesStore>((ref) {
+  final store = GifFavoritesStore();
+  ref.onDispose(store.dispose);
+  return store;
+});
 
 final class GifFavoritesView {
   const GifFavoritesView._(this.entries, this.loading, this.toggle);
@@ -28,12 +30,14 @@ final class GifFavoritesScope extends StatefulWidget {
     required this.accountId,
     required this.store,
     required this.builder,
+    this.onChanged,
     super.key,
   });
 
   final AccountId accountId;
   final GifFavoritesStore store;
   final Widget Function(BuildContext, GifFavoritesView) builder;
+  final VoidCallback? onChanged;
 
   @override
   State<GifFavoritesScope> createState() => _GifFavoritesScopeState();
@@ -75,6 +79,7 @@ class _GifFavoritesScopeState extends State<GifFavoritesScope> {
   Widget build(BuildContext context) {
     final account = widget.accountId;
     final store = widget.store;
+    final onChanged = widget.onChanged;
     return FutureBuilder<List<GiphyEntry>>(
       key: ValueKey((account, store)),
       future: _entries,
@@ -98,6 +103,7 @@ class _GifFavoritesScopeState extends State<GifFavoritesScope> {
                   entry,
                   saved: !entries.any((other) => sameFavoriteGif(other, entry)),
                 );
+                onChanged?.call();
               } on Object {
                 if (!context.mounted) return;
                 ScaffoldMessenger.maybeOf(context)?.showSnackBar(

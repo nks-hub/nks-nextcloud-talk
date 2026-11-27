@@ -224,6 +224,7 @@ final class GiphyPicker extends StatefulWidget {
     this.desktop = false,
     this.showAttribution = true,
     this.favorites,
+    this.onFavoritesOpened,
     super.key,
   });
 
@@ -235,6 +236,7 @@ final class GiphyPicker extends StatefulWidget {
   final bool desktop;
   final bool showAttribution;
   final GiphyPickerFavorites? favorites;
+  final VoidCallback? onFavoritesOpened;
 
   @override
   State<GiphyPicker> createState() => _GiphyPickerState();
@@ -263,7 +265,11 @@ final class _GiphyPickerState extends State<GiphyPicker> {
 
   void _toggleFavorites() {
     setState(() => _favoritesOnly = !_favoritesOnly);
-    if (!_favoritesOnly) _controller.searchAsTyped(_query.text);
+    if (_favoritesOnly) {
+      widget.onFavoritesOpened?.call();
+    } else {
+      _controller.searchAsTyped(_query.text);
+    }
   }
 
   @override

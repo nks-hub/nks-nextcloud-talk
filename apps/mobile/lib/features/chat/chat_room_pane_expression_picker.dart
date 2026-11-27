@@ -68,6 +68,7 @@ extension _ChatRoomExpressionPicker on _ChatRoomPaneState {
                   repository: repository,
                   accountId: AccountId.parse(room.accountId),
                   favoritesStore: ref.read(gifFavoritesStoreProvider),
+                  favoritesSync: ref.read(gifFavoritesSyncProvider),
                   onSelected: (entry) {
                     if (!mounted ||
                         !_emojiPickerOpen ||
@@ -439,6 +440,7 @@ final class _ComposerGifs extends StatefulWidget {
     required this.repository,
     required this.accountId,
     required this.favoritesStore,
+    required this.favoritesSync,
     required this.onSelected,
     super.key,
   });
@@ -446,7 +448,11 @@ final class _ComposerGifs extends StatefulWidget {
   final HttpGiphyRepository repository;
   final AccountId accountId;
   final GifFavoritesStore favoritesStore;
+  final GifFavoritesSync favoritesSync;
   final ValueChanged<GiphyEntry> onSelected;
+
+  void refreshFavorites() =>
+      unawaited(favoritesSync.refresh(accountId, repository.server));
 
   @override
   State<_ComposerGifs> createState() => _ComposerGifsState();
@@ -460,6 +466,7 @@ final class _ComposerGifsState extends State<_ComposerGifs> {
     super.initState();
     _controller = GiphyController(repository: widget.repository);
     unawaited(_controller.loadTrending());
+    widget.refreshFavorites();
   }
 
   @override
@@ -474,6 +481,7 @@ final class _ComposerGifsState extends State<_ComposerGifs> {
     return GifFavoritesScope(
       accountId: widget.accountId,
       store: widget.favoritesStore,
+      onChanged: widget.refreshFavorites,
       builder: (context, favorites) => GiphyPicker(
         controller: _controller,
         labels: GiphyPickerLabels(
@@ -486,6 +494,7 @@ final class _ComposerGifsState extends State<_ComposerGifs> {
         ),
         desktop: context.sendsOnEnter,
         showAttribution: false,
+        onFavoritesOpened: widget.refreshFavorites,
         favorites: (
           entries: favorites.entries,
           loading: favorites.loading,
