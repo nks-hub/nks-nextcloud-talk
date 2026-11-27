@@ -103,6 +103,7 @@ part 'chat_room_pane_handoff.dart';
 part 'chat_room_pane_undelivered.dart';
 part 'chat_room_pane_composer_widgets.dart';
 part 'chat_room_pane_expression_picker.dart';
+part 'chat_room_pane_layout.dart';
 part 'chat_room_pane_timeline_states.dart';
 part 'chat_room_pane_notices.dart';
 part 'chat_room_pane_sync.dart';
@@ -1060,9 +1061,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       key: _expressionPaneKey,
       roomKey: interactionKey,
       isCurrent: () => mounted && _key == interactionKey,
-      child: Column(
-        key: const Key('chat-room-pane'),
-        children: [
+      child: _ChatRoomLayout(
+        notices: [
           if (widget.showHeader)
             _ChatHeader(
               account: widget.account,
@@ -1097,92 +1097,90 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
               semanticsLabel: AppLocalizations.of(context).syncing,
             ),
           if (error != null) _ChatErrorNotice(error: error, onRetry: _sync),
-          Expanded(
-            child: _TimelineWithExpressionPicker(
-              picker: desktop ? null : expressionPicker,
-              timeline: showInitialLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : Stack(
-                      children: [
-                        _pointerSelectable(
-                          _ChatTimeline(
-                            readerIsActive: _readerIsActive,
-                            cache: _timelineCache,
-                            account: widget.account,
-                            conversation: widget.conversation,
-                            threadId: widget.threadId,
-                            inlineReplies:
-                                ref.watch(replyLayoutProvider) ==
-                                ReplyLayout.inline,
-                            messages: messages,
-                            blocks: shownBlocks,
-                            pending: pending,
-                            selectedOperationId: issue?.id,
-                            attachments: pendingAttachments,
-                            hasOlder: _island != null
-                                ? !_islandAtStart
-                                : (scope?.hasHistory ?? false) ||
-                                      (inRootRoom
-                                              ? cachedMessages.length
-                                              : cachedMessages
-                                                    .where(
-                                                      (row) =>
-                                                          row.messageId !=
-                                                          widget.threadId,
-                                                    )
-                                                    .length) >=
-                                          ref.watch(
-                                            chatMessageWindowProvider(_key),
-                                          ),
-                            loadingOlder: _loadingOlder,
-                            controller: _scrollController,
-                            onLoadOlder: () => unawaited(_loadOlder()),
-                            onRetry: (operation) {
-                              final draft = recoverable[operation.operationId];
-                              if (draft != null) {
-                                unawaited(_retryDraft(draft));
-                              } else {
-                                unawaited(_sync());
-                              }
-                            },
-                            onResend: _confirmResend,
-                            onCancel: (operation) {
-                              final draft = recoverable[operation.operationId];
-                              if (draft != null) {
-                                unawaited(_discardDraft(draft));
-                              } else {
-                                unawaited(_cancelPending(operation));
-                              }
-                            },
-                            onOpenThread: _openThread,
-                            onMessageActions: handleMessageActions,
-                            onReplySwipe: canReplyToMessage
-                                ? _startReply
-                                : null,
-                            onReactionTap: handleReactionTap,
-                            onJumpToMessage: (messageId) =>
-                                unawaited(_jumpToMessage(messageId)),
-                            jumpTargetId: _jumpTargetId,
-                            jumpTargetKey: _jumpTargetKey,
-                            highlightedMessageId: _highlightedMessageId,
-                            deliveryStates: deliveryStates,
-                            lastCommonRead: _cursorValue(scope?.lastCommonRead),
-                            anchorMessageId: _anchorMessageId,
-                          ),
-                        ),
-                        if (_awayFromNewest)
-                          Positioned(
-                            right: 16,
-                            bottom: 16,
-                            child: _JumpToNewestButton(
-                              onPressed: () => unawaited(_jumpToNewest()),
-                              newer: newerThanIsland,
-                            ),
-                          ),
-                      ],
+        ],
+        timeline: _TimelineWithExpressionPicker(
+          picker: desktop ? null : expressionPicker,
+          timeline: showInitialLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Stack(
+                  children: [
+                    _pointerSelectable(
+                      _ChatTimeline(
+                        readerIsActive: _readerIsActive,
+                        cache: _timelineCache,
+                        account: widget.account,
+                        conversation: widget.conversation,
+                        threadId: widget.threadId,
+                        inlineReplies:
+                            ref.watch(replyLayoutProvider) ==
+                            ReplyLayout.inline,
+                        messages: messages,
+                        blocks: shownBlocks,
+                        pending: pending,
+                        selectedOperationId: issue?.id,
+                        attachments: pendingAttachments,
+                        hasOlder: _island != null
+                            ? !_islandAtStart
+                            : (scope?.hasHistory ?? false) ||
+                                  (inRootRoom
+                                          ? cachedMessages.length
+                                          : cachedMessages
+                                                .where(
+                                                  (row) =>
+                                                      row.messageId !=
+                                                      widget.threadId,
+                                                )
+                                                .length) >=
+                                      ref.watch(
+                                        chatMessageWindowProvider(_key),
+                                      ),
+                        loadingOlder: _loadingOlder,
+                        controller: _scrollController,
+                        onLoadOlder: () => unawaited(_loadOlder()),
+                        onRetry: (operation) {
+                          final draft = recoverable[operation.operationId];
+                          if (draft != null) {
+                            unawaited(_retryDraft(draft));
+                          } else {
+                            unawaited(_sync());
+                          }
+                        },
+                        onResend: _confirmResend,
+                        onCancel: (operation) {
+                          final draft = recoverable[operation.operationId];
+                          if (draft != null) {
+                            unawaited(_discardDraft(draft));
+                          } else {
+                            unawaited(_cancelPending(operation));
+                          }
+                        },
+                        onOpenThread: _openThread,
+                        onMessageActions: handleMessageActions,
+                        onReplySwipe: canReplyToMessage ? _startReply : null,
+                        onReactionTap: handleReactionTap,
+                        onJumpToMessage: (messageId) =>
+                            unawaited(_jumpToMessage(messageId)),
+                        jumpTargetId: _jumpTargetId,
+                        jumpTargetKey: _jumpTargetKey,
+                        highlightedMessageId: _highlightedMessageId,
+                        deliveryStates: deliveryStates,
+                        lastCommonRead: _cursorValue(scope?.lastCommonRead),
+                        anchorMessageId: _anchorMessageId,
+                      ),
                     ),
-            ),
-          ),
+                    if (_awayFromNewest)
+                      Positioned(
+                        right: 16,
+                        bottom: 16,
+                        child: _JumpToNewestButton(
+                          onPressed: () => unawaited(_jumpToNewest()),
+                          newer: newerThanIsland,
+                        ),
+                      ),
+                  ],
+                ),
+        ),
+        composer: [
           ChatTypingBanner(names: typingNames),
           _ChatComposer(
             replyTo: _replyTo,

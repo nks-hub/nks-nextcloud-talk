@@ -22,6 +22,95 @@ const _ShortComposerGeometry _s21LandscapeComposerGeometry = (
 
 void _registerCompactReplyComposerTest() {
   testWidgets(
+    'a 110.9dp chat keeps typing, attachment retry and send usable',
+    (tester) async {
+      const pixelRatio = 2.625;
+      const roomHeight = 110.9;
+      const safePadding = FakeViewPadding(top: 63, left: 126);
+      tester.view.devicePixelRatio = pixelRatio;
+      tester.view.physicalSize = const Size(2220, 1080);
+      tester.view.padding = safePadding;
+      tester.view.viewPadding = safePadding;
+      addTearDown(tester.view.reset);
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      _addHarnessTearDown(tester, harness);
+      var attachmentStarts = 0;
+      await tester.pumpWidget(
+        harness.app(
+          inRoomScreen: true,
+          overrides: [
+            chatScopeProvider.overrideWith(
+              (_, key) => Stream.value(
+                StoredChatScope(
+                  accountId: key.accountId,
+                  roomToken: key.roomToken,
+                  scopeKey: 'root',
+                  historyCursor: '0',
+                  futureCursor: '0',
+                  lastCommonRead: '0',
+                  lastReadMessage: 0,
+                  unreadMessages: 0,
+                  hasHistory: false,
+                  futureConverged: true,
+                  blocksJson: '[]',
+                  lastSyncError: 'network',
+                ),
+              ),
+            ),
+            chatAttachmentDependenciesProvider.overrideWith((_, _) async {
+              attachmentStarts++;
+              throw StateError('Fixture attachment error');
+            }),
+          ],
+        ),
+      );
+      final room = find.byKey(const Key('chat-room-pane'));
+      final composer = find.byKey(const Key('chat-composer'));
+      final retry = find.byKey(const Key('retry-media-capabilities'));
+      final syncWarning = find.byKey(const Key('retry-chat-sync'));
+      final send = find.byKey(const Key('send-message-gesture'));
+      try {
+        await _pumpUntil(
+          tester,
+          () =>
+              retry.evaluate().isNotEmpty && syncWarning.evaluate().isNotEmpty,
+        );
+        await tester.enterText(composer, 'Draft before keyboard');
+        await tester.pump();
+        final keyboardInset =
+            (tester.getSize(room).height - roomHeight) * pixelRatio;
+        tester.view.viewInsets = FakeViewPadding(bottom: keyboardInset);
+        await _pumpTransition(tester);
+
+        expect(tester.getSize(room).height, closeTo(roomHeight, 0.1));
+        expect(tester.takeException(), isNull);
+        expect(tester.widget<TextField>(composer).focusNode?.hasFocus, isTrue);
+        expect(_composer(tester).text, 'Draft before keyboard');
+        expect(composer.hitTestable(), findsOneWidget);
+        expect(retry.hitTestable(), findsOneWidget);
+        expect(send.hitTestable(), findsOneWidget);
+
+        final attempts = attachmentStarts;
+        await tester.tap(retry);
+        await _pumpUntil(tester, () => attachmentStarts > attempts);
+        await tester.ensureVisible(syncWarning);
+        await tester.pump();
+        expect(syncWarning.hitTestable(), findsOneWidget);
+        await tester.enterText(composer, 'Sent above the keyboard');
+        await tester.pump();
+        await tester.tap(send);
+        await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
+        expect(harness.sentMessages, ['Sent above the keyboard']);
+        expect(tester.takeException(), isNull);
+      } finally {
+        tester.view.viewInsets = FakeViewPadding.zero;
+        await _unmountComposer(tester);
+      }
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
     'Galaxy S21 landscape can send and cancel a reply above the keyboard',
     (tester) async {
       const geometry = _s21LandscapeComposerGeometry;
