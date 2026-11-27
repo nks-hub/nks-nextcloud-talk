@@ -3,6 +3,75 @@ part of 'chat_media_composer_test.dart';
 void _registerChatMediaComposerToolbarTests(
   DurableAttachmentSourceStore Function() sourceStore,
 ) {
+  testWidgets(
+    'desktop voice draft shows its duration and keeps the caption and actions reachable',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(850, 600);
+      addTearDown(tester.view.reset);
+      final bridge = _RecordingBridge();
+      final backends = _VoiceBackendFactory();
+      addTearDown(bridge.close);
+      addTearDown(backends.close);
+      final caption = TextEditingController(text: 'Caption');
+      addTearDown(caption.dispose);
+
+      await tester.pumpWidget(
+        _composerApp(
+          sourceStore: sourceStore(),
+          bridge: bridge.bridge,
+          threadId: null,
+          voiceBackends: backends,
+          field: TextField(key: const Key('caption'), controller: caption),
+        ),
+      );
+      await _prepareVoicePreview(tester, backends);
+      final field = find.byKey(const Key('caption'));
+      final play = find.byKey(const Key('voice-play'));
+      final discard = find.byKey(const Key('voice-cancel-preview'));
+      final send = find.byKey(const Key('voice-send'));
+      final duration = find.byKey(const Key('voice-draft-duration'));
+      expect(tester.widget<Text>(duration).data, '0:03');
+      expect(
+        tester.getRect(field).right,
+        lessThanOrEqualTo(tester.getRect(play).left),
+      );
+      expect(tester.getRect(send).right, 850);
+      for (final action in [play, discard, send]) {
+        expect(action.hitTestable(), findsOneWidget);
+        expect(
+          tester.getCenter(action).dy,
+          closeTo(tester.getCenter(send).dy, 0.5),
+        );
+      }
+
+      tester.view.physicalSize = const Size(280, 600);
+      await tester.pump();
+      expect(
+        tester.getRect(field).bottom,
+        lessThanOrEqualTo(tester.getRect(play).top),
+      );
+      for (final action in [field, play, discard, send]) {
+        expect(action.hitTestable(), findsOneWidget);
+      }
+      expect(caption.text, 'Caption');
+      await tester.tap(play);
+      final player = backends.playbackBackends.single;
+      await _pumpUntil(tester, () => player._completed.hasListener);
+      expect(tester.widget<IconButton>(send).onPressed, isNull);
+      player._completed.add(null);
+      await _pumpUntil(
+        tester,
+        () => tester.widget<IconButton>(send).onPressed != null,
+      );
+      await tester.tap(send);
+      await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
+      expect(bridge.metadata.single.kind, AttachmentMessageKind.voice);
+      expect(tester.takeException(), isNull);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
+
   testWidgets('narrow idle toolbar keeps all five actions on one baseline', (
     tester,
   ) async {

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
-import 'dart:ui' show FlutterView;
+import 'dart:ui' show FlutterView, FontFeature;
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
@@ -22,6 +22,7 @@ import '../attachment_service.dart';
 import '../media/image_attachment_upload_controller.dart';
 import '../media/image_attachment_upload_panel.dart';
 import '../media/attachment_source_thumbnail.dart';
+import '../voice_duration.dart';
 import '../../conversations/desktop_attachment_drop.dart';
 import 'attachment_submission.dart';
 import 'giphy_attachment.dart';

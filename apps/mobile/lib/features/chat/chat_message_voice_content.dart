@@ -601,8 +601,8 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
   ) {
     final clamped = _clampedPosition(total);
     final progress = strings.voiceMessageProgress(
-      _formatPlaybackTime(clamped),
-      _formatPlaybackTime(total),
+      formatVoiceDuration(clamped),
+      formatVoiceDuration(total),
     );
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -640,8 +640,8 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
     final clamped = total == null ? Duration.zero : _clampedPosition(total);
     final progress = total != null
         ? strings.voiceMessageProgress(
-            _formatPlaybackTime(clamped),
-            _formatPlaybackTime(total),
+            formatVoiceDuration(clamped),
+            formatVoiceDuration(total),
           )
         : null;
     return LayoutBuilder(
@@ -790,7 +790,7 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
         inactiveColor: color.withValues(alpha: desktop ? 0.45 : 0.25),
         value: position.inMilliseconds.toDouble(),
         max: total.inMilliseconds.toDouble(),
-        label: _formatPlaybackTime(position),
+        label: formatVoiceDuration(position),
         semanticFormatterCallback: (_) => progress,
         onChanged: (value) =>
             setState(() => _scrubbing = Duration(milliseconds: value.round())),
@@ -799,18 +799,6 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
       ),
     );
   }
-}
-
-/// `m:ss` for anything under an hour, `h:mm:ss` beyond it. Voice messages are
-/// short, so the hour part is only there to keep a stray long file readable.
-String _formatPlaybackTime(Duration value) {
-  final total = value.isNegative ? Duration.zero : value;
-  final seconds = (total.inSeconds % 60).toString().padLeft(2, '0');
-  final minutes = total.inMinutes % 60;
-  if (total.inHours == 0) {
-    return '$minutes:$seconds';
-  }
-  return '${total.inHours}:${minutes.toString().padLeft(2, '0')}:$seconds';
 }
 
 final class _VoiceWaveTrack extends RectangularSliderTrackShape {
