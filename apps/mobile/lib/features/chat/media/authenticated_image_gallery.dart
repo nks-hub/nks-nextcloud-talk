@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../data/app_database.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../../data/chat_media_repository.dart';
 import 'authenticated_image_viewer.dart';
 import 'chat_image_exporter.dart';
@@ -63,6 +64,8 @@ final class AuthenticatedImageGallery extends StatefulWidget {
     this.onImageActions,
     this.onOpenFile,
     this.onForward,
+    this.onOpenSource,
+    this.onIndexChanged,
   }) : images = List.unmodifiable(images) {
     RangeError.checkValidIndex(initialIndex, images, 'initialIndex');
   }
@@ -79,6 +82,8 @@ final class AuthenticatedImageGallery extends StatefulWidget {
   /// [AuthenticatedImageViewer.onOpenFile].
   final ValueChanged<int>? onOpenFile;
   final ValueChanged<int>? onForward;
+  final ValueChanged<int>? onOpenSource;
+  final ValueChanged<int>? onIndexChanged;
 
   @override
   State<AuthenticatedImageGallery> createState() =>
@@ -136,10 +141,13 @@ final class _AuthenticatedImageGalleryState
               controller: _pages,
               physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
               itemCount: widget.images.length,
-              onPageChanged: (index) => setState(() {
-                _index = index;
-                _zoomed = false;
-              }),
+              onPageChanged: (index) {
+                setState(() {
+                  _index = index;
+                  _zoomed = false;
+                });
+                widget.onIndexChanged?.call(index);
+              },
               itemBuilder: (context, index) {
                 final image = widget.images[index];
                 return AuthenticatedImageViewer(
@@ -178,6 +186,16 @@ final class _AuthenticatedImageGalleryState
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (widget.onOpenSource != null)
+                        IconButton(
+                          key: const Key('chat-gallery-open-source'),
+                          tooltip: AppLocalizations.of(
+                            context,
+                          ).sharedItemsOpenSourceMessage,
+                          color: Colors.white,
+                          onPressed: () => widget.onOpenSource!(_index),
+                          icon: const Icon(Icons.chat_bubble_outline),
+                        ),
                       if (widget.onImageActions != null)
                         IconButton(
                           key: const Key('chat-gallery-actions'),

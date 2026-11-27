@@ -8,13 +8,41 @@ ChatGalleryImage? chatGalleryImage(StoredAccount account, ChatMessage message) {
   }
   final files = message.messageParameters.values.where((p) => p.type == 'file');
   if (files.length != 1) return null;
-  final file = files.single;
+  return _galleryFile(account, files.single);
+}
+
+List<ChatGalleryImage> sharedPhotosInMessage(
+  StoredAccount account,
+  ChatMessage message,
+) {
+  if (message.deleted ||
+      message.messageType != 'comment' ||
+      message.systemMessage.isNotEmpty) {
+    return const [];
+  }
+  return [
+    for (final file in message.messageParameters.values)
+      if (file.type == 'file')
+        ?_galleryFile(account, file, originalOnlyAllowed: true),
+  ];
+}
+
+ChatGalleryImage? _galleryFile(
+  StoredAccount account,
+  ChatRichObjectParameter file, {
+  bool originalOnlyAllowed = false,
+}) {
   final mime = _mimeType(file);
   final preview = _previewUri(account, file, mime);
   final original = _davAttachment(account, file)?.uri;
-  if (preview == null || original == null || mime == null) return null;
+  if (original == null ||
+      mime == null ||
+      !mime.startsWith('image/') ||
+      (preview == null && !originalOnlyAllowed)) {
+    return null;
+  }
   return ChatGalleryImage(
-    previewUri: _fullScreenPreviewUri(preview),
+    previewUri: preview == null ? original : _fullScreenPreviewUri(preview),
     smallerPreviewUri: preview,
     originalUri: original,
     contentType: mime,

@@ -9,9 +9,12 @@ import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../chat/chat_message_content.dart';
 import '../chat/chat_room_pane.dart';
+import '../chat/media/authenticated_image_gallery.dart';
 import '../chat/poll_dialog.dart';
 import '../search/message_search_thread_screen.dart';
 import 'shared_items_service.dart';
+
+part 'shared_media_gallery.dart';
 
 enum _SharedItemsViewState { loading, loaded, empty, error }
 
@@ -416,6 +419,8 @@ final class _SharedItemsScreenState extends ConsumerState<SharedItemsScreen> {
         ),
       ),
       _SharedItemsViewState.error => _errorView(strings),
+      _SharedItemsViewState.loaded when _selectedType == SharedItemType.media =>
+        _mediaGrid(strings),
       _SharedItemsViewState.loaded => _messageList(strings),
     };
   }
@@ -455,38 +460,39 @@ final class _SharedItemsScreenState extends ConsumerState<SharedItemsScreen> {
             onTap: _openingMessage ? null : () => _openMessage(message),
           );
         }
-        if (_loadMoreError != null) {
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Text(
-                  _errorMessage(strings, _loadMoreError),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: _loadMore,
-                  child: Text(strings.retry),
-                ),
-              ],
-            ),
-          );
-        }
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: OutlinedButton(
-            key: const Key('shared-items-load-more'),
-            onPressed: _loadingMore ? null : _loadMore,
-            child: _loadingMore
-                ? const SizedBox.square(
-                    dimension: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(strings.sharedItemsLoadMore),
-          ),
-        );
+        return _pageFooter(strings);
       },
+    );
+  }
+
+  Widget _pageFooter(AppLocalizations strings) {
+    if (_loadMoreError != null) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Text(
+              _errorMessage(strings, _loadMoreError),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(onPressed: _loadMore, child: Text(strings.retry)),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: OutlinedButton(
+        key: const Key('shared-items-load-more'),
+        onPressed: _loadingMore ? null : _loadMore,
+        child: _loadingMore
+            ? const SizedBox.square(
+                dimension: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(strings.sharedItemsLoadMore),
+      ),
     );
   }
 }

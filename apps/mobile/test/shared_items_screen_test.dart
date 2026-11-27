@@ -5,7 +5,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/data/chat_media_repository.dart';
+import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/features/chat/poll_dialog.dart';
 import 'package:nextcloudtalk/features/shareditems/shared_items_screen.dart';
 import 'package:nextcloudtalk/features/shareditems/shared_items_service.dart';
@@ -13,7 +18,10 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
+part 'shared_media_gallery_test.part.dart';
+
 void main() {
+  _galleryTests();
   testWidgets(
     'replacing the account cancels the old page and retires its poll scope',
     (tester) async {
@@ -290,6 +298,7 @@ SharedItemsPageResponse _page({
   required SharedItemType type,
   required List<int> messageIds,
   int lastKnownMessageId = 0,
+  Map<String, Object?> Function(int) message = _message,
 }) {
   final request = SharedItemsPageRequest(
     accountId: AccountId.parse(_account.id),
@@ -309,7 +318,7 @@ SharedItemsPageResponse _page({
   return decodeSharedItemsPageResponse(
     request: request,
     statusCode: 200,
-    body: _body({for (final id in messageIds) '$id': _message(id)}),
+    body: _body({for (final id in messageIds) '$id': message(id)}),
     headers: ChatResponseHeaders.fromMap({
       if (minimum != null) 'X-Chat-Last-Given': '$minimum',
     }),

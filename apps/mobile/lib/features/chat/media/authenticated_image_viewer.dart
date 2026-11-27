@@ -141,11 +141,13 @@ final class _AuthenticatedImageViewerState
     ChatMediaRepositoryException? largeFailure;
     try {
       try {
-        image = await widget.repository.loadPreview(
-          account: widget.account,
-          uri: widget.previewUri,
-          retry: widget.smallerPreviewUri == null,
-        );
+        if (widget.previewUri != widget.originalUri) {
+          image = await widget.repository.loadPreview(
+            account: widget.account,
+            uri: widget.previewUri,
+            retry: widget.smallerPreviewUri == null,
+          );
+        }
       } on ChatMediaRepositoryException catch (failure) {
         largeFailure = failure;
       }
