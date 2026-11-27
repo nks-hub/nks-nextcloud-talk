@@ -279,7 +279,7 @@ final class _InboxBody extends StatelessWidget {
     required this.onRefresh,
     required this.onSelect,
     this.selectedToken,
-    this.showHeading = false,
+    this.compact = false,
   });
   final StoredAccount account;
   final List<CachedConversation> conversations;
@@ -287,13 +287,14 @@ final class _InboxBody extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final ValueChanged<CachedConversation> onSelect;
   final String? selectedToken;
-  final bool showHeading;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final destination = _InboxScope.of(context).value;
     final strings = AppLocalizations.of(context);
-    final heading = showHeading
+    final mobile = compact && !context.usesDesktopDensity;
+    final heading = compact && !mobile
         ? _InboxHeading(destination.label(strings))
         : null;
     if (destination == _InboxDestination.messages) {
@@ -305,6 +306,7 @@ final class _InboxBody extends StatelessWidget {
         onSelect: onSelect,
         selectedToken: selectedToken,
         heading: heading,
+        inlineFavorites: mobile,
         onMessageSearch: _hasUnifiedSearch(account)
             ? () => openMessageSearch(context, account.id)
             : null,

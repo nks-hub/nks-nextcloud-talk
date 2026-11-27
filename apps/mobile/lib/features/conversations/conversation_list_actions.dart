@@ -14,6 +14,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../calls/call_state.dart';
 import '../chat/outgoing_message_status.dart';
 import '../rooms/room_settings_service.dart';
+import 'conversation_avatar.dart' show ConversationRoomType;
 import 'conversation_avatar_widget.dart';
 import 'conversation_delivery.dart';
 import 'conversation_presence.dart';
@@ -42,6 +43,7 @@ final class ConversationListView extends ConsumerStatefulWidget {
     this.selectedToken,
     this.bottomInset = 0,
     this.heading,
+    this.inlineFavorites = false,
     this.onMessageSearch,
   });
 
@@ -53,6 +55,7 @@ final class ConversationListView extends ConsumerStatefulWidget {
   final String? selectedToken;
 
   final Widget? heading;
+  final bool inlineFavorites;
   final VoidCallback? onMessageSearch;
 
   /// Room to leave under the last row for whatever floats over the list.
@@ -278,8 +281,16 @@ final class _ConversationListViewState
                     _query = value.trim().toLowerCase();
                   }),
                   onMessageSearch: widget.onMessageSearch,
+                  favorites: widget.inlineFavorites && favorites.isNotEmpty
+                      ? _InlineFavorites(
+                          account: widget.account,
+                          rooms: favorites,
+                          onSelect: widget.onSelect,
+                        )
+                      : null,
                 ),
-                if (!compact && favorites.isNotEmpty) shortcuts,
+                if (!compact && !widget.inlineFavorites && favorites.isNotEmpty)
+                  shortcuts,
                 _ConversationFilterBar(
                   selected: filters,
                   showArchived: canViewArchived,

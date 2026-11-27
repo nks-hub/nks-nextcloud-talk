@@ -5,10 +5,12 @@ final class _ConversationSearch extends StatelessWidget {
     required this.controller,
     required this.onChanged,
     this.onMessageSearch,
+    this.favorites,
   });
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final VoidCallback? onMessageSearch;
+  final Widget? favorites;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +60,7 @@ final class _ConversationSearch extends StatelessWidget {
               ),
             ),
           ),
+          ?favorites,
           if (onMessageSearch != null)
             IconButton(
               key: const Key('open-message-search'),
@@ -67,6 +70,69 @@ final class _ConversationSearch extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+final class _InlineFavorites extends StatelessWidget {
+  const _InlineFavorites({
+    required this.account,
+    required this.rooms,
+    required this.onSelect,
+  });
+
+  final StoredAccount account;
+  final List<CachedConversation> rooms;
+  final ValueChanged<CachedConversation> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final note = rooms
+        .where((room) => room.roomType == ConversationRoomType.noteToSelf)
+        .firstOrNull;
+    // Reserve the search icons, outside padding and editable text before
+    // adding a second favourite shortcut beside the message-search button.
+    final hasSpace =
+        MediaQuery.sizeOf(context).width >=
+        264 + MediaQuery.textScalerOf(context).scale(88);
+    final direct = rooms.length == 1
+        ? rooms.first
+        : hasSpace
+        ? note
+        : null;
+    final others = rooms.where((room) => room != direct);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (direct != null)
+          IconButton(
+            key: Key('favorite-room-${direct.token}'),
+            tooltip: direct.displayName,
+            icon: direct == note
+                ? const Icon(Icons.edit_note_rounded)
+                : ConversationAvatar(
+                    account: account,
+                    conversation: direct,
+                    radius: 16,
+                  ),
+            onPressed: () => onSelect(direct),
+          ),
+        if (others.isNotEmpty)
+          PopupMenuButton<CachedConversation>(
+            key: const Key('favorite-conversations-menu'),
+            tooltip: AppLocalizations.of(context).emojiCategoryFavorites,
+            icon: const Icon(Icons.star_outline_rounded),
+            onSelected: onSelect,
+            itemBuilder: (context) => [
+              for (final room in others)
+                PopupMenuItem(
+                  key: Key('favorite-room-${room.token}'),
+                  value: room,
+                  child: Text(room.displayName),
+                ),
+            ],
+          ),
+      ],
     );
   }
 }

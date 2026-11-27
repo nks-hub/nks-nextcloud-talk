@@ -304,6 +304,7 @@ final class _CompactShell extends StatelessWidget {
     AppLocalizations strings,
   ) {
     final listColor = _inboxSurface(context);
+    final mobile = !context.usesDesktopDensity;
     return Scaffold(
       key: const Key('conversation-shell-compact'),
       backgroundColor: listColor,
@@ -316,7 +317,10 @@ final class _CompactShell extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                strings.appTitle,
+                mobile
+                    ? _InboxScope.of(context).value.label(strings)
+                    : strings.appTitle,
+                key: mobile ? const Key('inbox-heading') : null,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(
@@ -373,7 +377,7 @@ final class _CompactShell extends StatelessWidget {
               loading: loading,
               onRefresh: onRefresh,
               onSelect: onOpenConversation,
-              showHeading: true,
+              compact: true,
             ),
           ),
         ],

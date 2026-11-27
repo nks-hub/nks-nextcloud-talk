@@ -279,6 +279,140 @@ void main() {
       },
     );
 
+    if (layout.key == 'compact') {
+      testWidgets('phone inbox searches and opens favourites from one row', (
+        tester,
+      ) async {
+        final visited = <ChatRoomProviderKey>{};
+        await pumpShell(
+          tester,
+          observedChatKeys: visited,
+          conversationsByAccount: {
+            'account-a': [
+              _conversation(
+                'account-a',
+                'mynotes',
+                displayName: 'Note to self',
+                roomType: 6,
+              ).copyWith(favorite: true),
+              _conversation(
+                'account-a',
+                'design',
+                displayName: 'Design',
+              ).copyWith(favorite: true),
+            ],
+          },
+        );
+        final search = find.byKey(const Key('conversation-name-search'));
+        final note = find.byKey(const Key('favorite-room-mynotes'));
+        final favorites = find.byKey(const Key('favorite-conversations-menu'));
+        final messages = find.byKey(const Key('open-message-search'));
+        await pumpUntilCondition(
+          tester,
+          () => find
+              .byKey(const Key('conversation-tile-mynotes'))
+              .evaluate()
+              .isNotEmpty,
+          reason: 'the room stream has not delivered the starred rooms',
+        );
+        expect(
+          tester.getRect(search).top -
+              tester.getRect(find.byType(AppBar)).bottom,
+          closeTo(4, 1),
+        );
+        for (final button in [note, favorites, messages]) {
+          expect(button.hitTestable(), findsOneWidget);
+          expect(
+            tester.getCenter(button).dy,
+            closeTo(tester.getCenter(search).dy, 1),
+          );
+        }
+        expect(find.byTooltip('Note to self'), findsOneWidget);
+        await tester.enterText(search, 'design');
+        await tester.pump();
+        expect(tester.testTextInput.isVisible, isTrue);
+        expect(
+          find.byKey(const Key('conversation-tile-mynotes')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('conversation-tile-design')),
+          findsOneWidget,
+        );
+        await tester.tap(find.byTooltip('Clear the search'));
+        await tester.pump();
+        await tester.tap(favorites);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(
+          find.byKey(const Key('favorite-room-design')).hitTestable(),
+          findsOneWidget,
+        );
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.tap(note);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(
+          visited,
+          contains((
+            accountId: 'account-a',
+            roomToken: 'mynotes',
+            threadId: null,
+          )),
+        );
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets(
+        'narrow phone inbox keeps favourites reachable with large text',
+        (tester) async {
+          tester.platformDispatcher.textScaleFactorTestValue = 2;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          await pumpShell(
+            tester,
+            conversationsByAccount: {
+              'account-a': [
+                _conversation(
+                  'account-a',
+                  'notes',
+                  displayName: 'Note to self',
+                  roomType: 6,
+                ).copyWith(favorite: true),
+                _conversation(
+                  'account-a',
+                  'project',
+                  displayName: 'My project',
+                ).copyWith(favorite: true),
+              ],
+            },
+          );
+          tester.view.physicalSize = const Size(320, 760);
+          await tester.pump();
+          final search = find.byKey(const Key('conversation-name-search'));
+          final favorites = find.byKey(
+            const Key('favorite-conversations-menu'),
+          );
+          expect(
+            tester.getCenter(search).dy,
+            closeTo(tester.getCenter(favorites).dy, 1),
+          );
+          expect(tester.getSize(search).width, greaterThan(176));
+          await tester.tap(favorites);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 400));
+          for (final token in ['notes', 'project']) {
+            expect(
+              find.byKey(Key('favorite-room-$token')).hitTestable(),
+              findsOneWidget,
+            );
+          }
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+
     testWidgets(
       '${layout.key}: Calls finds active rooms and Threads opens room threads',
       (tester) async {
