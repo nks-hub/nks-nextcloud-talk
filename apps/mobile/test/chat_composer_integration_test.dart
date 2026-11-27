@@ -170,10 +170,7 @@ void main() {
       () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
     );
 
-    await tester.tap(find.byKey(const Key('open-emoji-picker')));
-    await _pumpTransition(tester);
-    // The picker expands above the compose row instead of covering it: the
-    // line being typed into has to stay on screen while picking.
+    await _openEmojiPanel(tester);
     expect(find.byKey(const Key('inline-emoji-panel')), findsOneWidget);
     expect(find.byKey(const Key('chat-composer')), findsOneWidget);
     expect(
@@ -185,8 +182,6 @@ void main() {
     await tester.tap(find.byKey(const Key('emoji-choice-waving-hand')));
     await _pumpTransition(tester);
     expect(_composer(tester).text, '👋');
-    // The picker stays open for a second pick; sending the message is what
-    // dismisses it (the close button does too).
     expect(find.byKey(const Key('emoji-close')), findsOneWidget);
     await _pumpUntil(tester, () => _sendButtonEnabled(tester));
     await tester.tap(find.byKey(const Key('send-message-gesture')));
@@ -197,8 +192,7 @@ void main() {
     await _pumpTransition(tester);
     expect(harness.sentMessages, <String>['👋']);
     expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
-    await tester.tap(find.byKey(const Key('open-emoji-picker')));
-    await _pumpTransition(tester);
+    await _openEmojiPanel(tester);
     await tester.tap(find.byKey(const Key('emoji-category-people')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('emoji-choice-waving-hand')));
@@ -219,11 +213,16 @@ void main() {
     final resizedThumbnail = thumbnailImage.image as ResizeImage;
     expect(resizedThumbnail.width, 480);
     expect(resizedThumbnail.height, 480);
-    final pickerRect = tester.getRect(find.byType(GiphyPicker));
-    final viewportHeight =
-        tester.view.physicalSize.height / tester.view.devicePixelRatio;
-    expect(pickerRect.top, greaterThanOrEqualTo(0));
-    expect(pickerRect.bottom, lessThanOrEqualTo(viewportHeight));
+    final picker = find.descendant(
+      of: find.byKey(const Key('inline-emoji-panel')),
+      matching: find.byType(GiphyPicker),
+    );
+    expect(
+      tester.getBottomLeft(picker).dy,
+      lessThanOrEqualTo(
+        tester.getTopLeft(find.byKey(const Key('chat-composer'))).dy,
+      ),
+    );
     await tester.ensureVisible(gif);
     await tester.pump();
     await tester.tap(gif);
@@ -252,7 +251,7 @@ void main() {
   });
 
   testWidgets(
-    'unavailable Giphy integration becomes an honest disabled state',
+    'unavailable GIFs are explained in the panel and emoji still work',
     (tester) async {
       final harness = (await tester.runAsync(_ComposerHarness.create))!;
       _addHarnessTearDown(tester, harness);
@@ -266,27 +265,29 @@ void main() {
           ],
         ),
       );
-      await _pumpUntil(tester, () => _giphyButtonEnabled(tester));
+      await _pumpUntil(tester, () => _galleryEnabled(tester));
       await _tapGiphy(tester);
-      await _pumpUntil(tester, () => !_giphyButtonEnabled(tester));
-      await _openComposerMenu(tester);
-      final tile = find.byKey(const Key('open-giphy-picker'));
-      await _pumpUntil(
-        tester,
-        () => find
-            .text('GIFs are not available on this server.')
-            .evaluate()
-            .isNotEmpty,
+      final explanation = find.descendant(
+        of: find.byKey(const Key('inline-emoji-panel')),
+        matching: find.text('GIFs are not available on this server.'),
       );
-      expect(tester.widget<ListTile>(tile).enabled, isFalse);
+      await _pumpUntil(tester, () => explanation.evaluate().isNotEmpty);
       expect(find.byType(GiphyPicker), findsNothing);
+      await tester.tap(find.byKey(const Key('composer-emoji-tab')));
+      await tester.pump();
+      expect(explanation, findsNothing);
+      await tester.tap(find.byKey(const Key('emoji-category-people')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('emoji-choice-waving-hand')));
+      await tester.pump();
+      expect(_composer(tester).text, '👋');
       expect(tester.takeException(), isNull);
       await _unmountComposer(tester);
     },
   );
 
   testWidgets(
-    'first Giphy tap keeps the probe alive before the watched frame',
+    'selecting GIFs starts one probe and keeps it alive across frames',
     (tester) async {
       final harness = (await tester.runAsync(_ComposerHarness.create))!;
       _addHarnessTearDown(tester, harness);
@@ -311,34 +312,28 @@ void main() {
           ],
         ),
       );
-      await _pumpUntil(
-        tester,
-        () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
-      );
-      await _pumpUntil(tester, () => _giphyButtonEnabled(tester));
-
-      await _tapGiphy(tester);
-      await tester.runAsync(() async {
-        for (var attempt = 0; attempt < 600; attempt++) {
-          if (probeClient.requestStarted.isCompleted) {
-            return;
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 1));
-        }
-      });
-      final startedBeforeFrame = probeClient.requestStarted.isCompleted;
-
+      await _pumpUntil(tester, () => _galleryEnabled(tester));
+      await _openEmojiPanel(tester);
+      expect(factoryInvocations, 0);
+      expect(probeClient.requestStarted.isCompleted, isFalse);
+      await tester.tap(find.byKey(const Key('open-giphy-picker')));
       await tester.pump();
       await _pumpUntil(tester, () => probeClient.requestStarted.isCompleted);
-      expect(find.byKey(const Key('pick-image-attachment')), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.pump(const Duration(milliseconds: 32));
+      expect(probeClient.trendingRequests, 1);
+      expect(probeClient.closed, isFalse);
       probeClient.complete(_giphyResponse());
-      await _pumpUntil(
-        tester,
-        () => find.byType(GiphyPicker).evaluate().isNotEmpty,
+      final result = find.byKey(
+        const ValueKey<String>('giphy-thumbnail-https://giphy.com/gifs/wave'),
       );
-
-      expect(startedBeforeFrame, isTrue);
+      await _pumpUntil(tester, () => result.evaluate().isNotEmpty);
+      expect(
+        find.byKey(const Key('giphy-search')).hitTestable(),
+        findsOneWidget,
+      );
       expect(factoryInvocations, 1);
+      expect(probeClient.trendingRequests, 1);
       expect(probeClient.closed, isFalse);
       expect(tester.takeException(), isNull);
       await _unmountComposer(tester);
@@ -368,11 +363,7 @@ void main() {
       await tester.pumpWidget(
         harness.app(overrides: <Override>[factoryOverride]),
       );
-      await _pumpUntil(
-        tester,
-        () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
-      );
-      await _pumpUntil(tester, () => _giphyButtonEnabled(tester));
+      await _pumpUntil(tester, () => _galleryEnabled(tester));
       await _tapGiphy(tester);
       await _pumpUntil(tester, () => probeClient.requestStarted.isCompleted);
 
@@ -403,6 +394,7 @@ void main() {
       await tester.pump();
 
       expect(find.byType(GiphyPicker), findsNothing);
+      expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
       expect(harness.sentMessages, isEmpty);
       expect(tester.takeException(), isNull);
       await _unmountComposer(tester);
@@ -985,7 +977,7 @@ final class _ComposerHarness {
   }
 }
 
-HttpGiphyRepository _giphyRepository() {
+HttpGiphyRepository _giphyRepository({void Function(Uri)? onRequest}) {
   return HttpGiphyRepository(
     server: ServerBase.parse('https://cloud.example.invalid'),
     authorization: const GiphyAuthorization(
@@ -993,34 +985,16 @@ HttpGiphyRepository _giphyRepository() {
       appPassword: 'fixture-app-password',
     ),
     client: MockClient((request) async {
+      onRequest?.call(request.url);
       if (request.url.path.endsWith('/gifs/trending')) {
-        return http.Response(
-          jsonEncode(<String, Object?>{
-            'ocs': <String, Object?>{
-              'meta': <String, Object?>{
-                'status': 'ok',
-                'statuscode': 200,
-                'message': 'OK',
-              },
-              'data': <String, Object?>{
-                'entries': <Object?>[
-                  <String, Object?>{
-                    'thumbnailUrl':
-                        'https://cloud.example.invalid/'
-                        'apps/integration_giphy/gif/wave',
-                    'title': 'Wave',
-                    'subline': 'Fixture author',
-                    'resourceUrl': 'https://giphy.com/gifs/wave',
-                  },
-                ],
-                'cursor': 1,
-              },
-            },
-          }),
-          200,
-        );
+        return http.Response(_giphyResponse(), 200);
       }
-      if (request.url.path == '/apps/integration_giphy/gif/wave') {
+      if (request.url.path.endsWith('/gifs/search') &&
+          request.url.queryParameters['term'] == 'otter') {
+        return http.Response(_giphyResponse(slug: 'otter'), 200);
+      }
+      if (request.url.path == '/apps/integration_giphy/gif/wave' ||
+          request.url.path == '/apps/integration_giphy/gif/otter') {
         return http.Response.bytes(
           _animatedGif,
           200,
@@ -1029,7 +1003,9 @@ HttpGiphyRepository _giphyRepository() {
       }
       if (request.url.path.endsWith('/ocs/v2.php/references/resolve')) {
         return http.Response(
-          _giphyReferenceResponse(Uri.parse('https://giphy.com/gifs/wave')),
+          _giphyReferenceResponse(
+            Uri.parse(request.url.queryParameters['reference']!),
+          ),
           200,
           headers: const <String, String>{
             'content-type': 'application/json; charset=utf-8',
@@ -1145,7 +1121,7 @@ final _animatedGif = base64Decode(
   'AAAAAQABAAACAkQBACH5BAAKAAAALAAAAAABAAEAAAICTAEAOw==',
 );
 
-String _giphyResponse() => jsonEncode(<String, Object?>{
+String _giphyResponse({String slug = 'wave'}) => jsonEncode(<String, Object?>{
   'ocs': <String, Object?>{
     'meta': <String, Object?>{
       'status': 'ok',
@@ -1156,10 +1132,10 @@ String _giphyResponse() => jsonEncode(<String, Object?>{
       'entries': <Object?>[
         <String, Object?>{
           'thumbnailUrl':
-              'https://cloud.example.invalid/apps/integration_giphy/gif/wave',
-          'title': 'Wave',
+              'https://cloud.example.invalid/apps/integration_giphy/gif/$slug',
+          'title': slug,
           'subline': 'Fixture author',
-          'resourceUrl': 'https://giphy.com/gifs/wave',
+          'resourceUrl': 'https://giphy.com/gifs/$slug',
         },
       ],
       'cursor': 1,
@@ -1194,30 +1170,36 @@ final class _GatedVault implements CredentialVault {
 
 final class _ControlledGiphyClient extends http.BaseClient {
   final requestStarted = Completer<void>();
-  final _response = Completer<http.StreamedResponse>();
+  final _response = Completer<String>();
   bool closed = false;
+  int trendingRequests = 0;
 
   @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) {
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (!request.url.path.endsWith('/gifs/trending')) {
+      return http.StreamedResponse(
+        Stream.value(_animatedGif),
+        200,
+        headers: const {'content-type': 'image/gif'},
+      );
+    }
+    trendingRequests++;
     if (!requestStarted.isCompleted) {
       requestStarted.complete();
     }
-    return _response.future;
+    final body = await _response.future;
+    return http.StreamedResponse(
+      Stream.value(utf8.encode(body)),
+      200,
+      headers: const {'content-type': 'application/json; charset=utf-8'},
+    );
   }
 
   void complete(String body) {
     if (_response.isCompleted) {
       return;
     }
-    _response.complete(
-      http.StreamedResponse(
-        Stream<List<int>>.value(utf8.encode(body)),
-        200,
-        headers: const <String, String>{
-          'content-type': 'application/json; charset=utf-8',
-        },
-      ),
-    );
+    _response.complete(body);
   }
 
   @override
@@ -1226,7 +1208,7 @@ final class _ControlledGiphyClient extends http.BaseClient {
       return;
     }
     closed = true;
-    if (!_response.isCompleted) {
+    if (requestStarted.isCompleted && !_response.isCompleted) {
       _response.completeError(
         http.ClientException('fixture connection cancelled'),
       );

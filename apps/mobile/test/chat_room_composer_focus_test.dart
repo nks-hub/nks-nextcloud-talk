@@ -408,9 +408,7 @@ void main() {
       await tester.pump();
       expect(composerHasFocus(tester), isTrue);
 
-      // Something other than the composer steals focus while picking, the
-      // way a search inside the picker would.
-      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.tap(find.byKey(const Key('emoji-search')));
       await tester.pump();
       expect(composerHasFocus(tester), isFalse);
 
@@ -440,6 +438,13 @@ void main() {
       await tester.pump();
 
       expect(find.byKey(const Key('inline-emoji-panel')), findsOneWidget);
+      for (final key in [
+        'composer-emoji-tab',
+        'open-giphy-picker',
+        'emoji-close',
+      ]) {
+        expect(find.byKey(Key(key)).hitTestable(), findsOneWidget);
+      }
       expect(find.byKey(const Key('chat-composer')), findsOneWidget);
       await settle(tester);
     },

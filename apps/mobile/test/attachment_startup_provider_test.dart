@@ -99,22 +99,22 @@ void main() {
 
       try {
         final menu = find.byType(ComposerActionMenuButton);
-        bool giphyEnabled() => tester
+        bool galleryEnabled() => tester
             .widget<ComposerActionMenuButton>(menu)
             .actions
             .value
             .any(
               (action) =>
-                  action.key == const Key('open-giphy-picker') &&
+                  action.key == const Key('attach-source-gallery') &&
                   action.onSelected != null,
             );
 
-        await pumpUntilCondition(tester, giphyEnabled);
+        await pumpUntilCondition(tester, galleryEnabled);
         final container = ProviderScope.containerOf(tester.element(menu));
         container.invalidate(attachmentServiceProvider);
         final retry = find.byKey(const Key('retry-media-capabilities'));
         await pumpUntilCondition(tester, () => retry.evaluate().isNotEmpty);
-        expect(giphyEnabled(), isFalse);
+        expect(galleryEnabled(), isFalse);
 
         switch (trigger) {
           case _RetryTrigger.button:
@@ -130,7 +130,7 @@ void main() {
 
         await pumpUntilCondition(
           tester,
-          giphyEnabled,
+          galleryEnabled,
           timeout: const Duration(seconds: 3),
         );
         expect(retry, findsNothing);

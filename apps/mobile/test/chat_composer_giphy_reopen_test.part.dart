@@ -14,7 +14,7 @@ void _registerGiphyReopenTests() {
     _addHarnessTearDown(tester, harness);
     try {
       await tester.pumpWidget(harness.app());
-      await _pumpUntil(tester, () => _giphyButtonEnabled(tester));
+      await _pumpUntil(tester, () => _galleryEnabled(tester));
 
       final field = find.byKey(const Key('chat-composer'));
       final plus = find.byKey(const Key('pick-image-attachment'));
@@ -41,6 +41,7 @@ void _registerGiphyReopenTests() {
       expect(find.byKey(const Key('open-format-menu')), findsNothing);
       expect(find.byKey(const Key('open-giphy-picker')), findsNothing);
       await _openComposerMenu(tester);
+      expect(find.byKey(const Key('open-giphy-picker')), findsNothing);
       expect(
         find.byKey(const Key('record-voice-message')).hitTestable(),
         findsOneWidget,
@@ -77,25 +78,10 @@ void _registerGiphyReopenTests() {
   ) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
     _addHarnessTearDown(tester, harness);
-    var trendingRequests = 0;
-    final repository = HttpGiphyRepository(
-      server: ServerBase.parse('https://cloud.example.invalid'),
-      authorization: const GiphyAuthorization(
-        loginName: 'fixture-user',
-        appPassword: 'fixture-app-password',
-      ),
-      client: MockClient((request) async {
-        if (request.url.path.endsWith('/gifs/trending')) {
-          trendingRequests++;
-          return http.Response(_giphyResponse(), 200);
-        }
-        return http.Response.bytes(
-          _animatedGif,
-          200,
-          headers: const <String, String>{'content-type': 'image/gif'},
-        );
-      }),
-    );
+    final requests = <Uri>[];
+    int requestsFor(String path) =>
+        requests.where((uri) => uri.path.endsWith(path)).length;
+    final repository = _giphyRepository(onRequest: requests.add);
     addTearDown(repository.close);
     await tester.pumpWidget(
       harness.app(
@@ -106,7 +92,7 @@ void _registerGiphyReopenTests() {
         ],
       ),
     );
-    await _pumpUntil(tester, () => _giphyButtonEnabled(tester));
+    await _pumpUntil(tester, () => _galleryEnabled(tester));
 
     expect(find.byKey(const Key('pick-image-attachment')), findsOneWidget);
     expect(find.byKey(const Key('voice-record')), findsNothing);
@@ -115,16 +101,20 @@ void _registerGiphyReopenTests() {
       findsOneWidget,
     );
     await _tapGiphy(tester);
-    await _pumpUntil(tester, () {
-      final picker = find.byType(GiphyPicker);
-      return picker.evaluate().isNotEmpty &&
-          tester.widget<GiphyPicker>(picker).controller.phase ==
-              GiphyLoadPhase.ready;
-    });
-    expect(trendingRequests, 1);
-    Navigator.of(tester.element(find.byType(GiphyPicker))).pop();
+    final wave = find.byKey(
+      const ValueKey<String>('giphy-thumbnail-https://giphy.com/gifs/wave'),
+    );
+    final image = find.descendant(of: wave, matching: find.byType(Image));
+    await _pumpUntil(tester, () => image.evaluate().isNotEmpty);
+    expect(requestsFor('/gifs/trending'), 1);
+    expect(requestsFor('/gif/wave'), 1);
+    await tester.tap(find.byKey(const Key('emoji-close')));
     await _pumpTransition(tester);
-    expect(find.byKey(const Key('pick-image-attachment')), findsOneWidget);
+    expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
+    expect(
+      find.byKey(const Key('pick-image-attachment')).hitTestable(),
+      findsOneWidget,
+    );
 
     await _tapGiphy(tester);
     await tester.pump();
@@ -135,23 +125,131 @@ void _registerGiphyReopenTests() {
       tester.widget<GiphyPicker>(picker).controller.phase,
       GiphyLoadPhase.ready,
     );
-    expect(
-      find.descendant(
-        of: picker,
-        matching: find.byType(CircularProgressIndicator),
-      ),
-      findsNothing,
-    );
-    expect(trendingRequests, 1);
+    expect(wave, findsOneWidget);
+    await _pumpUntil(tester, () => image.evaluate().isNotEmpty);
+    expect(requestsFor('/gifs/trending'), 1);
+    expect(requestsFor('/gif/wave'), 1);
 
-    Navigator.of(tester.element(find.byType(GiphyPicker))).pop();
+    await tester.tap(find.byKey(const Key('composer-emoji-tab')));
     await _pumpTransition(tester);
-    expect(find.byKey(const Key('pick-image-attachment')), findsOneWidget);
+    expect(find.byKey(const Key('emoji-search')).hitTestable(), findsOneWidget);
+    expect(picker, findsNothing);
+    await tester.tap(find.byKey(const Key('open-emoji-picker')));
+    await _pumpTransition(tester);
+    expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
+    expect(
+      find.byKey(const Key('pick-image-attachment')).hitTestable(),
+      findsOneWidget,
+    );
     await _unmountComposer(tester);
   });
+
+  testWidgets(
+    'search and select a GIF on an 800 by 360 landscape phone',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(800, 360);
+      addTearDown(tester.view.reset);
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      _addHarnessTearDown(tester, harness);
+      final repository = _giphyRepository();
+      addTearDown(repository.close);
+      await tester.pumpWidget(
+        harness.app(
+          overrides: [
+            giphyRepositoryProvider.overrideWith(
+              (ref, accountId) async => repository,
+            ),
+          ],
+        ),
+      );
+      await _pumpUntil(tester, () => _galleryEnabled(tester));
+      await _tapGiphy(tester);
+      final search = find.byKey(const Key('giphy-search'));
+      await _pumpUntil(
+        tester,
+        () => search.hitTestable().evaluate().isNotEmpty,
+      );
+      await tester.enterText(search, 'otter');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      final result = find.byKey(
+        const ValueKey<String>('giphy-thumbnail-https://giphy.com/gifs/otter'),
+      );
+      await _pumpUntil(tester, () => result.evaluate().isNotEmpty);
+      final attribution = find.byKey(const Key('giphy-attribution-link'));
+      await tester.ensureVisible(attribution);
+      await tester.pump();
+      expect(attribution.hitTestable(), findsOneWidget);
+      await tester.ensureVisible(result);
+      await tester.pump();
+      expect(result.hitTestable(), findsOneWidget);
+      await tester.tap(result);
+      await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
+      expect(harness.sentMessages, ['https://giphy.com/gifs/otter']);
+      expect(tester.takeException(), isNull);
+      await _unmountComposer(tester);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  for (final closePanel in [true, false]) {
+    testWidgets(
+      closePanel
+          ? 'closing the panel during a GIF probe keeps it closed and preserves the draft'
+          : 'returning to emoji during a GIF probe keeps emoji selected and preserves the draft',
+      (tester) async {
+        final harness = (await tester.runAsync(_ComposerHarness.create))!;
+        _addHarnessTearDown(tester, harness);
+        final repository = _giphyRepository();
+        addTearDown(repository.close);
+        final probe = Completer<HttpGiphyRepository?>();
+        var requested = false;
+        await tester.pumpWidget(
+          harness.app(
+            overrides: [
+              giphyRepositoryProvider.overrideWith((ref, accountId) {
+                requested = true;
+                return probe.future;
+              }),
+            ],
+          ),
+        );
+        await _pumpUntil(tester, () => _galleryEnabled(tester));
+        await tester.enterText(find.byKey(const Key('chat-composer')), 'Draft');
+        await _openEmojiPanel(tester);
+        expect(requested, isFalse);
+        await tester.tap(find.byKey(const Key('open-giphy-picker')));
+        await _pumpUntil(tester, () => requested);
+        await tester.tap(
+          find.byKey(
+            Key(closePanel ? 'open-emoji-picker' : 'composer-emoji-tab'),
+          ),
+        );
+        await tester.pump();
+        probe.complete(repository);
+        await _pumpTransition(tester);
+
+        expect(find.byType(GiphyPicker), findsNothing);
+        expect(
+          find.byKey(const Key('inline-emoji-panel')),
+          closePanel ? findsNothing : findsOneWidget,
+        );
+        if (!closePanel) {
+          expect(
+            find.byKey(const Key('emoji-search')).hitTestable(),
+            findsOneWidget,
+          );
+        }
+        expect(_composer(tester).text, 'Draft');
+        expect(harness.sentMessages, isEmpty);
+        expect(tester.takeException(), isNull);
+        await _unmountComposer(tester);
+      },
+    );
+  }
 }
 
-bool _giphyButtonEnabled(WidgetTester tester) {
+bool _galleryEnabled(WidgetTester tester) {
   final button = find.byType(ComposerActionMenuButton);
   return button.evaluate().isNotEmpty &&
       tester
@@ -160,7 +258,7 @@ bool _giphyButtonEnabled(WidgetTester tester) {
           .value
           .any(
             (action) =>
-                action.key == const Key('open-giphy-picker') &&
+                action.key == const Key('attach-source-gallery') &&
                 action.onSelected != null,
           );
 }
@@ -170,8 +268,13 @@ Future<void> _openComposerMenu(WidgetTester tester) async {
   await _pumpTransition(tester);
 }
 
+Future<void> _openEmojiPanel(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('open-emoji-picker')));
+  await _pumpTransition(tester);
+}
+
 Future<void> _tapGiphy(WidgetTester tester) async {
-  await _openComposerMenu(tester);
+  await _openEmojiPanel(tester);
   await tester.tap(find.byKey(const Key('open-giphy-picker')));
 }
 
