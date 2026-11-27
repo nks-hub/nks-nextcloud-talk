@@ -27,6 +27,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 part 'account_removal_room_session.part.dart';
+part 'account_removal_drafts.part.dart';
 
 const _serverA = 'https://cloud-a.example.invalid';
 const _serverB = 'https://cloud-b.example.invalid';
@@ -1094,17 +1095,7 @@ Future<void> _seedAccount(
           updatedAtMillis: 1770000000,
         ),
       );
-  await database
-      .into(database.chatDrafts)
-      .insert(
-        ChatDraftsCompanion.insert(
-          accountId: accountId,
-          roomToken: roomToken,
-          scopeKey: 'root',
-          draftText: 'Half-written and private',
-          updatedAtMillis: 1770000000,
-        ),
-      );
+  await _seedAccountDrafts(database, accountId, roomToken);
 }
 
 /// Inserts an upload job plus the durable copy of the file it would send, and

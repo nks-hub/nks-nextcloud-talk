@@ -66,6 +66,9 @@ import 'features/chat/chat_service.dart';
 import 'features/chat/outgoing_message_status.dart';
 import 'features/chat/composer/giphy.dart';
 import 'features/chat/composer/emoji_usage_store.dart';
+import 'features/chat/composer/gif_favorites.dart';
+import 'features/chat/composer/message_collections.dart';
+import 'features/chat/composer/reply_templates.dart';
 import 'features/chat/composer/mention_suggestions.dart';
 import 'features/conversations/conversation_sync_service.dart';
 import 'features/newconversation/new_conversation_service.dart';
@@ -234,10 +237,6 @@ final class _NoPendingRevocationStore implements PendingRevocationStore {
   Future<void> writePendingRevocations(String? json) async =>
       throw StateError('Pending revocation store is unavailable');
 }
-
-final emojiUsageStoreProvider = Provider<EmojiUsageStore>((ref) {
-  return FileEmojiUsageStore();
-});
 
 final conversationAvatarRepositoryProvider =
     Provider<ConversationAvatarRepository>((ref) {

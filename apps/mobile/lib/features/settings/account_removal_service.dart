@@ -19,6 +19,7 @@ typedef AccountRemovalAborted = Future<void> Function(String accountId);
 typedef AccountPurged = Future<void> Function(String accountId);
 typedef AccountPushRevocation = Future<bool> Function(String accountId);
 typedef AccountBackgroundCleanup = Future<void> Function(String accountId);
+typedef AccountCollectionsCleanup = Future<void> Function(AccountId accountId);
 
 /// What a finished removal managed to do on the server.
 ///
@@ -58,9 +59,8 @@ final class AccountRemovalOutcome {
 /// turned into a pending revocation. A full, corrupt or unavailable queue
 /// stops removal so no live password loses its local owner.
 ///
-/// Deleting the local password is the one blocking local step. The account
-/// row stays in place until that succeeds, so a temporarily unavailable vault
-/// cannot leave a secret with no account through which removal can be retried.
+/// The account row stays until its credential and personal collections have
+/// been erased. A failed wipe can be retried through the same account.
 final class AccountRemovalService {
   const AccountRemovalService({
     required AccountRepository accounts,
@@ -73,6 +73,7 @@ final class AccountRemovalService {
     required Future<Directory> Function() voiceDirectory,
     required Future<Directory> Function() chatAttachmentDirectory,
     required Future<DurableAttachmentSourceStore> Function() attachmentSources,
+    AccountCollectionsCleanup? clearPersonalCollections,
     AccountRemovalStarted? onRemovalStarted,
     AccountRemovalAborted? onRemovalAborted,
     AccountPurged? onAccountPurged,
@@ -85,6 +86,7 @@ final class AccountRemovalService {
        _mediaDiskCache = mediaDiskCache,
        _emojiUsage = emojiUsage,
        _clearChatBackgrounds = clearChatBackgrounds,
+       _clearPersonalCollections = clearPersonalCollections,
        _voiceDirectory = voiceDirectory,
        _chatAttachmentDirectory = chatAttachmentDirectory,
        _attachmentSources = attachmentSources,
@@ -101,6 +103,7 @@ final class AccountRemovalService {
   final ChatMediaDiskCache _mediaDiskCache;
   final EmojiUsageStore _emojiUsage;
   final AccountBackgroundCleanup _clearChatBackgrounds;
+  final AccountCollectionsCleanup? _clearPersonalCollections;
   final Future<Directory> Function() _voiceDirectory;
   final Future<Directory> Function() _chatAttachmentDirectory;
   final Future<DurableAttachmentSourceStore> Function() _attachmentSources;
@@ -226,6 +229,7 @@ final class AccountRemovalService {
         Error.throwWithStackTrace(error, stackTrace);
       }
     }
+    await _clearPersonalCollections?.call(AccountId.parse(accountId));
     // Only caches: none may keep the account row around after the secret is
     // gone. A locked cache file can be retried by normal cache maintenance.
     await _bestEffort(() => _emojiUsage.delete(AccountId.parse(accountId)));

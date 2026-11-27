@@ -52,6 +52,25 @@ final accountAppearanceCleanupProvider = Provider<AccountBackgroundCleanup>((
   };
 });
 
+final emojiUsageStoreProvider = Provider<EmojiUsageStore>((ref) {
+  return FileEmojiUsageStore();
+});
+
+final personalCollectionsCleanupProvider = Provider<AccountCollectionsCleanup>((
+  ref,
+) {
+  final gifs = ref.watch(gifFavoritesStoreProvider);
+  final templates = ref.watch(replyTemplateStoreProvider);
+  final collections = ref.watch(messageCollectionStoreProvider);
+  return (account) async {
+    await Future.wait([
+      gifs.delete(account),
+      templates.delete(account),
+      collections.delete(account),
+    ]);
+  };
+});
+
 final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
   return AccountRemovalService(
     accounts: ref.watch(accountRepositoryProvider),
@@ -60,6 +79,7 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
     mediaCache: ref.watch(chatMediaCacheProvider),
     mediaDiskCache: ref.watch(chatMediaDiskCacheProvider),
     emojiUsage: ref.watch(emojiUsageStoreProvider),
+    clearPersonalCollections: ref.watch(personalCollectionsCleanupProvider),
     clearChatBackgrounds: ref.watch(accountAppearanceCleanupProvider),
     voiceDirectory: ref.watch(chatVoiceCacheDirectoryProvider),
     chatAttachmentDirectory: getApplicationCacheDirectory,
