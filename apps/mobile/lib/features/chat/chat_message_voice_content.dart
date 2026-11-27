@@ -373,15 +373,7 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
                     ),
                     const SizedBox(height: 4),
                   ],
-                  Row(
-                    children: [
-                      _toggleButton(scheme, label, desktop: true),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _desktopTimeline(context, strings, total),
-                      ),
-                    ],
-                  ),
+                  _desktopControls(context, strings, label, total),
                   if (_failed)
                     Text(
                       strings.voiceMessagePlaybackFailed,
@@ -455,31 +447,21 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
     );
   }
 
-  Widget _toggleButton(
-    ColorScheme scheme,
-    String label, {
-    bool desktop = false,
-  }) {
+  Widget _toggleButton(ColorScheme scheme, String label) {
     return IconButton.filled(
       key: Key('chat-voice-toggle-${widget.messageId}'),
       tooltip: label,
       onPressed: _loading ? null : () => unawaited(_toggle()),
       style: IconButton.styleFrom(
-        backgroundColor: desktop ? scheme.primary : scheme.onPrimaryFixed,
-        foregroundColor: desktop ? scheme.onPrimary : scheme.primaryFixed,
-        fixedSize: desktop ? const Size.square(32) : null,
-        minimumSize: desktop ? const Size.square(32) : null,
-        visualDensity: desktop ? VisualDensity.standard : null,
-        tapTargetSize: desktop ? MaterialTapTargetSize.shrinkWrap : null,
-        padding: desktop ? EdgeInsets.zero : null,
-        iconSize: desktop ? 22 : null,
+        backgroundColor: scheme.onPrimaryFixed,
+        foregroundColor: scheme.primaryFixed,
       ),
       icon: _loading
           ? SizedBox.square(
-              dimension: desktop ? 16 : 20,
+              dimension: 20,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: desktop ? scheme.primary : scheme.onPrimaryFixed,
+                color: scheme.onPrimaryFixed,
               ),
             )
           : Icon(
@@ -643,59 +625,141 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
     return shown > total ? total : shown;
   }
 
-  Widget _desktopTimeline(
+  Widget _desktopControls(
     BuildContext context,
     AppLocalizations strings,
+    String label,
     Duration? total,
   ) {
     final theme = Theme.of(context);
+    final actionLabel = _loading
+        ? strings.attachmentDownloading
+        : _failed && total == null && !_playing
+        ? strings.retry
+        : label;
     final clamped = total == null ? Duration.zero : _clampedPosition(total);
-    final position = _formatPlaybackTime(clamped);
-    final progress = total == null
-        ? position
-        : strings.voiceMessageProgress(position, _formatPlaybackTime(total));
-    final time = Text(
-      progress,
-      key: Key('chat-voice-progress-${widget.messageId}'),
-      style: theme.textTheme.labelSmall?.copyWith(
-        color: theme.colorScheme.onSurfaceVariant,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      ),
-    );
+    final progress = total != null
+        ? strings.voiceMessageProgress(
+            _formatPlaybackTime(clamped),
+            _formatPlaybackTime(total),
+          )
+        : null;
     return LayoutBuilder(
       builder: (context, constraints) {
         return Row(
           children: [
-            Expanded(
-              child: total == null
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Container(
-                        height: 2,
-                        color: theme.colorScheme.outlineVariant,
-                      ),
-                    )
-                  : SizedBox(
-                      height: 32,
-                      child: _seekSlider(
-                        context,
-                        total,
-                        clamped,
-                        progress,
-                        desktop: true,
-                      ),
-                    ),
-            ),
-            const SizedBox(width: 6),
             ConstrainedBox(
               constraints: BoxConstraints(
-                maxWidth: constraints.maxWidth * 0.55,
+                maxWidth: total == null ? constraints.maxWidth : 32,
               ),
-              child: FittedBox(fit: BoxFit.scaleDown, child: time),
+              child: _desktopToggle(
+                theme,
+                actionLabel,
+                showLabel: total == null,
+              ),
             ),
+            if (progress != null && total != null) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: SizedBox(
+                  height: 32,
+                  child: _seekSlider(
+                    context,
+                    total,
+                    clamped,
+                    progress,
+                    desktop: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: math.max(0, constraints.maxWidth - 40) * 0.55,
+                ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    progress,
+                    key: Key('chat-voice-progress-${widget.messageId}'),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         );
       },
+    );
+  }
+
+  Widget _desktopToggle(
+    ThemeData theme,
+    String actionLabel, {
+    required bool showLabel,
+  }) {
+    return Tooltip(
+      message: actionLabel,
+      excludeFromSemantics: true,
+      child: TextButton(
+        key: Key('chat-voice-toggle-${widget.messageId}'),
+        onPressed: _loading ? null : () => unawaited(_toggle()),
+        style: TextButton.styleFrom(
+          foregroundColor: theme.colorScheme.primary,
+          minimumSize: const Size.square(32),
+          padding: EdgeInsets.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.standard,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Ink(
+              width: 32,
+              height: 32,
+              decoration: ShapeDecoration(
+                shape: const CircleBorder(),
+                color: _loading
+                    ? theme.colorScheme.surfaceContainerHighest
+                    : theme.colorScheme.primary,
+              ),
+              child: Center(
+                child: _loading
+                    ? SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: theme.colorScheme.primary,
+                          semanticsLabel: showLabel ? null : actionLabel,
+                        ),
+                      )
+                    : Icon(
+                        _playing
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        size: 22,
+                        color: theme.colorScheme.onPrimary,
+                        semanticLabel: showLabel ? null : actionLabel,
+                      ),
+              ),
+            ),
+            if (showLabel)
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    actionLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 

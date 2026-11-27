@@ -531,11 +531,15 @@ Widget _voiceApp(
   ChatMessage? message,
   double width = 320,
   bool showAttachments = true,
+  Future<ChatVoiceFile> Function()? loadFile,
 }) {
   return ProviderScope(
     overrides: [
       chatVoicePlaybackBackendProvider.overrideWithValue(() => backend),
-      chatVoiceFileProvider.overrideWith((ref, key) async => file),
+      attachmentUriRepairProvider.overrideWithValue(_unchangedVoiceUri),
+      chatVoiceFileProvider.overrideWith(
+        (ref, key) async => loadFile == null ? file : await loadFile(),
+      ),
     ],
     child: localizedTestApp(
       home: Scaffold(
@@ -569,6 +573,7 @@ final class _FakePlaybackBackend implements VoicePlaybackBackend {
   int pauses = 0;
   int resumes = 0;
   int stops = 0;
+  bool failNextPlay = false;
   bool _closed = false;
 
   @override
@@ -587,6 +592,10 @@ final class _FakePlaybackBackend implements VoicePlaybackBackend {
   @override
   Future<void> playFile(String path, {required String mimeType}) async {
     playedPaths.add(path);
+    if (failNextPlay) {
+      failNextPlay = false;
+      throw StateError('Playback unavailable');
+    }
   }
 
   @override
