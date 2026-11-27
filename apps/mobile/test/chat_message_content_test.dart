@@ -19,9 +19,11 @@ import 'poll_test_support.dart';
 
 part 'chat_message_content_poll_test.part.dart';
 part 'chat_message_content_reaction_test.part.dart';
+part 'chat_message_content_voice_test.part.dart';
 
 void main() {
   _registerReactionSummaryTests();
+  _registerVoicePlaybackTests();
 
   testWidgets('validated incoming poll opens the server-backed viewer', (
     tester,
@@ -521,59 +523,15 @@ void main() {
     expect(tester.takeException(), isNull);
     semantics.dispose();
   });
-
-  testWidgets('a voice message exposes its length, position and seeking', (
-    tester,
-  ) async {
-    final backend = _FakePlaybackBackend();
-    addTearDown(backend.dispose);
-
-    await tester.pumpWidget(
-      _voiceApp(
-        backend,
-        const ChatVoiceFile(path: 'a.m4a', contentType: 'audio/mp4'),
-      ),
-    );
-
-    expect(find.byKey(const Key('chat-voice-44')), findsOneWidget);
-    expect(find.byKey(const Key('chat-voice-position-44')), findsNothing);
-
-    await tester.tap(find.byKey(const Key('chat-voice-toggle-44')));
-    await tester.pump();
-    await tester.pump();
-    expect(backend.playedPaths, hasLength(1));
-
-    backend
-      ..emitDuration(const Duration(seconds: 72))
-      ..emitPosition(const Duration(seconds: 9));
-    await tester.pump();
-
-    expect(find.text('0:09 of 1:12'), findsOneWidget);
-    final slider = tester.widget<Slider>(
-      find.byKey(const Key('chat-voice-position-44')),
-    );
-    expect(slider.value, 9000);
-    expect(slider.max, 72000);
-
-    slider.onChanged!(30000);
-    await tester.pump();
-    expect(find.text('0:30 of 1:12'), findsOneWidget);
-    slider.onChangeEnd!(30000);
-    await tester.pump();
-    expect(backend.seeks, <Duration>[const Duration(seconds: 30)]);
-
-    await tester.tap(find.byKey(const Key('chat-voice-toggle-44')));
-    await tester.pump();
-    expect(backend.pauses, 1);
-
-    await tester.tap(find.byKey(const Key('chat-voice-toggle-44')));
-    await tester.pump();
-    expect(backend.resumes, 1);
-    expect(backend.playedPaths, hasLength(1));
-  });
 }
 
-Widget _voiceApp(VoicePlaybackBackend backend, ChatVoiceFile file) {
+Widget _voiceApp(
+  VoicePlaybackBackend backend,
+  ChatVoiceFile file, {
+  ChatMessage? message,
+  double width = 320,
+  bool showAttachments = true,
+}) {
   return ProviderScope(
     overrides: [
       chatVoicePlaybackBackendProvider.overrideWithValue(() => backend),
@@ -584,11 +542,12 @@ Widget _voiceApp(VoicePlaybackBackend backend, ChatVoiceFile file) {
         body: Align(
           alignment: Alignment.topLeft,
           child: SizedBox(
-            width: 320,
+            width: width,
             child: ChatMessageContent(
               key: const Key('message-content'),
               account: _account,
-              message: _voiceMessage,
+              message: message ?? _voiceMessage,
+              showAttachments: showAttachments,
               fallbackText: '',
               foregroundColor: Colors.black,
             ),

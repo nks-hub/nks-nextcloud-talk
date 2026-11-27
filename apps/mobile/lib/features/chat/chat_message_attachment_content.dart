@@ -10,6 +10,7 @@ final class _ChatAttachment extends ConsumerWidget {
     required this.index,
     this.onOpenImage,
     this.compact = false,
+    this.showVoiceName = true,
   });
 
   final StoredAccount account;
@@ -19,6 +20,7 @@ final class _ChatAttachment extends ConsumerWidget {
   final int index;
   final VoidCallback? onOpenImage;
   final bool compact;
+  final bool showVoiceName;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -105,6 +107,7 @@ final class _ChatAttachment extends ConsumerWidget {
             messageId: messageId,
             index: index,
             name: name,
+            showName: showVoiceName,
           ),
         if (previewProvider != null)
           _InlineChatImagePreview(

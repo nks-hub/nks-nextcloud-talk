@@ -9,6 +9,7 @@ final class _VoiceAttachment extends ConsumerStatefulWidget {
     required this.messageId,
     required this.index,
     required this.name,
+    required this.showName,
   });
 
   final StoredAccount account;
@@ -17,6 +18,7 @@ final class _VoiceAttachment extends ConsumerStatefulWidget {
   final int messageId;
   final int index;
   final String name;
+  final bool showName;
 
   @override
   ConsumerState<_VoiceAttachment> createState() => _VoiceAttachmentState();
@@ -332,27 +334,75 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
         : strings.playVoiceMessage;
     final total = _total;
     final transcriberFactory = ref.watch(chatVoiceTranscriberFactoryProvider);
+    final desktop = context.usesDesktopDensity;
     return Container(
       key: Key('chat-voice-${widget.messageId}'),
-      margin: const EdgeInsets.only(top: 8),
+      constraints: desktop ? const BoxConstraints(maxWidth: 320) : null,
+      margin: desktop ? null : const EdgeInsets.only(top: 8),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
+        color: desktop
+            ? Color.alphaBlend(
+                scheme.primary.withValues(alpha: 0.08),
+                scheme.surfaceContainer,
+              )
+            : scheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(15),
+        border: desktop
+            ? Border.all(color: scheme.outlineVariant.withValues(alpha: 0.65))
+            : null,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: scheme.primaryFixed,
-              borderRadius: BorderRadius.circular(15),
+          if (desktop)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (widget.showName) ...[
+                    Text(
+                      widget.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.labelLarge?.copyWith(color: scheme.onSurface),
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                  Row(
+                    children: [
+                      _toggleButton(scheme, label, desktop: true),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _desktopTimeline(context, strings, total),
+                      ),
+                    ],
+                  ),
+                  if (_failed)
+                    Text(
+                      strings.voiceMessagePlaybackFailed,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: scheme.error),
+                    ),
+                ],
+              ),
+            )
+          else
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: scheme.primaryFixed,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                child: _player(context, strings, scheme, label, total),
+              ),
             ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-              child: _player(context, strings, scheme, label, total),
-            ),
-          ),
           if (transcriberFactory != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -378,27 +428,7 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton.filled(
-          style: IconButton.styleFrom(
-            backgroundColor: scheme.onPrimaryFixed,
-            foregroundColor: scheme.primaryFixed,
-          ),
-          key: Key('chat-voice-toggle-${widget.messageId}'),
-          tooltip: label,
-          onPressed: _loading ? null : () => unawaited(_toggle()),
-          icon: _loading
-              ? SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: scheme.onPrimaryFixed,
-                  ),
-                )
-              : Icon(
-                  _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                  semanticLabel: label,
-                ),
-        ),
+        _toggleButton(scheme, label),
         const SizedBox(width: 8),
         Flexible(
           child: Column(
@@ -422,6 +452,40 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
         ),
         const SizedBox(width: 4),
       ],
+    );
+  }
+
+  Widget _toggleButton(
+    ColorScheme scheme,
+    String label, {
+    bool desktop = false,
+  }) {
+    return IconButton.filled(
+      key: Key('chat-voice-toggle-${widget.messageId}'),
+      tooltip: label,
+      onPressed: _loading ? null : () => unawaited(_toggle()),
+      style: IconButton.styleFrom(
+        backgroundColor: desktop ? scheme.primary : scheme.onPrimaryFixed,
+        foregroundColor: desktop ? scheme.onPrimary : scheme.primaryFixed,
+        fixedSize: desktop ? const Size.square(32) : null,
+        minimumSize: desktop ? const Size.square(32) : null,
+        visualDensity: desktop ? VisualDensity.standard : null,
+        tapTargetSize: desktop ? MaterialTapTargetSize.shrinkWrap : null,
+        padding: desktop ? EdgeInsets.zero : null,
+        iconSize: desktop ? 22 : null,
+      ),
+      icon: _loading
+          ? SizedBox.square(
+              dimension: desktop ? 16 : 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: desktop ? scheme.primary : scheme.onPrimaryFixed,
+              ),
+            )
+          : Icon(
+              _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              semanticLabel: label,
+            ),
     );
   }
 
@@ -553,10 +617,7 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
     AppLocalizations strings,
     Duration total,
   ) {
-    final shown = _scrubbing ?? _position;
-    final clamped = shown < Duration.zero
-        ? Duration.zero
-        : (shown > total ? total : shown);
+    final clamped = _clampedPosition(total);
     final progress = strings.voiceMessageProgress(
       _formatPlaybackTime(clamped),
       _formatPlaybackTime(total),
@@ -564,29 +625,7 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Flexible(
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackShape: _peaks == null ? null : _VoiceWaveTrack(_peaks!),
-            ),
-            child: Slider(
-              activeColor: Theme.of(context).colorScheme.onPrimaryFixed,
-              inactiveColor: Theme.of(
-                context,
-              ).colorScheme.onPrimaryFixed.withValues(alpha: 0.25),
-              key: Key('chat-voice-position-${widget.messageId}'),
-              value: clamped.inMilliseconds.toDouble(),
-              max: total.inMilliseconds.toDouble(),
-              label: _formatPlaybackTime(clamped),
-              semanticFormatterCallback: (_) => progress,
-              onChanged: (value) => setState(
-                () => _scrubbing = Duration(milliseconds: value.round()),
-              ),
-              onChangeEnd: (value) =>
-                  unawaited(_seek(Duration(milliseconds: value.round()))),
-            ),
-          ),
-        ),
+        Flexible(child: _seekSlider(context, total, clamped, progress)),
         Text(
           progress,
           key: Key('chat-voice-progress-${widget.messageId}'),
@@ -595,6 +634,105 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
           ),
         ),
       ],
+    );
+  }
+
+  Duration _clampedPosition(Duration total) {
+    final shown = _scrubbing ?? _position;
+    if (shown.isNegative) return Duration.zero;
+    return shown > total ? total : shown;
+  }
+
+  Widget _desktopTimeline(
+    BuildContext context,
+    AppLocalizations strings,
+    Duration? total,
+  ) {
+    final theme = Theme.of(context);
+    final clamped = total == null ? Duration.zero : _clampedPosition(total);
+    final position = _formatPlaybackTime(clamped);
+    final progress = total == null
+        ? position
+        : strings.voiceMessageProgress(position, _formatPlaybackTime(total));
+    final time = Text(
+      progress,
+      key: Key('chat-voice-progress-${widget.messageId}'),
+      style: theme.textTheme.labelSmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Row(
+          children: [
+            Expanded(
+              child: total == null
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Container(
+                        height: 2,
+                        color: theme.colorScheme.outlineVariant,
+                      ),
+                    )
+                  : SizedBox(
+                      height: 32,
+                      child: _seekSlider(
+                        context,
+                        total,
+                        clamped,
+                        progress,
+                        desktop: true,
+                      ),
+                    ),
+            ),
+            const SizedBox(width: 6),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: constraints.maxWidth * 0.55,
+              ),
+              child: FittedBox(fit: BoxFit.scaleDown, child: time),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _seekSlider(
+    BuildContext context,
+    Duration total,
+    Duration position,
+    String progress, {
+    bool desktop = false,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = desktop ? scheme.primary : scheme.onPrimaryFixed;
+    return SliderTheme(
+      data: SliderTheme.of(context).copyWith(
+        trackShape: _peaks == null ? null : _VoiceWaveTrack(_peaks!),
+        trackHeight: desktop ? 3 : null,
+        thumbShape: desktop
+            ? const RoundSliderThumbShape(enabledThumbRadius: 4)
+            : null,
+        overlayShape: desktop
+            ? const RoundSliderOverlayShape(overlayRadius: 10)
+            : null,
+      ),
+      child: Slider(
+        key: Key('chat-voice-position-${widget.messageId}'),
+        padding: desktop ? const EdgeInsets.symmetric(horizontal: 4) : null,
+        activeColor: color,
+        inactiveColor: color.withValues(alpha: desktop ? 0.45 : 0.25),
+        value: position.inMilliseconds.toDouble(),
+        max: total.inMilliseconds.toDouble(),
+        label: _formatPlaybackTime(position),
+        semanticFormatterCallback: (_) => progress,
+        onChanged: (value) =>
+            setState(() => _scrubbing = Duration(milliseconds: value.round())),
+        onChangeEnd: (value) =>
+            unawaited(_seek(Duration(milliseconds: value.round()))),
+      ),
     );
   }
 }

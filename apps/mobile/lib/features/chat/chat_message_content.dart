@@ -11,6 +11,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app_providers.dart';
+import '../../core/desktop_metrics.dart';
 import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
 import '../../data/chat_media_repository.dart';
@@ -60,6 +61,41 @@ typedef _RenderedMessage = ({
 /// parsing the markdown again for an unchanged message was most of that
 /// rebuild. Entries go with the message they belong to.
 final _renderedMessages = Expando<_RenderedMessage>();
+final _voiceCaptions = Expando<RichChatDocument>();
+
+RichChatDocument _desktopVoiceCaption(
+  StoredAccount account,
+  ChatMessage message,
+  _RenderedMessage rendered,
+  MapEntry<String, ChatRichObjectParameter> file,
+) {
+  final document = rendered.document;
+  final text = message.message.trimRight();
+  final marker = '{${file.key}}';
+  if (!text.endsWith(marker) ||
+      _objectLink(file.value) != null ||
+      _mimeType(file.value)?.startsWith('audio/') != true ||
+      _davAttachment(account, file.value) == null) {
+    return document;
+  }
+  final cached = _voiceCaptions[document];
+  if (cached != null) return cached;
+  // A marker in a code block is part of the caption. A rich file marker is
+  // already represented by the player. Linked markers keep their file menu.
+  final last = document.nodes
+      .where(
+        (node) =>
+            node.children.isEmpty && (node.text?.trim().isNotEmpty ?? true),
+      )
+      .lastOrNull;
+  if (last?.parameterKey != file.key) return document;
+  return _voiceCaptions[document] = renderRichChatMessage(
+    message: text.substring(0, text.length - marker.length).trimRight(),
+    markdownEnabled: message.markdown == true,
+    parameters: message.messageParameters,
+    server: rendered.server,
+  );
+}
 
 _RenderedMessage _renderMessage(StoredAccount account, ChatMessage message) {
   final cached = _renderedMessages[message];
@@ -120,10 +156,15 @@ final class ChatMessageContent extends StatelessWidget {
       return Text(fallbackText, style: TextStyle(color: foregroundColor));
     }
     final rendered = _renderMessage(account, parsed);
-    final document = rendered.document;
     final attachments = parsed.messageParameters.entries
         .where((entry) => entry.value.type == 'file')
         .toList(growable: false);
+    final desktopVoiceLayout = showAttachments && context.usesDesktopDensity;
+    final document = desktopVoiceLayout && attachments.length == 1
+        ? _desktopVoiceCaption(account, parsed, rendered, attachments.single)
+        : rendered.document;
+    final captionEmpty =
+        document != rendered.document && document.root.children.isEmpty;
     final imageOnly =
         attachments.length == 1 &&
         parsed.message.trim() == '{${attachments.single.key}}' &&
@@ -153,7 +194,7 @@ final class ChatMessageContent extends StatelessWidget {
               ),
               const SizedBox(height: 8),
             ],
-            if (!imageOnly)
+            if (!imageOnly && !captionEmpty)
               if (giphySelection.references.isEmpty)
                 if (attachments.isEmpty &&
                     parsed.messageParameters.isEmpty &&
@@ -197,7 +238,8 @@ final class ChatMessageContent extends StatelessWidget {
               showAttachments && index < attachments.length;
               index++
             ) ...[
-              if (!imageOnly || index > 0) const SizedBox(height: 8),
+              if ((!imageOnly && !captionEmpty) || index > 0)
+                const SizedBox(height: 8),
               _ChatAttachment(
                 key: Key('chat-attachment-${parsed.messageId}-$index'),
                 account: account,
@@ -205,6 +247,13 @@ final class ChatMessageContent extends StatelessWidget {
                 roomToken: parsed.roomToken.value,
                 messageId: parsed.messageId,
                 index: index,
+                showVoiceName:
+                    !desktopVoiceLayout ||
+                    _mimeType(attachments[index].value)?.startsWith('audio/') !=
+                        true ||
+                    !document.nodes.any(
+                      (node) => node.parameterKey == attachments[index].key,
+                    ),
               ),
             ],
             if (parsed.reactions.isNotEmpty) ...[
