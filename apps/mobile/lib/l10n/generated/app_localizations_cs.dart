@@ -4600,4 +4600,70 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get unansweredReminderAlreadyAnswered => 'Odpověď už přišla.';
+
+  @override
+  String get photoNotes => 'Poznámky na fotce';
+
+  @override
+  String get photoAddPin => 'Přidat značku';
+
+  @override
+  String get photoPickPoint => 'Klepni na místo na fotce';
+
+  @override
+  String get photoNoteText => 'Na co chceš upozornit?';
+
+  @override
+  String get photoReplyText => 'Odpovědět u této značky';
+
+  @override
+  String get photoNoPins => 'Zatím tu nejsou žádné značky';
+
+  @override
+  String get photoChoosePin => 'Vyber značku a zobrazí se její odpovědi';
+
+  @override
+  String get photoChanged =>
+      'Fotka se změnila. Otevři aktuální verzi a uvidíš její značky.';
+
+  @override
+  String get photoNoAccess => 'Tahle fotka už není dostupná.';
+
+  @override
+  String get photoLoadAgain => 'Načíst fotku znovu';
+
+  @override
+  String get photoPin => 'Značka';
+
+  @override
+  String get draftHandoffTitle => 'Koncepty mezi zařízeními';
+
+  @override
+  String get draftHandoffEnable => 'Sdílet moje koncepty v tomto účtu';
+
+  @override
+  String get draftHandoffPrivacy =>
+      'Text a číslo citované zprávy se uloží na váš server.';
+
+  @override
+  String get draftHandoffEmpty =>
+      'Pro tuto konverzaci zde zatím žádný koncept není.';
+
+  @override
+  String get draftHandoffVariants => 'Vyberte verzi konceptu';
+
+  @override
+  String get draftHandoffUnavailable =>
+      'Koncepty mezi zařízeními se nepodařilo načíst.';
+
+  @override
+  String get draftHandoffMissingQuote =>
+      'Citovaná zpráva už není dostupná. Odeberte citaci nebo vyberte jinou zprávu.';
+
+  @override
+  String get draftHandoffThisDevice => 'Na tomto zařízení';
+
+  @override
+  String get photoNotesFull =>
+      'U této fotky nebo značky už byl vyčerpán počet příspěvků.';
 }

@@ -4592,4 +4592,69 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get unansweredReminderAlreadyAnswered =>
       'A reply has already arrived.';
+
+  @override
+  String get photoNotes => 'Notes on photo';
+
+  @override
+  String get photoAddPin => 'Add pin';
+
+  @override
+  String get photoPickPoint => 'Tap a spot on the photo';
+
+  @override
+  String get photoNoteText => 'What do you want to point out?';
+
+  @override
+  String get photoReplyText => 'Reply to this pin';
+
+  @override
+  String get photoNoPins => 'No pins yet';
+
+  @override
+  String get photoChoosePin => 'Choose a pin to see its replies';
+
+  @override
+  String get photoChanged =>
+      'The photo changed. Open the current version to see its pins.';
+
+  @override
+  String get photoNoAccess => 'This photo is no longer available.';
+
+  @override
+  String get photoLoadAgain => 'Reload photo';
+
+  @override
+  String get photoPin => 'Pin';
+
+  @override
+  String get draftHandoffTitle => 'Drafts across devices';
+
+  @override
+  String get draftHandoffEnable => 'Share my drafts for this account';
+
+  @override
+  String get draftHandoffPrivacy =>
+      'Your server stores the text and the ID of the quoted message.';
+
+  @override
+  String get draftHandoffEmpty => 'No drafts for this conversation yet.';
+
+  @override
+  String get draftHandoffVariants => 'Choose a draft version';
+
+  @override
+  String get draftHandoffUnavailable =>
+      'Could not load drafts from other devices.';
+
+  @override
+  String get draftHandoffMissingQuote =>
+      'The quoted message is no longer available. Remove the quote or choose another message.';
+
+  @override
+  String get draftHandoffThisDevice => 'On this device';
+
+  @override
+  String get photoNotesFull =>
+      'This photo or conversation has reached its notes limit.';
 }

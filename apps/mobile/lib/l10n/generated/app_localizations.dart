@@ -8221,6 +8221,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A reply has already arrived.'**
   String get unansweredReminderAlreadyAnswered;
+
+  /// No description provided for @photoNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes on photo'**
+  String get photoNotes;
+
+  /// No description provided for @photoAddPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Add pin'**
+  String get photoAddPin;
+
+  /// No description provided for @photoPickPoint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a spot on the photo'**
+  String get photoPickPoint;
+
+  /// No description provided for @photoNoteText.
+  ///
+  /// In en, this message translates to:
+  /// **'What do you want to point out?'**
+  String get photoNoteText;
+
+  /// No description provided for @photoReplyText.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply to this pin'**
+  String get photoReplyText;
+
+  /// No description provided for @photoNoPins.
+  ///
+  /// In en, this message translates to:
+  /// **'No pins yet'**
+  String get photoNoPins;
+
+  /// No description provided for @photoChoosePin.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a pin to see its replies'**
+  String get photoChoosePin;
+
+  /// No description provided for @photoChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo changed. Open the current version to see its pins.'**
+  String get photoChanged;
+
+  /// No description provided for @photoNoAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'This photo is no longer available.'**
+  String get photoNoAccess;
+
+  /// No description provided for @photoLoadAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload photo'**
+  String get photoLoadAgain;
+
+  /// No description provided for @photoPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin'**
+  String get photoPin;
+
+  /// No description provided for @draftHandoffTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Drafts across devices'**
+  String get draftHandoffTitle;
+
+  /// No description provided for @draftHandoffEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Share my drafts for this account'**
+  String get draftHandoffEnable;
+
+  /// No description provided for @draftHandoffPrivacy.
+  ///
+  /// In en, this message translates to:
+  /// **'Your server stores the text and the ID of the quoted message.'**
+  String get draftHandoffPrivacy;
+
+  /// No description provided for @draftHandoffEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No drafts for this conversation yet.'**
+  String get draftHandoffEmpty;
+
+  /// No description provided for @draftHandoffVariants.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a draft version'**
+  String get draftHandoffVariants;
+
+  /// No description provided for @draftHandoffUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load drafts from other devices.'**
+  String get draftHandoffUnavailable;
+
+  /// No description provided for @draftHandoffMissingQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'The quoted message is no longer available. Remove the quote or choose another message.'**
+  String get draftHandoffMissingQuote;
+
+  /// No description provided for @draftHandoffThisDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'On this device'**
+  String get draftHandoffThisDevice;
+
+  /// No description provided for @photoNotesFull.
+  ///
+  /// In en, this message translates to:
+  /// **'This photo or conversation has reached its notes limit.'**
+  String get photoNotesFull;
 }
 
 class _AppLocalizationsDelegate
