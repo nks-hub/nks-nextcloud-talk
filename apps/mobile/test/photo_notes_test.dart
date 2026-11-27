@@ -26,6 +26,7 @@ void main() {
   late List<http.Request> calls;
   late String version;
   late bool permitted;
+  late DateTime now;
   int? writeError;
   setUp(() async {
     db = openTestDatabase();
@@ -45,7 +46,9 @@ void main() {
     writeError = null;
     notes = [];
     calls = [];
+    now = DateTime.utc(2026);
     api = HttpNextcloudApi(
+      clock: () => now,
       client: MockClient((r) async {
         if (!r.url.path.contains('/photo/')) return server.handle(r);
         calls.add(r);
@@ -259,6 +262,25 @@ void main() {
       'Keep this text',
     );
     expect(find.byKey(const Key('photo-pin-surface')), findsOneWidget);
+    await t.pumpWidget(const SizedBox.shrink());
+    await t.pump(const Duration(milliseconds: 50));
+  });
+  testWidgets('disabling the extension removes open notes and entry button', (
+    t,
+  ) async {
+    await open(t);
+    final count = calls.length;
+    server.capability = null;
+    now = now.add(api.capabilityCacheTtl);
+    await tap(t, find.byTooltip('Refresh'));
+    await ready(t, find.text('This photo is no longer available.'));
+    expect(find.byKey(const Key('photo-pin-surface')), findsNothing);
+    expect(calls, hasLength(count));
+    Navigator.of(
+      t.element(find.text('This photo is no longer available.')),
+    ).pop();
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('open-photo-notes')), findsNothing);
     await t.pumpWidget(const SizedBox.shrink());
     await t.pump(const Duration(milliseconds: 50));
   });

@@ -207,8 +207,17 @@ class _PhotoNotesScreenState extends ConsumerState<_PhotoNotesScreen>
 
   void _recordFailure(Object e) {
     if (!mounted) return;
-    final code = e is OwnTalkExtensionsException ? e.statusCode : null;
-    final accessLost = code == 401 || code == 403 || code == 404;
+    final failure = e is OwnTalkExtensionsException ? e : null;
+    final code = failure?.statusCode;
+    final lostSession = switch (failure?.code) {
+      OwnTalkExtensionsError.accountMissing ||
+      OwnTalkExtensionsError.credentialMissing ||
+      OwnTalkExtensionsError.reauthenticationRequired ||
+      OwnTalkExtensionsError.unavailable => true,
+      _ => false,
+    };
+    if (lostSession) ref.invalidate(_support(widget.button.account.id));
+    final accessLost = lostSession || code == 401 || code == 403 || code == 404;
     setState(() {
       _error = accessLost ? 404 : code ?? 0;
       _canEdit = false;
