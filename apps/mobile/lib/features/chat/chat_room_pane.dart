@@ -30,6 +30,7 @@ import '../../core/giphy_reference.dart';
 import '../../core/stale_modifier_repair.dart';
 import '../../data/app_database.dart';
 import '../../data/composer_draft_focus.dart';
+import '../../data/undelivered_messages.dart';
 import '../../data/chat_repository.dart';
 import '../../data/recoverable_text_draft_store.dart';
 import 'package:uuid/uuid.dart';
@@ -92,6 +93,7 @@ part 'chat_room_pane_actions.dart';
 part 'chat_room_pane_attachment_menu.dart';
 part 'chat_room_pane_composer.dart';
 part 'chat_room_pane_drafts.dart';
+part 'chat_room_pane_undelivered.dart';
 part 'chat_room_pane_composer_widgets.dart';
 part 'chat_room_pane_expression_picker.dart';
 part 'chat_room_pane_timeline_states.dart';
@@ -232,6 +234,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   Timer? _islandPause;
   ChatRepository? _draftStore;
   CachedChatMessage? _replyTo;
+  UndeliveredMessage? _openedIssue;
   int _jumpGeneration = 0;
   bool _jumpInProgress = false;
 
@@ -355,6 +358,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _timelineCache.clear();
     _handoverOperationIds.clear();
     _replyTargets.clear();
+    _openedIssue = null;
     _historyGeneration++;
     _loadingOlder = false;
     _scrollController.resetExtentTracking();
@@ -654,32 +658,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     return admitted;
   }
 
-  /// [operations] with the rows of the replies sent from this pane.
-  ///
-  /// Without them a reply's stand-in was never replaced: its row never showed
-  /// up, so the line stayed "queued" under a message long delivered.
-  List<StoredTextSendOperation> _withOwnReplies(
-    List<StoredTextSendOperation> operations,
-  ) {
-    if (_replyTargets.isEmpty) {
-      return operations;
-    }
-    return [
-      ...operations,
-      for (final target in _replyTargets)
-        ...?ref
-            .watch(
-              textSendOperationsProvider((
-                accountId: _key.accountId,
-                roomToken: _key.roomToken,
-                threadId: target,
-              )),
-            )
-            .valueOrNull
-            ?.where((operation) => operation.replyTo == target),
-    ]..sort((a, b) => a.enqueueSequence.compareTo(b.enqueueSequence));
-  }
-
   /// Whether a completed send still has to stand in for its message.
   bool _awaitsTimeline(StoredTextSendOperation operation, int lastDisplayedId) {
     if (!_handoverOperationIds.contains(operation.operationId)) {
@@ -704,6 +682,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
 
   @override
   Widget build(BuildContext context) {
+    final issue = _selectedUndeliveredMessage();
     ref.listen(composerDraftFocusProvider, (_, key) {
       if (key == _key) _focusOpenedDraft(key!);
     });
@@ -888,8 +867,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         : history
               .where((message) => message.messageId > (_islandEntryNewest ?? 0))
               .length;
-    final operations = _withOwnReplies(
-      operationsValue.valueOrNull ?? const <StoredTextSendOperation>[],
+    final operations = _withUndeliveredSelection(
+      _withOwnReplies(operationsValue.valueOrNull ?? const <StoredTextSendOperation>[]),
+      issue,
     );
     final deliveryStates = <int, OutgoingMessageDeliveryState>{
       for (final status
@@ -1141,6 +1121,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                             messages: messages,
                             blocks: shownBlocks,
                             pending: pending,
+                            selectedOperationId: issue?.id,
                             attachments: pendingAttachments,
                             hasOlder: _island != null
                                 ? !_islandAtStart

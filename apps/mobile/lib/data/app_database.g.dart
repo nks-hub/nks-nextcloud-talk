@@ -6224,6 +6224,17 @@ class $TextSendOperationsTable extends TextSendOperations
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _composerThreadIdMeta = const VerificationMeta(
+    'composerThreadId',
+  );
+  @override
+  late final GeneratedColumn<int> composerThreadId = GeneratedColumn<int>(
+    'composer_thread_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _replyToMeta = const VerificationMeta(
     'replyTo',
   );
@@ -6307,6 +6318,7 @@ class $TextSendOperationsTable extends TextSendOperations
     errorClass,
     nextAttemptAt,
     automaticResendCount,
+    composerThreadId,
     replyTo,
     threadId,
     replyToToken,
@@ -6468,6 +6480,15 @@ class $TextSendOperationsTable extends TextSendOperations
         ),
       );
     }
+    if (data.containsKey('composer_thread_id')) {
+      context.handle(
+        _composerThreadIdMeta,
+        composerThreadId.isAcceptableOrUnknown(
+          data['composer_thread_id']!,
+          _composerThreadIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('reply_to')) {
       context.handle(
         _replyToMeta,
@@ -6597,6 +6618,10 @@ class $TextSendOperationsTable extends TextSendOperations
         DriftSqlType.int,
         data['${effectivePrefix}automatic_resend_count'],
       )!,
+      composerThreadId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}composer_thread_id'],
+      ),
       replyTo: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}reply_to'],
@@ -6659,6 +6684,10 @@ class StoredTextSendOperation extends DataClass
 
   /// How often the row went back to the queue on such a proof alone.
   final int automaticResendCount;
+
+  /// Thread in the client UI. Ordinary threads and quoted room messages use
+  /// the same reply field on the wire.
+  final int? composerThreadId;
   final int? replyTo;
   final int? threadId;
   final String? replyToToken;
@@ -6681,6 +6710,7 @@ class StoredTextSendOperation extends DataClass
     this.errorClass,
     this.nextAttemptAt,
     required this.automaticResendCount,
+    this.composerThreadId,
     this.replyTo,
     this.threadId,
     this.replyToToken,
@@ -6712,6 +6742,9 @@ class StoredTextSendOperation extends DataClass
       map['next_attempt_at'] = Variable<int>(nextAttemptAt);
     }
     map['automatic_resend_count'] = Variable<int>(automaticResendCount);
+    if (!nullToAbsent || composerThreadId != null) {
+      map['composer_thread_id'] = Variable<int>(composerThreadId);
+    }
     if (!nullToAbsent || replyTo != null) {
       map['reply_to'] = Variable<int>(replyTo);
     }
@@ -6750,6 +6783,9 @@ class StoredTextSendOperation extends DataClass
           ? const Value.absent()
           : Value(nextAttemptAt),
       automaticResendCount: Value(automaticResendCount),
+      composerThreadId: composerThreadId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(composerThreadId),
       replyTo: replyTo == null && nullToAbsent
           ? const Value.absent()
           : Value(replyTo),
@@ -6794,6 +6830,7 @@ class StoredTextSendOperation extends DataClass
       automaticResendCount: serializer.fromJson<int>(
         json['automaticResendCount'],
       ),
+      composerThreadId: serializer.fromJson<int?>(json['composerThreadId']),
       replyTo: serializer.fromJson<int?>(json['replyTo']),
       threadId: serializer.fromJson<int?>(json['threadId']),
       replyToToken: serializer.fromJson<String?>(json['replyToToken']),
@@ -6825,6 +6862,7 @@ class StoredTextSendOperation extends DataClass
       'errorClass': serializer.toJson<String?>(errorClass),
       'nextAttemptAt': serializer.toJson<int?>(nextAttemptAt),
       'automaticResendCount': serializer.toJson<int>(automaticResendCount),
+      'composerThreadId': serializer.toJson<int?>(composerThreadId),
       'replyTo': serializer.toJson<int?>(replyTo),
       'threadId': serializer.toJson<int?>(threadId),
       'replyToToken': serializer.toJson<String?>(replyToToken),
@@ -6850,6 +6888,7 @@ class StoredTextSendOperation extends DataClass
     Value<String?> errorClass = const Value.absent(),
     Value<int?> nextAttemptAt = const Value.absent(),
     int? automaticResendCount,
+    Value<int?> composerThreadId = const Value.absent(),
     Value<int?> replyTo = const Value.absent(),
     Value<int?> threadId = const Value.absent(),
     Value<String?> replyToToken = const Value.absent(),
@@ -6876,6 +6915,9 @@ class StoredTextSendOperation extends DataClass
         ? nextAttemptAt.value
         : this.nextAttemptAt,
     automaticResendCount: automaticResendCount ?? this.automaticResendCount,
+    composerThreadId: composerThreadId.present
+        ? composerThreadId.value
+        : this.composerThreadId,
     replyTo: replyTo.present ? replyTo.value : this.replyTo,
     threadId: threadId.present ? threadId.value : this.threadId,
     replyToToken: replyToToken.present ? replyToToken.value : this.replyToToken,
@@ -6924,6 +6966,9 @@ class StoredTextSendOperation extends DataClass
       automaticResendCount: data.automaticResendCount.present
           ? data.automaticResendCount.value
           : this.automaticResendCount,
+      composerThreadId: data.composerThreadId.present
+          ? data.composerThreadId.value
+          : this.composerThreadId,
       replyTo: data.replyTo.present ? data.replyTo.value : this.replyTo,
       threadId: data.threadId.present ? data.threadId.value : this.threadId,
       replyToToken: data.replyToToken.present
@@ -6959,6 +7004,7 @@ class StoredTextSendOperation extends DataClass
           ..write('errorClass: $errorClass, ')
           ..write('nextAttemptAt: $nextAttemptAt, ')
           ..write('automaticResendCount: $automaticResendCount, ')
+          ..write('composerThreadId: $composerThreadId, ')
           ..write('replyTo: $replyTo, ')
           ..write('threadId: $threadId, ')
           ..write('replyToToken: $replyToToken, ')
@@ -6986,6 +7032,7 @@ class StoredTextSendOperation extends DataClass
     errorClass,
     nextAttemptAt,
     automaticResendCount,
+    composerThreadId,
     replyTo,
     threadId,
     replyToToken,
@@ -7012,6 +7059,7 @@ class StoredTextSendOperation extends DataClass
           other.errorClass == this.errorClass &&
           other.nextAttemptAt == this.nextAttemptAt &&
           other.automaticResendCount == this.automaticResendCount &&
+          other.composerThreadId == this.composerThreadId &&
           other.replyTo == this.replyTo &&
           other.threadId == this.threadId &&
           other.replyToToken == this.replyToToken &&
@@ -7037,6 +7085,7 @@ class TextSendOperationsCompanion
   final Value<String?> errorClass;
   final Value<int?> nextAttemptAt;
   final Value<int> automaticResendCount;
+  final Value<int?> composerThreadId;
   final Value<int?> replyTo;
   final Value<int?> threadId;
   final Value<String?> replyToToken;
@@ -7060,6 +7109,7 @@ class TextSendOperationsCompanion
     this.errorClass = const Value.absent(),
     this.nextAttemptAt = const Value.absent(),
     this.automaticResendCount = const Value.absent(),
+    this.composerThreadId = const Value.absent(),
     this.replyTo = const Value.absent(),
     this.threadId = const Value.absent(),
     this.replyToToken = const Value.absent(),
@@ -7084,6 +7134,7 @@ class TextSendOperationsCompanion
     this.errorClass = const Value.absent(),
     this.nextAttemptAt = const Value.absent(),
     this.automaticResendCount = const Value.absent(),
+    this.composerThreadId = const Value.absent(),
     this.replyTo = const Value.absent(),
     this.threadId = const Value.absent(),
     this.replyToToken = const Value.absent(),
@@ -7120,6 +7171,7 @@ class TextSendOperationsCompanion
     Expression<String>? errorClass,
     Expression<int>? nextAttemptAt,
     Expression<int>? automaticResendCount,
+    Expression<int>? composerThreadId,
     Expression<int>? replyTo,
     Expression<int>? threadId,
     Expression<String>? replyToToken,
@@ -7147,6 +7199,7 @@ class TextSendOperationsCompanion
       if (nextAttemptAt != null) 'next_attempt_at': nextAttemptAt,
       if (automaticResendCount != null)
         'automatic_resend_count': automaticResendCount,
+      if (composerThreadId != null) 'composer_thread_id': composerThreadId,
       if (replyTo != null) 'reply_to': replyTo,
       if (threadId != null) 'thread_id': threadId,
       if (replyToToken != null) 'reply_to_token': replyToToken,
@@ -7173,6 +7226,7 @@ class TextSendOperationsCompanion
     Value<String?>? errorClass,
     Value<int?>? nextAttemptAt,
     Value<int>? automaticResendCount,
+    Value<int?>? composerThreadId,
     Value<int?>? replyTo,
     Value<int?>? threadId,
     Value<String?>? replyToToken,
@@ -7199,6 +7253,7 @@ class TextSendOperationsCompanion
       errorClass: errorClass ?? this.errorClass,
       nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
       automaticResendCount: automaticResendCount ?? this.automaticResendCount,
+      composerThreadId: composerThreadId ?? this.composerThreadId,
       replyTo: replyTo ?? this.replyTo,
       threadId: threadId ?? this.threadId,
       replyToToken: replyToToken ?? this.replyToToken,
@@ -7261,6 +7316,9 @@ class TextSendOperationsCompanion
     if (automaticResendCount.present) {
       map['automatic_resend_count'] = Variable<int>(automaticResendCount.value);
     }
+    if (composerThreadId.present) {
+      map['composer_thread_id'] = Variable<int>(composerThreadId.value);
+    }
     if (replyTo.present) {
       map['reply_to'] = Variable<int>(replyTo.value);
     }
@@ -7303,6 +7361,7 @@ class TextSendOperationsCompanion
           ..write('errorClass: $errorClass, ')
           ..write('nextAttemptAt: $nextAttemptAt, ')
           ..write('automaticResendCount: $automaticResendCount, ')
+          ..write('composerThreadId: $composerThreadId, ')
           ..write('replyTo: $replyTo, ')
           ..write('threadId: $threadId, ')
           ..write('replyToToken: $replyToToken, ')
@@ -18832,6 +18891,7 @@ typedef $$TextSendOperationsTableCreateCompanionBuilder =
       Value<String?> errorClass,
       Value<int?> nextAttemptAt,
       Value<int> automaticResendCount,
+      Value<int?> composerThreadId,
       Value<int?> replyTo,
       Value<int?> threadId,
       Value<String?> replyToToken,
@@ -18857,6 +18917,7 @@ typedef $$TextSendOperationsTableUpdateCompanionBuilder =
       Value<String?> errorClass,
       Value<int?> nextAttemptAt,
       Value<int> automaticResendCount,
+      Value<int?> composerThreadId,
       Value<int?> replyTo,
       Value<int?> threadId,
       Value<String?> replyToToken,
@@ -18973,6 +19034,11 @@ class $$TextSendOperationsTableFilterComposer
 
   ColumnFilters<int> get automaticResendCount => $composableBuilder(
     column: $table.automaticResendCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get composerThreadId => $composableBuilder(
+    column: $table.composerThreadId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -19109,6 +19175,11 @@ class $$TextSendOperationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get composerThreadId => $composableBuilder(
+    column: $table.composerThreadId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get replyTo => $composableBuilder(
     column: $table.replyTo,
     builder: (column) => ColumnOrderings(column),
@@ -19236,6 +19307,11 @@ class $$TextSendOperationsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get composerThreadId => $composableBuilder(
+    column: $table.composerThreadId,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get replyTo =>
       $composableBuilder(column: $table.replyTo, builder: (column) => column);
 
@@ -19334,6 +19410,7 @@ class $$TextSendOperationsTableTableManager
                 Value<String?> errorClass = const Value.absent(),
                 Value<int?> nextAttemptAt = const Value.absent(),
                 Value<int> automaticResendCount = const Value.absent(),
+                Value<int?> composerThreadId = const Value.absent(),
                 Value<int?> replyTo = const Value.absent(),
                 Value<int?> threadId = const Value.absent(),
                 Value<String?> replyToToken = const Value.absent(),
@@ -19357,6 +19434,7 @@ class $$TextSendOperationsTableTableManager
                 errorClass: errorClass,
                 nextAttemptAt: nextAttemptAt,
                 automaticResendCount: automaticResendCount,
+                composerThreadId: composerThreadId,
                 replyTo: replyTo,
                 threadId: threadId,
                 replyToToken: replyToToken,
@@ -19382,6 +19460,7 @@ class $$TextSendOperationsTableTableManager
                 Value<String?> errorClass = const Value.absent(),
                 Value<int?> nextAttemptAt = const Value.absent(),
                 Value<int> automaticResendCount = const Value.absent(),
+                Value<int?> composerThreadId = const Value.absent(),
                 Value<int?> replyTo = const Value.absent(),
                 Value<int?> threadId = const Value.absent(),
                 Value<String?> replyToToken = const Value.absent(),
@@ -19405,6 +19484,7 @@ class $$TextSendOperationsTableTableManager
                 errorClass: errorClass,
                 nextAttemptAt: nextAttemptAt,
                 automaticResendCount: automaticResendCount,
+                composerThreadId: composerThreadId,
                 replyTo: replyTo,
                 threadId: threadId,
                 replyToToken: replyToToken,

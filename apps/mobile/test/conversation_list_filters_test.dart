@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/native.dart';
+import 'package:drift/drift.dart' show Value;
+import 'package:nextcloudtalk/data/undelivered_messages.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,9 +18,11 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 part 'conversation_list_drafts_test.part.dart';
+part 'conversation_list_undelivered_test.part.dart';
 
 void main() {
   _draftTests();
+  _undeliveredTests();
   test('mention parsing is reused across large Drift-style emissions', () {
     var parseCount = 0;
     final cache = ConversationUnreadMentionCache(

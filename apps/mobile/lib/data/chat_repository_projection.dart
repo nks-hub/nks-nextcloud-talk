@@ -599,6 +599,7 @@ extension _ChatRepositoryProjection on ChatRepository {
         errorClass: Value(operation.errorClass),
         nextAttemptAt: Value(operation.nextAttemptAt),
         automaticResendCount: Value(operation.automaticResendCount),
+        composerThreadId: Value(existing?.composerThreadId),
         replyTo: Value(operation.replyTo),
         threadId: Value(operation.threadId),
         replyToToken: Value(operation.replyToToken?.value),

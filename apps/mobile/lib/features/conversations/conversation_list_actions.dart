@@ -12,6 +12,7 @@ import '../../core/tonal_state_icon.dart';
 import '../../data/app_database.dart';
 import '../../data/composer_draft_focus.dart';
 import '../../data/chat_repository.dart';
+import '../../data/undelivered_messages.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../calls/call_state.dart';
 import '../chat/outgoing_message_status.dart';
@@ -26,10 +27,11 @@ import 'conversation_sync_service.dart';
 
 part 'conversation_list_header.dart';
 part 'conversation_list_drafts.dart';
+part 'conversation_list_undelivered.dart';
 
 enum _ConversationAction { markUnread, toggleArchived }
 
-enum _ConversationListFilter { unread, mentions, archived, drafts }
+enum _ConversationListFilter { unread, mentions, archived, drafts, undelivered }
 
 /// Conversation list body used by the conversation shell.
 ///
@@ -72,6 +74,7 @@ final class _ConversationListViewState
   final Set<_ConversationListFilter> _filters = {};
   final _search = TextEditingController();
   String _query = '';
+  int _openGeneration = 0;
 
   @override
   void dispose() {
@@ -104,6 +107,11 @@ final class _ConversationListViewState
           _unreadMentions.clear();
         }
       } else {
+        if (filter == _ConversationListFilter.drafts) {
+          _filters.remove(_ConversationListFilter.undelivered);
+        } else if (filter == _ConversationListFilter.undelivered) {
+          _filters.remove(_ConversationListFilter.drafts);
+        }
         _filters.add(filter);
       }
     });
@@ -236,11 +244,15 @@ final class _ConversationListViewState
       _unreadMentions.retainConversations(widget.conversations);
     }
     final showDrafts = filters.contains(_ConversationListFilter.drafts);
+    final showUndelivered = filters.contains(
+      _ConversationListFilter.undelivered,
+    );
     final shown = widget.conversations
         .where(
           (conversation) =>
               conversation.accountId == widget.account.id &&
               (showDrafts ||
+                  showUndelivered ||
                   conversation.displayName.toLowerCase().contains(_query)) &&
               _matchesFilters(
                 conversation,
@@ -261,7 +273,15 @@ final class _ConversationListViewState
             _query,
           )
         : const <_ListedDraft>[];
-    final count = showDrafts ? matchingDrafts.length : shown.length;
+    final issues = showUndelivered
+        ? ref.watch(undeliveredMessagesProvider(widget.account.id))
+        : null;
+    final groups = _undeliveredRooms(issues?.valueOrNull ?? [], shown, _query);
+    final count = showUndelivered
+        ? groups.length
+        : showDrafts
+        ? matchingDrafts.length
+        : shown.length;
     final desktop = context.usesDesktopDensity;
     final shortcuts = desktop || (filters.isEmpty && _query.isEmpty)
         ? widget.conversations
@@ -313,16 +333,18 @@ final class _ConversationListViewState
               ],
             );
           }
-          if (drafts?.hasError == true) {
+          if (drafts?.hasError == true || issues?.hasError == true) {
             return TextButton.icon(
-              onPressed: () =>
-                  ref.invalidate(_accountDrafts(widget.account.id)),
+              onPressed: () => showUndelivered
+                  ? ref.invalidate(storedUndeliveredProvider(widget.account.id))
+                  : ref.invalidate(_accountDrafts(widget.account.id)),
               icon: const Icon(Icons.refresh),
               label: Text(AppLocalizations.of(context).retry),
             );
           }
           if (count == 0) {
-            if ((drafts?.isLoading ?? false) ||
+            if ((issues?.isLoading ?? false) ||
+                (drafts?.isLoading ?? false) ||
                 (widget.loading && widget.conversations.isEmpty)) {
               return const Padding(
                 padding: EdgeInsets.all(40),
@@ -333,6 +355,20 @@ final class _ConversationListViewState
               padding: const EdgeInsets.only(top: 40),
               child: _EmptyConversations(
                 filtered: filters.isNotEmpty || _query.isNotEmpty,
+              ),
+            );
+          }
+          if (showUndelivered) {
+            final group = groups[index - 1];
+            return _UndeliveredTile(
+              group: group,
+              onOpen: (message) => _openEditor(
+                group.room,
+                message.thread,
+                onValidated: () {
+                  ref.read(undeliveredSelectionProvider.notifier).state =
+                      message;
+                },
               ),
             );
           }

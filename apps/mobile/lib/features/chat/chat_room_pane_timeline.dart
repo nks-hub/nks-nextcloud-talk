@@ -168,6 +168,7 @@ final class _ChatTimeline extends StatelessWidget {
     required this.messages,
     required this.blocks,
     required this.pending,
+    required this.selectedOperationId,
     required this.attachments,
     required this.hasOlder,
     required this.loadingOlder,
@@ -205,6 +206,7 @@ final class _ChatTimeline extends StatelessWidget {
   /// gap between two cached ranges (see [_gapBeforeContentIndex]).
   final List<ChatBlock>? blocks;
   final List<StoredTextSendOperation> pending;
+  final String? selectedOperationId;
   final List<PendingAttachmentBatch> attachments;
   final bool hasOlder;
   final bool loadingOlder;
@@ -500,7 +502,7 @@ final class _ChatTimeline extends StatelessWidget {
         return bubble;
       }
       final operation = pending[pendingIndex];
-      return _PendingMessageBubble(
+      final bubble = _PendingMessageBubble(
         key: ValueKey('chat-pending-${operation.operationId}'),
         account: account,
         operation: operation,
@@ -514,6 +516,19 @@ final class _ChatTimeline extends StatelessWidget {
         onRetry: () => onRetry(operation),
         onResend: () => onResend(operation),
         onCancel: () => onCancel(operation),
+      );
+      if (operation.operationId != selectedOperationId) return bubble;
+      return DecoratedBox(
+        key: ValueKey('undelivered-target-${operation.operationId}'),
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: Theme.of(context).colorScheme.primary,
+              width: 3,
+            ),
+          ),
+        ),
+        child: bubble,
       );
     }
 
@@ -651,26 +666,6 @@ final class _ChatTimeline extends StatelessWidget {
               chatGalleryImage(account, parsed[index]!) != null)
             index,
       ];
-
-  /// Chronological index the centre sliver ends at.
-  ///
-  /// Without an anchor that is the newest item, so nothing lands in the sliver
-  /// before the centre. Once the reader has scrolled away the pane freezes the
-  /// anchor on the newest message they had seen, and everything that arrives
-  /// after it goes into the sliver that cannot move them.
-  int _anchorChronologicalIndex(int itemCount) {
-    final anchor = anchorMessageId;
-    if (anchor == null) {
-      return itemCount - 1;
-    }
-    final offset = hasOlder ? 1 : 0;
-    for (var index = messages.length - 1; index >= 0; index--) {
-      if (messages[index].messageId <= anchor) {
-        return index + offset;
-      }
-    }
-    return itemCount - 1;
-  }
 
   /// Whether the scope's confirmed ranges show a gap between the message at
   /// `index - 1` and the one at `index`. [messages] only ever contains rows

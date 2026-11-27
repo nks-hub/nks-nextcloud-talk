@@ -10,6 +10,7 @@ extension ChatRepositoryTextAdmission on ChatRepository {
     required String message,
     bool silent = false,
     ({String id, int? threadId, int? replyTo})? recoverableDraft,
+    int? composerThreadId,
     int? replyTo,
     int? threadId,
     ConversationToken? replyToToken,
@@ -76,6 +77,18 @@ extension ChatRepositoryTextAdmission on ChatRepository {
       final candidate = plan.commit(snapshot);
       final candidateAccount = candidate.accounts[account.accountId]!;
       await _persistAccount(candidateAccount);
+      if (composerThreadId != null) {
+        await (_database.update(_database.textSendOperations)..where(
+              (row) =>
+                  row.accountId.equals(accountId) &
+                  row.operationId.equals(operationId.value),
+            ))
+            .write(
+              TextSendOperationsCompanion(
+                composerThreadId: Value(composerThreadId),
+              ),
+            );
+      }
       return candidateAccount.operations[operationId]!;
     });
   }

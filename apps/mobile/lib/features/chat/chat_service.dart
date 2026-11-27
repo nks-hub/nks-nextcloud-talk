@@ -454,7 +454,6 @@ final class ChatService {
     ({String id, Future<void>? checkpoint})? recoverableDraft,
   }) {
     final key = _roomKey(accountId, roomToken);
-    // The write starts at tap time even when an earlier admission is queued.
     recoverableDraft?.checkpoint?.ignore();
     // Held from the tap: the app may be left before the message is admitted.
     _sendActivity(1);
@@ -556,6 +555,7 @@ final class ChatService {
         final operationId = _uuid.v4();
         final referenceUuid = _uuid.v4();
         await _chat.admitTextSend(
+          composerThreadId: threadId,
           accountId: accountId,
           recoverableDraft: recoverableDraft == null
               ? null

@@ -36,7 +36,7 @@ void main() {
           )
           .getSingleOrNull();
 
-      expect(version.read<int>('user_version'), 22);
+      expect(version.read<int>('user_version'), 23);
       expect(
         index?.read<String>('sql'),
         contains('(account_id, room_token, thread_id, message_id)'),

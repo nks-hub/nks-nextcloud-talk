@@ -31,6 +31,9 @@ final class RecoverableTextDraftStore extends ChangeNotifier {
     _changed();
   }
 
+  Iterable<RefusedTextDraft> volatileForAccount(String account) =>
+      _volatile.values.where((draft) => draft.accountId == account);
+
   Iterable<RefusedTextDraft> volatileDrafts(
     String account,
     String room,

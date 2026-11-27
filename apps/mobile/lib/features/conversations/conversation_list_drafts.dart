@@ -42,24 +42,37 @@ List<_ListedDraft> _matchDrafts(
 }
 
 extension _DraftNavigation on _ConversationListViewState {
-  Future<void> _openDraft(_ListedDraft entry) async {
+  Future<void> _openDraft(_ListedDraft entry) => _openEditor(
+    entry.room,
+    entry.thread,
+    onValidated: () {
+      ref.read(composerDraftFocusProvider.notifier).state = (
+        accountId: widget.account.id,
+        roomToken: entry.room.token,
+        threadId: entry.thread,
+      );
+    },
+  );
+
+  Future<void> _openEditor(
+    CachedConversation room,
+    int? id, {
+    required VoidCallback onValidated,
+  }) async {
+    final generation = ++_openGeneration;
+    final route = ModalRoute.of(context);
     final account = widget.account;
-    if (account.id != entry.room.accountId ||
-        account.id != entry.draft.accountId) {
-      return;
-    }
-    final id = entry.thread;
-    final key = (
-      accountId: account.id,
-      roomToken: entry.room.token,
-      threadId: id,
-    );
+    bool current() =>
+        generation == _openGeneration &&
+        widget.account.id == account.id &&
+        route?.isCurrent != false;
+    if (account.id != room.accountId) return;
+    final token = room.token;
     if (id == null) {
-      ref.read(composerDraftFocusProvider.notifier).state = key;
-      widget.onSelect(entry.room);
+      onValidated();
+      widget.onSelect(room);
       return;
     }
-    final token = entry.room.token;
     final store = ref.read(chatRepositoryProvider);
     try {
       var root = await store.getMessage(
@@ -67,7 +80,7 @@ extension _DraftNavigation on _ConversationListViewState {
         roomToken: token,
         messageId: id,
       );
-      if (!mounted || widget.account.id != account.id) return;
+      if (!mounted || !current()) return;
       if (root == null) {
         await ref
             .read(chatServiceProvider)
@@ -78,7 +91,7 @@ extension _DraftNavigation on _ConversationListViewState {
           messageId: id,
         );
       }
-      if (!mounted || widget.account.id != account.id) return;
+      if (!mounted || !current()) return;
       final thread = root == null
           ? null
           : ChatThreadContext.fromCachedRoot(
@@ -87,13 +100,13 @@ extension _DraftNavigation on _ConversationListViewState {
               root: root,
             );
       if (thread != null && thread.rootMessageId == id) {
-        ref.read(composerDraftFocusProvider.notifier).state = key;
+        onValidated();
         await Navigator.of(context).push<void>(
           MaterialPageRoute<void>(
             settings: const RouteSettings(name: '/chat/thread'),
             builder: (_) => ChatThreadScreen(
               account: account,
-              conversation: entry.room,
+              conversation: room,
               threadContext: thread,
             ),
           ),
@@ -103,7 +116,7 @@ extension _DraftNavigation on _ConversationListViewState {
     } on Exception {
       // A missing root cannot safely be opened as an ordinary room.
     }
-    if (mounted && widget.account.id == account.id) {
+    if (mounted && current()) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(

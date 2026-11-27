@@ -780,6 +780,10 @@ Future<void> _verifyTextThreadWireField(
         null,
   );
 
+  final stored = await tester.runAsync(
+    () => database.select(database.textSendOperations).getSingle(),
+  );
+  expect(stored?.composerThreadId, testCase.rootId);
   if (expectedNamed ?? testCase.named) {
     expect(posts.single['threadId'], '${testCase.rootId}');
     expect(posts.single.containsKey('replyTo'), isFalse);
