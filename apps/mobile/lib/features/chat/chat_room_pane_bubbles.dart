@@ -62,7 +62,8 @@ final class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final strings = AppLocalizations.of(context);
     final isSystem = message.systemMessage.isNotEmpty;
     // Exactly the reply gate the action sheet uses, plus the two kinds of
@@ -138,6 +139,132 @@ final class _MessageBubble extends StatelessWidget {
             root: message,
           )
         : null;
+
+    final headerAbove = !outgoing && !groupedWithPrevious;
+    final inlineClock =
+        outgoing &&
+        content == null &&
+        !message.deleted &&
+        parsed?.parent == null &&
+        (parsed?.messageParameters.isEmpty ?? true) &&
+        (parsed?.reactions.isEmpty ?? true) &&
+        !message.displayText.contains('\n') &&
+        !message.displayText.contains('://');
+    final metaStyle = theme.textTheme.labelSmall?.copyWith(
+      color: headerAbove ? scheme.onSurfaceVariant : colors.meta,
+    );
+    final metadata = SelectionContainer.disabled(
+      child: Wrap(
+        spacing: 5,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (parsed?.lastEditTimestamp != null)
+            Text(strings.edited, style: metaStyle),
+          Text(
+            _formatMessageClock(context, message.timestamp),
+            key: Key('chat-clock-${message.messageId}'),
+            style: metaStyle,
+          ),
+          if (outgoing && deliveryState != null)
+            _DeliveryMark(
+              key: Key('chat-delivery-${message.messageId}'),
+              state: deliveryState!,
+              color: colors.foreground,
+            ),
+        ],
+      ),
+    );
+    final body = DefaultTextStyle.merge(
+      style: TextStyle(
+        color: colors.foreground,
+        fontStyle: message.deleted ? FontStyle.italic : null,
+      ),
+      child:
+          content ??
+          ChatMessageContent(
+            account: account,
+            message: message.deleted ? null : parsed,
+            fallbackText: message.deleted
+                ? strings.deletedMessage
+                : message.displayText,
+            foregroundColor: colors.foreground,
+            showReplyPreview: showReplyPreview,
+            onReactionTap: message.deleted
+                ? null
+                : (emoji) => onReactionTap(message, parsed, emoji),
+            onOpenParent: onJumpToMessage,
+          ),
+    );
+    final surface = AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: _bubbleRadius(
+          outgoing: outgoing,
+          groupedWithPrevious: groupedWithPrevious,
+          groupEnd: groupEnd,
+        ),
+        // A jump target gets two rings: the bubble's own
+        // text colour against the bubble, and outside it
+        // the tertiary colour against the room, so the
+        // mark shows on light, dark and wallpaper alike.
+        border: highlighted
+            ? Border.all(color: colors.foreground, width: 2)
+            : isThreadRoot
+            ? Border.all(color: scheme.outlineVariant)
+            : null,
+        boxShadow: highlighted
+            ? [BoxShadow(color: scheme.tertiary, spreadRadius: 2)]
+            : null,
+      ),
+      child: DefaultSelectionStyle(
+        // The default selection colour is the primary at
+        // 40 %, which vanishes on a primary-filled bubble.
+        selectionColor: colors.foreground.withValues(alpha: 0.35),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (inlineClock)
+                Wrap(
+                  spacing: 9,
+                  runSpacing: 3,
+                  crossAxisAlignment: WrapCrossAlignment.end,
+                  children: [body, metadata],
+                )
+              else ...[
+                body,
+                if (!headerAbove) ...[const SizedBox(height: 3), metadata],
+              ],
+              if (canOpenThread && desktopThread == null) ...[
+                const SizedBox(height: 2),
+                SelectionContainer.disabled(
+                  child: TextButton.icon(
+                    key: Key('chat-open-thread-${message.messageId}'),
+                    onPressed: () => onOpenThread!(message),
+                    style: TextButton.styleFrom(
+                      foregroundColor: outgoing || colors.shared
+                          ? colors.foreground
+                          : scheme.primary,
+                      minimumSize: const Size(48, 48),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                    ),
+                    icon: const Icon(Icons.forum_outlined, size: 18),
+                    label: Text(
+                      threadReplies > 0
+                          ? strings.threadReplies(threadReplies)
+                          : strings.openThread,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
     // One message per line when a selection runs across several of them;
     // the avatar initials, the clock and the buttons stay out of the copy.
     final bubble = ChatSelectionJoin(
@@ -202,184 +329,51 @@ final class _MessageBubble extends StatelessWidget {
                           // Same actions on right-click, for the same reason as the
                           // conversation rows.
                           onSecondaryTap: messageActions,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 220),
-                            curve: Curves.easeOut,
-                            decoration: BoxDecoration(
-                              color: colors.background,
-                              borderRadius: _bubbleRadius(
-                                outgoing: outgoing,
-                                groupedWithPrevious: groupedWithPrevious,
-                                groupEnd: groupEnd,
-                              ),
-                              // A jump target gets two rings: the bubble's own
-                              // text colour against the bubble, and outside it
-                              // the tertiary colour against the room, so the
-                              // mark shows on light, dark and wallpaper alike.
-                              border: highlighted
-                                  ? Border.all(
-                                      color: colors.foreground,
-                                      width: 2,
-                                    )
-                                  : isThreadRoot
-                                  ? Border.all(color: scheme.outlineVariant)
-                                  : null,
-                              boxShadow: highlighted
-                                  ? [
-                                      BoxShadow(
-                                        color: scheme.tertiary,
-                                        spreadRadius: 2,
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                            child: DefaultSelectionStyle(
-                              // The default selection colour is the primary at
-                              // 40 %, which vanishes on a primary-filled bubble.
-                              selectionColor: colors.foreground.withValues(
-                                alpha: 0.35,
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  12,
-                                  8,
-                                  12,
-                                  7,
-                                ),
-                                child: Column(
+                          child: headerAbove
+                              ? Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    if (!outgoing && showAuthor)
-                                      ExcludeSemantics(
-                                        child: Text(
-                                          message.actorDisplayName,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelMedium
-                                              ?.copyWith(
-                                                color: colors.shared
-                                                    ? colors.foreground
-                                                    : scheme.primary,
-                                                fontWeight: FontWeight.w700,
-                                              ),
+                                    Padding(
+                                      padding: const EdgeInsetsDirectional.only(
+                                        start: 3,
+                                        bottom: 4,
+                                      ),
+                                      child: ChatBackgroundChip(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 5,
+                                          vertical: 2,
                                         ),
-                                      ),
-                                    if (!outgoing && showAuthor)
-                                      const SizedBox(height: 2),
-                                    DefaultTextStyle.merge(
-                                      style: TextStyle(
-                                        color: colors.foreground,
-                                        fontStyle: message.deleted
-                                            ? FontStyle.italic
-                                            : null,
-                                      ),
-                                      child:
-                                          content ??
-                                          ChatMessageContent(
-                                            account: account,
-                                            message: message.deleted
-                                                ? null
-                                                : parsed,
-                                            fallbackText: message.deleted
-                                                ? AppLocalizations.of(
-                                                    context,
-                                                  ).deletedMessage
-                                                : message.displayText,
-                                            foregroundColor: colors.foreground,
-                                            showReplyPreview: showReplyPreview,
-                                            onReactionTap: message.deleted
-                                                ? null
-                                                : (emoji) => onReactionTap(
-                                                    message,
-                                                    parsed,
-                                                    emoji,
+                                        child: SelectionContainer.disabled(
+                                          child: Wrap(
+                                            spacing: 8,
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
+                                            children: [
+                                              if (showAuthor)
+                                                ExcludeSemantics(
+                                                  child: Text(
+                                                    authorLabel,
+                                                    style: theme
+                                                        .textTheme
+                                                        .labelLarge
+                                                        ?.copyWith(
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color:
+                                                              scheme.onSurface,
+                                                        ),
                                                   ),
-                                            onOpenParent: onJumpToMessage,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    SelectionContainer.disabled(
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (parsed?.lastEditTimestamp !=
-                                              null) ...[
-                                            Text(
-                                              AppLocalizations.of(
-                                                context,
-                                              ).edited,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .labelSmall
-                                                  ?.copyWith(
-                                                    color: colors.meta,
-                                                  ),
-                                            ),
-                                            const SizedBox(width: 6),
-                                          ],
-                                          Text(
-                                            _formatMessageClock(
-                                              context,
-                                              message.timestamp,
-                                            ),
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .labelSmall
-                                                ?.copyWith(color: colors.meta),
-                                          ),
-                                          if (outgoing &&
-                                              deliveryState != null) ...[
-                                            const SizedBox(width: 6),
-                                            _DeliveryMark(
-                                              key: Key(
-                                                'chat-delivery-${message.messageId}',
-                                              ),
-                                              state: deliveryState!,
-                                              color: colors.foreground,
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                    if (canOpenThread &&
-                                        desktopThread == null) ...[
-                                      const SizedBox(height: 2),
-                                      SelectionContainer.disabled(
-                                        child: TextButton.icon(
-                                          key: Key(
-                                            'chat-open-thread-${message.messageId}',
-                                          ),
-                                          onPressed: () =>
-                                              onOpenThread!(message),
-                                          style: TextButton.styleFrom(
-                                            foregroundColor:
-                                                outgoing || colors.shared
-                                                ? colors.foreground
-                                                : scheme.primary,
-                                            minimumSize: const Size(48, 48),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 4,
-                                            ),
-                                          ),
-                                          icon: const Icon(
-                                            Icons.forum_outlined,
-                                            size: 18,
-                                          ),
-                                          label: Text(
-                                            threadReplies > 0
-                                                ? strings.threadReplies(
-                                                    threadReplies,
-                                                  )
-                                                : strings.openThread,
+                                                ),
+                                              metadata,
+                                            ],
                                           ),
                                         ),
                                       ),
-                                    ],
+                                    ),
+                                    surface,
                                   ],
-                                ),
-                              ),
-                            ),
-                          ),
+                                )
+                              : surface,
                         ),
                       ),
                     ),

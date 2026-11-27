@@ -141,6 +141,58 @@ void _registerChatRoomPaneWallpaperTests() {
     });
   }
 
+  testWidgets(
+    'a group sender and clock sit over the wallpaper; a short sent message shares its line with the clock',
+    (tester) async {
+      for (final (id, body) in [
+        (11, 'On my way'),
+        (12, 'First line\nSecond line'),
+      ]) {
+        await _insertCachedMessage(
+          database,
+          _messageJson(
+            id: id,
+            actorId: account.loginName,
+            actorDisplayName: 'Me',
+            timestamp: timestamp + id,
+            message: body,
+          ),
+          displayText: body,
+        );
+      }
+      await tester.pumpWidget(pane(wallpaper: true));
+      await tester.pump();
+      final surface = find.descendant(
+        of: find.byKey(const Key('chat-message-target-10')),
+        matching: find.byType(AnimatedContainer),
+      );
+      final bubbleTop = tester.getTopLeft(surface).dy;
+      expect(
+        tester.getBottomLeft(find.text('Other person')).dy,
+        lessThan(bubbleTop),
+      );
+      expect(
+        tester.getBottomLeft(find.byKey(const Key('chat-clock-10'))).dy,
+        lessThan(bubbleTop),
+      );
+      final shortBody = tester.getRect(find.text('On my way'));
+      final shortClock = tester.getRect(find.byKey(const Key('chat-clock-11')));
+      expect(shortClock.left, greaterThan(shortBody.right));
+      expect(
+        shortClock.center.dy,
+        inInclusiveRange(shortBody.top, shortBody.bottom),
+      );
+      expect(
+        tester.getTopLeft(find.byKey(const Key('chat-clock-12'))).dy,
+        greaterThanOrEqualTo(
+          tester.getBottomLeft(find.text('First line\nSecond line')).dy,
+        ),
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
+
   testWidgets('bubbles keep their own background over a wallpaper', (
     tester,
   ) async {

@@ -684,8 +684,8 @@ void _registerChatRoomPaneRenderingTests() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    // Without the avatar initials and the clock glued in between.
-    expect(copied(), 'first message\nThird person\nsecond message');
+    // Sender labels, dates and clocks are outside the message text.
+    expect(copied(), 'first message\nsecond message');
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
