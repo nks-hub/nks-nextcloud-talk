@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/chat_media_cache.dart';
+import 'package:nextcloudtalk/features/chat/composer/draft_handoff.dart';
 import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
 import 'package:nextcloudtalk/features/chat/composer/gif_favorites.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy.dart';
@@ -33,11 +34,25 @@ void main() {
       final gifs = GifFavoritesStore(directory: root);
       final templates = ReplyTemplateStore(directory: root);
       final collections = MessageCollectionStore(directory: root);
+      DraftHandoffStore openDrafts() => DraftHandoffStore(
+        ({
+          required accountId,
+          required feature,
+          required path,
+          method = 'GET',
+          query,
+          values,
+        }) => fail('Local account removal must not make a network request'),
+        directory: root,
+      );
+      final drafts = openDrafts();
+      addTearDown(drafts.dispose);
       final providers = ProviderContainer(
         overrides: [
           gifFavoritesStoreProvider.overrideWithValue(gifs),
           replyTemplateStoreProvider.overrideWithValue(templates),
           messageCollectionStoreProvider.overrideWithValue(collections),
+          draftHandoffProvider.overrideWithValue(drafts),
         ],
       );
       addTearDown(providers.dispose);
@@ -72,6 +87,12 @@ void main() {
         );
         await templates.save(account, name: 'Reply', text: 'Hello');
         await collections.create(account, 'Later');
+        await drafts.setEnabled(account.value, true);
+        await drafts.stage(
+          (accountId: account.value, roomToken: 'room123', threadId: null),
+          'Draft for ${account.value}',
+          null,
+        );
         await gifs.setFavorite(
           account,
           GiphyEntry(
@@ -90,6 +111,8 @@ void main() {
         throwsA(isA<FileSystemException>()),
       );
       expect(await accounts.getAccount(owner.value), isNotNull);
+      final ownerRows = await drafts.read(owner);
+      expect(ownerRows.map((row) => row['text']), contains('Draft for owner'));
       blocked = false;
       await service.removeAccount(owner.value);
       expect(await accounts.getAccount(owner.value), isNull);
@@ -102,6 +125,11 @@ void main() {
       expect(await gifs.read(other), hasLength(1));
       expect(await templates.read(other), hasLength(1));
       expect(await collections.read(other), hasLength(1));
+      final reopened = openDrafts();
+      addTearDown(reopened.dispose);
+      expect(await reopened.read(owner), isEmpty);
+      final otherRows = await reopened.read(other);
+      expect(otherRows.map((row) => row['text']), contains('Draft for other'));
     },
   );
 }
