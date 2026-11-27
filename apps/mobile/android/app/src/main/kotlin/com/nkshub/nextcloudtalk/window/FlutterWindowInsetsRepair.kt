@@ -4,29 +4,29 @@ import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
+import android.view.WindowInsetsAnimation
+import androidx.annotation.RequiresApi
 import io.flutter.embedding.android.FlutterView
 
 /**
- * Puts the window's real insets back into Flutter's hands after the app returns
- * to the foreground.
- *
- * Flutter defers insets while the keyboard animates, so the Dart side can move
- * with the keyboard instead of jumping after it. `ImeSyncDeferringInsetsCallback`
- * does that by consuming every insets update between the animation's start and
- * its end. Samsung's keyboard starts that animation and then never ends it when
- * the activity is paused in the middle of it - which is what picking a picture
- * with the keyboard open does - and from then on nothing the window reports ever
- * reaches the view again. The whole app keeps the viewport it had while the
- * keyboard was up: roughly half the screen of content and dead space below it,
- * on every screen, until some later keyboard animation happens to complete.
- *
- * The repair is to hand the view the insets the window really has. Dispatching
- * them the ordinary way is both the probe and the harmless case: a callback that
- * is not stuck applies them and there is nothing left to do, while one that is
- * stuck answers [WindowInsets.CONSUMED], proving the update never arrived, and
- * the insets are then applied to the view directly.
+ * Flutter's ImeSyncDeferringInsetsCallback consumes insets until the IME
+ * animation ends. If the end callback goes missing, the viewport keeps the
+ * keyboard inset even after the window reports it hidden.
  */
 object FlutterWindowInsetsRepair {
+    private const val IME_IDLE_DELAY_MS = 400L
+
+    fun watchKeyboardDismissals(
+        container: View,
+        target: () -> View? = { flutterViewIn(container) },
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val watcher = ImeDismissalWatcher(container, target)
+            container.setOnApplyWindowInsetsListener(watcher)
+            container.setWindowInsetsAnimationCallback(watcher)
+        }
+    }
+
     /**
      * Applies [insets] to [view], going around the deferring callback if that is
      * the only way they will land. Returns whether it had to.
@@ -66,5 +66,62 @@ object FlutterWindowInsetsRepair {
             flutterViewIn(view.getChildAt(index))?.let { return it }
         }
         return null
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    private class ImeDismissalWatcher(
+        private val container: View,
+        target: () -> View?,
+    ) : WindowInsetsAnimation.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE), View.OnApplyWindowInsetsListener {
+        private val ime = WindowInsets.Type.ime()
+        private var wasVisible = false
+        private var repairPending = false
+        private val repairDismissal = Runnable {
+            repairPending = false
+            if (container.isAttachedToWindow) {
+                target()?.let(::repair)
+            }
+        }
+
+        override fun onApplyWindowInsets(view: View, insets: WindowInsets): WindowInsets {
+            val visible = insets.isVisible(ime)
+            if (visible) {
+                cancelRepair()
+            } else if (wasVisible) {
+                // Android dispatches the final insets before starting the animation.
+                repairPending = true
+                deferRepair()
+            }
+            wasVisible = visible
+            return view.onApplyWindowInsets(insets)
+        }
+
+        override fun onProgress(
+            insets: WindowInsets,
+            animations: MutableList<WindowInsetsAnimation>,
+        ): WindowInsets {
+            if (repairPending && animations.any { it.typeMask and ime != 0 }) {
+                deferRepair()
+            }
+            return insets
+        }
+
+        override fun onEnd(animation: WindowInsetsAnimation) {
+            if (animation.typeMask and ime != 0) {
+                cancelRepair()
+            }
+        }
+
+        private fun deferRepair() {
+            container.removeCallbacks(repairDismissal)
+            container.postDelayed(repairDismissal, IME_IDLE_DELAY_MS)
+        }
+
+        private fun cancelRepair() {
+            if (repairPending) {
+                container.removeCallbacks(repairDismissal)
+                repairPending = false
+            }
+        }
     }
 }

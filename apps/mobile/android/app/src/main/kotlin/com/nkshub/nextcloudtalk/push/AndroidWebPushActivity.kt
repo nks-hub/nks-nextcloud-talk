@@ -2,6 +2,7 @@ package com.nkshub.nextcloudtalk.push
 
 import android.Manifest
 import android.app.RemoteInput
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -10,6 +11,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.widget.FrameLayout
 import com.nkshub.nextcloudtalk.attachments.AttachmentSaverActivityLifecycle
 import com.nkshub.nextcloudtalk.attachments.AttachmentRuntimeChannel
 import com.nkshub.nextcloudtalk.attachments.AttachmentTransferChannel
@@ -326,6 +328,9 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
             }
         })
     }
+
+    override fun provideRootLayout(context: Context): FrameLayout =
+        super.provideRootLayout(context).also { FlutterWindowInsetsRepair.watchKeyboardDismissals(it) }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
