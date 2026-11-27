@@ -2726,6 +2726,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'This message may already have reached the server, so it can no longer be cancelled.';
 
   @override
+  String get draftMemoryOnly =>
+      'This message could not be saved on this device. Retry before closing the app.';
+
+  @override
   String get roomDetailsDeleteAction => 'Delete conversation';
 
   @override

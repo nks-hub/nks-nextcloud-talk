@@ -210,7 +210,7 @@ final class _ChatTimeline extends StatelessWidget {
   final bool loadingOlder;
   final ChatScrollController controller;
   final VoidCallback onLoadOlder;
-  final VoidCallback onRetry;
+  final ValueChanged<StoredTextSendOperation> onRetry;
   final ValueChanged<StoredTextSendOperation> onResend;
   final ValueChanged<StoredTextSendOperation> onCancel;
   final ValueChanged<CachedChatMessage> onOpenThread;
@@ -511,7 +511,7 @@ final class _ChatTimeline extends StatelessWidget {
                 messages.last.messageId != threadId &&
                 _pendingSharesGroup(messages.last, account.loginName)),
         groupEnd: pendingIndex == pending.length - 1,
-        onRetry: onRetry,
+        onRetry: () => onRetry(operation),
         onResend: () => onResend(operation),
         onCancel: () => onCancel(operation),
       );

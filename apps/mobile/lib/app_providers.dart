@@ -28,6 +28,7 @@ import 'data/attachment_repository.dart';
 import 'data/chat_media_cache.dart';
 import 'data/chat_media_repository.dart';
 import 'data/chat_repository.dart';
+import 'data/recoverable_text_draft_store.dart';
 import 'data/call_session_repository.dart';
 import 'data/credential_vault.dart';
 import 'data/conversation_avatar_repository.dart';
@@ -185,10 +186,6 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
     unawaited(database.close());
   });
   return database;
-});
-
-final accountRepositoryProvider = Provider<AccountRepository>((ref) {
-  return AccountRepository(ref.watch(appDatabaseProvider));
 });
 
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {

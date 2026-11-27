@@ -16,7 +16,6 @@ final class _ProvisionalSend {
     required this.key,
     required this.message,
     required this.knownOperationIds,
-    this.restorableDraft,
     this.emojiSizeStep,
   });
 
@@ -27,9 +26,6 @@ final class _ProvisionalSend {
   /// Outbox rows that existed before this line was sent, so none of them can
   /// be the row it is admitted as.
   final Set<String> knownOperationIds;
-
-  /// The composer text this line came from, when it can be put back.
-  final String? restorableDraft;
 
   /// The enlargement picked by holding the quick emoji, shown from the first
   /// frame so the bubble does not change size once it is admitted.
@@ -183,12 +179,14 @@ final class _PendingMessageBubbleState
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final canSkip = operation.canSkipLocally;
+    final memoryOnly = operation.errorClass == 'local-draft-not-saved';
     final status = switch (operation.outboxState) {
       'queued' => strings.outboxQueued,
       'sending' => strings.outboxSending,
       'retryable' => strings.outboxRetryable,
       'awaitingConfirmation' when canSkip => strings.outboxConfirmationMissing,
       'awaitingConfirmation' => strings.outboxAwaitingConfirmation,
+      'failed' when memoryOnly => strings.draftMemoryOnly,
       'failed' => strings.outboxFailed,
       _ => strings.outboxFailed,
     };
@@ -202,7 +200,9 @@ final class _PendingMessageBubbleState
         (operation.outboxState != 'queued' || _queuedFor >= _queuedGrace) &&
         (!operation.operationId.startsWith(_provisionalOperationPrefix) ||
             operation.outboxState == 'failed');
-    final retryable = operation.outboxState == 'retryable';
+    final retryable =
+        operation.outboxState == 'retryable' ||
+        operation.operationId.startsWith(_refusedDraftPrefix);
     final ambiguous = operation.outboxState == 'awaitingConfirmation';
     final resourceUrl = exactGiphyResource(operation.message);
     final isGiphy = resourceUrl != null;
@@ -290,6 +290,14 @@ final class _PendingMessageBubbleState
                         ),
                       ),
                     ),
+                    if (memoryOnly)
+                      IconButton(
+                        tooltip: strings.messageActionCopy,
+                        onPressed: () =>
+                            _copyChatText(context, operation.message),
+                        iconSize: 18,
+                        icon: const Icon(Icons.copy_rounded),
+                      ),
                     if (retryable)
                       IconButton(
                         key: Key('chat-retry-${operation.operationId}'),
@@ -447,4 +455,21 @@ final class _EmptyChat extends StatelessWidget {
       },
     );
   }
+}
+
+Future<void> _copyChatText(BuildContext context, String text) async {
+  final strings = AppLocalizations.of(context);
+  String notice;
+  try {
+    await Clipboard.setData(ClipboardData(text: text));
+    notice = strings.messageCopied;
+  } on PlatformException {
+    notice = strings.conversationActionErrorGeneric;
+  } on MissingPluginException {
+    notice = strings.conversationActionErrorGeneric;
+  }
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(notice)));
 }

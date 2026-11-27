@@ -1069,6 +1069,7 @@
   "messageForwardFailed": "The message could not be forwarded.",
   "cancelSend": "Cancel sending",
   "outboxCancelAmbiguous": "This message may already have reached the server, so it can no longer be cancelled.",
+  "draftMemoryOnly": "This message could not be saved on this device. Retry before closing the app.",
   "roomDetailsDeleteAction": "Delete conversation",
   "roomDetailsDeleteDialogTitle": "Delete conversation?",
   "roomDetailsDeleteDialogMessage": "The conversation and all of its messages are removed for everyone. This cannot be undone.",

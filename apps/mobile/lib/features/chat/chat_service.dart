@@ -451,14 +451,19 @@ final class ChatService {
     String? replyToToken,
     PrivateReplyEligibilitySnapshot? privateReplyEligibility,
     int? emojiSizeStep,
+    ({String id, Future<void>? checkpoint})? recoverableDraft,
   }) {
     final key = _roomKey(accountId, roomToken);
+    // The write starts at tap time even when an earlier admission is queued.
+    recoverableDraft?.checkpoint?.ignore();
     // Held from the tap: the app may be left before the message is admitted.
     _sendActivity(1);
     // Admission has a lane of its own. On the room lane it would queue behind
     // the previous message's request, and a send into a tunnel would hold the
     // composer for as long as that request takes to fail.
-    return _serializeRoom<String>(_admissionKey(key), () {
+    return _serializeRoom<String>(_admissionKey(key), () async {
+      final checkpoint = recoverableDraft?.checkpoint;
+      if (checkpoint != null) await checkpoint;
       return _withRoomErrorPersistence<String>(accountId, roomToken, () async {
         final normalized = message.trim();
         if (normalized.isEmpty) {
@@ -552,6 +557,9 @@ final class ChatService {
         final referenceUuid = _uuid.v4();
         await _chat.admitTextSend(
           accountId: accountId,
+          recoverableDraft: recoverableDraft == null
+              ? null
+              : (id: recoverableDraft.id, threadId: threadId, replyTo: replyTo),
           roomToken: prepared.room.token,
           authority: prepared.authority,
           operationId: ChatOperationId.parse(operationId),
@@ -634,29 +642,6 @@ final class ChatService {
     } on Object {
       // Persisted by the wrapper, or the account went away underneath.
     }
-  }
-
-  /// Delivery for a message admitted on stored capabilities.
-  ///
-  /// The server is asked now, because a change it reports would make it
-  /// refuse a claim made with the stored ones. If it cannot be asked, the
-  /// stored ones still send the message or arm its retry.
-  Future<void> _deliverAfterStoredAdmission(
-    _PreparedChat stored,
-    int? threadId,
-  ) async {
-    var prepared = stored;
-    try {
-      prepared = await _prepare(
-        stored.account.id,
-        stored.room.token.value,
-        threadId: threadId,
-        allowPersistedCapabilitiesForSend: true,
-      );
-    } on Object {
-      // Falls back to [stored].
-    }
-    await _deliverPending(prepared, threadId: threadId);
   }
 
   Future<void> resendText({

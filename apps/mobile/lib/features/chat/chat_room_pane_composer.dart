@@ -366,6 +366,17 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
   }
 
   Future<void> _send() async {
+    final returning = _returningDraft;
+    if (returning != null &&
+        returning.key == _key &&
+        returning.text == _composer.text) {
+      if (!await returning.done ||
+          !mounted ||
+          returning.key != _key ||
+          returning.text != _composer.text) {
+        return;
+      }
+    }
     if (_sending || _isReadOnlyNow()) {
       return;
     }
@@ -423,6 +434,22 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     // At this instant the field holds exactly what is being sent, so nothing
     // the user has typed since can be thrown away.
     final String? sentDraft = clearComposer ? _composer.text : null;
+    final recovery = _composerDrafts;
+    final service = ref.read(chatServiceProvider);
+    final silent = _silentSend;
+    final draft = sentDraft == null
+        ? null
+        : RefusedTextDraft(
+            draftId: const Uuid().v4(),
+            accountId: targetKey.accountId,
+            roomToken: targetKey.roomToken,
+            threadId: targetKey.threadId,
+            replyTo: rootReply?.messageId,
+            silent: silent,
+            message: sentDraft,
+            createdAtMillis: DateTime.now().millisecondsSinceEpoch,
+          );
+    if (draft != null) recovery.begin(draft);
     if (clearComposer) {
       _composer.clear();
       // The picker was a means of composing this message; keeping it open
@@ -448,7 +475,6 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
                 const <StoredTextSendOperation>[])
           operation.operationId,
       },
-      restorableDraft: sentDraft,
       emojiSizeStep: emojiSizeStep,
     );
     _update(() {
@@ -461,43 +487,54 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     // Not held by _sending: a send is a queue entry, not a mode of the
     // composer. Calls reach the service in tap order and its admission lane
     // keeps that order, so the next line can be sent while this one waits.
+    final String operationId;
     try {
-      final operationId = await ref
-          .read(chatServiceProvider)
-          .sendText(
-            accountId: targetKey.accountId,
-            roomToken: targetKey.roomToken,
-            message: message,
-            silent: _silentSend,
-            threadId: targetKey.threadId,
-            replyTo: rootReply?.messageId,
-            emojiSizeStep: emojiSizeStep,
-          );
-      unawaited(_dropAdmittedDraft(targetKey, sentDraft));
+      operationId = await service.sendText(
+        accountId: targetKey.accountId,
+        roomToken: targetKey.roomToken,
+        message: message,
+        silent: silent,
+        recoverableDraft: draft == null
+            ? null
+            : (
+                id: draft.draftId,
+                checkpoint: recovery.checkpoint(draft, fromComposer: true),
+              ),
+        threadId: targetKey.threadId,
+        replyTo: rootReply?.messageId,
+        emojiSizeStep: emojiSizeStep,
+      );
+    } on Object catch (failure) {
+      final current = _isCurrentTextSendScope(targetKey, generation);
+      final error = failure is ChatServiceException
+          ? failure.code
+          : ChatServiceError.invalidResponse;
       if (mounted) {
-        _update(() => provisional.operationId = operationId);
+        _update(() {
+          if (draft == null && current) {
+            provisional.failed = true;
+          } else {
+            _provisionalSends.remove(provisional);
+          }
+          if (current) _localError = error;
+        });
       }
-      if (!_isCurrentTextSendScope(targetKey, generation)) {
-        return;
+      if (current && draft != null) {
+        await _returnPlainDraft(draft, targetKey, generation);
       }
-      await _scrollToNewest();
-      if (_isCurrentTextSendScope(targetKey, generation)) {
-        _update(() => _localError = null);
-      }
-    } on ChatServiceException catch (error) {
-      _failProvisional(
-        provisional,
-        current: _isCurrentTextSendScope(targetKey, generation),
-        reply: rootReply,
-        error: error.code,
-      );
-    } on Object {
-      _failProvisional(
-        provisional,
-        current: _isCurrentTextSendScope(targetKey, generation),
-        reply: rootReply,
-        error: ChatServiceError.invalidResponse,
-      );
+      return;
+    } finally {
+      if (draft != null) recovery.end(draft.draftId);
+    }
+    if (mounted) {
+      _update(() => provisional.operationId = operationId);
+    }
+    if (!_isCurrentTextSendScope(targetKey, generation)) {
+      return;
+    }
+    await _scrollToNewest();
+    if (_isCurrentTextSendScope(targetKey, generation)) {
+      _update(() => _localError = null);
     }
   }
 
@@ -509,58 +546,6 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
         curve: Curves.easeOut,
       );
     }
-  }
-
-  /// Settles a stand-in whose admission failed.
-  ///
-  /// The text goes back into a field the user has left alone. Otherwise it
-  /// stays in the timeline as a failed line, whose cancel button dismisses it,
-  /// so a message typed over is never lost. After a room change or disposal it
-  /// is only dropped, as the old draft is not restored there either.
-  void _failProvisional(
-    _ProvisionalSend provisional, {
-    required bool current,
-    required CachedChatMessage? reply,
-    required ChatServiceError error,
-  }) {
-    if (!mounted) {
-      return;
-    }
-    final restored =
-        current && _restoreSentDraft(provisional.restorableDraft, reply);
-    _update(() {
-      if (restored || !current) {
-        _provisionalSends.remove(provisional);
-      } else {
-        provisional.failed = true;
-      }
-      if (current) {
-        _localError = error;
-      }
-    });
-  }
-
-  /// Dismisses a failed stand-in, putting its text back when the field is free.
-  void _dismissProvisional(_ProvisionalSend provisional) {
-    _update(() => _provisionalSends.remove(provisional));
-    _restoreSentDraft(provisional.restorableDraft, null);
-  }
-
-  /// Puts a refused message back so it is not lost with the failure notice.
-  ///
-  /// Only into a field the user has left alone: once they have started the
-  /// next line, restoring would overwrite what they are writing, and the
-  /// failure is already reported above the composer.
-  bool _restoreSentDraft(String? draft, CachedChatMessage? reply) {
-    if (draft == null || draft.isEmpty || _composer.text.isNotEmpty) {
-      return false;
-    }
-    _composer.text = draft;
-    _composer.selection = TextSelection.collapsed(offset: draft.length);
-    if (reply != null && _replyTo == null) {
-      _update(() => _replyTo = reply);
-    }
-    return true;
   }
 
   bool _isCurrentSendScope(ChatRoomProviderKey targetKey, int generation) {
@@ -746,7 +731,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     for (final provisional in _provisionalSends) {
       if (operation.operationId ==
           '$_provisionalOperationPrefix${provisional.id}') {
-        _dismissProvisional(provisional);
+        _update(() => _provisionalSends.remove(provisional));
         return;
       }
     }

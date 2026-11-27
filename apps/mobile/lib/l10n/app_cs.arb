@@ -952,6 +952,7 @@
   "messageForwardFailed": "Zprávu se nepodařilo přeposlat.",
   "cancelSend": "Zrušit odeslání",
   "outboxCancelAmbiguous": "Zprávu už nelze zrušit, mohla dorazit na server.",
+  "draftMemoryOnly": "Zprávu se nepodařilo uložit do zařízení. Před zavřením aplikace zkuste odeslání znovu.",
   "roomDetailsDeleteAction": "Smazat konverzaci",
   "roomDetailsDeleteDialogTitle": "Smazat konverzaci?",
   "roomDetailsDeleteDialogMessage": "Konverzace i všechny její zprávy se smažou všem účastníkům. Akci nelze vzít zpět.",

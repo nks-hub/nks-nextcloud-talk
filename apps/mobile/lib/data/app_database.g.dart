@@ -12819,6 +12819,535 @@ class CallLifecycleSessionsCompanion
   }
 }
 
+class $RefusedTextDraftsTable extends RefusedTextDrafts
+    with TableInfo<$RefusedTextDraftsTable, RefusedTextDraft> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RefusedTextDraftsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES accounts (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _roomTokenMeta = const VerificationMeta(
+    'roomToken',
+  );
+  @override
+  late final GeneratedColumn<String> roomToken = GeneratedColumn<String>(
+    'room_token',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _draftIdMeta = const VerificationMeta(
+    'draftId',
+  );
+  @override
+  late final GeneratedColumn<String> draftId = GeneratedColumn<String>(
+    'draft_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _messageMeta = const VerificationMeta(
+    'message',
+  );
+  @override
+  late final GeneratedColumn<String> message = GeneratedColumn<String>(
+    'message',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _threadIdMeta = const VerificationMeta(
+    'threadId',
+  );
+  @override
+  late final GeneratedColumn<int> threadId = GeneratedColumn<int>(
+    'thread_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _replyToMeta = const VerificationMeta(
+    'replyTo',
+  );
+  @override
+  late final GeneratedColumn<int> replyTo = GeneratedColumn<int>(
+    'reply_to',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _silentMeta = const VerificationMeta('silent');
+  @override
+  late final GeneratedColumn<bool> silent = GeneratedColumn<bool>(
+    'silent',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("silent" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _createdAtMillisMeta = const VerificationMeta(
+    'createdAtMillis',
+  );
+  @override
+  late final GeneratedColumn<int> createdAtMillis = GeneratedColumn<int>(
+    'created_at_millis',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    accountId,
+    roomToken,
+    draftId,
+    message,
+    threadId,
+    replyTo,
+    silent,
+    createdAtMillis,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'refused_text_drafts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RefusedTextDraft> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_accountIdMeta);
+    }
+    if (data.containsKey('room_token')) {
+      context.handle(
+        _roomTokenMeta,
+        roomToken.isAcceptableOrUnknown(data['room_token']!, _roomTokenMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_roomTokenMeta);
+    }
+    if (data.containsKey('draft_id')) {
+      context.handle(
+        _draftIdMeta,
+        draftId.isAcceptableOrUnknown(data['draft_id']!, _draftIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_draftIdMeta);
+    }
+    if (data.containsKey('message')) {
+      context.handle(
+        _messageMeta,
+        message.isAcceptableOrUnknown(data['message']!, _messageMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_messageMeta);
+    }
+    if (data.containsKey('thread_id')) {
+      context.handle(
+        _threadIdMeta,
+        threadId.isAcceptableOrUnknown(data['thread_id']!, _threadIdMeta),
+      );
+    }
+    if (data.containsKey('reply_to')) {
+      context.handle(
+        _replyToMeta,
+        replyTo.isAcceptableOrUnknown(data['reply_to']!, _replyToMeta),
+      );
+    }
+    if (data.containsKey('silent')) {
+      context.handle(
+        _silentMeta,
+        silent.isAcceptableOrUnknown(data['silent']!, _silentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_silentMeta);
+    }
+    if (data.containsKey('created_at_millis')) {
+      context.handle(
+        _createdAtMillisMeta,
+        createdAtMillis.isAcceptableOrUnknown(
+          data['created_at_millis']!,
+          _createdAtMillisMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMillisMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {accountId, roomToken, draftId};
+  @override
+  RefusedTextDraft map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RefusedTextDraft(
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      roomToken: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}room_token'],
+      )!,
+      draftId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}draft_id'],
+      )!,
+      message: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}message'],
+      )!,
+      threadId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}thread_id'],
+      ),
+      replyTo: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}reply_to'],
+      ),
+      silent: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}silent'],
+      )!,
+      createdAtMillis: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at_millis'],
+      )!,
+    );
+  }
+
+  @override
+  $RefusedTextDraftsTable createAlias(String alias) {
+    return $RefusedTextDraftsTable(attachedDatabase, alias);
+  }
+}
+
+class RefusedTextDraft extends DataClass
+    implements Insertable<RefusedTextDraft> {
+  final String accountId;
+  final String roomToken;
+  final String draftId;
+  final String message;
+  final int? threadId;
+  final int? replyTo;
+  final bool silent;
+  final int createdAtMillis;
+  const RefusedTextDraft({
+    required this.accountId,
+    required this.roomToken,
+    required this.draftId,
+    required this.message,
+    this.threadId,
+    this.replyTo,
+    required this.silent,
+    required this.createdAtMillis,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['account_id'] = Variable<String>(accountId);
+    map['room_token'] = Variable<String>(roomToken);
+    map['draft_id'] = Variable<String>(draftId);
+    map['message'] = Variable<String>(message);
+    if (!nullToAbsent || threadId != null) {
+      map['thread_id'] = Variable<int>(threadId);
+    }
+    if (!nullToAbsent || replyTo != null) {
+      map['reply_to'] = Variable<int>(replyTo);
+    }
+    map['silent'] = Variable<bool>(silent);
+    map['created_at_millis'] = Variable<int>(createdAtMillis);
+    return map;
+  }
+
+  RefusedTextDraftsCompanion toCompanion(bool nullToAbsent) {
+    return RefusedTextDraftsCompanion(
+      accountId: Value(accountId),
+      roomToken: Value(roomToken),
+      draftId: Value(draftId),
+      message: Value(message),
+      threadId: threadId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(threadId),
+      replyTo: replyTo == null && nullToAbsent
+          ? const Value.absent()
+          : Value(replyTo),
+      silent: Value(silent),
+      createdAtMillis: Value(createdAtMillis),
+    );
+  }
+
+  factory RefusedTextDraft.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RefusedTextDraft(
+      accountId: serializer.fromJson<String>(json['accountId']),
+      roomToken: serializer.fromJson<String>(json['roomToken']),
+      draftId: serializer.fromJson<String>(json['draftId']),
+      message: serializer.fromJson<String>(json['message']),
+      threadId: serializer.fromJson<int?>(json['threadId']),
+      replyTo: serializer.fromJson<int?>(json['replyTo']),
+      silent: serializer.fromJson<bool>(json['silent']),
+      createdAtMillis: serializer.fromJson<int>(json['createdAtMillis']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'accountId': serializer.toJson<String>(accountId),
+      'roomToken': serializer.toJson<String>(roomToken),
+      'draftId': serializer.toJson<String>(draftId),
+      'message': serializer.toJson<String>(message),
+      'threadId': serializer.toJson<int?>(threadId),
+      'replyTo': serializer.toJson<int?>(replyTo),
+      'silent': serializer.toJson<bool>(silent),
+      'createdAtMillis': serializer.toJson<int>(createdAtMillis),
+    };
+  }
+
+  RefusedTextDraft copyWith({
+    String? accountId,
+    String? roomToken,
+    String? draftId,
+    String? message,
+    Value<int?> threadId = const Value.absent(),
+    Value<int?> replyTo = const Value.absent(),
+    bool? silent,
+    int? createdAtMillis,
+  }) => RefusedTextDraft(
+    accountId: accountId ?? this.accountId,
+    roomToken: roomToken ?? this.roomToken,
+    draftId: draftId ?? this.draftId,
+    message: message ?? this.message,
+    threadId: threadId.present ? threadId.value : this.threadId,
+    replyTo: replyTo.present ? replyTo.value : this.replyTo,
+    silent: silent ?? this.silent,
+    createdAtMillis: createdAtMillis ?? this.createdAtMillis,
+  );
+  RefusedTextDraft copyWithCompanion(RefusedTextDraftsCompanion data) {
+    return RefusedTextDraft(
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      roomToken: data.roomToken.present ? data.roomToken.value : this.roomToken,
+      draftId: data.draftId.present ? data.draftId.value : this.draftId,
+      message: data.message.present ? data.message.value : this.message,
+      threadId: data.threadId.present ? data.threadId.value : this.threadId,
+      replyTo: data.replyTo.present ? data.replyTo.value : this.replyTo,
+      silent: data.silent.present ? data.silent.value : this.silent,
+      createdAtMillis: data.createdAtMillis.present
+          ? data.createdAtMillis.value
+          : this.createdAtMillis,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RefusedTextDraft(')
+          ..write('accountId: $accountId, ')
+          ..write('roomToken: $roomToken, ')
+          ..write('draftId: $draftId, ')
+          ..write('message: $message, ')
+          ..write('threadId: $threadId, ')
+          ..write('replyTo: $replyTo, ')
+          ..write('silent: $silent, ')
+          ..write('createdAtMillis: $createdAtMillis')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    accountId,
+    roomToken,
+    draftId,
+    message,
+    threadId,
+    replyTo,
+    silent,
+    createdAtMillis,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RefusedTextDraft &&
+          other.accountId == this.accountId &&
+          other.roomToken == this.roomToken &&
+          other.draftId == this.draftId &&
+          other.message == this.message &&
+          other.threadId == this.threadId &&
+          other.replyTo == this.replyTo &&
+          other.silent == this.silent &&
+          other.createdAtMillis == this.createdAtMillis);
+}
+
+class RefusedTextDraftsCompanion extends UpdateCompanion<RefusedTextDraft> {
+  final Value<String> accountId;
+  final Value<String> roomToken;
+  final Value<String> draftId;
+  final Value<String> message;
+  final Value<int?> threadId;
+  final Value<int?> replyTo;
+  final Value<bool> silent;
+  final Value<int> createdAtMillis;
+  final Value<int> rowid;
+  const RefusedTextDraftsCompanion({
+    this.accountId = const Value.absent(),
+    this.roomToken = const Value.absent(),
+    this.draftId = const Value.absent(),
+    this.message = const Value.absent(),
+    this.threadId = const Value.absent(),
+    this.replyTo = const Value.absent(),
+    this.silent = const Value.absent(),
+    this.createdAtMillis = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RefusedTextDraftsCompanion.insert({
+    required String accountId,
+    required String roomToken,
+    required String draftId,
+    required String message,
+    this.threadId = const Value.absent(),
+    this.replyTo = const Value.absent(),
+    required bool silent,
+    required int createdAtMillis,
+    this.rowid = const Value.absent(),
+  }) : accountId = Value(accountId),
+       roomToken = Value(roomToken),
+       draftId = Value(draftId),
+       message = Value(message),
+       silent = Value(silent),
+       createdAtMillis = Value(createdAtMillis);
+  static Insertable<RefusedTextDraft> custom({
+    Expression<String>? accountId,
+    Expression<String>? roomToken,
+    Expression<String>? draftId,
+    Expression<String>? message,
+    Expression<int>? threadId,
+    Expression<int>? replyTo,
+    Expression<bool>? silent,
+    Expression<int>? createdAtMillis,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (accountId != null) 'account_id': accountId,
+      if (roomToken != null) 'room_token': roomToken,
+      if (draftId != null) 'draft_id': draftId,
+      if (message != null) 'message': message,
+      if (threadId != null) 'thread_id': threadId,
+      if (replyTo != null) 'reply_to': replyTo,
+      if (silent != null) 'silent': silent,
+      if (createdAtMillis != null) 'created_at_millis': createdAtMillis,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RefusedTextDraftsCompanion copyWith({
+    Value<String>? accountId,
+    Value<String>? roomToken,
+    Value<String>? draftId,
+    Value<String>? message,
+    Value<int?>? threadId,
+    Value<int?>? replyTo,
+    Value<bool>? silent,
+    Value<int>? createdAtMillis,
+    Value<int>? rowid,
+  }) {
+    return RefusedTextDraftsCompanion(
+      accountId: accountId ?? this.accountId,
+      roomToken: roomToken ?? this.roomToken,
+      draftId: draftId ?? this.draftId,
+      message: message ?? this.message,
+      threadId: threadId ?? this.threadId,
+      replyTo: replyTo ?? this.replyTo,
+      silent: silent ?? this.silent,
+      createdAtMillis: createdAtMillis ?? this.createdAtMillis,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (roomToken.present) {
+      map['room_token'] = Variable<String>(roomToken.value);
+    }
+    if (draftId.present) {
+      map['draft_id'] = Variable<String>(draftId.value);
+    }
+    if (message.present) {
+      map['message'] = Variable<String>(message.value);
+    }
+    if (threadId.present) {
+      map['thread_id'] = Variable<int>(threadId.value);
+    }
+    if (replyTo.present) {
+      map['reply_to'] = Variable<int>(replyTo.value);
+    }
+    if (silent.present) {
+      map['silent'] = Variable<bool>(silent.value);
+    }
+    if (createdAtMillis.present) {
+      map['created_at_millis'] = Variable<int>(createdAtMillis.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RefusedTextDraftsCompanion(')
+          ..write('accountId: $accountId, ')
+          ..write('roomToken: $roomToken, ')
+          ..write('draftId: $draftId, ')
+          ..write('message: $message, ')
+          ..write('threadId: $threadId, ')
+          ..write('replyTo: $replyTo, ')
+          ..write('silent: $silent, ')
+          ..write('createdAtMillis: $createdAtMillis, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -12847,6 +13376,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CallSessionsTable callSessions = $CallSessionsTable(this);
   late final $CallLifecycleSessionsTable callLifecycleSessions =
       $CallLifecycleSessionsTable(this);
+  late final $RefusedTextDraftsTable refusedTextDrafts =
+      $RefusedTextDraftsTable(this);
   late final Index cachedChatMessagesAttachmentConfirmation = Index(
     'cached_chat_messages_attachment_confirmation',
     'CREATE INDEX cached_chat_messages_attachment_confirmation ON cached_chat_messages (account_id, room_token, reference_id, message_id)',
@@ -12875,6 +13406,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     attachmentJobs,
     callSessions,
     callLifecycleSessions,
+    refusedTextDrafts,
     cachedChatMessagesAttachmentConfirmation,
     cachedChatMessagesThreadWindow,
   ];
@@ -12963,6 +13495,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('call_lifecycle_sessions', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'accounts',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('refused_text_drafts', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -13273,6 +13812,27 @@ final class $$AccountsTableReferences
 
     final cache = $_typedResult.readTableOrNull(
       _callLifecycleSessionsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$RefusedTextDraftsTable, List<RefusedTextDraft>>
+  _refusedTextDraftsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.refusedTextDrafts,
+        aliasName: 'accounts__id__refused_text_drafts__account_id',
+      );
+
+  $$RefusedTextDraftsTableProcessedTableManager get refusedTextDraftsRefs {
+    final manager = $$RefusedTextDraftsTableTableManager(
+      $_db,
+      $_db.refusedTextDrafts,
+    ).filter((f) => f.accountId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _refusedTextDraftsRefsTable($_db),
     );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
@@ -13680,6 +14240,31 @@ class $$AccountsTableFilterComposer
                     $removeJoinBuilderFromRootComposer,
               ),
         );
+    return f(composer);
+  }
+
+  Expression<bool> refusedTextDraftsRefs(
+    Expression<bool> Function($$RefusedTextDraftsTableFilterComposer f) f,
+  ) {
+    final $$RefusedTextDraftsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.refusedTextDrafts,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RefusedTextDraftsTableFilterComposer(
+            $db: $db,
+            $table: $db.refusedTextDrafts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
     return f(composer);
   }
 }
@@ -14158,6 +14743,32 @@ class $$AccountsTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> refusedTextDraftsRefs<T extends Object>(
+    Expression<T> Function($$RefusedTextDraftsTableAnnotationComposer a) f,
+  ) {
+    final $$RefusedTextDraftsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.refusedTextDrafts,
+          getReferencedColumn: (t) => t.accountId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$RefusedTextDraftsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.refusedTextDrafts,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$AccountsTableTableManager
@@ -14187,6 +14798,7 @@ class $$AccountsTableTableManager
             bool attachmentRuntimeAccountsRefs,
             bool callSessionsRefs,
             bool callLifecycleSessionsRefs,
+            bool refusedTextDraftsRefs,
           })
         > {
   $$AccountsTableTableManager(_$AppDatabase db, $AccountsTable table)
@@ -14293,6 +14905,7 @@ class $$AccountsTableTableManager
                 attachmentRuntimeAccountsRefs = false,
                 callSessionsRefs = false,
                 callLifecycleSessionsRefs = false,
+                refusedTextDraftsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -14311,6 +14924,7 @@ class $$AccountsTableTableManager
                       db.attachmentRuntimeAccounts,
                     if (callSessionsRefs) db.callSessions,
                     if (callLifecycleSessionsRefs) db.callLifecycleSessions,
+                    if (refusedTextDraftsRefs) db.refusedTextDrafts,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -14588,6 +15202,27 @@ class $$AccountsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (refusedTextDraftsRefs)
+                        await $_getPrefetchedData<
+                          StoredAccount,
+                          $AccountsTable,
+                          RefusedTextDraft
+                        >(
+                          currentTable: table,
+                          referencedTable: $$AccountsTableReferences
+                              ._refusedTextDraftsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$AccountsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).refusedTextDraftsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.accountId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -14622,6 +15257,7 @@ typedef $$AccountsTableProcessedTableManager =
         bool attachmentRuntimeAccountsRefs,
         bool callSessionsRefs,
         bool callLifecycleSessionsRefs,
+        bool refusedTextDraftsRefs,
       })
     >;
 typedef $$AccountThemesTableCreateCompanionBuilder =
@@ -21664,6 +22300,398 @@ typedef $$CallLifecycleSessionsTableProcessedTableManager =
       StoredCallLifecycleSession,
       PrefetchHooks Function({bool accountId})
     >;
+typedef $$RefusedTextDraftsTableCreateCompanionBuilder =
+    RefusedTextDraftsCompanion Function({
+      required String accountId,
+      required String roomToken,
+      required String draftId,
+      required String message,
+      Value<int?> threadId,
+      Value<int?> replyTo,
+      required bool silent,
+      required int createdAtMillis,
+      Value<int> rowid,
+    });
+typedef $$RefusedTextDraftsTableUpdateCompanionBuilder =
+    RefusedTextDraftsCompanion Function({
+      Value<String> accountId,
+      Value<String> roomToken,
+      Value<String> draftId,
+      Value<String> message,
+      Value<int?> threadId,
+      Value<int?> replyTo,
+      Value<bool> silent,
+      Value<int> createdAtMillis,
+      Value<int> rowid,
+    });
+
+final class $$RefusedTextDraftsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $RefusedTextDraftsTable,
+          RefusedTextDraft
+        > {
+  $$RefusedTextDraftsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $AccountsTable _accountIdTable(_$AppDatabase db) =>
+      db.accounts.createAlias('refused_text_drafts__account_id__accounts__id');
+
+  $$AccountsTableProcessedTableManager get accountId {
+    final $_column = $_itemColumn<String>('account_id')!;
+
+    final manager = $$AccountsTableTableManager(
+      $_db,
+      $_db.accounts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_accountIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$RefusedTextDraftsTableFilterComposer
+    extends Composer<_$AppDatabase, $RefusedTextDraftsTable> {
+  $$RefusedTextDraftsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get roomToken => $composableBuilder(
+    column: $table.roomToken,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get draftId => $composableBuilder(
+    column: $table.draftId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get message => $composableBuilder(
+    column: $table.message,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get threadId => $composableBuilder(
+    column: $table.threadId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get replyTo => $composableBuilder(
+    column: $table.replyTo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get silent => $composableBuilder(
+    column: $table.silent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAtMillis => $composableBuilder(
+    column: $table.createdAtMillis,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$AccountsTableFilterComposer get accountId {
+    final $$AccountsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableFilterComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RefusedTextDraftsTableOrderingComposer
+    extends Composer<_$AppDatabase, $RefusedTextDraftsTable> {
+  $$RefusedTextDraftsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get roomToken => $composableBuilder(
+    column: $table.roomToken,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get draftId => $composableBuilder(
+    column: $table.draftId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get message => $composableBuilder(
+    column: $table.message,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get threadId => $composableBuilder(
+    column: $table.threadId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get replyTo => $composableBuilder(
+    column: $table.replyTo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get silent => $composableBuilder(
+    column: $table.silent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAtMillis => $composableBuilder(
+    column: $table.createdAtMillis,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$AccountsTableOrderingComposer get accountId {
+    final $$AccountsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableOrderingComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RefusedTextDraftsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RefusedTextDraftsTable> {
+  $$RefusedTextDraftsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get roomToken =>
+      $composableBuilder(column: $table.roomToken, builder: (column) => column);
+
+  GeneratedColumn<String> get draftId =>
+      $composableBuilder(column: $table.draftId, builder: (column) => column);
+
+  GeneratedColumn<String> get message =>
+      $composableBuilder(column: $table.message, builder: (column) => column);
+
+  GeneratedColumn<int> get threadId =>
+      $composableBuilder(column: $table.threadId, builder: (column) => column);
+
+  GeneratedColumn<int> get replyTo =>
+      $composableBuilder(column: $table.replyTo, builder: (column) => column);
+
+  GeneratedColumn<bool> get silent =>
+      $composableBuilder(column: $table.silent, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAtMillis => $composableBuilder(
+    column: $table.createdAtMillis,
+    builder: (column) => column,
+  );
+
+  $$AccountsTableAnnotationComposer get accountId {
+    final $$AccountsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RefusedTextDraftsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RefusedTextDraftsTable,
+          RefusedTextDraft,
+          $$RefusedTextDraftsTableFilterComposer,
+          $$RefusedTextDraftsTableOrderingComposer,
+          $$RefusedTextDraftsTableAnnotationComposer,
+          $$RefusedTextDraftsTableCreateCompanionBuilder,
+          $$RefusedTextDraftsTableUpdateCompanionBuilder,
+          (RefusedTextDraft, $$RefusedTextDraftsTableReferences),
+          RefusedTextDraft,
+          PrefetchHooks Function({bool accountId})
+        > {
+  $$RefusedTextDraftsTableTableManager(
+    _$AppDatabase db,
+    $RefusedTextDraftsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RefusedTextDraftsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RefusedTextDraftsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RefusedTextDraftsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> accountId = const Value.absent(),
+                Value<String> roomToken = const Value.absent(),
+                Value<String> draftId = const Value.absent(),
+                Value<String> message = const Value.absent(),
+                Value<int?> threadId = const Value.absent(),
+                Value<int?> replyTo = const Value.absent(),
+                Value<bool> silent = const Value.absent(),
+                Value<int> createdAtMillis = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RefusedTextDraftsCompanion(
+                accountId: accountId,
+                roomToken: roomToken,
+                draftId: draftId,
+                message: message,
+                threadId: threadId,
+                replyTo: replyTo,
+                silent: silent,
+                createdAtMillis: createdAtMillis,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String accountId,
+                required String roomToken,
+                required String draftId,
+                required String message,
+                Value<int?> threadId = const Value.absent(),
+                Value<int?> replyTo = const Value.absent(),
+                required bool silent,
+                required int createdAtMillis,
+                Value<int> rowid = const Value.absent(),
+              }) => RefusedTextDraftsCompanion.insert(
+                accountId: accountId,
+                roomToken: roomToken,
+                draftId: draftId,
+                message: message,
+                threadId: threadId,
+                replyTo: replyTo,
+                silent: silent,
+                createdAtMillis: createdAtMillis,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$RefusedTextDraftsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({accountId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (accountId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.accountId,
+                                referencedTable:
+                                    $$RefusedTextDraftsTableReferences
+                                        ._accountIdTable(db),
+                                referencedColumn:
+                                    $$RefusedTextDraftsTableReferences
+                                        ._accountIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$RefusedTextDraftsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RefusedTextDraftsTable,
+      RefusedTextDraft,
+      $$RefusedTextDraftsTableFilterComposer,
+      $$RefusedTextDraftsTableOrderingComposer,
+      $$RefusedTextDraftsTableAnnotationComposer,
+      $$RefusedTextDraftsTableCreateCompanionBuilder,
+      $$RefusedTextDraftsTableUpdateCompanionBuilder,
+      (RefusedTextDraft, $$RefusedTextDraftsTableReferences),
+      RefusedTextDraft,
+      PrefetchHooks Function({bool accountId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -21701,4 +22729,6 @@ class $AppDatabaseManager {
       $$CallSessionsTableTableManager(_db, _db.callSessions);
   $$CallLifecycleSessionsTableTableManager get callLifecycleSessions =>
       $$CallLifecycleSessionsTableTableManager(_db, _db.callLifecycleSessions);
+  $$RefusedTextDraftsTableTableManager get refusedTextDrafts =>
+      $$RefusedTextDraftsTableTableManager(_db, _db.refusedTextDrafts);
 }

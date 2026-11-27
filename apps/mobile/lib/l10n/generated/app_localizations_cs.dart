@@ -2727,6 +2727,10 @@ class AppLocalizationsCs extends AppLocalizations {
       'Zprávu už nelze zrušit, mohla dorazit na server.';
 
   @override
+  String get draftMemoryOnly =>
+      'Zprávu se nepodařilo uložit do zařízení. Před zavřením aplikace zkuste odeslání znovu.';
+
+  @override
   String get roomDetailsDeleteAction => 'Smazat konverzaci';
 
   @override

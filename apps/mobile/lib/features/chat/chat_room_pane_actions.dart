@@ -835,16 +835,7 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
       ..showSnackBar(SnackBar(key: key, content: Text(text)));
   }
 
-  Future<void> _copyMessageText(String text) async {
-    await Clipboard.setData(ClipboardData(text: text));
-    if (!mounted) {
-      return;
-    }
-    final strings = AppLocalizations.of(context);
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(strings.messageCopied)));
-  }
+  Future<void> _copyMessageText(String text) => _copyChatText(context, text);
 
   Future<void> _startEditMessage(
     CachedChatMessage message,

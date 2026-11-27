@@ -4958,6 +4958,12 @@ abstract class AppLocalizations {
   /// **'This message may already have reached the server, so it can no longer be cancelled.'**
   String get outboxCancelAmbiguous;
 
+  /// No description provided for @draftMemoryOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'This message could not be saved on this device. Retry before closing the app.'**
+  String get draftMemoryOnly;
+
   /// No description provided for @roomDetailsDeleteAction.
   ///
   /// In en, this message translates to:

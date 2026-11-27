@@ -78,6 +78,111 @@ extension _ChatServiceNonBlockingCases on _ChatServiceIntegrationSuite {
       expect(await chat.roomsWithPendingTextSends(), isEmpty);
     });
 
+    test(
+      'a rapid send cannot pass a composer draft whose checkpoint is still writing',
+      () async {
+        final writes = Completer<void>();
+        final sent = <String>[];
+        final api = HttpNextcloudApi(
+          client: _sendServer((request) {
+            sent.add(request.bodyFields['message']!);
+            return _acceptedSend(request, 120 + sent.length);
+          }),
+        );
+        addTearDown(api.close);
+        final service = ChatService(
+          accounts: accounts,
+          chat: chat,
+          credentials: credentials,
+          api: api,
+        );
+        addTearDown(service.close);
+        await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+        final ready = writes.future.then((_) async {
+          await database
+              .into(database.refusedTextDrafts)
+              .insert(
+                const RefusedTextDraft(
+                  accountId: 'account-a',
+                  roomToken: 'rooma123',
+                  draftId: 'held',
+                  message: 'first',
+                  silent: false,
+                  createdAtMillis: 1,
+                ),
+              );
+        });
+        final first = service.sendText(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          message: 'first',
+          recoverableDraft: (id: 'held', checkpoint: ready),
+        );
+        final second = service.sendText(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          message: '👍',
+        );
+        await pumpEventQueue();
+        expect(sent, isEmpty);
+        writes.complete();
+        await Future.wait([first, second]);
+        await _waitForChatCondition(() => sent.length == 2);
+        expect(sent, ['first', '👍']);
+        expect(
+          await database.select(database.refusedTextDrafts).get(),
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'retrying a refused reply as plain text preserves the draft without posting',
+      () async {
+        final api = HttpNextcloudApi(
+          client: _sendServer(
+            (_) => fail('Mismatched reply reached the server'),
+          ),
+        );
+        addTearDown(api.close);
+        final service = ChatService(
+          accounts: accounts,
+          chat: chat,
+          credentials: credentials,
+          api: api,
+        );
+        addTearDown(service.close);
+        await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+        const saved = RefusedTextDraft(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          draftId: 'answer',
+          message: 'saved answer',
+          replyTo: 109,
+          silent: false,
+          createdAtMillis: 1,
+        );
+        await database.into(database.refusedTextDrafts).insert(saved);
+        await expectLater(
+          service.sendText(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            message: 'saved answer',
+            recoverableDraft: (id: 'answer', checkpoint: null),
+          ),
+          throwsA(isA<Object>()),
+        );
+        expect(
+          await database.select(database.refusedTextDrafts).getSingle(),
+          saved,
+        );
+        expect(
+          await database.select(database.textSendOperations).get(),
+          isEmpty,
+        );
+      },
+    );
+
     for (final lostResponse in [false, true]) {
       test('two quick sends settle when the second receipt is '
           '${lostResponse ? 'lost' : 'empty'}', () async {

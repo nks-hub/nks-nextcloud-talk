@@ -30,6 +30,8 @@ import '../../core/giphy_reference.dart';
 import '../../core/stale_modifier_repair.dart';
 import '../../data/app_database.dart';
 import '../../data/chat_repository.dart';
+import '../../data/recoverable_text_draft_store.dart';
+import 'package:uuid/uuid.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../platform/media/image_attachment_picker.dart';
 import '../conversations/conversation_avatar.dart';
@@ -86,6 +88,7 @@ export 'chat_thread_context.dart';
 part 'chat_room_pane_actions.dart';
 part 'chat_room_pane_attachment_menu.dart';
 part 'chat_room_pane_composer.dart';
+part 'chat_room_pane_drafts.dart';
 part 'chat_room_pane_composer_widgets.dart';
 part 'chat_room_pane_expression_picker.dart';
 part 'chat_room_pane_timeline_states.dart';
@@ -293,6 +296,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _pendingJumpMessageId = widget.jumpToMessageId;
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_handleScroll);
+    _composerDrafts = ref.read(recoverableTextDraftStoreProvider);
+    _draftAccountGeneration = _composerDrafts.accountGeneration(
+      widget.account.id,
+    );
     _composer.addListener(_handleComposerChanged);
     _composerFocusNode.addListener(_handleComposerFocusChanged);
     _connectivityWakeSubscription = ref
@@ -310,92 +317,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     });
   }
 
-  /// Composer text is only durable once the outbox admits it, and admission
-  /// can be refused, so the draft is persisted on its own.
-  void _scheduleDraftSave() {
-    _draftTimer?.cancel();
-    _draftTimer = Timer(
-      const Duration(milliseconds: 500),
-      () => unawaited(_flushDraft(_key, _recoverableDraft(_key))),
-    );
-  }
-
-  /// What to store as the draft of [key]: the field, or while that is empty
-  /// the text of a send the outbox does not hold yet. Until it is admitted
-  /// that text exists nowhere else, and a process killed in between would
-  /// take it along.
-  String _recoverableDraft(ChatRoomProviderKey key) {
-    if (_composer.text.trim().isNotEmpty) {
-      return _composer.text;
-    }
-    for (final send in _provisionalSends) {
-      final text = send.restorableDraft;
-      if (send.key == key && send.operationId == null && text != null) {
-        return text;
-      }
-    }
-    return _composer.text;
-  }
-
-  /// Removes the copy [_recoverableDraft] kept of a message the outbox holds
-  /// now. A draft that reads differently was written since and stays.
-  Future<void> _dropAdmittedDraft(ChatRoomProviderKey key, String? sent) async {
-    final store = _draftStore;
-    if (store == null || sent == null) {
-      return;
-    }
-    final stored = await store.readDraft(
-      accountId: key.accountId,
-      roomToken: key.roomToken,
-      threadId: key.threadId,
-    );
-    if (stored == sent.trim()) {
-      await store.saveDraft(
-        accountId: key.accountId,
-        roomToken: key.roomToken,
-        threadId: key.threadId,
-        text: '',
-      );
-    }
-  }
-
-  Future<void> _flushDraft(ChatRoomProviderKey key, String text) async {
-    _draftTimer?.cancel();
-    _draftTimer = null;
-    final store = _draftStore;
-    if (store == null) {
-      return;
-    }
-    await store.saveDraft(
-      accountId: key.accountId,
-      roomToken: key.roomToken,
-      threadId: key.threadId,
-      text: text.trim(),
-    );
-  }
-
-  /// Set while the pane clears the composer itself, so the clear is not
-  /// mistaken for the person deleting what they wrote.
+  late final RecoverableTextDraftStore _composerDrafts;
+  ({ChatRoomProviderKey key, String text, Future<bool> done})? _returningDraft;
+  late int _draftAccountGeneration;
   bool _suppressDraftSave = false;
-
-  Future<void> _restoreDraft(ChatRoomProviderKey key) async {
-    final store = _draftStore;
-    if (store == null) {
-      return;
-    }
-    final draft = await store.readDraft(
-      accountId: key.accountId,
-      roomToken: key.roomToken,
-      threadId: key.threadId,
-    );
-    if (draft == null || !mounted || key != _key || _composer.text.isNotEmpty) {
-      return;
-    }
-    _composer.value = TextEditingValue(
-      text: draft,
-      selection: TextSelection.collapsed(offset: draft.length),
-    );
-  }
 
   @override
   void didUpdateWidget(covariant ChatRoomPane oldWidget) {
@@ -412,7 +337,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       roomToken: oldWidget.conversation.token,
       threadId: oldWidget.threadId,
     );
-    unawaited(_flushDraft(left, _recoverableDraft(left)));
+    unawaited(_flushDraft(left, _composer.text));
+    _draftAccountGeneration = _composerDrafts.accountGeneration(
+      widget.account.id,
+    );
     _suppressDraftSave = true;
     _composer.clear();
     _suppressDraftSave = false;
@@ -506,7 +434,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     // second of typing threw the text away: the debounce had not fired yet
     // and the disposal only cancelled it. The write is safe to outlive this
     // widget — it goes to the database under the room's own key.
-    unawaited(_flushDraft(_key, _recoverableDraft(_key)));
+    unawaited(_flushDraft(_key, _composer.text));
     _visibilityGeneration++;
     final visibility = _roomVisibility;
     scheduleMicrotask(() => visibility?.setVisible(_visibilityOwner, null));
@@ -587,10 +515,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       return;
     }
     _composerFocusGeneration++;
-    // The process can be killed from here on, so the draft cannot wait for
-    // its debounce. Nor can a message sent a moment ago and not admitted
-    // yet be stored as an empty field.
-    unawaited(_flushDraft(_key, _recoverableDraft(_key)));
+    // The process can be killed from here on, so flush the current field now.
+    unawaited(_flushDraft(_key, _composer.text));
     _syncTypingActivity(forceInactive: true);
     _incomingAnnouncements.reset();
     unawaited(_stopLiveSync());
@@ -988,6 +914,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     }
     final admitted = _admittedProvisionals(operations);
     final lastDisplayedId = messages.isEmpty ? 0 : messages.last.messageId;
+    final recoverable = _recoverableDrafts();
     final pending = <StoredTextSendOperation>[
       for (final operation in operations)
         if (operation.outboxState != 'completed')
@@ -997,6 +924,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           // one transaction. Dropping the bubble on the first of them left a
           // frame or more with the message nowhere on screen.
           operation.copyWith(outboxState: 'sending'),
+      for (final draft in recoverable.values) _failedDraftOperation(draft),
       for (final send in _provisionalSends)
         if (send.key == _key && !admitted.contains(send))
           send.asOperation(widget.account.id),
@@ -1230,10 +1158,23 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                             loadingOlder: _loadingOlder,
                             controller: _scrollController,
                             onLoadOlder: () => unawaited(_loadOlder()),
-                            onRetry: _sync,
+                            onRetry: (operation) {
+                              final draft = recoverable[operation.operationId];
+                              if (draft != null) {
+                                unawaited(_retryDraft(draft));
+                              } else {
+                                unawaited(_sync());
+                              }
+                            },
                             onResend: _confirmResend,
-                            onCancel: (operation) =>
-                                unawaited(_cancelPending(operation)),
+                            onCancel: (operation) {
+                              final draft = recoverable[operation.operationId];
+                              if (draft != null) {
+                                unawaited(_discardDraft(draft));
+                              } else {
+                                unawaited(_cancelPending(operation));
+                              }
+                            },
                             onOpenThread: _openThread,
                             onMessageActions: handleMessageActions,
                             onReplySwipe: canReplyToMessage

@@ -1,6 +1,29 @@
 part of 'chat_service.dart';
 
 extension _ChatServiceOutbox on ChatService {
+  /// Delivery for a message admitted on stored capabilities.
+  ///
+  /// The server is asked now, because a change it reports would make it
+  /// refuse a claim made with the stored ones. If it cannot be asked, the
+  /// stored ones still send the message or arm its retry.
+  Future<void> _deliverAfterStoredAdmission(
+    _PreparedChat stored,
+    int? threadId,
+  ) async {
+    var prepared = stored;
+    try {
+      prepared = await _prepare(
+        stored.account.id,
+        stored.room.token.value,
+        threadId: threadId,
+        allowPersistedCapabilitiesForSend: true,
+      );
+    } on Object {
+      // Falls back to [stored].
+    }
+    await _deliverPending(prepared, threadId: threadId);
+  }
+
   Future<bool> _updatePendingTextSend(
     String accountId,
     String roomToken,

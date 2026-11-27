@@ -8,6 +8,7 @@ import 'package:drift_flutter/drift_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
+part 'refused_draft_table.dart';
 
 @DataClassName('StoredAccount')
 class Accounts extends Table {
@@ -345,26 +346,6 @@ class TextSendOperations extends Table {
   ];
 }
 
-/// Composer text that has not been admitted to the outbox yet. A send can be
-/// refused before admission, for example while the device is offline, so the
-/// text has to survive process death on its own.
-@DataClassName('StoredChatDraft')
-class ChatDrafts extends Table {
-  TextColumn get accountId =>
-      text().references(Accounts, #id, onDelete: KeyAction.cascade)();
-
-  TextColumn get roomToken => text()();
-
-  TextColumn get scopeKey => text()();
-
-  TextColumn get draftText => text()();
-
-  IntColumn get updatedAtMillis => integer()();
-
-  @override
-  Set<Column<Object>> get primaryKey => {accountId, roomToken, scopeKey};
-}
-
 @DataClassName('StoredAttachmentRuntimeAccount')
 class AttachmentRuntimeAccounts extends Table {
   TextColumn get accountId => text().references(Accounts, #id)();
@@ -668,6 +649,7 @@ Future<Directory> _resolveDatabaseDirectory() async {
     AttachmentJobs,
     CallSessions,
     CallLifecycleSessions,
+    RefusedTextDrafts,
   ],
 )
 final class AppDatabase extends _$AppDatabase {
@@ -721,7 +703,7 @@ final class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 20;
+  int get schemaVersion => 21;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -1091,6 +1073,9 @@ final class AppDatabase extends _$AppDatabase {
         'ON cached_chat_messages '
         '(account_id, room_token, thread_id, message_id)',
       );
+    }
+    if (from < 21) {
+      await _createTableIfMissing(migrator, refusedTextDrafts);
     }
   }
 

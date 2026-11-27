@@ -18,6 +18,7 @@ part 'chat_repository_reactions.dart';
 part 'chat_repository_read_markers.dart';
 part 'chat_repository_thread_replies.dart';
 part 'chat_repository_text_send_runtime.dart';
+part 'chat_repository_text_admission.dart';
 
 const String _rootScopeKey = 'root';
 const String _networkRootScopeKey = 'network-root';
@@ -803,66 +804,6 @@ final class ChatRepository {
 
   Future<ChatMergeOutcome> applyChatReadResponse(ChatReadResponse response) =>
       _applyChatReadResponse(response);
-
-  Future<TextSendOutboxOperation> admitTextSend({
-    required String accountId,
-    required ConversationToken roomToken,
-    required ChatTextSendAuthority authority,
-    required ChatOperationId operationId,
-    required ChatReferenceId referenceId,
-    required String message,
-    bool silent = false,
-    int? replyTo,
-    int? threadId,
-    ConversationToken? replyToToken,
-    ConversationToken? parentRoomToken,
-    PrivateReplyEligibilitySnapshot? privateReplyEligibility,
-  }) {
-    return _database.transaction(() async {
-      final snapshot = await _loadRuntime(accountId);
-      final account = snapshot.accounts[AccountId.parse(accountId)];
-      if (account == null) {
-        throw StateError('Chat account does not exist');
-      }
-      final sequence =
-          account.operations.values
-              .where((operation) => operation.roomToken == roomToken)
-              .fold<int>(0, (value, operation) {
-                return operation.enqueueSequence > value
-                    ? operation.enqueueSequence
-                    : value;
-              }) +
-          1;
-      final result = admitTextSendOperation(
-        snapshot,
-        accountId: account.accountId,
-        authority: authority,
-        draft: TextSendOutboxDraft(
-          operationId: operationId,
-          operationKind: 'textSend',
-          roomToken: roomToken,
-          referenceId: referenceId,
-          message: message,
-          replayContractRevision: textSendReplayContractRevision,
-          silent: silent,
-          enqueueSequence: sequence,
-          replyTo: replyTo,
-          threadId: threadId,
-          replyToToken: replyToToken,
-          parentRoomToken: parentRoomToken,
-          privateReplyEligibility: privateReplyEligibility,
-        ),
-      );
-      final plan = result.plan;
-      if (result.outcome != ChatOutboxOutcome.queued || plan == null) {
-        throw StateError('Text send was not admitted');
-      }
-      final candidate = plan.commit(snapshot);
-      final candidateAccount = candidate.accounts[account.accountId]!;
-      await _persistAccount(candidateAccount);
-      return candidateAccount.operations[operationId]!;
-    });
-  }
 
   Future<ClaimedTextSend?> claimNextTextSend({
     required String accountId,

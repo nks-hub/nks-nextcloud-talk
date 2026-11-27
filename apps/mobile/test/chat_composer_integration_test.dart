@@ -17,7 +17,6 @@ import 'package:nextcloudtalk/core/stale_modifier_repair.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/attachment_repository.dart';
-import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';

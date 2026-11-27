@@ -8,7 +8,9 @@ import '../core/giphy_reference.dart';
 import 'app_database.dart';
 
 final class AccountRepository {
-  const AccountRepository(this._database);
+  const AccountRepository(this._database, {this.onAccountPurged});
+
+  final void Function(String accountId)? onAccountPurged;
 
   final AppDatabase _database;
 
@@ -357,8 +359,8 @@ final class AccountRepository {
   /// survivor is selected so the app never ends up with accounts but no active
   /// one. Removing the last account deliberately leaves nothing selected: that
   /// is what returns the shell to onboarding.
-  Future<List<String>> purgeAccount(String accountId) {
-    return _database.transaction(() async {
+  Future<List<String>> purgeAccount(String accountId) async {
+    final handles = await _database.transaction(() async {
       final sourceHandles =
           await (_database.selectOnly(_database.attachmentJobs)
                 ..addColumns([_database.attachmentJobs.sourceHandle])
@@ -392,6 +394,10 @@ final class AccountRepository {
         batch.deleteWhere(
           _database.attachmentRuntimeAccounts,
           (runtime) => runtime.accountId.equals(accountId),
+        );
+        batch.deleteWhere(
+          _database.refusedTextDrafts,
+          (draft) => draft.accountId.equals(accountId),
         );
         batch.deleteWhere(
           _database.chatDrafts,
@@ -448,6 +454,8 @@ final class AccountRepository {
 
       return sourceHandles;
     });
+    onAccountPurged?.call(accountId);
+    return handles;
   }
 
   Future<ConversationAccountState> loadConversationState(

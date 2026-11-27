@@ -534,15 +534,22 @@ void _registerNonBlockingComposerTests() {
   );
 
   testWidgets(
-    'a refused admission under a new draft stays as a failed line',
+    'a refused reply survives reopening alongside the new draft and retries once',
     (tester) async {
       final harness = (await tester.runAsync(_ComposerHarness.create))!;
       _addHarnessTearDown(tester, harness);
+      await tester.runAsync(harness.seedReplyMessage);
       await tester.pumpWidget(harness.app());
       await _pumpUntil(
         tester,
         () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
       );
+      final parent = find.byKey(const Key('chat-message-target-109'));
+      await _pumpUntil(tester, () => parent.evaluate().isNotEmpty);
+      await tester.longPress(parent);
+      await _pumpTransition(tester);
+      await tester.tap(find.byKey(const Key('message-action-reply')));
+      await _pumpTransition(tester);
       final hold = Completer<void>();
       harness.admissionHold.add(hold);
       harness.admissionRefused = true;
@@ -567,17 +574,165 @@ void _registerNonBlockingComposerTests() {
       expect(find.text('first'), findsOneWidget);
       expect(harness.chatSendStarted, isEmpty);
 
-      await tester.tap(find.byKey(const Key('chat-cancel-provisional-1')));
-      await tester.pump();
-
-      expect(find.byKey(const Key('chat-pending-provisional-1')), findsNothing);
-      expect(_composer(tester).text, 'typed meanwhile');
+      final saved = (await tester.runAsync(
+        harness.database.select(harness.database.refusedTextDrafts).getSingle,
+      ))!;
+      expect(saved.replyTo, 109);
+      expect(saved.threadId, isNull);
+      expect(saved.message, 'first');
+      expect(saved.roomToken, harness.conversation.token);
+      expect(saved.accountId, harness.account.id);
+      await _unmountComposer(tester);
+      harness.admissionRefused = false;
+      await tester.pumpWidget(harness.app());
+      final retry = find.byKey(
+        Key('chat-retry-refused-draft-${saved.draftId}'),
+      );
+      await _pumpUntil(
+        tester,
+        () =>
+            retry.hitTestable().evaluate().isNotEmpty &&
+            _composer(tester).text == 'typed meanwhile',
+      );
       expect(harness.chatSendStarted, isEmpty);
+      await tester.tap(retry);
+      await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
+      expect(harness.sentMessages, ['first']);
+      expect(harness.chatSendFields.single['replyTo'], '109');
+      expect(_composer(tester).text, 'typed meanwhile');
+      expect(
+        await tester.runAsync(
+          harness.database.select(harness.database.refusedTextDrafts).get,
+        ),
+        isEmpty,
+      );
       expect(tester.takeException(), isNull);
       await _unmountComposer(tester);
     },
     timeout: const Timeout(Duration(seconds: 30)),
   );
+
+  testWidgets(
+    'a draft that could not be written warns and can be retried when storage returns',
+    (tester) async {
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      _addHarnessTearDown(tester, harness);
+      final clipboard = <String>[];
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          clipboard.add((call.arguments as Map)['text'] as String);
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      await tester.pumpWidget(harness.app(wrapInScaffold: true));
+      final field = find.byKey(const Key('chat-composer'));
+      await _pumpUntil(tester, () => field.evaluate().isNotEmpty);
+      await tester.runAsync(
+        () => harness.database.customStatement(
+          "CREATE TRIGGER disk_full BEFORE INSERT ON refused_text_drafts BEGIN SELECT RAISE(ABORT, 'full'); END",
+        ),
+      );
+      await _typeAndSend(tester, 'waiting for storage');
+      await tester.enterText(field, 'newer text');
+      await _pumpUntil(
+        tester,
+        () => find
+            .textContaining('could not be saved on this device')
+            .evaluate()
+            .isNotEmpty,
+      );
+      expect(harness.chatSendStarted, isEmpty);
+      expect(clipboard, isEmpty);
+      await tester.tap(find.byTooltip('Copy text'));
+      await tester.pump();
+      expect(clipboard, ['waiting for storage']);
+      expect(_composer(tester).text, 'newer text');
+      expect(
+        await tester.runAsync(
+          harness.database.select(harness.database.refusedTextDrafts).get,
+        ),
+        isEmpty,
+      );
+      await tester.runAsync(
+        () => harness.database.customStatement('DROP TRIGGER disk_full'),
+      );
+      await tester.tap(find.byTooltip('Retry sending'));
+      await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
+      expect(harness.sentMessages, ['waiting for storage']);
+      expect(_composer(tester).text, 'newer text');
+      expect(tester.takeException(), isNull);
+      await _unmountComposer(tester);
+    },
+  );
+
+  for (final changeReply in [true, false]) {
+    testWidgets(
+      changeReply
+          ? 'a new reply selection cannot take over refused plain text'
+          : 'a failed transfer back to the composer leaves only one sendable copy',
+      (tester) async {
+        final harness = (await tester.runAsync(_ComposerHarness.create))!;
+        _addHarnessTearDown(tester, harness);
+        await tester.runAsync(harness.seedReplyMessage);
+        await tester.pumpWidget(harness.app());
+        final parent = find.byKey(const Key('chat-message-target-109'));
+        await _pumpUntil(tester, () => parent.evaluate().isNotEmpty);
+        final hold = Completer<void>();
+        harness.admissionHold.add(hold);
+        harness.admissionRefused = true;
+        addTearDown(() {
+          if (!hold.isCompleted) hold.complete();
+        });
+        await _typeAndSend(tester, 'original');
+        if (changeReply) {
+          await tester.longPress(parent);
+          await _pumpTransition(tester);
+          await tester.tap(find.byKey(const Key('message-action-reply')));
+          await _pumpTransition(tester);
+        } else {
+          await tester.runAsync(
+            () => harness.database.customStatement(
+              "CREATE TRIGGER reject_restore BEFORE INSERT ON chat_drafts BEGIN SELECT RAISE(ABORT, 'write refused'); END",
+            ),
+          );
+        }
+        hold.complete();
+        final retry = find.byWidgetPredicate(
+          (w) =>
+              w.key is ValueKey<String> &&
+              (w.key! as ValueKey<String>).value.startsWith(
+                'chat-retry-refused-draft-',
+              ),
+        );
+        await _pumpUntil(
+          tester,
+          () => retry.hitTestable().evaluate().isNotEmpty,
+        );
+        expect(_composer(tester).text, isEmpty);
+        if (changeReply) {
+          expect(find.byKey(const Key('chat-reply-banner')), findsOneWidget);
+        }
+        harness.admissionRefused = false;
+        await tester.tap(retry);
+        await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
+        expect(harness.sentMessages, ['original']);
+        expect(harness.chatSendFields.single.containsKey('replyTo'), isFalse);
+        expect(
+          await tester.runAsync(
+            harness.database.select(harness.database.refusedTextDrafts).get,
+          ),
+          isEmpty,
+        );
+        expect(tester.takeException(), isNull);
+        await _unmountComposer(tester);
+      },
+    );
+  }
 
   testWidgets(
     'the composer keeps focus and the keyboard through a send and its bubble',
@@ -729,12 +884,12 @@ void _registerNonBlockingComposerTests() {
         if (!hold.isCompleted) hold.complete();
         setAway(false);
       });
-      final drafts = ChatRepository(harness.database);
       Future<String?> storedDraft() => tester.runAsync<String?>(
-        () => drafts.readDraft(
-          accountId: harness.account.id,
-          roomToken: harness.conversation.token,
-        ),
+        () async =>
+            (await harness.database
+                    .select(harness.database.refusedTextDrafts)
+                    .getSingleOrNull())
+                ?.message,
       );
       Future<List<StoredTextSendOperation>> outbox() async =>
           (await tester.runAsync(
@@ -746,7 +901,7 @@ void _registerNonBlockingComposerTests() {
       await _typeAndSend(tester, 'on the way out');
       await _pumpUntil(tester, () => _composer(tester).text.isEmpty);
 
-      // HOME, while the line is still only in memory.
+      // HOME, before the outbox accepts the message.
       setAway(true);
       String? draft;
       for (var attempt = 0; attempt < 200 && draft == null; attempt++) {

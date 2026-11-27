@@ -1,5 +1,19 @@
 part of 'app_providers.dart';
 
+final recoverableTextDraftStoreProvider =
+    ChangeNotifierProvider<RecoverableTextDraftStore>(
+      (ref) => RecoverableTextDraftStore(ref.watch(appDatabaseProvider)),
+    );
+
+final accountRepositoryProvider = Provider<AccountRepository>((ref) {
+  return AccountRepository(
+    ref.watch(appDatabaseProvider),
+    onAccountPurged: ref
+        .watch(recoverableTextDraftStoreProvider.notifier)
+        .forgetAccount,
+  );
+});
+
 final attachmentRoomJobsProvider = StreamProvider.autoDispose
     .family<List<StoredAttachmentJob>, ChatRoomProviderKey>((ref, key) {
       return ref
