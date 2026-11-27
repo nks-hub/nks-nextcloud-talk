@@ -8,6 +8,12 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.1.5 (126) — 27 November 2026
+
+- Recently used emoji appear in one row above the catalogue. Use the star beside search to filter your favourites. Your search stays in place when you switch to GIFs and back.
+- On desktop, Escape closes the emoji picker and returns the cursor to your draft. If you are replying, the quote stays in place.
+- The desktop conversation list keeps search, Note to self and filters on one row, leaving more space for conversations in narrow windows.
+
 ## 1.1.4 (125) — 27 November 2026
 
 - The smiley button beside the message field opens both emoji and GIFs. Sending a GIF keeps your draft.
