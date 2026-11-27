@@ -14,6 +14,7 @@ import '../../app_providers.dart';
 import '../../core/desktop_metrics.dart';
 import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
+import '../owntalk_extensions/checklist_widget.dart';
 import '../../data/chat_media_repository.dart';
 import '../../data/chat_media_cache.dart';
 import 'references/reference_resolver.dart';
@@ -175,6 +176,9 @@ final class ChatMessageContent extends StatelessWidget {
               _mimeType(attachments.single.value),
             ) !=
             null;
+    final checklist = parsed.deleted || parsed.systemMessage.isNotEmpty
+        ? null
+        : checklistLines(parsed.message);
     final giphySelection = rendered.giphy;
     final references = rendered.references;
     return _PollViewerScope(
@@ -209,6 +213,18 @@ final class ChatMessageContent extends StatelessWidget {
                           parsed.referenceId,
                         )?.step ??
                         0,
+                  )
+                else if (checklist != null)
+                  SharedChecklistPreview(
+                    accountId: account.id,
+                    token: parsed.roomToken.value,
+                    id: parsed.messageId,
+                    lines: checklist,
+                    source: parsed.message,
+                    fallback: RichChatDocumentContent(
+                      document: document,
+                      foregroundColor: foregroundColor,
+                    ),
                   )
                 else
                   RichChatDocumentContent(

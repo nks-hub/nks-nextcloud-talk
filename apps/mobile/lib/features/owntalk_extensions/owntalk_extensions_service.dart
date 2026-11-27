@@ -10,6 +10,15 @@ import '../../data/account_repository.dart';
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
 
+enum RoomMessageTool {
+  checklist('chat.checklists', 'checklist'),
+  followup('chat.unansweredReminders', 'followup');
+
+  const RoomMessageTool(this.feature, this.path);
+  final String feature;
+  final String path;
+}
+
 enum OwnTalkExtensionsError {
   accountMissing,
   credentialMissing,
@@ -239,6 +248,48 @@ final class OwnTalkExtensionsService {
         appPassword: session.appPassword,
       ),
     );
+  }
+
+  Future<Map<String, dynamic>> roomMessageTool({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+    required RoomMessageTool tool,
+    String method = 'GET',
+    Map<String, Object?>? values,
+  }) async {
+    final session = await _availableSession(accountId);
+    if (session.snapshot.ownTalkExtensions?.supportsFeature(tool.feature) !=
+        true) {
+      throw const OwnTalkExtensionsException(
+        OwnTalkExtensionsError.unavailable,
+      );
+    }
+    final room = ConversationToken.parse(roomToken, path: 'roomToken');
+    if (messageId < 1 || !const {'GET', 'PUT', 'DELETE'}.contains(method)) {
+      throw const OwnTalkExtensionsException(
+        OwnTalkExtensionsError.invalidResponse,
+      );
+    }
+    final server = session.server;
+    final endpoint = server.uri.replace(
+      path:
+          '${server.basePath}/ocs/v2.php/apps/owntalk_extensions/api/v1/room/${room.value}/${tool.path}/$messageId',
+      queryParameters: const {'format': 'json'},
+    );
+    final response = await _call(
+      () => _api.callOwnTalkRoomTool(
+        uri: endpoint,
+        method: method,
+        loginName: session.loginName,
+        appPassword: session.appPassword,
+        values: values,
+      ),
+    );
+    if (tool == RoomMessageTool.followup && (!response.containsKey('dueAt') || (response['dueAt'] != null && response['dueAt'] is! int))) {
+      throw const OwnTalkExtensionsException(OwnTalkExtensionsError.invalidResponse);
+    }
+    return response;
   }
 
   Future<_Session> _availableSession(String accountId) async {

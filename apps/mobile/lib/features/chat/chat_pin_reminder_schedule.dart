@@ -397,6 +397,7 @@ Future<ReminderSheetResult?> showReminderSheet({
   required BuildContext context,
   required DateTime now,
   required DateTime? existing,
+  String? title,
 }) {
   final strings = AppLocalizations.of(context);
   return showModalBottomSheet<ReminderSheetResult>(
@@ -407,7 +408,7 @@ Future<ReminderSheetResult?> showReminderSheet({
         children: [
           ListTile(
             key: const Key('reminder-sheet-title'),
-            title: Text(strings.reminderTitle),
+            title: Text(title ?? strings.reminderTitle),
             subtitle: existing == null
                 ? null
                 : Text(

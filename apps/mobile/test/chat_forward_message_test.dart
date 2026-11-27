@@ -17,6 +17,7 @@ import 'package:nextcloudtalk/features/conversations/conversation_presence.dart'
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'owntalk_extensions_test_support.dart';
 import 'test_support.dart';
 
 /// Talk features that allow sending text. Dropping `chat-reference-id` is the
@@ -257,9 +258,14 @@ void main() {
       () => find.text('Receipts').hitTestable().evaluate().isNotEmpty,
     );
     await tester.tap(find.text('Receipts'));
-    await pumpUntilCondition(tester, () => tester.widgetList<CheckboxListTile>(find.byType(CheckboxListTile)).any((tile)=>tile.value==true));
+    await pumpUntilCondition(
+      tester,
+      () => tester
+          .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
+          .any((tile) => tile.value == true),
+    );
     final saved = (await tester.runAsync(
-      () => MessageCollectionStore(directory:directory).read(owner),
+      () => MessageCollectionStore(directory: directory).read(owner),
     ))!.single.messages.single;
     expect(saved.roomToken, source.token);
     expect(saved.messageId, 10);
@@ -268,6 +274,79 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 50));
   });
+
+  testWidgets(
+    'a reply during reminder setup clears a regular direct message reminder',
+    (tester) async {
+      final raw = _sendResponse(
+        referenceId: 'fixture-reference',
+        message: 'Cached hello',
+      );
+      final message = (raw['ocs']! as Map)['data']! as Map<String, dynamic>;
+      message.addAll({
+        'token': source.token,
+        'id': 10,
+        'actorId': account.loginName,
+        'threadId': 10,
+        'isThread': false,
+      });
+      await (database.update(
+        database.cachedChatMessages,
+      )..where((row) => row.messageId.equals(10))).write(
+        CachedChatMessagesCompanion(
+          actorId: Value(account.loginName),
+          rawJson: Value(jsonEncode(message)),
+        ),
+      );
+      source = source.copyWith(
+        roomType: 1,
+        rawJson: jsonEncode({...jsonDecode(source.rawJson) as Map, 'type': 1}),
+      );
+      await database.update(database.cachedConversations).replace(source);
+      final server = FakeOwnTalkServer(
+        capability: ownTalkCapabilityJson(
+          features: ['chat.unansweredReminders'],
+        ),
+      )..talkFeatures = _sendableFeatures;
+      Map<String, dynamic>? saved;
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/followup/10')) {
+            if (request.method == 'PUT') {
+              saved = jsonDecode(request.body) as Map<String, dynamic>;
+            }
+            return ocsResponse(200, {'dueAt': null});
+          }
+          return server.handle(request);
+        }),
+      );
+      addTearDown(api.close);
+      await tester.pumpWidget(app(api: api));
+      await flush(tester);
+      await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+      await settle(tester);
+      final action = find.byKey(const Key('message-unanswered-reminder'));
+      await tester.ensureVisible(action);
+      await tester.tap(action);
+      final tomorrow = find.byKey(const Key('reminder-preset-tomorrow'));
+      await pumpUntilCondition(
+        tester,
+        () => tomorrow.hitTestable().evaluate().isNotEmpty,
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(tomorrow);
+      final notice = find.byKey(const Key('conditional-reminder-answered'));
+      await pumpUntilCondition(tester, () => notice.evaluate().isNotEmpty);
+      expect(saved?['threadId'], 0);
+      expect(saved?['dueAt'], isA<int>());
+      expect(
+        find.byKey(const Key('conditional-reminder-updated')),
+        findsNothing,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+    },
+  );
 
   testWidgets('forwards the message text into the picked conversation', (
     tester,

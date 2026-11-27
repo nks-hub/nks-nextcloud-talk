@@ -49,6 +49,40 @@ const _ownTalkImageTimeout = Duration(minutes: 2);
 /// session: a desktop re-enters the room while its details are open, and a
 /// new session would otherwise discard a write the server already applied.
 mixin _NextcloudApiOwnTalkExtensions on _HttpNextcloudApiBase {
+  Future<Map<String, dynamic>> callOwnTalkRoomTool({
+    required Uri uri,
+    required String method,
+    required String loginName,
+    required String appPassword,
+    Map<String, Object?>? values,
+  }) async {
+    final request = _authenticatedOcsRequest(
+      method,
+      uri,
+      loginName: loginName,
+      appPassword: appPassword,
+    );
+    if (values != null) {
+      request.headers['Content-Type'] = 'application/json';
+      request.bodyBytes = utf8.encode(jsonEncode(values));
+    }
+    final payload = await _sendJson(
+      request,
+      allowedStatusCodes: const {200},
+      maximumBytes: 16384,
+    );
+    final envelope = payload.json;
+    if (envelope case {
+      'ocs': {
+        'meta': {'status': 'ok'},
+        'data': final Map<String, dynamic> data,
+      },
+    }) {
+      return data;
+    }
+    throw const NextcloudApiException(NextcloudApiError.invalidJson);
+  }
+
   Future<OwnTalkSettingsFetchResult> fetchOwnTalkRoomSettings({
     required FetchOwnTalkRoomSettingsRequest settingsRequest,
     required String loginName,

@@ -45,6 +45,8 @@ import 'chat_wallpaper.dart';
 import 'chat_context_menu.dart';
 import 'chat_selection.dart';
 import '../owntalk_extensions/chat_appearance.dart';
+import '../owntalk_extensions/checklist_widget.dart';
+import '../owntalk_extensions/owntalk_extensions_service.dart';
 import 'composer/message_collections.dart';
 import '../owntalk_extensions/owntalk_room_extras.dart';
 import 'chat_pin_reminder_schedule.dart';
@@ -91,6 +93,7 @@ import 'composer/reply_templates.dart';
 export 'chat_thread_context.dart';
 
 part 'chat_room_pane_actions.dart';
+part 'chat_room_pane_reminders.dart';
 part 'chat_room_pane_attachment_menu.dart';
 part 'chat_room_pane_composer.dart';
 part 'chat_room_pane_drafts.dart';

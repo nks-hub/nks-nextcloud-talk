@@ -123,6 +123,15 @@ extension _ChatRoomPaneAttachmentControls on _ChatRoomPaneState {
             ? null
             : () => unawaited(_pickLocationOnMap()),
       ),
+    if (_offersRoomTool(RoomMessageTool.checklist, watch: true))
+      AttachmentMenuAction(
+        key: const Key('compose-checklist'),
+        icon: const Icon(Icons.checklist),
+        label: strings.sharedChecklist,
+        onSelected: _sending || _composer.text.isNotEmpty
+            ? null
+            : () => unawaited(_newSharedChecklist()),
+      ),
     if (pollAvailable?.isLoading ?? false)
       AttachmentMenuAction(
         key: const Key('create-poll-checking'),
@@ -151,6 +160,40 @@ extension _ChatRoomPaneAttachmentControls on _ChatRoomPaneState {
     );
     if (text == null || !mounted || room != _key || _isReadOnlyNow()) return;
     if (!insertComposerText(_composer, text)) _showComposerLimitError();
+    _composerFocusNode.requestFocus();
+  }
+
+  bool _offersRoomTool(RoomMessageTool tool, {bool watch = false}) {
+    final key = (
+      accountId: widget.account.id,
+      roomToken: widget.conversation.token,
+    );
+    if (!ownTalkConversationCanShare(
+      roomType: widget.conversation.roomType,
+      rawJson: widget.conversation.rawJson,
+    )) {
+      return false;
+    }
+    final supported = ownTalkRoomExtrasProvider(
+      key,
+    ).select((s) => s.capability?.supportsFeature(tool.feature) == true);
+    return watch ? ref.watch(supported) : ref.read(supported);
+  }
+
+  Future<void> _newSharedChecklist() async {
+    final key = _key;
+    final text = await composeSharedChecklist(context);
+    if (!mounted ||
+        key != _key ||
+        text == null ||
+        _composer.text.isNotEmpty ||
+        _isReadOnlyNow()) {
+      return;
+    }
+    if (!insertComposerText(_composer, text)) {
+      _showComposerLimitError();
+      return;
+    }
     _composerFocusNode.requestFocus();
   }
 
