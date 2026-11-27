@@ -8,6 +8,14 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.2.2 (129) — 28 November 2026
+
+- Android now accepts the optional link that Nextcloud Notifications 34.0.6 includes in Talk reminders. Tapping a reminder opens its conversation in the receiving account.
+- Attachment checks recover automatically after a temporary failure. If the server accepts a message but its reply is lost, the next history update matches the saved copy to the outgoing message.
+- The emoji and GIF picker remembers each tab. Star a GIF, find drafts and undelivered messages from the inbox, or open a photo’s original message from the gallery.
+- The chat composer, saved replies, collections and search filters remain usable above the keyboard in landscape.
+- OwnTalk Extensions 0.7.0 can sync favourite GIFs, hand off a draft with its quoted message, and attach replies to a spot on a photo.
+
 ## 1.2.1 (128) — 28 November 2026
 
 - Search results, filters and the person picker scroll when the keyboard leaves little room. You can still select a person and date range with the phone on its side.
