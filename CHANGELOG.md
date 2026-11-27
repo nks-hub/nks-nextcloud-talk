@@ -8,6 +8,12 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.1.4 (125) — 27 November 2026
+
+- The smiley button beside the message field opens both emoji and GIFs. Sending a GIF keeps your draft.
+- On phones, search and favourite conversation shortcuts share one row. Note to self opens from that row.
+- Chats and threads leave space below the newest message when you open them, including after an image preview loads.
+
 ## 1.1.3 (124) — 27 November 2026
 
 - The conversation list has new navigation and room avatars. The chat shows the sender and time above each group of incoming messages. On desktop, short reply threads expand inside the conversation.
