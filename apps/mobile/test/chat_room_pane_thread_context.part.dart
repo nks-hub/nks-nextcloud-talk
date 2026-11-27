@@ -319,6 +319,11 @@ void _registerChatRoomPaneThreadContextTests() {
         ((fixture['ocs'] as Map)['data'] as List).first as Map,
       );
       roomJson['token'] = conversation.token;
+      final lastMessage = Map<String, Object?>.from(
+        roomJson['lastMessage']! as Map,
+      );
+      lastMessage['id'] = 78;
+      roomJson['lastMessage'] = lastMessage;
       await (database.update(
         database.cachedConversations,
       )..where((row) => row.token.equals(conversation.token))).write(
@@ -402,20 +407,18 @@ void _registerChatRoomPaneThreadContextTests() {
           overrides: [chatServiceProvider.overrideWithValue(service)],
         ),
       );
-      await tester.pump();
-      await tester.ensureVisible(find.byKey(const Key('chat-open-thread-78')));
-      await tester.tap(find.byKey(const Key('chat-open-thread-78')));
-      final screen = find.byKey(const Key('chat-thread-screen-77'));
-      for (var i = 0; i < 60 && screen.evaluate().isEmpty; i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)),
-        );
-        await tester.pump();
+      try {
+        final chip = find.byKey(const Key('chat-open-thread-78'));
+        await _pumpUntil(tester, () => chip.evaluate().isNotEmpty);
+        await tester.ensureVisible(chip);
+        await tester.tap(chip);
+        final screen = find.byKey(const Key('chat-thread-screen-77'));
+        await _pumpUntil(tester, () => screen.evaluate().isNotEmpty);
+        expect(screen, findsOneWidget);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(milliseconds: 1));
       }
-
-      expect(screen, findsOneWidget);
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(milliseconds: 1));
     });
 
     testWidgets('title alone does not classify an ordinary thread as named', (

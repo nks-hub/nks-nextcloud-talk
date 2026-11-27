@@ -25,9 +25,28 @@ void main() {
   late MemoryCredentialVault vault;
   late StoredAccount account;
   late CachedConversation conversation;
+  Future<void>? databaseClosing;
+
+  Future<void> closeDatabase() => databaseClosing ??= database.close();
+
+  Future<void> unmount(WidgetTester tester) async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    var closed = false;
+    final closing = closeDatabase().whenComplete(() => closed = true);
+    closing.ignore();
+    // Drift can still be draining callbacks scheduled on the widget clock.
+    await pumpUntilCondition(
+      tester,
+      () => closed,
+      reason: 'the chat database did not close after unmounting',
+    );
+    await closing;
+  }
 
   setUp(() async {
     database = openTestDatabase();
+    databaseClosing = null;
     vault = MemoryCredentialVault();
     account = await AccountRepository(database).upsertAccount(
       accountId: 'account-a',
@@ -40,7 +59,9 @@ void main() {
     conversation = await _cacheConversation(database, account.id, 'rooma123');
   });
 
-  tearDown(() => database.close());
+  tearDown(() async {
+    if (databaseClosing == null) await closeDatabase();
+  });
 
   testWidgets('re-reads an unresolved file share and shows the file', (
     tester,
@@ -56,8 +77,10 @@ void main() {
     );
     addTearDown(api.close);
 
-    await tester.pumpWidget(_app(database, vault, api, account, conversation));
     try {
+      await tester.pumpWidget(
+        _app(database, vault, api, account, conversation),
+      );
       await pumpUntilCondition(
         tester,
         () => _opensFile(659),
@@ -69,7 +92,7 @@ void main() {
       expect(stored.messageParameters['file']?.name, 'report.pdf');
       expect(reads, [659], reason: 'one re-read per shown message');
     } finally {
-      await _unmount(tester);
+      await unmount(tester);
     }
   });
 
@@ -77,7 +100,12 @@ void main() {
     await _insertMessage(database, _resolved(659));
     await _insertScope(database, from: 659, to: 659);
     final reads = <int>[];
+    var polled = false;
     final api = _server(
+      future: (_) async {
+        polled = true;
+        return null;
+      },
       reread: (id) async {
         reads.add(id);
         return _resolved(id);
@@ -85,13 +113,15 @@ void main() {
     );
     addTearDown(api.close);
 
-    await tester.pumpWidget(_app(database, vault, api, account, conversation));
     try {
-      await pumpUntilCondition(tester, () => _opensFile(659));
+      await tester.pumpWidget(
+        _app(database, vault, api, account, conversation),
+      );
+      await pumpUntilCondition(tester, () => polled && _opensFile(659));
       await tester.pump(const Duration(seconds: 1));
       expect(reads, isEmpty);
     } finally {
-      await _unmount(tester);
+      await unmount(tester);
     }
   });
 
@@ -115,8 +145,10 @@ void main() {
     );
     addTearDown(api.close);
 
-    await tester.pumpWidget(_app(database, vault, api, account, conversation));
     try {
+      await tester.pumpWidget(
+        _app(database, vault, api, account, conversation),
+      );
       await pumpUntilCondition(tester, () => reads.isNotEmpty);
       await tester.pump(const Duration(seconds: 1));
       expect(_opensFile(659), isFalse);
@@ -128,7 +160,7 @@ void main() {
       );
       expect(reads, [659, 659]);
     } finally {
-      await _unmount(tester);
+      await unmount(tester);
     }
   });
 
@@ -311,17 +343,6 @@ HttpNextcloudApi _server({
       );
     }),
   );
-}
-
-/// Unmounts the pane even when an expectation failed, so its draft flush
-/// and query streams finish before the next test closes the database.
-Future<void> _unmount(WidgetTester tester) async {
-  await tester.pumpWidget(const SizedBox.shrink());
-  // Long enough for the sync loop's last round and the providers it held to
-  // let go of the database.
-  for (var i = 0; i < 5; i++) {
-    await tester.pump(const Duration(seconds: 1));
-  }
 }
 
 Widget _app(

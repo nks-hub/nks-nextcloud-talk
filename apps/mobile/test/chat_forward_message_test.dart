@@ -61,6 +61,27 @@ void main() {
   late List<String> sharedFiles;
   late List<String> postedMessages;
 
+  Future<void> cacheSourceScope(int newest) async {
+    await database
+        .into(database.chatScopes)
+        .insertOnConflictUpdate(
+          ChatScopesCompanion.insert(
+            accountId: account.id,
+            roomToken: source.token,
+            scopeKey: 'root',
+            historyCursor: '10',
+            futureCursor: '$newest',
+            lastCommonRead: '0',
+            lastReadMessage: 0,
+            unreadMessages: 0,
+            hasHistory: false,
+            futureConverged: true,
+            blocksJson: '[["10","$newest"]]',
+            lastSyncedAtMillis: const Value(1724300000000),
+          ),
+        );
+  }
+
   setUp(() async {
     postedRooms = <String>[];
     sharedFiles = <String>[];
@@ -120,6 +141,7 @@ void main() {
             rawJson: '{}',
           ),
         );
+    await cacheSourceScope(10);
   });
 
   tearDown(() => database.close());
@@ -357,6 +379,7 @@ void main() {
             ),
           );
     }
+    await cacheSourceScope(103);
     await tester.pumpWidget(
       app(
         api: buildApi(),
@@ -370,8 +393,6 @@ void main() {
         ],
       ),
     );
-    // Settled, not flushed: once the room's sync gets to run it opens a scope
-    // that covers none of the rows cached here, and they leave the timeline.
     await settle(tester);
 
     final picture = find.byKey(const Key('chat-image-error-102-0'));
