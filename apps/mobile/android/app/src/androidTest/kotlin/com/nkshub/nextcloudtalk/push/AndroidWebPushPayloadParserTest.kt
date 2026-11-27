@@ -29,6 +29,40 @@ class AndroidWebPushPayloadParserTest {
     }
 
     @Test
+    fun reminderWithBrowserLinkKeepsTheSameNativeTarget() {
+        val fields = """
+            "nid":11,"app":"spreed","subject":"Reminder","type":"reminder","id":"room1"
+        """.trimIndent()
+        val expected = AndroidWebPushPayload.Message(11L, "spreed", "Reminder", "reminder", "room1")
+        assertEquals(expected, parse("{$fields}"))
+        assertEquals(
+            expected,
+            parse("""{$fields,"link":"https://cloud.example.invalid/call/room1#message_42"}"""),
+        )
+        assertEquals(
+            expected,
+            parse("""{"link":"https://other.example.invalid/call/another-room",$fields}"""),
+        )
+    }
+
+    @Test
+    fun browserLinkDoesNotMakeMalformedMessagesOrCommandsValid() {
+        for (source in listOf(
+            """{"link":"https://example.invalid"}""",
+            """{"nid":1,"link":"a","link":"b"}""",
+            """{"nid":1,"link":true}""",
+            """{"nid":1,"link":""}""",
+            """{"nid":1,"link":"${"a".repeat(3001)}"}""",
+            """{"activationToken":"9f9bcfc4-93db-4f23-a8f4-5f2403f722cc","link":"a"}""",
+            """{"delete":true,"nid":1,"link":"a"}""",
+            """{"delete-multiple":true,"nids":[1],"link":"a"}""",
+            """{"delete-all":true,"link":"a"}""",
+        )) {
+            assertEquals(source, AndroidWebPushPayload.Invalid, parse(source))
+        }
+    }
+
+    @Test
     fun deleteCommandsAreBoundedAndTyped() {
         assertEquals(AndroidWebPushPayload.DeleteAll, parse("""{"delete-all":true}"""))
         assertEquals(

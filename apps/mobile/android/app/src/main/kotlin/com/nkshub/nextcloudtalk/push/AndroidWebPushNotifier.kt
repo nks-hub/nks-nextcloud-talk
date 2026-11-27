@@ -94,6 +94,13 @@ internal object AndroidWebPushPayloadParser {
                     "activationToken", "app", "subject", "type", "id" ->
                         reader.readBoundedString(stringLimit(name))
                             ?: return AndroidWebPushPayload.Invalid
+                    "link" -> {
+                        // Nextcloud may include a browser URL. Native taps use account and room IDs.
+                        if (reader.readBoundedString(MAX_LINK_LENGTH) == null) {
+                            return AndroidWebPushPayload.Invalid
+                        }
+                        Unit
+                    }
                     "nid" -> reader.readPositiveInt64()
                         ?: return AndroidWebPushPayload.Invalid
                     "nids" -> reader.readPositiveInt64List()
@@ -142,7 +149,7 @@ internal object AndroidWebPushPayloadParser {
             } else {
                 AndroidWebPushPayload.Invalid
             }
-            null -> if (keys.all(NORMAL_KEYS::contains)) {
+            null -> if (keys.all(NORMAL_KEYS::contains) && keys.any { it != "link" }) {
                 AndroidWebPushPayload.Message(
                     notificationId = this["nid"] as Long?,
                     app = this["app"] as String?,
@@ -218,10 +225,11 @@ internal object AndroidWebPushPayloadParser {
     private const val MAX_SUBJECT_LENGTH = 2048
     private const val MAX_TYPE_LENGTH = 128
     private const val MAX_OBJECT_ID_LENGTH = 512
+    private const val MAX_LINK_LENGTH = 3000
     private val POSITIVE_INTEGER_PATTERN = Regex("^[1-9][0-9]*$")
     private val ACTION_KEYS = setOf("delete", "delete-multiple", "delete-all")
     private val ACTIVATION_KEYS = setOf("activationToken")
-    private val NORMAL_KEYS = setOf("app", "subject", "type", "id", "nid")
+    private val NORMAL_KEYS = setOf("app", "subject", "type", "id", "nid", "link")
     private val DELETE_ONE_KEYS = setOf("delete", "nid")
     private val DELETE_MULTIPLE_KEYS = setOf("delete-multiple", "nids")
     private val DELETE_ALL_KEYS = setOf("delete-all")
