@@ -212,38 +212,22 @@ final class _InboxDesktopHeader extends StatelessWidget {
       key: const Key('conversation-list-header'),
       constraints: BoxConstraints(minHeight: context.paneHeaderHeight),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+        padding: const EdgeInsetsDirectional.only(start: 12, end: 8),
+        child: Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    strings.appTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  key: const Key('open-new-conversation'),
-                  icon: const Icon(Icons.edit_square),
-                  tooltip: strings.newConversationTitle,
-                  onPressed: onCompose,
-                ),
-                IconButton(
-                  key: const Key('refresh-conversations'),
-                  icon: const Icon(Icons.refresh_rounded),
-                  tooltip: strings.refresh,
-                  onPressed: onRefresh,
-                ),
-              ],
+            const Expanded(child: _InboxHeading()),
+            IconButton(
+              key: const Key('open-new-conversation'),
+              icon: const Icon(Icons.edit_square),
+              tooltip: strings.newConversationTitle,
+              onPressed: onCompose,
             ),
-            _InboxHeading(_InboxScope.of(context).value.label(strings)),
+            IconButton(
+              key: const Key('refresh-conversations'),
+              icon: const Icon(Icons.refresh_rounded),
+              tooltip: strings.refresh,
+              onPressed: onRefresh,
+            ),
           ],
         ),
       ),
@@ -252,21 +236,19 @@ final class _InboxDesktopHeader extends StatelessWidget {
 }
 
 final class _InboxHeading extends StatelessWidget {
-  const _InboxHeading(this.title);
-  final String title;
+  const _InboxHeading();
 
   @override
   Widget build(BuildContext context) => Semantics(
     header: true,
     child: Text(
-      title,
+      _InboxScope.of(context).value.label(AppLocalizations.of(context)),
       key: const Key('inbox-heading'),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.8,
-      ),
+      style: Theme.of(
+        context,
+      ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
     ),
   );
 }
@@ -279,7 +261,6 @@ final class _InboxBody extends StatelessWidget {
     required this.onRefresh,
     required this.onSelect,
     this.selectedToken,
-    this.compact = false,
   });
   final StoredAccount account;
   final List<CachedConversation> conversations;
@@ -287,16 +268,11 @@ final class _InboxBody extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final ValueChanged<CachedConversation> onSelect;
   final String? selectedToken;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final destination = _InboxScope.of(context).value;
     final strings = AppLocalizations.of(context);
-    final mobile = compact && !context.usesDesktopDensity;
-    final heading = compact && !mobile
-        ? _InboxHeading(destination.label(strings))
-        : null;
     if (destination == _InboxDestination.messages) {
       return ConversationListView(
         account: account,
@@ -305,8 +281,6 @@ final class _InboxBody extends StatelessWidget {
         onRefresh: onRefresh,
         onSelect: onSelect,
         selectedToken: selectedToken,
-        heading: heading,
-        inlineFavorites: mobile,
         onMessageSearch: _hasUnifiedSearch(account)
             ? () => openMessageSearch(context, account.id)
             : null,
@@ -330,6 +304,14 @@ final class _InboxBody extends StatelessWidget {
                         ConversationCallState.fromConversation(room) != null),
               )
               .toList();
+    final intro = unsupported
+        ? strings.threadManagementUnsupported
+        : rooms.isEmpty
+        ? (threads ? strings.noConversations : strings.inboxNoActiveCalls)
+        : threads
+        ? strings.inboxThreadRooms
+        : null;
+    final firstRoom = intro == null ? 0 : 1;
     return Material(
       type: MaterialType.transparency,
       child: RefreshIndicator(
@@ -338,40 +320,23 @@ final class _InboxBody extends StatelessWidget {
           key: ValueKey(destination),
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-          itemCount: rooms.length + 1,
+          itemCount: rooms.length + firstRoom,
           itemBuilder: (context, index) {
-            if (index == 0) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (heading != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: heading,
-                    ),
-                  if (threads || rooms.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 14,
-                      ),
-                      child: Text(
-                        unsupported
-                            ? strings.threadManagementUnsupported
-                            : rooms.isEmpty
-                            ? (threads
-                                  ? strings.noConversations
-                                  : strings.inboxNoActiveCalls)
-                            : strings.inboxThreadRooms,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                ],
+            if (index == 0 && intro != null) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 14,
+                ),
+                child: Text(
+                  intro,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
               );
             }
-            final room = rooms[index - 1];
+            final room = rooms[index - firstRoom];
             return ListTile(
               key: Key('inbox-${destination.name}-${room.token}'),
               leading: ConversationAvatar(

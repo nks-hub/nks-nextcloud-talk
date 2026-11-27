@@ -209,9 +209,7 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('expanded conversation header grows at 200 percent text scale', (
-    tester,
-  ) async {
+  testWidgets('inbox heading fits at 200 percent text scale', (tester) async {
     await _setViewport(tester, const Size(1400, 800));
 
     await tester.pumpWidget(
@@ -227,10 +225,17 @@ void main() {
     );
     await tester.pump();
 
-    expect(
-      tester.getSize(find.byKey(const Key('conversation-list-header'))).height,
-      greaterThan(72),
+    final header = tester.getRect(
+      find.byKey(const Key('conversation-list-header')),
     );
+    final heading = tester.getRect(find.byKey(const Key('inbox-heading')));
+    final compose = tester.getRect(
+      find.byKey(const Key('open-new-conversation')),
+    );
+    expect(heading.top, greaterThanOrEqualTo(header.top));
+    expect(heading.bottom, lessThanOrEqualTo(header.bottom));
+    expect(heading.right, lessThanOrEqualTo(compose.left));
+    expect(heading.center.dy, closeTo(compose.center.dy, 1));
     expect(tester.takeException(), isNull);
   });
 

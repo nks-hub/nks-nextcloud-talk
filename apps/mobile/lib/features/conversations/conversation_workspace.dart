@@ -304,30 +304,20 @@ final class _CompactShell extends StatelessWidget {
     AppLocalizations strings,
   ) {
     final listColor = _inboxSurface(context);
-    final mobile = !context.usesDesktopDensity;
     return Scaffold(
       key: const Key('conversation-shell-compact'),
       backgroundColor: listColor,
       appBar: AppBar(
         backgroundColor: listColor,
+        toolbarHeight: context.usesDesktopDensity
+            ? context.paneHeaderHeight
+            : null,
         titleSpacing: 16,
-        title: Row(
+        title: const Row(
           children: [
-            const BrandMark(size: 32),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                mobile
-                    ? _InboxScope.of(context).value.label(strings)
-                    : strings.appTitle,
-                key: mobile ? const Key('inbox-heading') : null,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
-            ),
+            BrandMark(size: 28),
+            SizedBox(width: 8),
+            Expanded(child: _InboxHeading()),
           ],
         ),
         actions: [
@@ -343,6 +333,7 @@ final class _CompactShell extends StatelessWidget {
             icon: const Icon(Icons.edit_square),
           ),
           IconButton(
+            key: const Key('refresh-conversations'),
             onPressed: syncing ? null : onRefresh,
             tooltip: strings.refresh,
             icon: const Icon(Icons.refresh_rounded),
@@ -377,7 +368,6 @@ final class _CompactShell extends StatelessWidget {
               loading: loading,
               onRefresh: onRefresh,
               onSelect: onOpenConversation,
-              compact: true,
             ),
           ),
         ],
