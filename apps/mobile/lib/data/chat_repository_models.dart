@@ -157,6 +157,13 @@ bool _isCancellableTextSend(StoredTextSendOperation operation) {
   }.contains(operation.outboxState);
 }
 
+extension StoredTextSendActions on StoredTextSendOperation {
+  bool get canSkipLocally =>
+      outboxState == TextSendOutboxState.awaitingConfirmation.name &&
+      automaticResendCount >= textSendMaximumAutomaticResends &&
+      messageIdsJson == '[]';
+}
+
 List<int> _decodeMessageIds(String source) {
   final decoded = jsonDecode(source);
   if (decoded is! List<Object?> || decoded.any((value) => value is! int)) {

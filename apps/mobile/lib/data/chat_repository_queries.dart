@@ -324,6 +324,9 @@ extension _ChatRepositoryQueries on ChatRepository {
         (operation) =>
             operation.accountId.equals(accountId) &
             operation.roomToken.equals(roomToken) &
+            operation.outboxState
+                .equals(TextSendOutboxState.skipped.name)
+                .not() &
             (threadId == null
                 ? operation.replyTo.isNull() & operation.threadId.isNull()
                 : operation.replyTo.equals(threadId) |
@@ -359,6 +362,9 @@ extension _ChatRepositoryQueries on ChatRepository {
           ..where(
             operations.accountId.equals(accountId) &
                 operations.roomToken.equals(roomToken) &
+                operations.outboxState
+                    .equals(TextSendOutboxState.skipped.name)
+                    .not() &
                 (threadId == null
                     ? operations.replyTo.isNull() & operations.threadId.isNull()
                     : operations.replyTo.equals(threadId) |

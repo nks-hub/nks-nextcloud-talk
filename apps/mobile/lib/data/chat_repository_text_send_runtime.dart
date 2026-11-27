@@ -1,5 +1,38 @@
 part of 'chat_repository.dart';
 
+extension ChatRepositoryTextSendActions on ChatRepository {
+  Future<bool> skipTextSend({
+    required String accountId,
+    required String roomToken,
+    required String operationId,
+  }) async {
+    final rows = _database.textSendOperations;
+    // The state check and update are one write so a late confirmation wins.
+    final changed =
+        await (_database.update(rows)..where(
+              (row) =>
+                  row.accountId.equals(accountId) &
+                  row.roomToken.equals(roomToken) &
+                  row.operationId.equals(operationId) &
+                  row.outboxState.equals(
+                    TextSendOutboxState.awaitingConfirmation.name,
+                  ) &
+                  row.automaticResendCount.isBiggerOrEqualValue(
+                    textSendMaximumAutomaticResends,
+                  ) &
+                  row.messageIdsJson.equals('[]'),
+            ))
+            .write(
+              TextSendOperationsCompanion(
+                outboxState: Value(TextSendOutboxState.skipped.name),
+                nextAttemptAt: const Value(null),
+                updatedAtMillis: Value(DateTime.now().millisecondsSinceEpoch),
+              ),
+            );
+    return changed != 0;
+  }
+}
+
 extension _ChatRepositoryTextSendRuntime on ChatRepository {
   Future<ClaimedTextSend?> _claimTextSendTransaction(
     String accountId,

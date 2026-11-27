@@ -1010,6 +1010,30 @@ abstract class AppLocalizations {
   /// **'Awaiting confirmation'**
   String get outboxAwaitingConfirmation;
 
+  /// No description provided for @outboxConfirmationMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'No confirmation received'**
+  String get outboxConfirmationMissing;
+
+  /// No description provided for @outboxSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip message'**
+  String get outboxSkip;
+
+  /// No description provided for @outboxSkipDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'This message will disappear from the queue so later messages can send. If the server confirms it later, it will appear in the conversation.'**
+  String get outboxSkipDescription;
+
+  /// No description provided for @outboxSkipFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t skip the message.'**
+  String get outboxSkipFailed;
+
   /// No description provided for @outboxFailed.
   ///
   /// In en, this message translates to:

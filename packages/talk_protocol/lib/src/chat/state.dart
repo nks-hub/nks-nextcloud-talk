@@ -17,6 +17,7 @@ enum TextSendOutboxState {
   awaitingConfirmation,
   failed,
   completed,
+  skipped,
 }
 
 final class ChatBlock {
@@ -286,6 +287,7 @@ final class TextSendOutboxOperation {
           TextSendOutboxState.sending,
           TextSendOutboxState.retryable,
           TextSendOutboxState.awaitingConfirmation,
+          TextSendOutboxState.skipped,
         }.contains(state) &&
         attemptCount < 1) {
       _outboxFailure(r'$.operations.attemptCount');

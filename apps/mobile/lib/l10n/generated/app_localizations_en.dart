@@ -506,6 +506,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get outboxAwaitingConfirmation => 'Awaiting confirmation';
 
   @override
+  String get outboxConfirmationMissing => 'No confirmation received';
+
+  @override
+  String get outboxSkip => 'Skip message';
+
+  @override
+  String get outboxSkipDescription =>
+      'This message will disappear from the queue so later messages can send. If the server confirms it later, it will appear in the conversation.';
+
+  @override
+  String get outboxSkipFailed => 'Couldn\'t skip the message.';
+
+  @override
   String get outboxFailed => 'Message could not be sent';
 
   @override

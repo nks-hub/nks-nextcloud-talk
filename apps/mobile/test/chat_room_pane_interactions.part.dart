@@ -509,8 +509,7 @@ void _registerChatRoomPaneInteractionTests() {
     );
     expect(
       decorated.any(
-        (box) =>
-            (box.decoration as BoxDecoration).color == scheme.primary,
+        (box) => (box.decoration as BoxDecoration).color == scheme.primary,
       ),
       isTrue,
     );
@@ -717,6 +716,54 @@ void _registerChatRoomPaneInteractionTests() {
             .getSingleOrNull();
     expect(row?.outboxState, 'awaitingConfirmation');
     expect(find.text('Maybe sent fixture text'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('an exhausted send can be skipped after the sender confirms', (
+    tester,
+  ) async {
+    await _insertPendingOperation(
+      database,
+      account,
+      conversation,
+      operationId: 'operation-exhausted',
+      outboxState: 'awaitingConfirmation',
+      message: 'Text without a receipt',
+      attemptCount: 1 + textSendMaximumAutomaticResends,
+      automaticResendCount: textSendMaximumAutomaticResends,
+    );
+    await tester.pumpWidget(app(home: roomScreen()));
+    await tester.pump();
+
+    expect(find.text('No confirmation received'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const Key('chat-pending-status-operation-exhausted')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('chat-cancel-operation-exhausted')),
+      findsNothing,
+    );
+    await tester.tap(find.byKey(const Key('chat-skip-operation-exhausted')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('skip-outbox-dialog')), findsOneWidget);
+    expect(find.textContaining('confirms it later'), findsOneWidget);
+    expect(
+      (await database.select(database.textSendOperations).getSingle())
+          .outboxState,
+      'awaitingConfirmation',
+    );
+
+    await tester.tap(find.byKey(const Key('confirm-skip-outbox')));
+    await _pumpUntil(
+      tester,
+      () => find.text('Text without a receipt').evaluate().isEmpty,
+    );
+    final row = await database.select(database.textSendOperations).getSingle();
+    expect(row.outboxState, 'skipped');
+    expect(row.messageIdsJson, '[]');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));

@@ -317,6 +317,7 @@ Future<void> _insertPendingOperation(
   required String outboxState,
   required String message,
   int attemptCount = 0,
+  int automaticResendCount = 0,
   int createdAtMillis = 1,
 }) {
   return database
@@ -332,6 +333,7 @@ Future<void> _insertPendingOperation(
           enqueueSequence: 1,
           outboxState: outboxState,
           attemptCount: attemptCount,
+          automaticResendCount: Value(automaticResendCount),
           messageIdsJson: '[]',
           duplicateRiskAcknowledged: false,
           createdAtMillis: createdAtMillis,

@@ -510,6 +510,19 @@ class AppLocalizationsCs extends AppLocalizations {
   String get outboxAwaitingConfirmation => 'Čeká na potvrzení';
 
   @override
+  String get outboxConfirmationMissing => 'Potvrzení nedorazilo';
+
+  @override
+  String get outboxSkip => 'Přeskočit zprávu';
+
+  @override
+  String get outboxSkipDescription =>
+      'Zpráva zmizí z fronty a ostatní zprávy se budou moct odeslat. Pokud ji server později potvrdí, objeví se v konverzaci.';
+
+  @override
+  String get outboxSkipFailed => 'Zprávu se nepodařilo přeskočit.';
+
+  @override
   String get outboxFailed => 'Zprávu se nepodařilo odeslat';
 
   @override

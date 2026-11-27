@@ -17,6 +17,7 @@ import '../../network/nextcloud_api.dart';
 import 'outgoing_message_status.dart';
 
 part 'chat_service_models.dart';
+part 'chat_service_outbox.dart';
 part 'chat_service_private_reply.dart';
 part 'chat_service_relay.dart';
 part 'chat_service_runtime.dart';
@@ -840,62 +841,29 @@ final class ChatService {
     required String accountId,
     required String roomToken,
     required String operationId,
-  }) async {
-    final roomKey = _roomKey(accountId, roomToken);
-    _ChatRetryWake? retryWake;
-    final cancelled = await _serializeRoom<bool>(
-      _deliveryKey(roomKey),
-      () async {
-        final cancelled = await _chat.cancelTextSend(
-          accountId: accountId,
-          operationId: operationId,
-        );
-        final retry = _retryTimers[roomKey];
-        if (cancelled && retry?.operationId == operationId) {
-          retryWake = retry;
-        }
-        return cancelled;
-      },
-    );
-    if (cancelled) {
-      _sendActivity(1);
-      unawaited(
-        _resumePendingAfterCancel(
-          accountId,
-          roomToken,
-          retryWake: retryWake,
-        ).whenComplete(() => _sendActivity(-1)),
-      );
-    }
-    return cancelled;
-  }
+  }) => _updatePendingTextSend(
+    accountId,
+    roomToken,
+    operationId,
+    () => _chat.cancelTextSend(accountId: accountId, operationId: operationId),
+  );
 
-  Future<void> _resumePendingAfterCancel(
-    String accountId,
-    String roomToken, {
-    required _ChatRetryWake? retryWake,
-  }) async {
-    final roomKey = _roomKey(accountId, roomToken);
-    try {
-      final pending = await _chat.roomsWithPendingTextSends();
-      if (!pending.any(
-        (room) => room.accountId == accountId && room.roomToken == roomToken,
-      )) {
-        _cancelRetryWake(roomKey, retryWake);
-        return;
-      }
-      final prepared = await _prepare(
-        accountId,
-        roomToken,
-        allowPersistedCapabilitiesForSend: true,
-        preferPersistedCapabilities: true,
-      );
-      _cancelRetryWake(roomKey, retryWake);
-      await _deliverPending(prepared, clearsRoomError: false);
-    } on Object {
-      // The durable row remains for its ordinary retry or the next wake.
-    }
-  }
+  /// Releases an exhausted send's queue position while keeping its reference
+  /// for confirmation. Returns false if the operation is no longer eligible.
+  Future<bool> skipText({
+    required String accountId,
+    required String roomToken,
+    required String operationId,
+  }) => _updatePendingTextSend(
+    accountId,
+    roomToken,
+    operationId,
+    () => _chat.skipTextSend(
+      accountId: accountId,
+      roomToken: roomToken,
+      operationId: operationId,
+    ),
+  );
 
   void _cancelRetryWake(String roomKey, _ChatRetryWake? retry) {
     if (retry == null || !identical(_retryTimers[roomKey], retry)) {

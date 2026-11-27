@@ -283,41 +283,177 @@ extension _ChatServiceAutomaticResendCases on _ChatServiceIntegrationSuite {
       expect(row.automaticResendCount, 0);
     });
 
-    test('three automatic resends are the last ones', () async {
-      var posts = 0;
+    test('skipping an exhausted send releases the queue and keeps its late '
+        'confirmation after reopening the database', () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'owntalk-skip-send-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final file = File(
+        '${directory.path}${Platform.pathSeparator}chat.sqlite',
+      );
+      var storage = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(() => storage.close());
+      var repository = ChatRepository(storage);
+      const accountId = 'account-a';
+      const roomToken = 'rooma123';
+      await AccountRepository(storage).upsertAccount(
+        accountId: accountId,
+        serverUrl: 'https://cloud.example.invalid',
+        loginName: 'fixture-user',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      await _cacheConversation(storage, accountId: accountId);
+
+      final posts = <String>[];
+      String? lateReference;
       final api = HttpNextcloudApi(
-        client: _sendServer((request) {
-          posts++;
-          throw http.ClientException('Synthetic reset', request.url);
-        }, features: _backgroundReadFeatures),
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                _chatCapabilities(
+                  talkFeatures: _backgroundReadFeatures.toList(),
+                ),
+              ),
+              200,
+            );
+          }
+          if (request.method == 'POST') {
+            final message = request.bodyFields['message']!;
+            posts.add(message);
+            if (message == 'never answered') {
+              throw http.ClientException('Synthetic reset', request.url);
+            }
+            return _acceptedSend(request, 121);
+          }
+          final reference = lateReference;
+          final known = int.tryParse(
+            request.url.queryParameters['lastKnownMessageId'] ?? '',
+          );
+          if (reference == null ||
+              known == null ||
+              known >= 122 ||
+              request.url.queryParameters['lookIntoFuture'] != '1') {
+            return http.Response('', 304);
+          }
+          return http.Response(
+            jsonEncode(
+              _externalMessageResponse(
+                messageId: 122,
+                timestamp: 1770000122,
+                message: 'never answered',
+                threadId: 122,
+                referenceId: reference,
+              ),
+            ),
+            200,
+            headers: const <String, String>{
+              'X-Chat-Last-Given': '122',
+              'X-Chat-Last-Common-Read': '110',
+            },
+          );
+        }),
       );
       addTearDown(api.close);
-      final service = _resendingService(api);
-      await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+      ChatService openService() {
+        final service = ChatService(
+          accounts: AccountRepository(storage),
+          chat: repository,
+          credentials: credentials,
+          api: api,
+          absenceGraceSeconds: _testGraceSeconds,
+        );
+        addTearDown(service.close);
+        return service;
+      }
 
+      final service = openService();
+      await service.syncRoom(accountId: accountId, roomToken: roomToken);
       await service.sendText(
-        accountId: 'account-a',
-        roomToken: 'rooma123',
+        accountId: accountId,
+        roomToken: roomToken,
         message: 'never answered',
       );
       final rows = await _waitForTextSendsWithin(
-        database,
+        storage,
         const Duration(seconds: 20),
         (rows) =>
             rows.single.automaticResendCount ==
                 textSendMaximumAutomaticResends &&
             rows.single.outboxState == 'awaitingConfirmation',
       );
-      expect(posts, 1 + textSendMaximumAutomaticResends);
-      expect(rows.single.attemptCount, 1 + textSendMaximumAutomaticResends);
-
-      // Left to the sender from here on, as every ambiguous send used to be.
-      expect(await chat.roomsWithPendingTextSends(), isEmpty);
-      await Future<void>.delayed(
-        const Duration(seconds: 2 * _testGraceSeconds + 2),
+      final first = rows.single;
+      expect(first.attemptCount, 4);
+      expect(posts, List.filled(4, 'never answered'));
+      expect(await repository.roomsWithPendingTextSends(), isEmpty);
+      final second = await service.sendText(
+        accountId: accountId,
+        roomToken: roomToken,
+        message: 'next message',
       );
       await service.drainPendingSends();
-      expect(posts, 1 + textSendMaximumAutomaticResends);
+      final blocked = await storage.select(storage.textSendOperations).get();
+      expect(
+        blocked.singleWhere((row) => row.operationId == second).attemptCount,
+        0,
+      );
+      expect(posts, hasLength(4));
+
+      expect(
+        await service.cancelText(
+          accountId: accountId,
+          roomToken: roomToken,
+          operationId: first.operationId,
+        ),
+        isFalse,
+      );
+      expect(
+        await service.skipText(
+          accountId: accountId,
+          roomToken: roomToken,
+          operationId: first.operationId,
+        ),
+        isTrue,
+      );
+      final sent = await _waitForTextSends(
+        storage,
+        (rows) => rows.any(
+          (row) => row.operationId == second && row.outboxState == 'completed',
+        ),
+      );
+      final skipped = sent.singleWhere(
+        (row) => row.operationId == first.operationId,
+      );
+      expect(skipped.outboxState, 'skipped');
+      expect(skipped.referenceId, first.referenceId);
+      expect(skipped.messageIdsJson, '[]');
+      expect(skipped.message, first.message);
+      expect(posts, [...List.filled(4, 'never answered'), 'next message']);
+
+      await service.close();
+      await storage.close();
+      storage = AppDatabase.forTesting(NativeDatabase(file));
+      repository = ChatRepository(storage);
+      final reopened = openService();
+      await reopened.drainPendingSends();
+      final visible = await repository
+          .watchTextSendOperations(accountId: accountId, roomToken: roomToken)
+          .first;
+      expect(visible.map((row) => row.operationId), [second]);
+      expect(posts, hasLength(5));
+
+      lateReference = first.referenceId;
+      await reopened.syncRoom(accountId: accountId, roomToken: roomToken);
+      final confirmed = await storage.select(storage.textSendOperations).get();
+      final late = confirmed.singleWhere(
+        (row) => row.operationId == first.operationId,
+      );
+      expect(late.outboxState, 'completed');
+      expect(late.messageIdsJson, '[122]');
+      expect(late.referenceId, first.referenceId);
+      expect(posts, hasLength(5));
     });
 
     test('a wake after the grace period checks a send left by an earlier '

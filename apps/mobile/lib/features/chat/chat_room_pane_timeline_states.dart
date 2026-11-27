@@ -63,7 +63,7 @@ final class _ProvisionalSend {
   }
 }
 
-final class _PendingMessageBubble extends StatefulWidget {
+final class _PendingMessageBubble extends ConsumerStatefulWidget {
   const _PendingMessageBubble({
     super.key,
     required this.account,
@@ -88,10 +88,12 @@ final class _PendingMessageBubble extends StatefulWidget {
   final VoidCallback onCancel;
 
   @override
-  State<_PendingMessageBubble> createState() => _PendingMessageBubbleState();
+  ConsumerState<_PendingMessageBubble> createState() =>
+      _PendingMessageBubbleState();
 }
 
-final class _PendingMessageBubbleState extends State<_PendingMessageBubble> {
+final class _PendingMessageBubbleState
+    extends ConsumerState<_PendingMessageBubble> {
   /// A send that goes straight out is queued for a fraction of a second. Its
   /// cancel button would only flash and make the bubble jump, so the button
   /// waits until the message has really been sitting in the queue.
@@ -129,14 +131,63 @@ final class _PendingMessageBubbleState extends State<_PendingMessageBubble> {
     super.dispose();
   }
 
+  Future<void> _confirmSkip() async {
+    final pending = operation;
+    final strings = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('skip-outbox-dialog'),
+        title: Text(strings.outboxSkip),
+        content: Text(strings.outboxSkipDescription),
+        scrollable: true,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(strings.cancel),
+          ),
+          FilledButton(
+            key: const Key('confirm-skip-outbox'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(strings.outboxSkip),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
+    final bool skipped;
+    try {
+      skipped = await ref
+          .read(chatServiceProvider)
+          .skipText(
+            accountId: pending.accountId,
+            roomToken: pending.roomToken,
+            operationId: pending.operationId,
+          );
+    } on Object {
+      if (mounted) _showSkipFailure(strings);
+      return;
+    }
+    if (mounted && !skipped) _showSkipFailure(strings);
+  }
+
+  void _showSkipFailure(AppLocalizations strings) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(strings.outboxSkipFailed)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
+    final canSkip = operation.canSkipLocally;
     final status = switch (operation.outboxState) {
       'queued' => strings.outboxQueued,
       'sending' => strings.outboxSending,
       'retryable' => strings.outboxRetryable,
+      'awaitingConfirmation' when canSkip => strings.outboxConfirmationMissing,
       'awaitingConfirmation' => strings.outboxAwaitingConfirmation,
       'failed' => strings.outboxFailed,
       _ => strings.outboxFailed,
@@ -285,8 +336,15 @@ final class _PendingMessageBubbleState extends State<_PendingMessageBubble> {
                           'chat-pending-status-${operation.operationId}',
                         ),
                         tooltip: status,
-                        onSelected: (resend) =>
-                            resend ? onResend() : onCancel(),
+                        onSelected: (resend) {
+                          if (resend) {
+                            onResend();
+                          } else if (canSkip) {
+                            unawaited(_confirmSkip());
+                          } else {
+                            onCancel();
+                          }
+                        },
                         itemBuilder: (_) => [
                           PopupMenuItem(
                             key: Key('chat-resend-${operation.operationId}'),
@@ -294,9 +352,14 @@ final class _PendingMessageBubbleState extends State<_PendingMessageBubble> {
                             child: Text(strings.resendMessage),
                           ),
                           PopupMenuItem(
-                            key: Key('chat-cancel-${operation.operationId}'),
+                            key: Key(
+                              'chat-${canSkip ? 'skip' : 'cancel'}-'
+                              '${operation.operationId}',
+                            ),
                             value: false,
-                            child: Text(strings.cancelSend),
+                            child: Text(
+                              canSkip ? strings.outboxSkip : strings.cancelSend,
+                            ),
                           ),
                         ],
                         child: ConstrainedBox(
