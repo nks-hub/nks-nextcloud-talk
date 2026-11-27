@@ -10,6 +10,19 @@ final _storedRefusedDrafts = StreamProvider.autoDispose
     );
 
 extension _ChatRoomDrafts on _ChatRoomPaneState {
+  ChatThreadContext? get _currentThreadContext {
+    final threadContext = widget.threadContext;
+    if (threadContext == null ||
+        !threadContext.matches(
+          accountId: widget.account.id,
+          roomToken: widget.conversation.token,
+          rootMessageId: widget.threadId,
+        )) {
+      return null;
+    }
+    return threadContext;
+  }
+
   /// Composer text is only durable once the outbox admits it, and admission
   /// can be refused, so the draft is persisted on its own.
   void _scheduleDraftSave() {
@@ -32,13 +45,15 @@ extension _ChatRoomDrafts on _ChatRoomPaneState {
       return;
     }
     if (_returningDraft?.key == key && _returningDraft?.text == text) return;
+    final reply = _replyTo;
+    unawaited(_publishDraft(key, text, reply?.messageId));
     await _composerDrafts.saveComposer(
       store,
       key.accountId,
       key.roomToken,
       key.threadId,
-      text.trim(),
-      reply: _replyTo,
+      text.trim().isEmpty ? '' : text,
+      reply: reply,
     );
   }
 
@@ -53,6 +68,10 @@ extension _ChatRoomDrafts on _ChatRoomPaneState {
       key.roomToken,
       key.threadId,
     );
+    if (draft == null && mounted && key == _key) {
+      await _restoreSharedDraft(key);
+      return;
+    }
     if (draft == null ||
         !mounted ||
         key != _key ||
@@ -60,12 +79,14 @@ extension _ChatRoomDrafts on _ChatRoomPaneState {
         _composer.text.isNotEmpty) {
       return;
     }
+    _restoredQuote = draft.reply;
     _update(() => _replyTo = draft.reply);
     _composer.value = TextEditingValue(
       text: draft.text,
       selection: TextSelection.collapsed(offset: draft.text.length),
     );
     _focusOpenedDraft(key);
+    unawaited(_restoreSharedDraft(key));
   }
 
   void _focusOpenedDraft(ChatRoomProviderKey key) {
@@ -106,6 +127,7 @@ extension _ChatRoomDrafts on _ChatRoomPaneState {
     );
     try {
       await _composerDrafts.restorePlain(draft);
+      _handoff.returnToComposer(key, draft.draftId).ignore();
       ready.complete(true);
     } on Object {
       // The independent copy still owns the text if the transaction rolled back.
@@ -166,6 +188,13 @@ extension _ChatRoomDrafts on _ChatRoomPaneState {
     final recovery = ref.read(recoverableTextDraftStoreProvider);
     final service = ref.read(chatServiceProvider);
     if (!recovery.begin(draft)) return;
+    final key = (
+      accountId: draft.accountId,
+      roomToken: draft.roomToken,
+      threadId: draft.threadId,
+    );
+    final generation = _handoff.generation(key.accountId);
+    final reserved = _handoff.reserved(key, draft.draftId)..ignore();
     try {
       if (mounted &&
           _key.accountId == draft.accountId &&
@@ -187,6 +216,7 @@ extension _ChatRoomDrafts on _ChatRoomPaneState {
               : null,
         ),
       );
+      unawaited(_removeAdmittedDraft(key, reserved, generation));
     } on Object catch (error) {
       if (mounted &&
           _key ==
@@ -209,8 +239,16 @@ extension _ChatRoomDrafts on _ChatRoomPaneState {
   Future<void> _discardDraft(RefusedTextDraft draft) async {
     final recovery = ref.read(recoverableTextDraftStoreProvider);
     if (!recovery.begin(draft)) return;
+    final key = (
+      accountId: draft.accountId,
+      roomToken: draft.roomToken,
+      threadId: draft.threadId,
+    );
+    final generation = _handoff.generation(key.accountId);
+    final reserved = _handoff.reserved(key, draft.draftId)..ignore();
     try {
       await recovery.discard(draft);
+      unawaited(_removeAdmittedDraft(key, reserved, generation));
     } on Object {
       if (mounted) {
         _update(() => _localError = ChatServiceError.invalidResponse);

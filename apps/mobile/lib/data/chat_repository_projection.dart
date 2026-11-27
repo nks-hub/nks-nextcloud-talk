@@ -136,6 +136,7 @@ extension _ChatRepositoryProjection on ChatRepository {
       roomToken: operation.roomToken,
       replyTo: operation.replyTo,
       namedThreadId: operation.threadId,
+      replyThreadId: operation.replyThreadId,
       message: message,
     );
   }
@@ -147,12 +148,10 @@ extension _ChatRepositoryProjection on ChatRepository {
     required ConversationToken roomToken,
     required int? replyTo,
     required int? namedThreadId,
+    int? replyThreadId,
     required ChatMessage message,
   }) async {
-    if (replyTo != null && namedThreadId != null) {
-      return;
-    }
-    final viewThreadId = namedThreadId ?? replyTo;
+    final viewThreadId = replyThreadId ?? namedThreadId ?? replyTo;
     if (message.roomToken != roomToken) {
       return;
     }
@@ -164,8 +163,11 @@ extension _ChatRepositoryProjection on ChatRepository {
       return;
     }
     if (replyTo != null) {
-      final parent = _matchingThreadParent(message);
-      if (parent == null || parent.messageId != replyTo) {
+      final parent = message.parent;
+      if (parent is! ChatFullParent ||
+          parent.messageId != replyTo ||
+          parent.roomToken != roomToken ||
+          parent.message.threadId != viewThreadId) {
         return;
       }
     }
@@ -465,6 +467,7 @@ extension _ChatRepositoryProjection on ChatRepository {
         nextAttemptAt: row.nextAttemptAt,
         automaticResendCount: row.automaticResendCount,
         replyTo: row.replyTo,
+        replyThreadId: row.replyTo == null ? null : row.composerThreadId,
         threadId: row.threadId,
         replyToToken: row.replyToToken == null
             ? null

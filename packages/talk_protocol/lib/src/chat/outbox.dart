@@ -9,6 +9,8 @@ import 'profile.dart';
 import 'response.dart';
 import 'state.dart';
 
+part 'outbox_confirmation.dart';
+
 enum ChatOutboxOutcome {
   queued,
   sending,
@@ -173,6 +175,7 @@ final class TextSendOutboxDraft {
     required this.enqueueSequence,
     required this.replyTo,
     required this.threadId,
+    this.replyThreadId,
     required this.replyToToken,
     required this.parentRoomToken,
     this.silent = false,
@@ -200,7 +203,13 @@ final class TextSendOutboxDraft {
         _outboxFailure(r'$.operation.replyToToken');
       }
     }
-    if (threadId != null && (threadId! < 1 || replyTo != null)) {
+    if ((threadId != null &&
+            (threadId! < 1 ||
+                (replyTo != null && threadId != replyThreadId))) ||
+        (replyThreadId != null &&
+            (replyThreadId! < 1 ||
+                replyTo == null ||
+                parentRoomToken != roomToken))) {
       _outboxFailure(r'$.operation.threadId');
     }
     if (privateReplyEligibility != null &&
@@ -219,6 +228,9 @@ final class TextSendOutboxDraft {
   final int enqueueSequence;
   final int? replyTo;
   final int? threadId;
+
+  /// Expected conversation thread for a same-room quote, including ordinary threads.
+  final int? replyThreadId;
   final ConversationToken? replyToToken;
   final ConversationToken? parentRoomToken;
   final PrivateReplyEligibilitySnapshot? privateReplyEligibility;
@@ -273,6 +285,7 @@ ChatOutboxResult admitTextSendOperation(
     nextAttemptAt: null,
     replyTo: draft.replyTo,
     threadId: draft.threadId,
+    replyThreadId: draft.replyThreadId,
     replyToToken: draft.replyToToken,
     parentRoomToken: draft.parentRoomToken,
     silent: draft.silent,
@@ -816,53 +829,6 @@ _Reconciliation _reconcileOperation(
   );
 }
 
-bool _authoritativeConfirmationMatches(
-  ChatAccountState account,
-  TextSendOutboxOperation operation,
-  ChatMessageConfirmation message,
-) {
-  if (message.accountId != account.accountId ||
-      message.server != account.server ||
-      message.roomToken != operation.roomToken ||
-      message.referenceId != operation.referenceId.value) {
-    return false;
-  }
-  return matchesAuthoritativeChatConfirmationScope(
-    confirmation: ChatConfirmationScope(
-      messageId: message.messageId,
-      parentMessageId: message.parentMessageId,
-      parentRoomToken: message.parentRoomToken,
-      parentThreadId: message.parentThreadId,
-      parentDeleted: message.parentDeleted,
-      replyToMessageId: message.replyToMessageId,
-      replyToRoomToken: message.replyToRoomToken,
-      threadId: message.threadId,
-    ),
-    roomToken: operation.roomToken,
-    replyTo: operation.replyTo,
-    replyToToken: operation.replyToToken,
-    parentRoomToken: operation.parentRoomToken,
-    threadId: operation.threadId,
-  );
-}
-
-bool _responseMatches(
-  ChatAccountState account,
-  TextSendOutboxOperation operation,
-  ChatSendResponse response,
-) {
-  final request = response.request;
-  return request.accountId == account.accountId &&
-      request.server == account.server &&
-      request.operationId == operation.operationId &&
-      request.roomToken == operation.roomToken &&
-      request.referenceId == operation.referenceId &&
-      request.replyTo == operation.replyTo &&
-      request.threadId == operation.threadId &&
-      request.replyToToken == operation.replyToToken &&
-      request.parentRoomToken == operation.parentRoomToken;
-}
-
 bool _canReplayTextSend(
   ChatAccountState account,
   ChatTextSendAuthority authority,
@@ -873,8 +839,8 @@ bool _canReplayTextSend(
       !authority.profile.sendText) {
     return false;
   }
-  if (operation.threadId != null) {
-    return authority.profile.threadFetch;
+  if (operation.threadId != null && !authority.profile.threadFetch) {
+    return false;
   }
   if (operation.replyTo == null) {
     return true;

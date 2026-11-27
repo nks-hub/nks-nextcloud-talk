@@ -350,6 +350,7 @@ final class ChatSendRequest extends ChatRequest {
     required ChatReferenceId referenceId,
     int? replyTo,
     int? threadId,
+    int? replyThreadId,
     ConversationToken? parentRoomToken,
     ConversationToken? replyToToken,
     bool silent = false,
@@ -365,6 +366,7 @@ final class ChatSendRequest extends ChatRequest {
     referenceId: referenceId,
     replyTo: replyTo,
     threadId: threadId,
+    replyThreadId: replyThreadId,
     parentRoomToken: parentRoomToken,
     replyToToken: replyToToken,
     silent: silent,
@@ -384,6 +386,7 @@ final class ChatSendRequest extends ChatRequest {
     required ChatReferenceId referenceId,
     int? replyTo,
     int? threadId,
+    int? replyThreadId,
     ConversationToken? parentRoomToken,
     ConversationToken? replyToToken,
     bool silent = false,
@@ -399,6 +402,7 @@ final class ChatSendRequest extends ChatRequest {
     referenceId: referenceId,
     replyTo: replyTo,
     threadId: threadId,
+    replyThreadId: replyThreadId,
     parentRoomToken: parentRoomToken,
     replyToToken: replyToToken,
     silent: silent,
@@ -417,6 +421,7 @@ final class ChatSendRequest extends ChatRequest {
     required this.referenceId,
     required this.replyTo,
     required this.threadId,
+    required this.replyThreadId,
     required this.parentRoomToken,
     required this.replyToToken,
     required this.silent,
@@ -438,6 +443,13 @@ final class ChatSendRequest extends ChatRequest {
     if (threadId != null &&
         (threadId! < 1 || !profile.threadFetch || replyTo != null)) {
       _requestFailure(r'$.body.threadId');
+    }
+    if (replyThreadId != null &&
+        (replyThreadId! < 1 ||
+            replyTo == null ||
+            parentRoomToken != roomToken ||
+            replyToToken != null)) {
+      _requestFailure(r'$.replyThreadId');
     }
     if (replyTo == null) {
       if (parentRoomToken != null || replyToToken != null) {
@@ -470,6 +482,9 @@ final class ChatSendRequest extends ChatRequest {
   final ChatReferenceId referenceId;
   final int? replyTo;
   final int? threadId;
+
+  /// Local confirmation scope. Talk derives the thread from the quoted message.
+  final int? replyThreadId;
   final ConversationToken? parentRoomToken;
   final ConversationToken? replyToToken;
   final bool silent;

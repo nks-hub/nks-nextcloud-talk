@@ -55,9 +55,9 @@ bool matchesAuthoritativeChatConfirmationScope({
   required ConversationToken? parentRoomToken,
   required int? threadId,
 }) {
-  if (threadId != null) {
-    if (confirmation.threadId != threadId ||
-        confirmation.parentMessageId == null) {
+  if (threadId != null && confirmation.threadId != threadId) return false;
+  if (threadId != null && replyTo == null) {
+    if (confirmation.parentMessageId == null) {
       return false;
     }
     if (confirmation.parentDeleted) {

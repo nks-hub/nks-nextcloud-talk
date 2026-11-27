@@ -174,6 +174,7 @@ final class TextSendOutboxOperation {
     required this.nextAttemptAt,
     required this.replyTo,
     required this.threadId,
+    this.replyThreadId,
     required this.replyToToken,
     required this.parentRoomToken,
     this.silent = false,
@@ -196,6 +197,9 @@ final class TextSendOutboxOperation {
   final int? nextAttemptAt;
   final int? replyTo;
   final int? threadId;
+
+  /// Expected conversation thread for a same-room quote, including ordinary threads.
+  final int? replyThreadId;
   final ConversationToken? replyToToken;
   final ConversationToken? parentRoomToken;
 
@@ -238,6 +242,7 @@ final class TextSendOutboxOperation {
         : nextAttemptAt as int?,
     replyTo: replyTo ?? this.replyTo,
     threadId: threadId,
+    replyThreadId: replyThreadId,
     silent: silent,
     automaticResendCount: automaticResendCount ?? this.automaticResendCount,
     replyToToken: identical(replyToToken, _unchanged)
@@ -264,7 +269,13 @@ final class TextSendOutboxOperation {
       }
       previousId = messageId;
     }
-    if (threadId != null && (threadId! < 1 || replyTo != null)) {
+    if ((threadId != null &&
+            (threadId! < 1 ||
+                (replyTo != null && threadId != replyThreadId))) ||
+        (replyThreadId != null &&
+            (replyThreadId! < 1 ||
+                replyTo == null ||
+                parentRoomToken != roomToken))) {
       _outboxFailure(r'$.operations.threadId');
     }
     if (replyTo == null) {

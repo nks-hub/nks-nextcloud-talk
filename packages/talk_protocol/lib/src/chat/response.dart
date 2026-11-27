@@ -733,6 +733,10 @@ _OcsEnvelope _decodeOcsEnvelope(Uint8List body) {
 }
 
 bool _matchesDirectSendContext(ChatSendRequest request, ChatMessage message) {
+  if (request.replyThreadId != null &&
+      message.threadId != request.replyThreadId) {
+    return false;
+  }
   if (request.threadId != null) {
     return message.threadId == request.threadId && message.parent == null;
   }

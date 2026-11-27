@@ -18,6 +18,28 @@ const _visibleDraft = CustomExpression<bool>('''
 
 typedef ComposerDraft = ({String text, CachedChatMessage? reply});
 
+extension CachedDraftQuote on CachedChatMessage {
+  bool canQuoteIn(int? root) {
+    if (deleted) return false;
+    if (root == null) return true;
+    try {
+      final parsed = ChatMessage.fromJson(jsonDecode(rawJson));
+      return !parsed.deleted &&
+          parsed.isReplyable &&
+          parsed.roomToken.value == roomToken &&
+          parsed.messageId == messageId &&
+          threadId == parsed.threadId &&
+          (threadId == root ||
+              (messageId == root &&
+                  _isCanonicalCachedRootThreadId(threadId, root)));
+    } on FormatException {
+      return false;
+    } on TalkProtocolException {
+      return false;
+    }
+  }
+}
+
 extension ChatRepositoryDrafts on ChatRepository {
   Stream<List<StoredChatDraft>> watchDrafts(String accountId) =>
       (_database.select(_database.chatDrafts)
@@ -62,7 +84,14 @@ extension ChatRepositoryDrafts on ChatRepository {
             reply.messageId <= 0)) {
       throw const FormatException('Invalid draft reply scope');
     }
-    return (text: row.draftText, reply: reply);
+    final current = reply == null
+        ? null
+        : await getMessage(
+            accountId: accountId,
+            roomToken: roomToken,
+            messageId: reply.messageId,
+          );
+    return (text: row.draftText, reply: current ?? reply);
   });
 
   Future<void> _writeDraft({

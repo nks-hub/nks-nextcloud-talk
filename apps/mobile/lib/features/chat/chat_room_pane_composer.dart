@@ -396,6 +396,27 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     if (message.isEmpty) {
       return;
     }
+    final reply = _replyTo;
+    if (reply != null && identical(reply, _restoredQuote)) {
+      final key = _key;
+      final current = await _draftStore?.getMessage(
+        accountId: key.accountId,
+        roomToken: key.roomToken,
+        messageId: reply.messageId,
+      );
+      if (!mounted ||
+          key != _key ||
+          _composer.text.trim() != message ||
+          !identical(_replyTo, reply)) {
+        return;
+      }
+      if (current == null || !current.canQuoteIn(key.threadId)) {
+        _showLocationSnackBar(
+          AppLocalizations.of(context).draftHandoffMissingQuote,
+        );
+        return;
+      }
+    }
     await _sendMessage(message, clearComposer: true);
   }
 
@@ -432,7 +453,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       _update(() => _localError = ChatServiceError.invalidResponse);
       return;
     }
-    final rootReply = targetKey.threadId == null ? _replyTo : null;
+    final rootReply = _replyTo;
     final generation = _textSendGeneration;
     // Emptied before the request, not after it. Clearing on the way back
     // compared the whole field against the sent text, so typing the next line
@@ -455,6 +476,16 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             message: sentDraft,
             createdAtMillis: DateTime.now().millisecondsSinceEpoch,
           );
+    final handoffGeneration = _handoff.generation(targetKey.accountId);
+    final shared = draft == null
+        ? null
+        : _handoff.stage(
+            targetKey,
+            draft.message,
+            rootReply?.messageId,
+            sendingDraftId: draft.draftId,
+          );
+    shared?.ignore();
     if (draft != null) recovery.begin(draft);
     if (clearComposer) {
       _composer.clear();
@@ -531,6 +562,9 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       return;
     } finally {
       if (draft != null) recovery.end(draft.draftId);
+    }
+    if (shared != null) {
+      unawaited(_removeAdmittedDraft(targetKey, shared, handoffGeneration));
     }
     if (mounted) {
       _update(() => provisional.operationId = operationId);

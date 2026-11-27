@@ -40,6 +40,14 @@ extension _ChatRoomPaneAttachmentControls on _ChatRoomPaneState {
       label: strings.replyTemplates,
       onSelected: _sending ? null : () => unawaited(_chooseReplyTemplate()),
     ),
+    if (ref.watch(draftHandoffSupportProvider(widget.account.id)).valueOrNull ==
+        true)
+      AttachmentMenuAction(
+        key: const Key('draft-handoff'),
+        icon: const Icon(Icons.devices_rounded),
+        label: strings.draftHandoffTitle,
+        onSelected: () => unawaited(_showDraftHandoff()),
+      ),
     if (voiceSupported)
       AttachmentMenuAction(
         key: const Key('record-voice-message'),

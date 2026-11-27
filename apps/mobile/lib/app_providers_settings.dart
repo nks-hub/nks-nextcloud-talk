@@ -62,11 +62,13 @@ final personalCollectionsCleanupProvider = Provider<AccountCollectionsCleanup>((
   final gifs = ref.watch(gifFavoritesStoreProvider);
   final templates = ref.watch(replyTemplateStoreProvider);
   final collections = ref.watch(messageCollectionStoreProvider);
+  final drafts = ref.watch(draftHandoffProvider);
   return (account) async {
     await Future.wait([
       gifs.delete(account),
       templates.delete(account),
       collections.delete(account),
+      drafts.delete(account),
     ]);
   };
 });

@@ -2,6 +2,85 @@ part of 'chat_service_integration_test.dart';
 
 extension _ChatServiceThreadAdmissionCases on _ChatServiceIntegrationSuite {
   void registerThreadAdmissionCases() {
+    for (final named in [true, false]) {
+      test(
+        'thread quote survives admission and HTTP echo (named=$named)',
+        () async {
+          await _cacheThreadRoot(database, isThread: named);
+          final root = await chat.getMessage(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            messageId: 109,
+          );
+          Future<void> child(int id, int thread, {bool deleted = false}) async {
+            final raw = jsonDecode(root!.rawJson) as Map<String, Object?>;
+            raw.addAll({
+              'id': id,
+              'threadId': thread,
+              'isThread': false,
+              'threadTitle': null,
+              'deleted': deleted ? true : null,
+            });
+            await database
+                .into(database.cachedChatMessages)
+                .insert(
+                  root.copyWith(
+                    messageId: id,
+                    threadId: Value(thread),
+                    deleted: deleted,
+                    rawJson: jsonEncode(raw),
+                  ),
+                );
+          }
+
+          await child(204, 109);
+          await child(205, 110);
+          await child(206, 109, deleted: true);
+          final gate = _ThreadAdmissionGate();
+          addTearDown(gate.api.close);
+          gate.releaseCapabilities();
+          final service = ChatService(
+            accounts: accounts,
+            chat: chat,
+            credentials: credentials,
+            api: gate.api,
+          );
+          Future<String> send(int parent) => service.sendText(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            threadId: 109,
+            replyTo: parent,
+            message: 'Quoted answer',
+          );
+          for (final parent in [205, 206, 207]) {
+            await expectLater(
+              send(parent),
+              throwsA(isA<ChatServiceException>()),
+            );
+          }
+          expect(gate.postRequests, 0);
+          await send(204);
+          await _waitForOutboxSettled(chat);
+          final row =
+              (await database.select(database.textSendOperations).get()).single;
+          expect(row.outboxState, 'completed');
+          expect(row.replyTo, 204);
+          expect(row.composerThreadId, 109);
+          expect(row.threadId, named ? 109 : null);
+          expect(gate.sentBody?['replyTo'], '204');
+          expect(gate.sentBody, isNot(contains('threadId')));
+          Future<List<StoredTextSendOperation>> inThread(int root) => chat
+              .watchTextSendOperations(
+                accountId: 'account-a',
+                roomToken: 'rooma123',
+                threadId: root,
+              )
+              .first;
+          expect((await inThread(109)).single.operationId, row.operationId);
+          expect(await inThread(204), isEmpty);
+        },
+      );
+    }
     for (final mutation in _InvalidThreadRootMutation.values) {
       test(
         'thread send rejects ${mutation.description} after capability read starts',
@@ -242,7 +321,8 @@ final class _ThreadAdmissionGate {
         : _sendReplyResponse(
             referenceId: request.bodyFields['referenceId']!,
             message: request.bodyFields['message']!,
-            replyTo: 109,
+            replyTo: int.parse(request.bodyFields['replyTo']!),
+            rootThreadId: 109,
           );
     return http.Response(
       jsonEncode(response),

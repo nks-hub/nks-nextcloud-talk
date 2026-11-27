@@ -64,6 +64,7 @@ extension ChatRepositoryTextAdmission on ChatRepository {
           silent: silent,
           enqueueSequence: sequence,
           replyTo: replyTo,
+          replyThreadId: replyTo == null ? null : composerThreadId,
           threadId: threadId,
           replyToToken: replyToToken,
           parentRoomToken: parentRoomToken,

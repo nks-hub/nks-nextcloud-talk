@@ -359,8 +359,8 @@ final class ChatService {
     required int messageId,
   }) => _refreshMessage(accountId, roomToken, messageId);
 
-  /// [replyTo] answers a specific root message. Talk turns that into a thread,
-  /// so it is mutually exclusive with sending inside an existing [threadId].
+  /// [replyTo] quotes an existing message. In a thread, the quote must belong
+  /// to [threadId]. Talk derives its thread from the quoted message.
   ///
   /// [emojiSizeStep] (1 to [ChatEmojiSizeReference.maxStep]) marks an
   /// emoji-only message to be shown enlarged by this client; it rides in the
@@ -371,9 +371,7 @@ final class ChatService {
   /// still on the wire. Delivery continues on the room lane, so the outbox is
   /// still emptied in admission order and a later message cannot overtake an
   /// earlier one. Everything after admission is reported through the
-  /// operation's own state, not by this future. The value is the id the
-  /// operation was admitted under, so a caller showing a provisional entry
-  /// can tell when the outbox row has taken its place.
+  /// operation's state. Its returned ID links the provisional entry to the row.
   Future<String> sendText({
     required String accountId,
     required String roomToken,
@@ -399,13 +397,6 @@ final class ChatService {
       return _withRoomErrorPersistence<String>(accountId, roomToken, () async {
         final normalized = message.trim();
         if (normalized.isEmpty) {
-          throw const ChatServiceException(ChatServiceError.invalidResponse);
-        }
-        if (replyTo == null &&
-            (replyToToken != null || privateReplyEligibility != null)) {
-          throw const ChatServiceException(ChatServiceError.invalidResponse);
-        }
-        if (replyTo != null && (threadId != null || replyTo < 1)) {
           throw const ChatServiceException(ChatServiceError.invalidResponse);
         }
         // The text exists only in memory until it is admitted, so nothing
@@ -458,6 +449,14 @@ final class ChatService {
                 (await _resolveAndSynchronizePrepared(prepared)).prepared,
           );
         }
+        await _validateTextReply(
+          accountId,
+          roomToken,
+          threadId,
+          replyTo,
+          replyToToken,
+          privateReplyEligibility,
+        );
         final effectiveReplyTo =
             replyTo ??
             (prepared.namedThread == true ? null : prepared.threadId);

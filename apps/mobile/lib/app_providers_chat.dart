@@ -1,5 +1,9 @@
 part of 'app_providers.dart';
 
+final chatRepositoryProvider = Provider<ChatRepository>((ref) {
+  return ChatRepository(ref.watch(appDatabaseProvider));
+});
+
 final recoverableTextDraftStoreProvider =
     ChangeNotifierProvider<RecoverableTextDraftStore>(
       (ref) => RecoverableTextDraftStore(ref.watch(appDatabaseProvider)),

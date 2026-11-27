@@ -1,5 +1,15 @@
 part of 'chat_composer_integration_test.dart';
 
+typedef _ShortComposerGeometry = ({
+  String name,
+  Size physicalSize,
+  double pixelRatio,
+  double topPadding,
+  double keyboard,
+  double visibleHeight,
+  bool attachment,
+});
+
 const _ShortComposerGeometry _s21LandscapeComposerGeometry = (
   name: 'Galaxy S21 landscape',
   physicalSize: Size(2400, 1080),

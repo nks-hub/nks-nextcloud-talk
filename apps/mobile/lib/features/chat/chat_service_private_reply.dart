@@ -1,6 +1,37 @@
 part of 'chat_service.dart';
 
 extension ChatServicePrivateReply on ChatService {
+  Future<void> _validateTextReply(
+    String accountId,
+    String roomToken,
+    int? threadId,
+    int? replyTo,
+    String? replyToToken,
+    PrivateReplyEligibilitySnapshot? eligibility,
+  ) async {
+    if (replyTo == null) {
+      if (replyToToken != null || eligibility != null) {
+        throw const ChatServiceException(ChatServiceError.invalidResponse);
+      }
+      return;
+    }
+    if (replyTo < 1) {
+      throw const ChatServiceException(ChatServiceError.invalidResponse);
+    }
+    if (threadId == null) return;
+    final quote = await _chat.getMessage(
+      accountId: accountId,
+      roomToken: roomToken,
+      messageId: replyTo,
+    );
+    if (replyToToken != null ||
+        eligibility != null ||
+        quote == null ||
+        !quote.canQuoteIn(threadId)) {
+      throw const ChatServiceException(ChatServiceError.invalidResponse);
+    }
+  }
+
   /// Fetches fresh, request-bound evidence for one cross-room private reply.
   /// The returned snapshot is still rechecked against the current capability
   /// generation when [ChatService.sendText] admits the durable operation.

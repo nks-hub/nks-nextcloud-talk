@@ -185,6 +185,7 @@ Map<String, Object?> _sendReplyResponse({
   required String referenceId,
   required String message,
   required int replyTo,
+  int? rootThreadId,
 }) {
   final response =
       readFixtureJson(
@@ -196,9 +197,9 @@ Map<String, Object?> _sendReplyResponse({
   final parent = data['parent']! as Map<String, Object?>;
   data['referenceId'] = referenceId;
   data['message'] = message;
-  data['threadId'] = replyTo;
+  data['threadId'] = rootThreadId ?? replyTo;
   parent['id'] = replyTo;
-  parent['threadId'] = replyTo;
+  parent['threadId'] = rootThreadId ?? replyTo;
   return response;
 }
 

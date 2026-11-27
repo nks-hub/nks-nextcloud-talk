@@ -70,6 +70,53 @@ void main() {
   });
 
   group('named-thread outbox', () {
+    test('quoted child binds both immediate parent and canonical thread', () {
+      final operation = _operation(
+        TextSendOutboxState.awaitingConfirmation,
+        replyTo: 704,
+        replyThreadId: 700,
+        threadId: 700,
+        parentRoomToken: _roomToken,
+      );
+      final request = _requestFromOperation(operation);
+      expect(request.formBody, {
+        'message': _message,
+        'referenceId': _referenceId.value,
+        'replyTo': 704,
+      });
+      for (final (root, parentId, expected) in [
+        (700, 704, true),
+        (701, 704, false),
+        (700, 705, false),
+      ]) {
+        final parent = _messageJson(id: parentId, threadId: root);
+        final raw = _messageJson(id: 706, threadId: root, parent: parent);
+        final confirmation = reconcileTextSendConfirmation(
+          _snapshot(operation: operation),
+          accountId: _accountId,
+          operationId: _operationId,
+          confirmations: [_confirmationFromJson(raw)],
+        );
+        expect(
+          confirmation.outcome,
+          expected ? ChatOutboxOutcome.completed : ChatOutboxOutcome.unchanged,
+        );
+        ChatSendResponse receipt() => decodeChatSendResponse(
+          request: request,
+          statusCode: 201,
+          body: _sendBody(threadId: root, parent: parent),
+        );
+        if (expected) {
+          expect(receipt().classification, ChatSendClassification.confirmed);
+        } else {
+          expect(
+            receipt,
+            _throwsCode(TalkProtocolErrorCode.invalidChatResponse),
+          );
+        }
+      }
+    });
+
     test('admits, claims and confirms the durable thread binding', () {
       var snapshot = _snapshot();
       final admitted = admitTextSendOperation(
@@ -618,7 +665,8 @@ ChatSendRequest _requestFromOperation(TextSendOutboxOperation operation) =>
       message: operation.message,
       referenceId: operation.referenceId,
       replyTo: operation.replyTo,
-      threadId: operation.threadId,
+      threadId: operation.replyTo == null ? operation.threadId : null,
+      replyThreadId: operation.replyThreadId,
       parentRoomToken: operation.parentRoomToken,
       replyToToken: operation.replyToToken,
     );
@@ -647,6 +695,7 @@ TextSendOutboxOperation _operation(
   ConversationToken? roomToken,
   int? replyTo,
   int? threadId = 700,
+  int? replyThreadId,
   ConversationToken? replyToToken,
   ConversationToken? parentRoomToken,
 }) => TextSendOutboxOperation(
@@ -666,6 +715,7 @@ TextSendOutboxOperation _operation(
   nextAttemptAt: null,
   replyTo: replyTo,
   threadId: threadId,
+  replyThreadId: replyThreadId,
   replyToToken: replyToToken,
   parentRoomToken: parentRoomToken,
 );

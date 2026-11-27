@@ -329,8 +329,10 @@ extension _ChatRepositoryQueries on ChatRepository {
                 .not() &
             (threadId == null
                 ? operation.replyTo.isNull() & operation.threadId.isNull()
-                : operation.replyTo.equals(threadId) |
-                      operation.threadId.equals(threadId)),
+                : operation.composerThreadId.equals(threadId) |
+                      (operation.composerThreadId.isNull() &
+                          (operation.replyTo.equals(threadId) |
+                              operation.threadId.equals(threadId)))),
       )
       ..orderBy([(operation) => OrderingTerm.asc(operation.enqueueSequence)]);
     return query.watch();
@@ -367,8 +369,10 @@ extension _ChatRepositoryQueries on ChatRepository {
                     .not() &
                 (threadId == null
                     ? operations.replyTo.isNull() & operations.threadId.isNull()
-                    : operations.replyTo.equals(threadId) |
-                          operations.threadId.equals(threadId)),
+                    : operations.composerThreadId.equals(threadId) |
+                          (operations.composerThreadId.isNull() &
+                              (operations.replyTo.equals(threadId) |
+                                  operations.threadId.equals(threadId)))),
           )
           ..orderBy([
             OrderingTerm.asc(operations.enqueueSequence),

@@ -68,6 +68,7 @@ import 'features/chat/composer/giphy.dart';
 import 'features/chat/composer/emoji_usage_store.dart';
 import 'features/chat/composer/gif_favorites.dart';
 import 'features/chat/composer/message_collections.dart';
+import 'features/chat/composer/draft_handoff.dart';
 import 'features/chat/composer/reply_templates.dart';
 import 'features/chat/composer/mention_suggestions.dart';
 import 'features/conversations/conversation_sync_service.dart';
@@ -189,10 +190,6 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
     unawaited(database.close());
   });
   return database;
-});
-
-final chatRepositoryProvider = Provider<ChatRepository>((ref) {
-  return ChatRepository(ref.watch(appDatabaseProvider));
 });
 
 final threadRepositoryProvider = Provider<ThreadRepository>((ref) {

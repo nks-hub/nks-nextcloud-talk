@@ -48,6 +48,7 @@ import '../owntalk_extensions/chat_appearance.dart';
 import '../owntalk_extensions/checklist_widget.dart';
 import '../owntalk_extensions/owntalk_extensions_service.dart';
 import 'composer/message_collections.dart';
+import 'composer/draft_handoff.dart';
 import '../owntalk_extensions/owntalk_room_extras.dart';
 import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
@@ -98,6 +99,7 @@ part 'chat_room_pane_reminders.dart';
 part 'chat_room_pane_attachment_menu.dart';
 part 'chat_room_pane_composer.dart';
 part 'chat_room_pane_drafts.dart';
+part 'chat_room_pane_handoff.dart';
 part 'chat_room_pane_undelivered.dart';
 part 'chat_room_pane_composer_widgets.dart';
 part 'chat_room_pane_expression_picker.dart';
@@ -284,19 +286,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     threadId: widget.threadId,
   );
 
-  ChatThreadContext? get _currentThreadContext {
-    final threadContext = widget.threadContext;
-    if (threadContext == null ||
-        !threadContext.matches(
-          accountId: widget.account.id,
-          roomToken: widget.conversation.token,
-          rootMessageId: widget.threadId,
-        )) {
-      return null;
-    }
-    return threadContext;
-  }
-
   void _update(VoidCallback callback) => setState(callback);
 
   @override
@@ -309,6 +298,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_handleScroll);
     _composerDrafts = ref.read(recoverableTextDraftStoreProvider);
+    _handoff = ref.read(draftHandoffProvider);
     _draftAccountGeneration = _composerDrafts.accountGeneration(
       widget.account.id,
     );
@@ -329,6 +319,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     });
   }
 
+  late final DraftHandoffStore _handoff;
+  CachedChatMessage? _restoredQuote;
   late final RecoverableTextDraftStore _composerDrafts;
   ({ChatRoomProviderKey key, String text, Future<bool> done})? _returningDraft;
   late int _draftAccountGeneration;
