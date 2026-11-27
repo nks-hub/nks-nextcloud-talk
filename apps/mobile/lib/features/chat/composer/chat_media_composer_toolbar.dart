@@ -164,6 +164,17 @@ final class _ComposerActionToolbar extends StatelessWidget {
   ) {
     final entry = field;
     if (entry != null) {
+      const buttonSize = 48.0;
+      final desktop = context.usesDesktopDensity;
+      Widget actionSlot(Widget action) => desktop
+          ? ConstrainedBox(
+              constraints: const BoxConstraints(
+                minWidth: buttonSize,
+                minHeight: buttonSize,
+              ),
+              child: action,
+            )
+          : action;
       final colors = Theme.of(context).colorScheme;
       final decoration = BoxDecoration(
         color: colors.surfaceContainerHigh,
@@ -174,16 +185,15 @@ final class _ComposerActionToolbar extends StatelessWidget {
         key: const Key('chat-media-composer-actions'),
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (leadingAction != null) ...[
-            DecoratedBox(decoration: decoration, child: leadingAction),
-            const SizedBox(width: 6),
+          if (leadingAction case final leading?) ...[
+            DecoratedBox(decoration: decoration, child: actionSlot(leading)),
+            SizedBox(width: desktop ? 12 : 6),
           ],
           Expanded(
             child: DecoratedBox(
               decoration: decoration,
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  const buttonSize = 48.0;
                   const entryWidth = 90.0;
                   final pinnedWidth = pinnedAction == null ? 0.0 : buttonSize;
                   final available = (constraints.maxWidth - pinnedWidth).clamp(
@@ -199,7 +209,9 @@ final class _ComposerActionToolbar extends StatelessWidget {
                     children: [
                       Expanded(
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(minHeight: 48),
+                          constraints: const BoxConstraints(
+                            minHeight: buttonSize,
+                          ),
                           child: Center(widthFactor: 1, child: entry),
                         ),
                       ),
@@ -209,11 +221,13 @@ final class _ComposerActionToolbar extends StatelessWidget {
                           scrollDirection: Axis.horizontal,
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
-                            children: actions,
+                            children: [
+                              for (final action in actions) actionSlot(action),
+                            ],
                           ),
                         ),
                       ),
-                      ?pinnedAction,
+                      if (pinnedAction != null) actionSlot(pinnedAction),
                     ],
                   );
                 },

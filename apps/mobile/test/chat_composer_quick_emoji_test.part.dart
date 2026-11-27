@@ -52,11 +52,14 @@ void _registerQuickEmojiComposerTests() {
   });
 
   /// Pumps the composer with the thumbs-up quick emoji showing.
-  Future<_ComposerHarness> openQuickEmojiComposer(WidgetTester tester) async {
+  Future<_ComposerHarness> openQuickEmojiComposer(
+    WidgetTester tester, {
+    bool voice = false,
+  }) async {
     final server = FakeOwnTalkServer()
       ..setExternally({'composer.quickEmoji': '\u{1F44D}'});
     final harness = (await tester.runAsync(
-      () => _ComposerHarness.create(ownTalk: server),
+      () => _ComposerHarness.create(ownTalk: server, voice: voice),
     ))!;
     _addHarnessTearDown(tester, harness);
     await tester.pumpWidget(
@@ -77,6 +80,66 @@ void _registerQuickEmojiComposerTests() {
     );
     return harness;
   }
+
+  testWidgets(
+    'desktop composer aligns actions when the draft grows',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(850, 650);
+      addTearDown(tester.view.reset);
+      _installVoiceChannels();
+      final harness = await openQuickEmojiComposer(tester, voice: true);
+      try {
+        final plus = find.byKey(const Key('pick-image-attachment'));
+        final field = find.byKey(const Key('chat-composer'));
+        final emoji = find.byKey(const Key('open-emoji-picker'));
+        final voice = find.byKey(const Key('voice-record'));
+        final quick = find.byKey(const Key('send-quick-emoji'));
+        final send = find.byKey(const Key('send-message-gesture'));
+        await _pumpUntil(
+          tester,
+          () => voice.hitTestable().evaluate().isNotEmpty,
+        );
+
+        final baseline = tester.getCenter(plus).dy;
+        void expectAligned(Finder control) {
+          expect(control.hitTestable(), findsOneWidget);
+          expect(tester.getSize(control), const Size.square(48));
+          expect(tester.getCenter(control).dy, closeTo(baseline, 0.5));
+        }
+
+        for (final control in [plus, emoji, voice, quick]) {
+          expectAligned(control);
+        }
+        final primary = tester.getRect(quick);
+        expect(primary.right, 850 - 16);
+        expect(tester.getRect(plus).left, 16);
+        expect(tester.getRect(field).left - tester.getRect(plus).right, 12);
+        expect(tester.getRect(emoji).right, tester.getRect(voice).left);
+        expect(tester.getRect(voice).right, primary.left);
+        expect(tester.getCenter(field).dy, closeTo(baseline, 0.5));
+        final singleLine = tester.getSize(field).height;
+
+        const draft = 'First line\nSecond line\nThird line';
+        await tester.enterText(field, draft);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(tester.getSize(field).height, greaterThan(singleLine + 20));
+        for (final control in [plus, emoji, send]) {
+          expectAligned(control);
+        }
+        expect(tester.getRect(send), primary);
+        expect(tester.getRect(emoji).right, primary.left);
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
+        expect(harness.sentMessages.single, draft);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await _unmountComposer(tester);
+      }
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
 
   testWidgets('send and quick emoji share one slot of the same size', (
     tester,

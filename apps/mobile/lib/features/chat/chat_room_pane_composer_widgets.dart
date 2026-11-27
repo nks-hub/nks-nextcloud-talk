@@ -563,7 +563,7 @@ final class _ChatComposer extends ConsumerWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: ChatComposerViewportLayout.padding(compactHeight),
+          padding: ChatComposerViewportLayout.padding(context, compactHeight),
           child: Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(

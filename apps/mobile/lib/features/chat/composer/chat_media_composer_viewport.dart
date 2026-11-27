@@ -22,8 +22,11 @@ final class ChatComposerViewportLayout extends StatefulWidget {
 
   final Widget Function(BuildContext context, bool compactHeight) builder;
 
-  static EdgeInsets padding(bool compactHeight) =>
-      EdgeInsets.symmetric(horizontal: 10, vertical: compactHeight ? 2 : 8);
+  static EdgeInsets padding(BuildContext context, bool compactHeight) =>
+      EdgeInsets.symmetric(
+        horizontal: context.usesDesktopDensity ? 16 : 10,
+        vertical: compactHeight ? 2 : 8,
+      );
 
   @override
   State<ChatComposerViewportLayout> createState() =>
