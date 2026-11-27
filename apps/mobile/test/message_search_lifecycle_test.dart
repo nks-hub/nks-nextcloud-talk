@@ -240,7 +240,7 @@ void main() {
       await tester.pump();
 
       final list = find.byKey(const Key('message-search-results'));
-      final scrollable = find.descendant(
+      final scrollable = find.ancestor(
         of: list,
         matching: find.byType(Scrollable),
       );
@@ -273,11 +273,12 @@ void main() {
 
       Navigator.of(pane).pop();
       await tester.pumpAndSettle();
-      expect(tester.widget<TextField>(query).controller!.text, 'fixture');
       expect(
         tester.state<ScrollableState>(scrollable).position.pixels,
         initialOffset,
       );
+      await tester.scrollUntilVisible(query, -160, scrollable: scrollable);
+      expect(tester.widget<TextField>(query).controller!.text, 'fixture');
       expect(service.cursors, [null, 20]);
       expect(tester.takeException(), isNull);
     },
