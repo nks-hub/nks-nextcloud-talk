@@ -427,8 +427,9 @@ extension _ChatServiceAutomaticResendCases on _ChatServiceIntegrationSuite {
         database,
         (rows) => rows.single.outboxState == 'awaitingConfirmation',
       );
-      // The relay owns delivery, so nothing reads the room over HTTP.
-      expect(requests.where((kind) => kind != 'capabilities'), ['POST']);
+      await _waitForChatCondition(() => requests.contains('GET'));
+      expect(requests.where((kind) => kind != 'capabilities'), ['POST', 'GET']);
+      expect(posts, 1, reason: 'the first read can only confirm a saved copy');
 
       await _waitForTextSendsWithin(
         database,
@@ -436,8 +437,9 @@ extension _ChatServiceAutomaticResendCases on _ChatServiceIntegrationSuite {
         (rows) => rows.single.outboxState == 'completed',
       );
       expect(relay.isTrusted, isTrue);
-      expect(requests.where((kind) => kind != 'capabilities').take(3), [
+      expect(requests.where((kind) => kind != 'capabilities').take(4), [
         'POST',
+        'GET',
         'GET',
         'POST',
       ]);

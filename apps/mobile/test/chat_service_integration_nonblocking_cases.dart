@@ -78,6 +78,94 @@ extension _ChatServiceNonBlockingCases on _ChatServiceIntegrationSuite {
       expect(await chat.roomsWithPendingTextSends(), isEmpty);
     });
 
+    for (final lostResponse in [false, true]) {
+      test('two quick sends settle when the second receipt is '
+          '${lostResponse ? 'lost' : 'empty'}', () async {
+        final releaseFirst = Completer<void>();
+        addTearDown(() {
+          if (!releaseFirst.isCompleted) releaseFirst.complete();
+        });
+        final posts = <String>[];
+        final saved = <Map<String, Object?>>[];
+        final api = HttpNextcloudApi(
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/cloud/capabilities')) {
+              return http.Response(jsonEncode(_chatCapabilities()), 200);
+            }
+            if (request.method == 'GET') {
+              final anchor = int.parse(
+                request.url.queryParameters['lastKnownMessageId']!,
+              );
+              final newer = saved
+                  .where((message) => (message['id']! as int) > anchor)
+                  .toList();
+              if (newer.isEmpty) return http.Response('', 304);
+              return http.Response(
+                jsonEncode({
+                  'ocs': {
+                    'meta': {'status': 'ok', 'statuscode': 200},
+                    'data': newer,
+                  },
+                }),
+                200,
+                headers: {'X-Chat-Last-Given': '${newer.last['id']}'},
+              );
+            }
+            posts.add(request.bodyFields['message']!);
+            if (posts.length == 1) await releaseFirst.future;
+            final receipt = _acceptedSend(request, 120 + posts.length);
+            final body = jsonDecode(receipt.body) as Map<String, Object?>;
+            final ocs = body['ocs']! as Map<String, Object?>;
+            saved.add(ocs['data']! as Map<String, Object?>);
+            if (posts.length == 1) return receipt;
+            if (lostResponse) {
+              throw http.ClientException(
+                'Receipt lost after save',
+                request.url,
+              );
+            }
+            ocs['data'] = null;
+            return http.Response(jsonEncode(body), 201);
+          }),
+        );
+        addTearDown(api.close);
+        final service = ChatService(
+          accounts: accounts,
+          chat: chat,
+          credentials: credentials,
+          api: api,
+        );
+        addTearDown(service.close);
+        final reader = service.bindLiveRoom(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+        );
+        addTearDown(reader.close);
+        await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+
+        Future<String> send(String message) => service.sendText(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          message: message,
+        );
+        await send('first');
+        await _waitForChatCondition(() => posts.isNotEmpty);
+        await send('second');
+        expect(posts, ['first']);
+        releaseFirst.complete();
+
+        final settled = await _waitForTextSends(
+          database,
+          (rows) =>
+              rows.length == 2 &&
+              rows.every((row) => row.outboxState == 'completed'),
+        );
+        expect(settled.map((row) => row.messageIdsJson), ['[121]', '[122]']);
+        expect(settled.map((row) => row.attemptCount), [1, 1]);
+        expect(posts, ['first', 'second']);
+      });
+    }
+
     test(
       'a reply admitted behind an unanswered send keeps its parent',
       () async {

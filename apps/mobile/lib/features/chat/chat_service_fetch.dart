@@ -1,6 +1,45 @@
 part of 'chat_service.dart';
 
 extension _ChatServiceFetch on ChatService {
+  Future<void> _checkSendConfirmation(
+    _PreparedChat prepared,
+    int? threadId,
+  ) async {
+    await _armAbsenceVerification(prepared);
+    final accountId = prepared.account.id;
+    final roomToken = prepared.room.token.value;
+    if (!prepared.profile.backgroundCatchUp &&
+        !_hasActiveReader(accountId, roomToken)) {
+      return;
+    }
+    // A lost POST receipt can leave the relay idle even though the message
+    // exists. Start a fresh HTTP read and let the delivery lane go before it
+    // tries to drain the outbox. Only the existing grace period permits replay.
+    _syncRoom(
+      accountId: accountId,
+      roomToken: roomToken,
+      threadId: threadId,
+      joinExisting: false,
+      automatic: true,
+    ).ignore();
+  }
+
+  /// Arms a check for when the head-of-line send may first be proven absent.
+  Future<void> _armAbsenceVerification(_PreparedChat prepared) async {
+    final pending = await _chat.pendingAbsenceVerification(
+      accountId: prepared.account.id,
+      roomToken: prepared.room.token.value,
+    );
+    if (pending == null) {
+      return;
+    }
+    final remaining = pending.verifiableAt - _nowSeconds();
+    if (remaining >= 0) {
+      // The verifying read must start in a later second.
+      _armRetry(prepared, remaining + 1);
+    }
+  }
+
   Future<ChatSynchronizationResult> _syncRoom({
     required String accountId,
     required String roomToken,

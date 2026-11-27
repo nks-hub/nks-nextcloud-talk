@@ -694,27 +694,6 @@ final class ChatService {
         absenceGraceSeconds: _absenceGraceSeconds,
       );
 
-  /// Arms the room's timer for the moment its ambiguous head-of-line send may
-  /// first be checked against the server.
-  ///
-  /// Nothing is armed once that moment has passed. Whoever asks then has just
-  /// read the room, so that read was the check, and arming again on its
-  /// refusal would spin.
-  Future<void> _armAbsenceVerification(_PreparedChat prepared) async {
-    final pending = await _chat.pendingAbsenceVerification(
-      accountId: prepared.account.id,
-      roomToken: prepared.room.token.value,
-    );
-    if (pending == null) {
-      return;
-    }
-    final remaining = pending.verifiableAt - _nowSeconds();
-    if (remaining >= 0) {
-      // One more, because the read has to start in a later second.
-      _armRetry(prepared, remaining + 1);
-    }
-  }
-
   /// Reads the scope of the room's ambiguous head-of-line send over HTTP, so
   /// that the read can prove the message absent and queue it again. Returns
   /// false when the room has no such send.
@@ -1352,7 +1331,7 @@ final class ChatService {
       final retryDelay =
           error.retryAfter?.inSeconds ??
           _unsentRetryDelaySeconds(claim.operation.attemptCount);
-      await recordFailure(
+      final outcome = await recordFailure(
         error.requestNotSent
             ? ChatTransportBodyState.notSent
             : ChatTransportBodyState.possiblySent,
@@ -1364,14 +1343,16 @@ final class ChatService {
           retryDelay,
           operationId: claim.operation.operationId.value,
         );
-      } else {
-        await _armAbsenceVerification(prepared);
+      } else if (outcome == ChatOutboxOutcome.awaitingConfirmation) {
+        await _checkSendConfirmation(prepared, claim.operation.threadId);
       }
       return true;
     } on TalkProtocolException {
       _ensureAccountActive(prepared.account.id);
-      await recordFailure(ChatTransportBodyState.possiblySent);
-      await _armAbsenceVerification(prepared);
+      final outcome = await recordFailure(ChatTransportBodyState.possiblySent);
+      if (outcome == ChatOutboxOutcome.awaitingConfirmation) {
+        await _checkSendConfirmation(prepared, claim.operation.threadId);
+      }
       return true;
     }
     _ensureAccountActive(prepared.account.id);
@@ -1410,7 +1391,7 @@ final class ChatService {
       );
     }
     if (outcome == ChatOutboxOutcome.awaitingConfirmation) {
-      await _armAbsenceVerification(prepared);
+      await _checkSendConfirmation(prepared, claim.operation.threadId);
     }
     if (outcome == ChatOutboxOutcome.retryable) {
       // The pause the outbox stored is this one or shorter.
