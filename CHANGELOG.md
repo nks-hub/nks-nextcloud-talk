@@ -8,6 +8,14 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.2.1 (128) — 28 November 2026
+
+- Search results, filters and the person picker scroll when the keyboard leaves little room. You can still select a person and date range with the phone on its side.
+- Leaving a conversation now cancels late read and connectivity updates. Closing the application while attachments are starting also cancels that startup.
+- Removing an account waits for its cached preview files to close before deleting them on Windows.
+- Star GIFs, find drafts and undelivered messages, save messages to collections, and browse a conversation's media gallery. In message search you can filter by person and date and move between matches.
+- With OwnTalk Extensions 0.7.0 you can sync favourite GIFs, continue a draft on another device, and reply to a spot on a photo. Build 127 first delivered these changes to internal TestFlight testers.
+
 ## 1.2.0 (127) — 27 November 2026
 
 - Save favourite GIFs from the picker. Switching between GIFs and emoji keeps the search and scroll position for each tab. Czech emoji searches also work without accents.
