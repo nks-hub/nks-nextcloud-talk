@@ -296,7 +296,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sendMessage => 'Send message';
 
   @override
-  String get openEmojiPicker => 'Open emoji picker';
+  String get emojiAndGifs => 'Emoji and GIFs';
+
+  @override
+  String get gifTab => 'GIFs';
 
   @override
   String get clipboardImageOfferTitle => 'Paste image from clipboard';
@@ -403,9 +406,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mentionSuggestionsError => 'Couldn\'t load suggestions';
-
-  @override
-  String get openGiphyPicker => 'Open GIF picker';
 
   @override
   String get giphyChecking => 'Checking GIF availability…';

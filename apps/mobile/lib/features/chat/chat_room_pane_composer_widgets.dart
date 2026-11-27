@@ -715,47 +715,6 @@ final class _ReplyBanner extends StatelessWidget {
   }
 }
 
-/// The emoji picker as a panel between the timeline and the compose row.
-///
-/// Bounded so it behaves like the soft keyboard it replaces: it takes a share
-/// of the pane rather than the whole screen, and never squeezes the timeline
-/// out on a short window.
-final class _InlineEmojiPanel extends StatelessWidget {
-  const _InlineEmojiPanel({
-    required this.accountId,
-    required this.usageStore,
-    required this.labels,
-    required this.onClose,
-    required this.onSelected,
-  });
-
-  final AccountId accountId;
-  final EmojiUsageStore usageStore;
-  final EmojiPickerLabels labels;
-  final VoidCallback onClose;
-  final ValueChanged<EmojiChoice> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final height = math.min(320.0, MediaQuery.sizeOf(context).height * 0.45);
-    return Material(
-      color: scheme.surfaceContainerLow,
-      child: SizedBox(
-        key: const Key('inline-emoji-panel'),
-        height: height,
-        child: EmojiPicker(
-          accountId: accountId,
-          usageStore: usageStore,
-          labels: labels,
-          onClose: onClose,
-          onSelected: onSelected,
-        ),
-      ),
-    );
-  }
-}
-
 /// Collects the text of one private reply.
 ///
 /// Deliberately a dialog rather than a hand-off into the target room's

@@ -87,6 +87,7 @@ part 'chat_room_pane_actions.dart';
 part 'chat_room_pane_attachment_menu.dart';
 part 'chat_room_pane_composer.dart';
 part 'chat_room_pane_composer_widgets.dart';
+part 'chat_room_pane_expression_picker.dart';
 part 'chat_room_pane_timeline_states.dart';
 part 'chat_room_pane_notices.dart';
 part 'chat_room_pane_sync.dart';
@@ -183,7 +184,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       <(ChatRoomProviderKey, int)>{};
   final Set<(ChatRoomProviderKey, int)> _pendingReminderActions =
       <(ChatRoomProviderKey, int)>{};
-  int _giphyGeneration = 0;
   bool _syncing = false;
   bool _loadingOlder = false;
   int _historyGeneration = 0;
@@ -429,7 +429,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _sendGeneration++;
     _textSendGeneration++;
     _composerFocusGeneration++;
-    _giphyGeneration++;
     _jumpGeneration++;
     _jumpInProgress = false;
     _jumpFetching = false;
@@ -517,7 +516,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _sendGeneration++;
     _textSendGeneration++;
     _composerFocusGeneration++;
-    _giphyGeneration++;
     _jumpGeneration++;
     _liveBinding?.close();
     unawaited(_syncLoop?.stop());
@@ -1026,45 +1024,18 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       conversation: liveConversation,
       guestLabel: strings.participantAvatarGuest,
     );
-    final giphy = _giphyRequested && !readOnly
-        ? ref.watch(giphyRepositoryProvider(widget.account.id))
-        : null;
-    final giphyRepository = giphy?.valueOrNull;
     final fileAttachmentSupported = _supportsFileAttachment(
       attachmentDependencies,
     );
-    final String giphyTooltip;
-    final VoidCallback? giphyAction;
-    if (attachmentDependencies?.isLoading ?? false) {
-      giphyTooltip = strings.mediaCapabilityChecking;
-      giphyAction = null;
-    } else if (!fileAttachmentSupported) {
-      giphyTooltip = strings.mediaCapabilityUnavailable;
-      giphyAction = null;
-    } else if (giphy == null) {
-      giphyTooltip = strings.openGiphyPicker;
-      giphyAction = () => unawaited(_requestGiphy());
-    } else if (giphy.isLoading) {
-      giphyTooltip = strings.giphyChecking;
-      giphyAction = null;
-    } else if (giphy.hasError) {
-      giphyTooltip = strings.giphyRetry;
-      giphyAction = () => unawaited(_requestGiphy(refresh: true));
-    } else if (giphyRepository == null) {
-      giphyTooltip = strings.giphyUnavailable;
-      giphyAction = null;
-    } else {
-      giphyTooltip = strings.openGiphyPicker;
-      giphyAction = () => unawaited(_requestGiphy());
-    }
+    final giphy = _giphyRequested && fileAttachmentSupported && !readOnly
+        ? ref.watch(giphyRepositoryProvider(widget.account.id))
+        : null;
     final canSendSilently = !readOnly && (actionsProfile?.silentSend ?? false);
     final attachmentMenuActions = _attachmentMenuActions(
       strings: strings,
       attachmentSupported: fileAttachmentSupported,
       actionsProfile: actionsProfile,
       pollAvailable: pollAvailable,
-      giphyLabel: giphyTooltip,
-      giphyAction: _sending ? null : giphyAction,
       voiceSupported:
           fileAttachmentSupported &&
           (attachmentDependencies?.valueOrNull?.profile.voice ?? false),
@@ -1077,7 +1048,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       IconButton(
         key: const Key('open-emoji-picker'),
         onPressed: _sending ? null : _toggleEmojiPicker,
-        tooltip: strings.openEmojiPicker,
+        tooltip: strings.emojiAndGifs,
         isSelected: _emojiPickerOpen,
         icon: const Icon(Icons.emoji_emotions_outlined),
         selectedIcon: const Icon(Icons.emoji_emotions),
@@ -1214,80 +1185,84 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
             ),
           if (error != null) _ChatErrorNotice(error: error, onRetry: _sync),
           Expanded(
-            child: showInitialLoading
-                ? const Center(child: CircularProgressIndicator())
-                : Stack(
-                    children: [
-                      _pointerSelectable(
-                        _ChatTimeline(
-                          readerIsActive: _readerIsActive,
-                          cache: _timelineCache,
-                          account: widget.account,
-                          conversation: widget.conversation,
-                          threadId: widget.threadId,
-                          inlineReplies:
-                              ref.watch(replyLayoutProvider) ==
-                              ReplyLayout.inline,
-                          messages: messages,
-                          blocks: shownBlocks,
-                          pending: pending,
-                          attachments: pendingAttachments,
-                          hasOlder: _island != null
-                              ? !_islandAtStart
-                              : (scope?.hasHistory ?? false) ||
-                                    (inRootRoom
-                                            ? cachedMessages.length
-                                            : cachedMessages
-                                                  .where(
-                                                    (row) =>
-                                                        row.messageId !=
-                                                        widget.threadId,
-                                                  )
-                                                  .length) >=
-                                        ref.watch(
-                                          chatMessageWindowProvider(_key),
-                                        ),
-                          loadingOlder: _loadingOlder,
-                          controller: _scrollController,
-                          onLoadOlder: () => unawaited(_loadOlder()),
-                          onRetry: _sync,
-                          onResend: _confirmResend,
-                          onCancel: (operation) =>
-                              unawaited(_cancelPending(operation)),
-                          onOpenThread: _openThread,
-                          onMessageActions: handleMessageActions,
-                          onReplySwipe: canReplyToMessage ? _startReply : null,
-                          onReactionTap: handleReactionTap,
-                          onJumpToMessage: (messageId) =>
-                              unawaited(_jumpToMessage(messageId)),
-                          jumpTargetId: _jumpTargetId,
-                          jumpTargetKey: _jumpTargetKey,
-                          highlightedMessageId: _highlightedMessageId,
-                          deliveryStates: deliveryStates,
-                          lastCommonRead: _cursorValue(scope?.lastCommonRead),
-                          anchorMessageId: _anchorMessageId,
-                        ),
-                      ),
-                      if (_awayFromNewest)
-                        Positioned(
-                          right: 16,
-                          bottom: 16,
-                          child: _JumpToNewestButton(
-                            onPressed: () => unawaited(_jumpToNewest()),
-                            newer: newerThanIsland,
+            child: _TimelineWithExpressionPicker(
+              picker: _emojiPickerOpen && !readOnly
+                  ? _expressionPicker(
+                      giphy,
+                      checkingAttachments:
+                          attachmentDependencies?.isLoading ?? false,
+                      fileAttachmentSupported: fileAttachmentSupported,
+                    )
+                  : null,
+              timeline: showInitialLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : Stack(
+                      children: [
+                        _pointerSelectable(
+                          _ChatTimeline(
+                            readerIsActive: _readerIsActive,
+                            cache: _timelineCache,
+                            account: widget.account,
+                            conversation: widget.conversation,
+                            threadId: widget.threadId,
+                            inlineReplies:
+                                ref.watch(replyLayoutProvider) ==
+                                ReplyLayout.inline,
+                            messages: messages,
+                            blocks: shownBlocks,
+                            pending: pending,
+                            attachments: pendingAttachments,
+                            hasOlder: _island != null
+                                ? !_islandAtStart
+                                : (scope?.hasHistory ?? false) ||
+                                      (inRootRoom
+                                              ? cachedMessages.length
+                                              : cachedMessages
+                                                    .where(
+                                                      (row) =>
+                                                          row.messageId !=
+                                                          widget.threadId,
+                                                    )
+                                                    .length) >=
+                                          ref.watch(
+                                            chatMessageWindowProvider(_key),
+                                          ),
+                            loadingOlder: _loadingOlder,
+                            controller: _scrollController,
+                            onLoadOlder: () => unawaited(_loadOlder()),
+                            onRetry: _sync,
+                            onResend: _confirmResend,
+                            onCancel: (operation) =>
+                                unawaited(_cancelPending(operation)),
+                            onOpenThread: _openThread,
+                            onMessageActions: handleMessageActions,
+                            onReplySwipe: canReplyToMessage
+                                ? _startReply
+                                : null,
+                            onReactionTap: handleReactionTap,
+                            onJumpToMessage: (messageId) =>
+                                unawaited(_jumpToMessage(messageId)),
+                            jumpTargetId: _jumpTargetId,
+                            jumpTargetKey: _jumpTargetKey,
+                            highlightedMessageId: _highlightedMessageId,
+                            deliveryStates: deliveryStates,
+                            lastCommonRead: _cursorValue(scope?.lastCommonRead),
+                            anchorMessageId: _anchorMessageId,
                           ),
                         ),
-                    ],
-                  ),
-          ),
-          if (_emojiPickerOpen && !readOnly)
-            _InlineEmojiPanel(
-              accountId: AccountId.parse(_key.accountId),
-              usageStore: ref.read(emojiUsageStoreProvider),
-              labels: emojiPickerLabelsFor(strings),
-              onClose: _closeEmojiPicker,
-              onSelected: _insertEmoji,
+                        if (_awayFromNewest)
+                          Positioned(
+                            right: 16,
+                            bottom: 16,
+                            child: _JumpToNewestButton(
+                              onPressed: () => unawaited(_jumpToNewest()),
+                              newer: newerThanIsland,
+                            ),
+                          ),
+                      ],
+                    ),
             ),
+          ),
           ChatTypingBanner(names: typingNames),
           _ChatComposer(
             replyTo: _replyTo,

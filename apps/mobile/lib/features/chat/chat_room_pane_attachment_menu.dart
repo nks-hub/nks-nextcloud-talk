@@ -27,16 +27,7 @@ extension _ChatRoomPaneAttachmentControls on _ChatRoomPaneState {
     required RichChatCapabilityProfile? actionsProfile,
     required AsyncValue<bool>? pollAvailable,
     required bool voiceSupported,
-    required String giphyLabel,
-    required VoidCallback? giphyAction,
   }) => <AttachmentMenuAction>[
-    AttachmentMenuAction(
-      key: const Key('open-giphy-picker'),
-      icon: const Icon(Icons.gif_box_outlined),
-      label: strings.openGiphyPicker,
-      description: giphyLabel == strings.openGiphyPicker ? null : giphyLabel,
-      onSelected: giphyAction,
-    ),
     AttachmentMenuAction(
       key: const Key('open-format-menu'),
       icon: const Icon(Icons.text_format_rounded),

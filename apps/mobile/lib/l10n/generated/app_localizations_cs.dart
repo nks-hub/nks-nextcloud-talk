@@ -299,7 +299,10 @@ class AppLocalizationsCs extends AppLocalizations {
   String get sendMessage => 'Odeslat zprávu';
 
   @override
-  String get openEmojiPicker => 'Otevřít výběr emoji';
+  String get emojiAndGifs => 'Emoji a GIFy';
+
+  @override
+  String get gifTab => 'GIFy';
 
   @override
   String get clipboardImageOfferTitle => 'Vložit obrázek ze schránky';
@@ -407,9 +410,6 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get mentionSuggestionsError => 'Návrhy se nepodařilo načíst';
-
-  @override
-  String get openGiphyPicker => 'Otevřít výběr GIFů';
 
   @override
   String get giphyChecking => 'Kontrola dostupnosti GIFů…';

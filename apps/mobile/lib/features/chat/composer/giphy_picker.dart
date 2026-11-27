@@ -221,36 +221,58 @@ final class GiphyPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) => Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: TextField(
-              key: const Key('giphy-search'),
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: labels.searchHint,
-                prefixIcon: const Icon(Icons.search_rounded),
-                border: const OutlineInputBorder(),
+    final window = MediaQuery.sizeOf(context);
+    final compact = window.width > window.height && window.height < 520;
+    final search = Padding(
+      padding: EdgeInsets.all(compact ? 4 : 8),
+      child: TextField(
+        key: const Key('giphy-search'),
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: labels.searchHint,
+          prefixIcon: const Icon(Icons.search_rounded),
+          border: const OutlineInputBorder(),
+          isDense: compact,
+        ),
+        onChanged: controller.searchAsTyped,
+        onSubmitted: controller.search,
+      ),
+    );
+    final attribution = _GiphyAttributionLink(
+      repository: controller.repository,
+      label: labels.poweredByGiphy,
+      onPressed: onAttributionPressed,
+    );
+    return Column(
+      children: [
+        if (compact)
+          Row(
+            children: [
+              Expanded(child: search),
+              Flexible(child: attribution),
+            ],
+          )
+        else
+          search,
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, bounds) => AnimatedBuilder(
+              animation: controller,
+              builder: (context, _) => _buildResults(
+                context,
+                tileHeight: compact
+                    ? (bounds.maxHeight - 8).clamp(48.0, 120.0)
+                    : null,
               ),
-              onChanged: controller.searchAsTyped,
-              onSubmitted: controller.search,
             ),
           ),
-          Expanded(child: _buildResults(context)),
-          _GiphyAttributionLink(
-            repository: controller.repository,
-            label: labels.poweredByGiphy,
-            onPressed: onAttributionPressed,
-          ),
-        ],
-      ),
+        ),
+        if (!compact) attribution,
+      ],
     );
   }
 
-  Widget _buildResults(BuildContext context) {
+  Widget _buildResults(BuildContext context, {required double? tileHeight}) {
     if (controller.phase == GiphyLoadPhase.loading &&
         controller.entries.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -274,8 +296,9 @@ final class GiphyPicker extends StatelessWidget {
         SliverPadding(
           padding: const EdgeInsets.all(8),
           sliver: SliverGrid.builder(
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 240,
+              mainAxisExtent: tileHeight,
               mainAxisSpacing: 8,
               crossAxisSpacing: 8,
             ),

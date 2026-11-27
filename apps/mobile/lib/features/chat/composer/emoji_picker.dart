@@ -165,6 +165,7 @@ final class EmojiPicker extends StatefulWidget {
     this.glyphSupport,
     this.selectedGlyph,
     this.recordUsage = true,
+    this.headerTabs,
     super.key,
   });
 
@@ -174,6 +175,7 @@ final class EmojiPicker extends StatefulWidget {
   final VoidCallback onClose;
   final ValueChanged<EmojiChoice> onSelected;
   final EmojiCatalog? catalog;
+  final Widget? headerTabs;
 
   /// Decides which emoji the device font cannot draw; defaults to the system.
   final EmojiGlyphSupport? glyphSupport;
@@ -423,7 +425,9 @@ final class _EmojiPickerState extends State<EmojiPicker> {
       ),
       IconButton(
         key: const Key('emoji-close'),
-        tooltip: widget.labels.closeTooltip,
+        tooltip: widget.headerTabs == null
+            ? widget.labels.closeTooltip
+            : MaterialLocalizations.of(context).closeButtonTooltip,
         onPressed: widget.onClose,
         icon: const Icon(Icons.close_rounded),
       ),
@@ -473,6 +477,28 @@ final class _EmojiPickerState extends State<EmojiPicker> {
     );
     return Column(
       children: [
+        if (!tight || widget.headerTabs != null) ...[
+          SizedBox(
+            height: compact ? 48 : 56,
+            child: Row(
+              children: [
+                Expanded(
+                  child:
+                      widget.headerTabs ??
+                      Padding(
+                        padding: const EdgeInsetsDirectional.only(start: 16),
+                        child: Text(
+                          widget.labels.title,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                ),
+                ...actions,
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+        ],
         if (tight)
           Padding(
             padding: const EdgeInsetsDirectional.only(start: 4, top: 4),
@@ -484,30 +510,10 @@ final class _EmojiPickerState extends State<EmojiPicker> {
                 Expanded(
                   child: query.isEmpty ? categories : const SizedBox.shrink(),
                 ),
-                ...actions,
-              ],
-            ),
-          )
-        else ...[
-          SizedBox(
-            height: compact ? 48 : 56,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsetsDirectional.only(start: 16),
-                    child: Text(
-                      widget.labels.title,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                ),
-                ...actions,
+                if (widget.headerTabs == null) ...actions,
               ],
             ),
           ),
-          const Divider(height: 1),
-        ],
         if (_managingFavorites)
           Container(
             key: const Key('emoji-favorite-mode-hint'),

@@ -596,11 +596,17 @@ abstract class AppLocalizations {
   /// **'Send message'**
   String get sendMessage;
 
-  /// No description provided for @openEmojiPicker.
+  /// No description provided for @emojiAndGifs.
   ///
   /// In en, this message translates to:
-  /// **'Open emoji picker'**
-  String get openEmojiPicker;
+  /// **'Emoji and GIFs'**
+  String get emojiAndGifs;
+
+  /// No description provided for @gifTab.
+  ///
+  /// In en, this message translates to:
+  /// **'GIFs'**
+  String get gifTab;
 
   /// No description provided for @clipboardImageOfferTitle.
   ///
@@ -811,12 +817,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t load suggestions'**
   String get mentionSuggestionsError;
-
-  /// No description provided for @openGiphyPicker.
-  ///
-  /// In en, this message translates to:
-  /// **'Open GIF picker'**
-  String get openGiphyPicker;
 
   /// No description provided for @giphyChecking.
   ///

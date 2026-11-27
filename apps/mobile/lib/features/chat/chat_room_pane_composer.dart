@@ -397,31 +397,6 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     await _sendMessage(emoji, clearComposer: false, emojiSizeStep: sizeStep);
   }
 
-  Future<void> _sendGiphyForScope(
-    GiphyEntry entry,
-    HttpGiphyRepository repository,
-    ChatRoomProviderKey targetKey,
-    int giphyGeneration,
-  ) async {
-    if (!_isCurrentGiphyScope(targetKey, giphyGeneration)) {
-      return;
-    }
-    if (!isSupportedGiphyResource(entry.resourceUrl)) {
-      if (mounted) {
-        _update(() => _localError = ChatServiceError.invalidResponse);
-      }
-      return;
-    }
-    // A GIF is sent as a reference, not as a file in the user's storage. The
-    // bubble resolves that reference through the account's own server and
-    // renders the animation inline.
-    await _sendMessage(
-      entry.resourceUrl.toString(),
-      clearComposer: false,
-      expectedKey: targetKey,
-    );
-  }
-
   Future<void> _sendMessage(
     String message, {
     required bool clearComposer,
@@ -685,105 +660,6 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     }
     _composer.value = next;
     _composerFocusNode.requestFocus();
-  }
-
-  Future<void> _requestGiphy({bool refresh = false}) async {
-    if (_sending || _isReadOnlyNow()) {
-      return;
-    }
-    final targetKey = _key;
-    final generation = ++_giphyGeneration;
-    final provider = giphyRepositoryProvider(targetKey.accountId);
-    final subscription = ref.listenManual<AsyncValue<HttpGiphyRepository?>>(
-      provider,
-      (_, _) {},
-      fireImmediately: true,
-    );
-    if (!_giphyRequested) {
-      _update(() => _giphyRequested = true);
-    }
-    try {
-      if (refresh) {
-        ref.invalidate(provider);
-      }
-      final repository = await ref.read(provider.future);
-      if (!_isCurrentGiphyScope(targetKey, generation) || repository == null) {
-        return;
-      }
-      await _showGiphyPicker(repository, targetKey, generation);
-    } on Object {
-      // The watched provider exposes a localized retry state in the composer.
-    } finally {
-      subscription.close();
-    }
-  }
-
-  bool _isCurrentGiphyScope(ChatRoomProviderKey targetKey, int generation) {
-    return mounted && generation == _giphyGeneration && targetKey == _key;
-  }
-
-  Future<void> _showGiphyPicker(
-    HttpGiphyRepository repository,
-    ChatRoomProviderKey targetKey,
-    int generation,
-  ) async {
-    if (!_isCurrentGiphyScope(targetKey, generation)) {
-      return;
-    }
-    final strings = AppLocalizations.of(context);
-    final controller = GiphyController(repository: repository);
-    unawaited(controller.loadTrending());
-    try {
-      await showModalBottomSheet<void>(
-        context: context,
-        useSafeArea: true,
-        isScrollControlled: true,
-        builder: (sheetContext) => Align(
-          alignment: Alignment.bottomCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 840),
-            child: SizedBox(
-              height: MediaQuery.sizeOf(sheetContext).height * 0.72,
-              child: GiphyPicker(
-                controller: controller,
-                labels: GiphyPickerLabels(
-                  searchHint: strings.giphySearchHint,
-                  noResults: strings.giphyNoResults,
-                  retry: strings.retry,
-                  loadMore: strings.giphyLoadMore,
-                  poweredByGiphy: strings.giphyPoweredBy,
-                ),
-                thumbnailBuilder: (_, entry) => ExcludeSemantics(
-                  child: _GiphyThumbnail(repository: repository, entry: entry),
-                ),
-                onAttributionPressed: _openGiphyAttribution,
-                onSelected: (entry) {
-                  Navigator.of(sheetContext).pop();
-                  unawaited(
-                    _sendGiphyForScope(
-                      entry,
-                      repository,
-                      targetKey,
-                      generation,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
-      );
-    } finally {
-      controller.dispose();
-    }
-  }
-
-  Future<void> _openGiphyAttribution(Uri uri) async {
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } on Object {
-      // The picker remains usable when no external browser is available.
-    }
   }
 
   void _showComposerLimitError() {
