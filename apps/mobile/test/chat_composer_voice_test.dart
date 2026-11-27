@@ -158,6 +158,44 @@ void main() {
       expect(await fixture.controller.resumeRecording(), isFalse);
     });
 
+    test(
+      'a refused pause keeps the recording available to finish and play',
+      () async {
+        final fixture = _VoiceFixture();
+        addTearDown(fixture.close);
+        await fixture.controller.start();
+        fixture.recorder.refuseChange = true;
+        expect(await fixture.controller.pauseRecording(), isFalse);
+        expect(fixture.controller.state.phase, VoiceMessagePhase.recording);
+        expect(fixture.controller.state.error, VoiceMessageError.pauseFailed);
+        expect(await fixture.controller.start(), isFalse);
+        expect(await fixture.controller.stop(), isTrue);
+        expect(
+          fixture.controller.state.draft?.source,
+          fixture.recorder.recording.source,
+        );
+        expect(await fixture.controller.play(), isTrue);
+        expect(fixture.player.plays, 1);
+        expect(fixture.controller.state.error, isNull);
+      },
+    );
+
+    test(
+      'a refused resume keeps the paused recording available to discard',
+      () async {
+        final fixture = _VoiceFixture();
+        addTearDown(fixture.close);
+        await fixture.controller.start();
+        await fixture.controller.pauseRecording();
+        fixture.recorder.refuseChange = true;
+        expect(await fixture.controller.resumeRecording(), isFalse);
+        expect(fixture.controller.state.phase, VoiceMessagePhase.paused);
+        expect(await fixture.controller.cancel(), isTrue);
+        expect(fixture.recorder.cancels, 1);
+        expect(fixture.controller.state.phase, VoiceMessagePhase.idle);
+      },
+    );
+
     test('a paused recording can still be stopped and cancelled', () async {
       final fixture = _VoiceFixture();
       addTearDown(fixture.close);
@@ -479,6 +517,7 @@ final class _FakeRecorder implements VoiceRecorder {
   int starts = 0;
   int pauses = 0;
   int resumes = 0;
+  bool refuseChange = false;
   int cancels = 0;
   int closes = 0;
   final List<PreparedAttachmentSource> discarded = [];
@@ -487,10 +526,16 @@ final class _FakeRecorder implements VoiceRecorder {
   Future<void> start() async => starts++;
 
   @override
-  Future<void> pause() async => pauses++;
+  Future<void> pause() async {
+    if (refuseChange) throw StateError('pause refused');
+    pauses++;
+  }
 
   @override
-  Future<void> resume() async => resumes++;
+  Future<void> resume() async {
+    if (refuseChange) throw StateError('resume refused');
+    resumes++;
+  }
 
   @override
   Stream<double> get amplitude => _amplitude.stream;

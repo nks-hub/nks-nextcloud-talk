@@ -190,6 +190,7 @@ final class VoiceMessageController extends ChangeNotifier {
   bool _admissionPending = false;
   bool _discardDraftAfterAdmission = false;
   int _operationGeneration = 0;
+  int? _pendingPauseGeneration;
   int _playGeneration = 0;
   Future<void>? _closeFuture;
 
@@ -253,43 +254,43 @@ final class VoiceMessageController extends ChangeNotifier {
   /// Normalised loudness of the running recording, for the waveform.
   Stream<double> get amplitude => recorder.amplitude;
 
-  Future<bool> pauseRecording() async {
-    if (_closed || _state.phase != VoiceMessagePhase.recording) {
-      return false;
-    }
-    final generation = _operationGeneration;
-    try {
-      await recorder.pause();
-    } on Object {
-      if (_isCurrent(generation)) {
-        _setError(VoiceMessageError.pauseFailed);
-      }
-      return false;
-    }
-    if (!_isCurrent(generation)) {
-      return false;
-    }
-    _setState(const VoiceMessageState(phase: VoiceMessagePhase.paused));
-    return true;
-  }
+  Future<bool> pauseRecording() => _setPaused(true);
 
-  Future<bool> resumeRecording() async {
-    if (_closed || _state.phase != VoiceMessagePhase.paused) {
+  Future<bool> resumeRecording() => _setPaused(false);
+
+  Future<bool> _setPaused(bool paused) async {
+    final previous = _state.phase;
+    final generation = _operationGeneration;
+    if (_closed ||
+        _pendingPauseGeneration == generation ||
+        previous !=
+            (paused ? VoiceMessagePhase.recording : VoiceMessagePhase.paused)) {
       return false;
     }
-    final generation = _operationGeneration;
+    _pendingPauseGeneration = generation;
     try {
-      await recorder.resume();
+      await (paused ? recorder.pause() : recorder.resume());
     } on Object {
       if (_isCurrent(generation)) {
-        _setError(VoiceMessageError.pauseFailed);
+        _setState(
+          VoiceMessageState(
+            phase: previous,
+            error: VoiceMessageError.pauseFailed,
+          ),
+        );
       }
       return false;
+    } finally {
+      if (_pendingPauseGeneration == generation) _pendingPauseGeneration = null;
     }
     if (!_isCurrent(generation)) {
       return false;
     }
-    _setState(const VoiceMessageState(phase: VoiceMessagePhase.recording));
+    _setState(
+      VoiceMessageState(
+        phase: paused ? VoiceMessagePhase.paused : VoiceMessagePhase.recording,
+      ),
+    );
     return true;
   }
 
