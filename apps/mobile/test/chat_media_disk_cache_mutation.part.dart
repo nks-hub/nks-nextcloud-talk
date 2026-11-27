@@ -262,6 +262,61 @@ void _previewMutationTests(
     expect(other?.body.last, 2);
   });
 
+  test(
+    'account purge waits only for its own preview timestamp writes',
+    () async {
+      const other = 'account-b';
+      final uri = uriFor(1);
+      final seed = open();
+      await seed.write(accountId: account, uri: uri, image: image(10, 1));
+      final owned = storedPreviews().single;
+      final ownedDirectory = p.normalize(owned.parent.path);
+      await seed.write(accountId: other, uri: uri, image: image(10, 2));
+      final ownerGate = Completer<void>();
+      final otherGate = Completer<void>();
+      final cache = open(
+        touchFile: (file, _) => p.equals(file.path, owned.path)
+            ? ownerGate.future
+            : otherGate.future,
+      );
+      await cache.read(accountId: account, uri: uri);
+      await cache.read(accountId: other, uri: uri);
+
+      final directoryOpened = Completer<void>();
+      final native = _NativeFiles();
+      final purge = IOOverrides.runZoned(
+        () => cache.evictAccount(account),
+        createDirectory: (path) {
+          final directory = native.createDirectory(path);
+          if (!p.equals(path, ownedDirectory)) return directory;
+          directoryOpened.complete();
+          return _ObservedPreviewDirectory(
+            directory,
+            beforeDelete: () {
+              if (!ownerGate.isCompleted) {
+                throw FileSystemException(
+                  'The preview is still open',
+                  owned.path,
+                );
+              }
+            },
+          );
+        },
+      );
+      try {
+        await directoryOpened.future.timeout(deadline);
+        ownerGate.complete();
+        await purge.timeout(deadline);
+        expect(owned.existsSync(), isFalse);
+        expect(storedPreviews().single.readAsBytesSync().last, 2);
+      } finally {
+        if (!ownerGate.isCompleted) ownerGate.complete();
+        otherGate.complete();
+        await purge;
+      }
+    },
+  );
+
   test('account purge can finish while unrelated pruning waits', () async {
     const otherAccount = 'account-b';
     final seed = open();

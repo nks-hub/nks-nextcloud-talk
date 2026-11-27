@@ -293,7 +293,7 @@ final class ChatMediaDiskCache {
   final Future<void> Function(File file) _deleteFile;
   final Future<void> Function(File file, DateTime touchedAt) _touchFile;
   final Map<String, _ChatMediaDiskEntry> _index = {};
-  final Set<String> _touching = {};
+  final Map<String, Completer<void>> _touching = {};
   final Map<String, Future<void>> _pendingMutations = {};
   final Map<String, Set<Future<void>>> _pendingWrites = {};
 
@@ -380,9 +380,9 @@ final class ChatMediaDiskCache {
   }
 
   void _scheduleTouch(String path, File file) {
-    if (_touching.add(path)) {
-      unawaited(_persistTouch(path, file));
-    }
+    if (_touching.containsKey(path)) return;
+    _touching[path] = Completer<void>();
+    unawaited(_persistTouch(path, file));
   }
 
   Future<void> _persistTouch(String path, File file) async {
@@ -399,7 +399,7 @@ final class ChatMediaDiskCache {
         entry = latest;
       }
     } finally {
-      _touching.remove(path);
+      _touching.remove(path)!.complete();
     }
   }
 
@@ -473,7 +473,7 @@ final class ChatMediaDiskCache {
       final path = file.path;
       await _mutatePath(path, () async {
         final replacesEntry =
-            _index.containsKey(path) || _touching.contains(path);
+            _index.containsKey(path) || _touching.containsKey(path);
         await temporary.rename(path);
         _drop(path);
         _index[path] = _ChatMediaDiskEntry(
@@ -523,6 +523,11 @@ final class ChatMediaDiskCache {
         _drop(path);
       }
     }
+    // Windows may keep a preview open while its last-use time is written.
+    await Future.wait([
+      for (final touch in _touching.entries)
+        if (p.isWithin(directory.path, touch.key)) touch.value.future,
+    ]);
     try {
       await directory.delete(recursive: true);
     } on FileSystemException {
