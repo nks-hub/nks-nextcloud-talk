@@ -306,12 +306,11 @@ void _registerChatMediaComposerToolbarTests(
         ],
         trailingActions: _aggregatedTrailingActions(),
         openAppSettings: () async => true,
+        field: const SizedBox(height: 48),
         wrap: (composer, _) => ChatComposerViewportLayout(
           builder: (context, compactHeight) => AdaptiveChatComposerLayout(
             compact: compactHeight,
-            field: const SizedBox(height: 48),
             mediaComposer: composer,
-            dividerColor: Colors.grey,
           ),
         ),
       ),
@@ -363,12 +362,11 @@ void _registerChatMediaComposerToolbarTests(
         bridge: bridge.bridge,
         threadId: null,
         voiceBackends: voiceBackends,
+        field: const SizedBox(height: 48),
         wrap: (composer, _) => ChatComposerViewportLayout(
           builder: (context, compactHeight) => AdaptiveChatComposerLayout(
             compact: compactHeight,
-            field: const SizedBox(height: 48),
             mediaComposer: composer,
-            dividerColor: Colors.grey,
           ),
         ),
       ),

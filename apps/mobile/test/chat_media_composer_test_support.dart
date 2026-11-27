@@ -10,6 +10,7 @@ Widget _composerApp({
   ImageSelectionBackend imageSelectionBackend = const _ImageBackend(),
   ContactSelectionBackend contactSelectionBackend =
       const PlatformContactSelectionBackend(),
+  Widget? field,
   Widget? leadingAction,
   List<Widget> idleActions = const <Widget>[],
   List<Widget> trailingActions = const <Widget>[],
@@ -43,6 +44,7 @@ Widget _composerApp({
     onCaptionConsumed: onCaptionConsumed,
     openAppSettings: openAppSettings,
     controller: mediaController,
+    field: field,
     leadingAction: leadingAction,
     showAttachmentButton: showAttachmentButton,
     idleActions: idleActions,

@@ -3,6 +3,7 @@ part of 'chat_media_composer.dart';
 final class ChatMediaComposerStatus extends StatelessWidget {
   const ChatMediaComposerStatus.loading({
     super.key,
+    this.field,
     this.leadingAction,
     this.idleActions = const <Widget>[],
     this.trailingActions = const <Widget>[],
@@ -12,6 +13,7 @@ final class ChatMediaComposerStatus extends StatelessWidget {
   const ChatMediaComposerStatus.unavailable({
     super.key,
     required this.onRetry,
+    this.field,
     this.leadingAction,
     this.idleActions = const <Widget>[],
     this.trailingActions = const <Widget>[],
@@ -19,6 +21,7 @@ final class ChatMediaComposerStatus extends StatelessWidget {
 
   final bool unavailable;
   final VoidCallback? onRetry;
+  final Widget? field;
   final Widget? leadingAction;
   final List<Widget> idleActions;
   final List<Widget> trailingActions;
@@ -27,41 +30,46 @@ final class ChatMediaComposerStatus extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     final compact = usesCompactChatComposerLayout(context);
-    final compactPinnedAction = compact && trailingActions.isNotEmpty
-        ? trailingActions.last
-        : null;
-    final remainingTrailingActions = compact && trailingActions.isNotEmpty
-        ? trailingActions.take(trailingActions.length - 1)
-        : trailingActions;
+    final pinAction = (compact || field != null) && trailingActions.isNotEmpty;
     final status = unavailable
         ? strings.mediaCapabilityUnavailable
         : strings.mediaCapabilityChecking;
-    if (compact) {
-      return Semantics(
-        label: status,
-        child: SizedBox(
-          key: Key(
-            unavailable
-                ? 'chat-media-composer-unavailable'
-                : 'chat-media-composer-loading',
-          ),
-          height: 48,
-          child: _ComposerActionToolbar(
-            compact: true,
-            compactPinnedAction: compactPinnedAction,
-            leadingAction: leadingAction,
-            actions: <Widget>[
-              if (unavailable)
-                IconButton(
-                  key: const Key('retry-media-capabilities'),
-                  onPressed: onRetry,
-                  tooltip: strings.retryMediaCapabilities,
-                  constraints: const BoxConstraints(
-                    minWidth: 48,
-                    minHeight: 48,
+    final retry = IconButton(
+      key: const Key('retry-media-capabilities'),
+      onPressed: onRetry,
+      tooltip: strings.retryMediaCapabilities,
+      icon: const Icon(Icons.refresh_rounded),
+    );
+    return Semantics(
+      key: Key(
+        unavailable
+            ? 'chat-media-composer-unavailable'
+            : 'chat-media-composer-loading',
+      ),
+      label: compact || !unavailable ? status : null,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (unavailable && !compact)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    status,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  icon: const Icon(Icons.refresh_rounded),
                 ),
+                retry,
+              ],
+            ),
+          _ComposerActionToolbar(
+            field: field,
+            compact: compact,
+            pinnedAction: pinAction ? trailingActions.last : null,
+            leadingAction: leadingAction,
+            actions: [
+              if (unavailable && compact) retry,
               ...idleActions,
               SizedBox.square(
                 dimension: 48,
@@ -72,82 +80,101 @@ final class ChatMediaComposerStatus extends StatelessWidget {
                   icon: const Icon(Icons.mic_none_rounded),
                 ),
               ),
-              ...remainingTrailingActions,
+              ...trailingActions.take(
+                trailingActions.length - (pinAction ? 1 : 0),
+              ),
             ],
           ),
-        ),
-      );
-    }
-    return Column(
-      key: Key(
-        unavailable
-            ? 'chat-media-composer-unavailable'
-            : 'chat-media-composer-loading',
+        ],
       ),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                status,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            if (unavailable)
-              IconButton(
-                key: const Key('retry-media-capabilities'),
-                onPressed: onRetry,
-                tooltip: strings.retryMediaCapabilities,
-                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-                icon: const Icon(Icons.refresh_rounded),
-              ),
-          ],
-        ),
-        _ComposerActionToolbar(
-          leadingAction: leadingAction,
-          actions: <Widget>[
-            ...idleActions,
-            SizedBox.square(
-              dimension: 48,
-              child: IconButton(
-                key: const Key('voice-record-unavailable'),
-                onPressed: null,
-                tooltip: strings.voiceUnsupported,
-                icon: const Icon(Icons.mic_none_rounded),
-              ),
-            ),
-            ...trailingActions,
-          ],
-        ),
-      ],
     );
   }
 }
 
 final class _ComposerActionToolbar extends StatelessWidget {
   const _ComposerActionToolbar({
+    this.field,
     required this.leadingAction,
     required this.actions,
     this.compact = false,
-    this.compactPinnedAction,
+    this.pinnedAction,
   });
 
+  final Widget? field;
   final Widget? leadingAction;
   final List<Widget> actions;
   final bool compact;
-  final Widget? compactPinnedAction;
+  final Widget? pinnedAction;
 
   @override
   Widget build(BuildContext context) {
+    final entry = field;
+    if (entry != null) {
+      final colors = Theme.of(context).colorScheme;
+      final decoration = BoxDecoration(
+        color: colors.surfaceContainerHigh,
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(14),
+      );
+      return Row(
+        key: const Key('chat-media-composer-actions'),
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (leadingAction != null) ...[
+            DecoratedBox(decoration: decoration, child: leadingAction),
+            const SizedBox(width: 6),
+          ],
+          Expanded(
+            child: DecoratedBox(
+              decoration: decoration,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const buttonSize = 48.0;
+                  const entryWidth = 90.0;
+                  final pinnedWidth = pinnedAction == null ? 0.0 : buttonSize;
+                  final available = (constraints.maxWidth - pinnedWidth).clamp(
+                    0.0,
+                    double.infinity,
+                  );
+                  final actionWidth = (available - entryWidth).clamp(
+                    available.clamp(0.0, buttonSize),
+                    available,
+                  );
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 48),
+                          child: Center(widthFactor: 1, child: entry),
+                        ),
+                      ),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: actionWidth),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: actions,
+                          ),
+                        ),
+                      ),
+                      ?pinnedAction,
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     if (compact) {
       return Row(
         key: const Key('chat-media-composer-actions'),
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
-          ?compactPinnedAction,
+          ?pinnedAction,
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -170,6 +197,31 @@ final class _ComposerActionToolbar extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: actions,
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+final class _RecordingToolbar extends StatelessWidget {
+  const _RecordingToolbar({required this.field, required this.controls});
+
+  final Widget? field;
+  final Widget controls;
+
+  @override
+  Widget build(BuildContext context) {
+    final entry = field;
+    return Row(
+      key: const Key('chat-media-composer-actions'),
+      children: [
+        if (entry != null) Flexible(child: entry),
+        Expanded(
+          flex: 3,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: controls,
           ),
         ),
       ],

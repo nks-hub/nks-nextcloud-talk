@@ -270,7 +270,7 @@ final class _ChatComposer extends ConsumerWidget {
     required this.autofocus,
     required this.sending,
     required this.postingBlock,
-    required this.mediaComposer,
+    required this.buildMediaComposer,
     required this.replyTo,
     required this.onCancelReply,
     required this.mentionSource,
@@ -314,7 +314,7 @@ final class _ChatComposer extends ConsumerWidget {
 
   /// Null while this account may post; otherwise why it may not.
   final ChatPostingBlock? postingBlock;
-  final Widget mediaComposer;
+  final Widget Function(Widget field) buildMediaComposer;
 
   bool get readOnly => postingBlock != null;
   final CachedChatMessage? replyTo;
@@ -490,6 +490,7 @@ final class _ChatComposer extends ConsumerWidget {
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final composerField = Focus(
+      key: GlobalObjectKey(focusNode),
       onKeyEvent: (node, event) =>
           _handleKey(context, event, sendsOnEnter: context.sendsOnEnter),
       child: SizedBox(
@@ -535,14 +536,13 @@ final class _ChatComposer extends ConsumerWidget {
           ),
           decoration: InputDecoration(
             hintText: strings.messageHint,
-            isDense: compactHeight ? true : null,
+            hintMaxLines: 1,
+            isDense: true,
             filled: false,
             border: InputBorder.none,
             enabledBorder: InputBorder.none,
             focusedBorder: InputBorder.none,
-            contentPadding: compactHeight
-                ? const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
-                : const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            contentPadding: const EdgeInsetsDirectional.fromSTEB(12, 12, 0, 12),
           ),
         ),
       ),
@@ -635,33 +635,10 @@ final class _ChatComposer extends ConsumerWidget {
                             error: strings.mentionSuggestionsError,
                           ),
                         ),
-                        ListenableBuilder(
-                          listenable: focusNode,
-                          builder: (context, _) => Container(
-                            decoration: BoxDecoration(
-                              color: Color.lerp(
-                                scheme.surface,
-                                scheme.surfaceContainerHighest,
-                                0.45,
-                              ),
-                              borderRadius: BorderRadius.circular(26),
-                              border: Border.all(
-                                color: focusNode.hasFocus
-                                    ? scheme.primary
-                                    : scheme.outlineVariant,
-                                width: 2,
-                              ),
-                            ),
-                            child: AdaptiveChatComposerLayout(
-                              compact: compactHeight,
-                              field: composerField,
-                              mediaComposer: mediaComposer,
-                              compactReply: compactHeight ? replyBanner : null,
-                              dividerColor: scheme.outlineVariant.withValues(
-                                alpha: 0.7,
-                              ),
-                            ),
-                          ),
+                        AdaptiveChatComposerLayout(
+                          compact: compactHeight,
+                          mediaComposer: buildMediaComposer(composerField),
+                          compactReply: compactHeight ? replyBanner : null,
                         ),
                       ],
                     ),

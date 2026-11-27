@@ -839,7 +839,7 @@ void main() {
 
       expect(find.byKey(const Key('toggle-silent-send')), findsNothing);
       expect(find.byKey(const Key('schedule-message')), findsNothing);
-      expect(find.byKey(const Key('open-giphy-picker')), findsOneWidget);
+      expect(find.byKey(const Key('pick-image-attachment')), findsOneWidget);
 
       await tester.longPress(find.byKey(const Key('send-message-gesture')));
       await settle(tester);

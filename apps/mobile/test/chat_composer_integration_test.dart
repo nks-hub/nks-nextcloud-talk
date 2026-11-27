@@ -23,6 +23,7 @@ import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/features/chat/composer/chat_media_composer.dart';
+import 'package:nextcloudtalk/features/chat/media/image_attachment_upload_panel.dart';
 import 'package:nextcloudtalk/features/chat/composer/clipboard_image_offer.dart';
 import 'package:nextcloudtalk/features/chat/composer/clipboard_image_source.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy.dart';
@@ -206,7 +207,7 @@ void main() {
     await _pumpTransition(tester);
     expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
 
-    await tester.tap(find.byKey(const Key('open-giphy-picker')));
+    await _tapGiphy(tester);
     final gif = find.byKey(
       const ValueKey<String>('giphy-thumbnail-https://giphy.com/gifs/wave'),
     );
@@ -265,27 +266,19 @@ void main() {
           ],
         ),
       );
+      await _pumpUntil(tester, () => _giphyButtonEnabled(tester));
+      await _tapGiphy(tester);
+      await _pumpUntil(tester, () => !_giphyButtonEnabled(tester));
+      await _openComposerMenu(tester);
+      final tile = find.byKey(const Key('open-giphy-picker'));
       await _pumpUntil(
         tester,
         () => find
-            .byIcon(Icons.chat_bubble_outline_rounded)
+            .text('GIFs are not available on this server.')
             .evaluate()
             .isNotEmpty,
       );
-      await tester.tap(find.byKey(const Key('open-giphy-picker')));
-      await _pumpUntil(tester, () {
-        final button = tester.widget<IconButton>(
-          find.byKey(const Key('open-giphy-picker')),
-        );
-        return button.onPressed == null &&
-            button.tooltip == 'GIFs are not available on this server.';
-      });
-
-      final button = tester.widget<IconButton>(
-        find.byKey(const Key('open-giphy-picker')),
-      );
-      expect(button.onPressed, isNull);
-      expect(button.tooltip, 'GIFs are not available on this server.');
+      expect(tester.widget<ListTile>(tile).enabled, isFalse);
       expect(find.byType(GiphyPicker), findsNothing);
       expect(tester.takeException(), isNull);
       await _unmountComposer(tester);
@@ -324,7 +317,7 @@ void main() {
       );
       await _pumpUntil(tester, () => _giphyButtonEnabled(tester));
 
-      await tester.tap(find.byKey(const Key('open-giphy-picker')));
+      await _tapGiphy(tester);
       await tester.runAsync(() async {
         for (var attempt = 0; attempt < 600; attempt++) {
           if (probeClient.requestStarted.isCompleted) {
@@ -380,7 +373,7 @@ void main() {
         () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
       );
       await _pumpUntil(tester, () => _giphyButtonEnabled(tester));
-      await tester.tap(find.byKey(const Key('open-giphy-picker')));
+      await _tapGiphy(tester);
       await _pumpUntil(tester, () => probeClient.requestStarted.isCompleted);
 
       final accountB = harness.account.copyWith(
@@ -512,12 +505,6 @@ bool _sendButtonEnabled(WidgetTester tester) {
       null;
 }
 
-bool _giphyButtonEnabled(WidgetTester tester) {
-  final button = find.byKey(const Key('open-giphy-picker'));
-  return button.evaluate().isNotEmpty &&
-      tester.widget<IconButton>(button).onPressed != null;
-}
-
 /// Pumps until [condition] holds.
 ///
 /// The bound is a net against a hang, not a budget for the work: the chains
@@ -591,7 +578,7 @@ Future<void> _verifyShortComposer(
   final editableElement = tester.element(editable);
   final mediaElement = tester.element(mediaWidget);
   final media = tester.widget<ChatMediaComposer>(mediaWidget).controller!;
-  expect(tester.widget<TextField>(composer).decoration?.isDense, isNull);
+  expect(tester.widget<TextField>(composer).decoration?.isDense, isTrue);
   await tester.enterText(composer, 'First line\nSecond line');
   await tester.pump();
   expect(tester.widget<TextField>(composer).focusNode?.hasFocus, isTrue);
@@ -629,8 +616,6 @@ Future<void> _verifyShortComposer(
   final controls = <Finder>[
     composer,
     find.byKey(const Key('pick-image-attachment')),
-    find.byKey(const Key('open-giphy-picker')),
-    find.byKey(const Key('open-format-menu')),
     find.byKey(const Key('open-emoji-picker')),
     find.byKey(const Key('voice-record')).evaluate().isNotEmpty
         ? find.byKey(const Key('voice-record'))

@@ -679,7 +679,7 @@ final class VoiceMessageControls extends StatelessWidget {
       _button(
         key: const Key('voice-record'),
         tooltip: labels.record,
-        icon: Icons.mic_rounded,
+        icon: Icons.mic_none_rounded,
         action: controller.start,
       ),
       if ((state.error == VoiceMessageError.permissionDenied ||

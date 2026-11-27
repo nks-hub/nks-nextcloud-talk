@@ -23,7 +23,7 @@ final class ChatComposerViewportLayout extends StatefulWidget {
   final Widget Function(BuildContext context, bool compactHeight) builder;
 
   static EdgeInsets padding(bool compactHeight) =>
-      EdgeInsets.symmetric(horizontal: 12, vertical: compactHeight ? 2 : 10);
+      EdgeInsets.symmetric(horizontal: 10, vertical: compactHeight ? 2 : 8);
 
   @override
   State<ChatComposerViewportLayout> createState() =>
@@ -86,72 +86,31 @@ final class AdaptiveChatComposerLayout extends StatelessWidget {
   const AdaptiveChatComposerLayout({
     super.key,
     required this.compact,
-    required this.field,
     required this.mediaComposer,
-    required this.dividerColor,
     this.compactReply,
   });
 
   final bool compact;
-  final Widget field;
   final Widget mediaComposer;
-  final Color dividerColor;
   final Widget? compactReply;
 
   @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const fieldFloor = 96.0;
-        const actionsViewport = 344.0;
-        const actionSize = 48.0;
-        final reply = compact ? compactReply : null;
-        final replyWidth = reply == null
-            ? 0.0
-            : (constraints.maxWidth / 4).clamp(actionSize, 192.0);
-        final contentWidth = (constraints.maxWidth - replyWidth - 1).clamp(
-          0.0,
-          double.infinity,
-        );
-        final mediaWidth = compact
-            ? (contentWidth - fieldFloor).clamp(
-                contentWidth.clamp(0.0, actionSize),
-                actionsViewport,
-              )
-            : null;
-        final fieldWidth = mediaWidth == null
-            ? null
-            : contentWidth - mediaWidth;
-        return Flex(
-          direction: compact ? Axis.horizontal : Axis.vertical,
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: compact
-              ? CrossAxisAlignment.center
-              : CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(width: fieldWidth, child: field),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final reply = compact ? compactReply : null;
+      return Row(
+        children: [
+          Expanded(child: mediaComposer),
+          if (reply != null)
             SizedBox(
-              width: compact ? 1 : null,
-              height: compact ? actionSize : 1,
-              child: ColoredBox(color: dividerColor),
+              width: (constraints.maxWidth / 4).clamp(48, 192),
+              height: 48,
+              child: reply,
             ),
-            SizedBox(
-              width: mediaWidth,
-              height: compact ? actionSize : null,
-              child: Padding(
-                padding: compact
-                    ? EdgeInsets.zero
-                    : const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                child: mediaComposer,
-              ),
-            ),
-            if (reply != null)
-              SizedBox(width: replyWidth, height: actionSize, child: reply),
-          ],
-        );
-      },
-    );
-  }
+        ],
+      );
+    },
+  );
 }
 
 final class CompactChatReplyPreview extends StatelessWidget {

@@ -19,12 +19,14 @@ final class AttachmentMenuAction {
     required this.key,
     required this.icon,
     required this.label,
+    this.description,
     required this.onSelected,
   });
 
   final Key key;
   final Widget icon;
   final String label;
+  final String? description;
   final VoidCallback? onSelected;
 }
 
@@ -50,10 +52,10 @@ final class ComposerActionMenuButton extends StatelessWidget {
         final enabled = current.any((action) => action.onSelected != null);
         return IconButton(
           key: const Key('pick-image-attachment'),
-          tooltip: AppLocalizations.of(context).addAttachment,
+          tooltip: AppLocalizations.of(context).composerTools,
           constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           onPressed: enabled ? () => unawaited(_open(context)) : null,
-          icon: const Icon(Icons.attach_file_rounded),
+          icon: const Icon(Icons.add_rounded),
         );
       },
     );
@@ -62,6 +64,12 @@ final class ComposerActionMenuButton extends StatelessWidget {
   Future<void> _open(BuildContext context) {
     return showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxWidth: 640,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+      ),
+      showDragHandle: true,
       builder: (sheetContext) => SafeArea(
         child: ValueListenableBuilder<List<AttachmentMenuAction>>(
           valueListenable: actions,
@@ -78,6 +86,9 @@ final class ComposerActionMenuButton extends StatelessWidget {
                     key: action.key,
                     leading: action.icon,
                     title: Text(action.label),
+                    subtitle: action.description == null
+                        ? null
+                        : Text(action.description!),
                     enabled: action.onSelected != null,
                     onTap: action.onSelected == null
                         ? null

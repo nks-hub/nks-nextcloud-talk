@@ -238,6 +238,7 @@ final class ChatMediaComposer extends StatefulWidget {
     this.onCaptionConsumed,
     this.openAppSettings,
     this.controller,
+    this.field,
     this.leadingAction,
     this.idleActions = const <Widget>[],
     this.trailingActions = const <Widget>[],
@@ -279,6 +280,7 @@ final class ChatMediaComposer extends StatefulWidget {
   final ValueChanged<String>? onCaptionConsumed;
   final Future<bool> Function()? openAppSettings;
   final ChatMediaComposerController? controller;
+  final Widget? field;
   final Widget? leadingAction;
   final List<Widget> idleActions;
   final List<Widget> trailingActions;
@@ -661,11 +663,11 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     final compactHeight = usesCompactChatComposerLayout(context);
-    final compactPinnedAction =
-        compactHeight && widget.trailingActions.isNotEmpty
+    final pinAction = compactHeight || widget.field != null;
+    final pinnedAction = pinAction && widget.trailingActions.isNotEmpty
         ? widget.trailingActions.last
         : null;
-    final trailingActions = compactHeight && widget.trailingActions.isNotEmpty
+    final trailingActions = pinAction && widget.trailingActions.isNotEmpty
         ? widget.trailingActions.take(widget.trailingActions.length - 1)
         : widget.trailingActions;
     final voiceLabels = _voiceLabels(strings);
@@ -709,35 +711,16 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       children: [
         if (!compactHeight) _attachmentPreviews(),
         if (voiceOwnsToolbar)
-          compactHeight
-              ? SingleChildScrollView(
-                  key: const Key('chat-media-composer-actions'),
-                  scrollDirection: Axis.horizontal,
-                  child: VoiceMessageControls(
-                    controller: voiceController,
-                    labels: voiceLabels,
-                    onOpenSettings: widget.openAppSettings == null
-                        ? null
-                        : () => unawaited(_openAppSettings()),
-                  ),
-                )
-              : Row(
-                  key: const Key('chat-media-composer-actions'),
-                  children: <Widget>[
-                    Expanded(
-                      child: Align(
-                        alignment: AlignmentDirectional.centerStart,
-                        child: VoiceMessageControls(
-                          controller: voiceController,
-                          labels: voiceLabels,
-                          onOpenSettings: widget.openAppSettings == null
-                              ? null
-                              : () => unawaited(_openAppSettings()),
-                        ),
-                      ),
-                    ),
-                  ],
-                )
+          _RecordingToolbar(
+            field: widget.field,
+            controls: VoiceMessageControls(
+              controller: voiceController,
+              labels: voiceLabels,
+              onOpenSettings: widget.openAppSettings == null
+                  ? null
+                  : () => unawaited(_openAppSettings()),
+            ),
+          )
         else if (voiceErrorUsesRemainingWidth && !compactHeight)
           Column(
             key: const Key('chat-media-composer-error'),
@@ -750,8 +733,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
                 ),
               ),
               _ComposerActionToolbar(
+                field: widget.field,
                 compact: compactHeight,
-                compactPinnedAction: compactPinnedAction,
+                pinnedAction: pinnedAction,
                 leadingAction: attachmentAction,
                 actions: <Widget>[
                   ...widget.idleActions,
@@ -764,8 +748,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
           )
         else
           _ComposerActionToolbar(
+            field: widget.field,
             compact: compactHeight,
-            compactPinnedAction: compactPinnedAction,
+            pinnedAction: pinnedAction,
             leadingAction: attachmentAction,
             actions: <Widget>[
               if (voiceErrorUsesRemainingWidth)

@@ -106,6 +106,8 @@ void main() {
       find.byKey(const Key('chat-composer')),
       'Pošlu odkaz na kód:',
     );
+    await tester.tap(find.byKey(const Key('pick-image-attachment')));
+    await waitFor(tester, find.byKey(const Key('open-format-menu')));
     await tester.tap(find.byKey(const Key('open-format-menu')));
     await shoot(tester, 'ipad13-2-format');
 

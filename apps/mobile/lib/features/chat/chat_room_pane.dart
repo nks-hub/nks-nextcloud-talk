@@ -562,6 +562,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         same =
             published[index].key == actions[index].key &&
             published[index].label == actions[index].label &&
+            published[index].description == actions[index].description &&
             (published[index].onSelected == null) ==
                 (actions[index].onSelected == null);
       }
@@ -1079,58 +1080,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       attachmentSupported: giphyAttachmentSupported,
       actionsProfile: actionsProfile,
       pollAvailable: pollAvailable,
+      giphyLabel: giphyTooltip,
+      giphyAction: _sending ? null : giphyAction,
     );
     _publishAttachmentMenuActions(attachmentMenuActions);
     final leadingComposerAction = ComposerActionMenuButton(
       actions: _attachmentMenuActions_,
     );
     final idleComposerActions = <Widget>[
-      IconButton(
-        key: const Key('open-giphy-picker'),
-        onPressed: _sending ? null : giphyAction,
-        tooltip: giphyTooltip,
-        icon:
-            (attachmentDependencies?.isLoading ?? false) ||
-                (giphy?.isLoading ?? false)
-            ? const SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.gif_box_outlined),
-      ),
-      PopupMenuButton<ComposerFormat>(
-        key: const Key('open-format-menu'),
-        enabled: !_sending && !readOnly,
-        tooltip: strings.formatMenuTooltip,
-        icon: const Icon(Icons.text_format_rounded),
-        onSelected: _applyComposerFormat,
-        itemBuilder: (context) => [
-          for (final (format, label, icon) in [
-            (ComposerFormat.bold, strings.formatBold, Icons.format_bold),
-            (ComposerFormat.italic, strings.formatItalic, Icons.format_italic),
-            (
-              ComposerFormat.strikethrough,
-              strings.formatStrikethrough,
-              Icons.format_strikethrough,
-            ),
-            (ComposerFormat.inlineCode, strings.formatInlineCode, Icons.code),
-            (
-              ComposerFormat.codeBlock,
-              strings.formatCodeBlock,
-              Icons.data_object,
-            ),
-          ])
-            PopupMenuItem(
-              key: Key('format-${format.name}'),
-              value: format,
-              child: ListTile(
-                leading: Icon(icon),
-                title: Text(label),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-        ],
-      ),
       IconButton(
         key: const Key('open-emoji-picker'),
         onPressed: _sending ? null : _toggleEmojiPicker,
@@ -1367,10 +1324,11 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
             canDivertPaste: () => _mediaComposerController.canAttachBytes,
             postingBlock: postingAccess.block,
             mentionSource: mentionSource?.valueOrNull,
-            mediaComposer: attachmentDependencies == null
-                ? const SizedBox.shrink()
+            buildMediaComposer: (field) => attachmentDependencies == null
+                ? field
                 : _buildMediaComposer(
                     attachmentDependencies,
+                    field: field,
                     leadingAction: leadingComposerAction,
                     idleActions: idleComposerActions,
                     trailingActions: trailingComposerActions,

@@ -1,12 +1,27 @@
 part of 'chat_room_pane.dart';
 
-extension _ChatRoomPaneAttachmentMenu on _ChatRoomPaneState {
+extension _ChatRoomPaneAttachmentControls on _ChatRoomPaneState {
   List<AttachmentMenuAction> _attachmentMenuActions({
     required AppLocalizations strings,
     required bool attachmentSupported,
     required RichChatCapabilityProfile? actionsProfile,
     required AsyncValue<bool>? pollAvailable,
+    required String giphyLabel,
+    required VoidCallback? giphyAction,
   }) => <AttachmentMenuAction>[
+    AttachmentMenuAction(
+      key: const Key('open-giphy-picker'),
+      icon: const Icon(Icons.gif_box_outlined),
+      label: strings.openGiphyPicker,
+      description: giphyLabel == strings.openGiphyPicker ? null : giphyLabel,
+      onSelected: giphyAction,
+    ),
+    AttachmentMenuAction(
+      key: const Key('open-format-menu'),
+      icon: const Icon(Icons.text_format_rounded),
+      label: strings.formatMenuTooltip,
+      onSelected: _sending ? null : () => unawaited(_chooseComposerFormat()),
+    ),
     AttachmentMenuAction(
       key: const Key('attach-source-gallery'),
       icon: const Icon(Icons.image_outlined),
@@ -99,4 +114,155 @@ extension _ChatRoomPaneAttachmentMenu on _ChatRoomPaneState {
         onSelected: _sending ? null : () => unawaited(_openPollComposer()),
       ),
   ];
+
+  Future<void> _chooseComposerFormat() async {
+    final room = _key;
+    final strings = AppLocalizations.of(context);
+    final format = await showModalBottomSheet<ComposerFormat>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final (format, label, icon) in [
+                (ComposerFormat.bold, strings.formatBold, Icons.format_bold),
+                (
+                  ComposerFormat.italic,
+                  strings.formatItalic,
+                  Icons.format_italic,
+                ),
+                (
+                  ComposerFormat.strikethrough,
+                  strings.formatStrikethrough,
+                  Icons.format_strikethrough,
+                ),
+                (
+                  ComposerFormat.inlineCode,
+                  strings.formatInlineCode,
+                  Icons.code,
+                ),
+                (
+                  ComposerFormat.codeBlock,
+                  strings.formatCodeBlock,
+                  Icons.data_object,
+                ),
+              ])
+                ListTile(
+                  key: Key('format-${format.name}'),
+                  leading: Icon(icon),
+                  title: Text(label),
+                  onTap: () => Navigator.pop(sheetContext, format),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (mounted && _key == room && format != null) {
+      _applyComposerFormat(format);
+    }
+  }
+
+  Widget _buildMediaComposer(
+    AsyncValue<ChatAttachmentDependencies> dependencies, {
+    required Widget field,
+    required Widget leadingAction,
+    required List<Widget> idleActions,
+    required List<Widget> trailingActions,
+  }) {
+    return dependencies.when(
+      loading: () => ChatMediaComposerStatus.loading(
+        field: field,
+        leadingAction: leadingAction,
+        idleActions: idleActions,
+        trailingActions: trailingActions,
+      ),
+      error: (_, _) => ChatMediaComposerStatus.unavailable(
+        field: field,
+        leadingAction: leadingAction,
+        idleActions: idleActions,
+        trailingActions: trailingActions,
+        onRetry: () => retryChatAttachmentDependencies(ref, _key),
+      ),
+      data: (value) {
+        final captionOwner = _key;
+        try {
+          final accountId = AccountId.parse(widget.account.id);
+          final server = ServerBase.parse(widget.account.serverUrl);
+          final roomToken = ConversationToken.parse(
+            widget.conversation.token,
+            path: r'$.roomToken',
+          );
+          final threadContext = _currentThreadContext;
+          final threadBinding = threadContext?.mediaBinding(
+            accountId: accountId,
+            roomToken: roomToken,
+          );
+          final cachedReplyTo = widget.threadId == null ? _replyTo : null;
+          final replyTarget = cachedReplyTo == null
+              ? null
+              : ChatMediaReplyTarget(
+                  accountId: AccountId.parse(cachedReplyTo.accountId),
+                  roomToken: ConversationToken.parse(
+                    cachedReplyTo.roomToken,
+                    path: r'$.replyTo.roomToken',
+                  ),
+                  messageId: cachedReplyTo.messageId,
+                  messageThreadId: cachedReplyTo.threadId,
+                  deleted: cachedReplyTo.deleted,
+                  systemMessage: cachedReplyTo.systemMessage.isNotEmpty,
+                );
+          return ChatMediaComposer(
+            key: ValueKey((
+              widget.account.id,
+              widget.conversation.token,
+              widget.threadId,
+              threadContext?.kind,
+            )),
+            accountId: accountId,
+            controller: _mediaComposerController,
+            server: server,
+            roomToken: roomToken,
+            threadId: widget.threadId,
+            threadBinding: threadBinding,
+            replyTarget: replyTarget,
+            onReplyDurablyAccepted: _handleMediaReplyDurablyAccepted,
+            sourceStore: value.source,
+            capabilityProfile: value.profile,
+            submissionBridge: AttachmentSubmissionBridge.withService(
+              accountId: accountId,
+              server: server,
+              roomToken: roomToken,
+              prepare: value.resolver.resolve,
+              service: value.service,
+            ),
+            // The same source the call uses: the platform says when it has
+            // taken the microphone for a telephone call, and a recording that
+            // does not hear it records the ringing.
+            audioInterruptions: ref.read(callAudioInterruptionsProvider),
+            field: field,
+            leadingAction: leadingAction,
+            idleActions: idleActions,
+            trailingActions: trailingActions,
+            showAttachmentButton: false,
+            silent: _silentSend,
+            captionSource: () => _composer.text,
+            onCaptionConsumed: (caption) =>
+                _clearConsumedCaption(captionOwner, caption),
+            openAppSettings: () => ref.read(appSettingsOpenerProvider).open(),
+          );
+        } on TalkProtocolException {
+          return ChatMediaComposerStatus.unavailable(
+            field: field,
+            leadingAction: leadingAction,
+            idleActions: idleActions,
+            trailingActions: trailingActions,
+            onRetry: () => retryChatAttachmentDependencies(ref, _key),
+          );
+        }
+      },
+    );
+  }
 }

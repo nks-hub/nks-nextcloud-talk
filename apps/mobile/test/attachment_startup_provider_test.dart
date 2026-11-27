@@ -15,6 +15,7 @@ import 'package:nextcloudtalk/data/attachment_repository.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:nextcloudtalk/features/chat/chat_attachment_context.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
+import 'package:nextcloudtalk/features/chat/media/image_attachment_upload_panel.dart';
 import 'package:nextcloudtalk/network/attachment_transport.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
@@ -97,12 +98,19 @@ void main() {
       );
 
       try {
-        final giphy = find.byKey(const Key('open-giphy-picker'));
-        bool giphyEnabled() =>
-            tester.widget<IconButton>(giphy).onPressed != null;
+        final menu = find.byType(ComposerActionMenuButton);
+        bool giphyEnabled() => tester
+            .widget<ComposerActionMenuButton>(menu)
+            .actions
+            .value
+            .any(
+              (action) =>
+                  action.key == const Key('open-giphy-picker') &&
+                  action.onSelected != null,
+            );
 
         await pumpUntilCondition(tester, giphyEnabled);
-        final container = ProviderScope.containerOf(tester.element(giphy));
+        final container = ProviderScope.containerOf(tester.element(menu));
         container.invalidate(attachmentServiceProvider);
         final retry = find.byKey(const Key('retry-media-capabilities'));
         await pumpUntilCondition(tester, () => retry.evaluate().isNotEmpty);
