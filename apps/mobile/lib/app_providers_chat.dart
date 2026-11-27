@@ -447,16 +447,15 @@ final attachmentInFlightBytesProvider =
 final attachmentServiceProvider = FutureProvider<AttachmentService>((
   ref,
 ) async {
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
   final source = await ref.watch(attachmentSourceProvider.future);
+  if (disposed) throw AttachmentServiceClosed();
   final chat = ref.watch(chatServiceProvider);
   final keepAlive = ref.watch(transferKeepAliveProvider);
   final owner = AttachmentRuntimeOwner(reserveAttachmentRuntime());
-  var disposed = false;
   Future<int>? sourceSweep;
-  ref.onDispose(() {
-    disposed = true;
-    unawaited(owner.close(maintenance: sourceSweep));
-  });
+  ref.onDispose(() => unawaited(owner.close(maintenance: sourceSweep)));
   try {
     final service = await owner.open(
       () => AttachmentService(

@@ -26,6 +26,23 @@ import 'test_support.dart';
 enum _RetryTrigger { button, timer, connectivity, resume }
 
 void main() {
+  testWidgets('disposing during source startup cancels the attachment runtime', (
+    tester,
+  ) async {
+    final fixture = await _attachmentStartupFixture(tester);
+    final delayedSource = Completer<DurableAttachmentSourceStore>();
+    final container = ProviderContainer(
+      overrides: [
+        attachmentSourceProvider.overrideWith((_) => delayedSource.future),
+      ],
+    );
+    final pending = container.read(attachmentServiceProvider.future);
+    final closed = expectLater(pending, throwsA(isA<AttachmentServiceClosed>()));
+    container.dispose();
+    delayedSource.complete(fixture.source);
+    await closed;
+  });
+
   testWidgets('the room recovers after a late attachment runtime start', (
     tester,
   ) async {
