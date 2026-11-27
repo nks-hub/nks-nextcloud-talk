@@ -1,1 +1,1 @@
-A search result from far back in a conversation opens the message itself. Scrolling then loads older and newer messages around it, and one tap takes you back to the newest. The send button is a plain arrow, the desktop chat list has a tidier header, and a right click works in an opened picture and in the gallery.
+OwnTalk automatically retries attachment checks after a temporary error. If a send confirmation is missing, the app looks for the message in the conversation history. On Android, the chat reclaims its space when the keyboard closes.

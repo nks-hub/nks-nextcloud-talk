@@ -8,6 +8,12 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.1.2 (123) — 27 November 2026
+
+- The composer stops waiting after 30 seconds if attachment setup stalls. It retries temporary failures after 10 seconds or as soon as the connection comes back or the app returns to the foreground.
+- When a send confirmation is missing, OwnTalk checks the conversation history for the original message.
+- On Android, the chat returns to full height after the keyboard closes, even when the closing animation has no end signal.
+
 ## 1.1.1 (121) — 23 November 2026
 
 - A search result from far back in a conversation opens the message itself. It used to say the message was no longer available once more than about a thousand newer messages followed it. The app loads the messages around it in one request, about 1.5 s on a Galaxy S9+; on a server without that request it loads the history until it reaches the message, with a progress bar.
