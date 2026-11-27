@@ -141,10 +141,15 @@ void main() {
     expect(service.searchedTerms, isEmpty);
   });
 
+  final filterViewport = ValueVariant({
+    (size: const Size(390, 844), ime: 300.0),
+    (size: const Size(797.7, 355.4), ime: 180.0),
+  });
   testWidgets('a person and date range narrow the same search term', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(390, 844);
+    final viewport = filterViewport.currentValue!;
+    tester.view.physicalSize = viewport.size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final service = _FakeMessageSearchService(
@@ -161,19 +166,25 @@ void main() {
       },
     );
     final query = find.byKey(const Key('message-search-field'));
+    tester.view.viewInsets = FakeViewPadding(bottom: viewport.ime);
     await tester.enterText(query, 'invoice');
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('message-search-sender')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('message-search-person-field')),
       'Ali',
     );
+    tester.view.viewInsets = FakeViewPadding(bottom: viewport.ime);
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
     expect(find.text('Fixture group'), findsNothing);
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Alice Example'));
     await tester.pumpAndSettle();
     expect(service.filtersUsed.last.person, 'fixture-alice');
@@ -189,6 +200,10 @@ void main() {
     final end = DateTime(2026, 1, 7);
     await tester.enterText(dates.first, material.formatCompactDate(start));
     await tester.enterText(dates.last, material.formatCompactDate(end));
+    tester.view.viewInsets = FakeViewPadding(bottom: viewport.ime);
+    await tester.pumpAndSettle();
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
     await tester.tap(find.text(material.okButtonLabel));
     await tester.pumpAndSettle();
 
@@ -201,7 +216,7 @@ void main() {
     );
     expect(tester.widget<TextField>(query).controller!.text, 'invoice');
     expect(tester.takeException(), isNull);
-  });
+  }, variant: filterViewport);
 
   testWidgets('retrying a failed page keeps the previous search hits', (
     tester,

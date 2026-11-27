@@ -277,43 +277,54 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
       ),
       body: ContentColumn(
         child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: TextField(
-                  key: const Key('message-search-field'),
-                  controller: _controller,
-                  autofocus: true,
-                  textInputAction: TextInputAction.search,
-                  onChanged: _onQueryChanged,
-                  decoration: InputDecoration(
-                    hintText: strings.searchMessagesHint,
-                    prefixIcon: const Icon(Icons.search),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: _controller,
-                      builder: (context, value, _) {
-                        if (value.text.isEmpty) return const SizedBox.shrink();
-                        return IconButton(
-                          tooltip: strings.searchMessagesClear,
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _controller.clear();
-                            _onQueryChanged('');
-                          },
-                        );
-                      },
+          child: CustomScrollView(
+            controller: _scrollController,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: TextField(
+                    key: const Key('message-search-field'),
+                    controller: _controller,
+                    autofocus: true,
+                    textInputAction: TextInputAction.search,
+                    onChanged: _onQueryChanged,
+                    decoration: InputDecoration(
+                      hintText: strings.searchMessagesHint,
+                      prefixIcon: const Icon(Icons.search),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _controller,
+                        builder: (context, value, _) {
+                          if (value.text.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          return IconButton(
+                            tooltip: strings.searchMessagesClear,
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _controller.clear();
+                              _onQueryChanged('');
+                            },
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
               ),
-              FutureBuilder<Set<MessageSearchFilter>>(
-                future: _supportedFilters,
-                builder: (context, snapshot) =>
-                    _buildFilters(context, strings, snapshot.data ?? const {}),
+              SliverToBoxAdapter(
+                child: FutureBuilder<Set<MessageSearchFilter>>(
+                  future: _supportedFilters,
+                  builder: (context, snapshot) => _buildFilters(
+                    context,
+                    strings,
+                    snapshot.data ?? const {},
+                  ),
+                ),
               ),
-              Expanded(child: _buildBody(strings)),
+              _buildBody(strings),
             ],
           ),
         ),
@@ -388,43 +399,42 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
   }
 
   Widget _buildBody(AppLocalizations strings) {
-    switch (_viewState) {
-      case _MessageSearchViewState.idle:
-        return Center(
-          key: const Key('message-search-idle'),
-          child: Text(strings.searchMessagesPrompt),
-        );
-      case _MessageSearchViewState.searching:
-        return const Center(
-          key: Key('message-search-loading'),
-          child: CircularProgressIndicator(),
-        );
-      case _MessageSearchViewState.error:
-        return Center(
-          key: const Key('message-search-error'),
-          child: Text(_errorMessage(strings, _error)),
-        );
-      case _MessageSearchViewState.results:
-        if (_results.isEmpty && _nextCursor == null) {
-          return Center(
-            key: const Key('message-search-no-results'),
-            child: Text(strings.searchMessagesNoResults),
+    if (_viewState == _MessageSearchViewState.results &&
+        (_results.isNotEmpty || _nextCursor != null)) {
+      return SliverList.builder(
+        key: const Key('message-search-results'),
+        itemCount: _results.length + (_nextCursor == null ? 0 : 1),
+        itemBuilder: (context, index) {
+          if (index == _results.length) return _buildMore(strings);
+          return _MessageSearchResultTile(
+            result: _results[index],
+            onTap: () => _selectMatch(index),
           );
-        }
-        return ListView.builder(
-          key: const Key('message-search-results'),
-          controller: _scrollController,
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          itemCount: _results.length + (_nextCursor == null ? 0 : 1),
-          itemBuilder: (context, index) {
-            if (index == _results.length) return _buildMore(strings);
-            return _MessageSearchResultTile(
-              result: _results[index],
-              onTap: () => _selectMatch(index),
-            );
-          },
-        );
+        },
+      );
     }
+    return SliverFillRemaining(
+      hasScrollBody: false,
+      child: Center(
+        child: switch (_viewState) {
+          _MessageSearchViewState.idle => Text(
+            strings.searchMessagesPrompt,
+            key: const Key('message-search-idle'),
+          ),
+          _MessageSearchViewState.searching => const CircularProgressIndicator(
+            key: Key('message-search-loading'),
+          ),
+          _MessageSearchViewState.error => Text(
+            _errorMessage(strings, _error),
+            key: const Key('message-search-error'),
+          ),
+          _MessageSearchViewState.results => Text(
+            strings.searchMessagesNoResults,
+            key: const Key('message-search-no-results'),
+          ),
+        },
+      ),
+    );
   }
 
   Widget _buildMore(AppLocalizations strings) => Padding(
@@ -490,6 +500,7 @@ final class _SearchPersonDialogState extends State<_SearchPersonDialog> {
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     return AlertDialog(
+      scrollable: true,
       title: Text(strings.searchMessagesSender),
       content: SizedBox(
         width: 360,
