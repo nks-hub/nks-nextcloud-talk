@@ -13,6 +13,7 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/attachment_repository.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
+import 'package:nextcloudtalk/features/chat/chat_attachment_context.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/network/attachment_transport.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
@@ -20,6 +21,8 @@ import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dar
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
+
+enum _RetryTrigger { button, timer, connectivity, resume }
 
 void main() {
   testWidgets('the room recovers after a late attachment runtime start', (
@@ -55,67 +58,149 @@ void main() {
     );
   });
 
-  testWidgets('the composer retry restarts failed attachment initialization', (
-    tester,
-  ) async {
-    final fixture = await _attachmentStartupFixture(tester);
-    var startupAttempts = 0;
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          appDatabaseProvider.overrideWithValue(fixture.database),
-          credentialVaultProvider.overrideWithValue(fixture.vault),
-          nextcloudApiProvider.overrideWithValue(fixture.api),
-          connectivityWakeEventsProvider.overrideWithValue(
-            const Stream.empty(),
-          ),
-          attachmentSourceProvider.overrideWith((_) => fixture.source),
-          attachmentServiceProvider.overrideWith((_) async {
-            if (++startupAttempts == 2) {
-              throw StateError('Synthetic attachment startup failure');
-            }
-            return fixture.service;
-          }),
-        ],
-        child: localizedTestApp(
-          home: Scaffold(
-            body: ChatRoomPane(
-              account: fixture.account,
-              conversation: fixture.conversation,
+  for (final trigger in _RetryTrigger.values) {
+    testWidgets('the composer recovers from failed attachment startup on '
+        '${trigger.name}', (tester) async {
+      final fixture = await _attachmentStartupFixture(tester);
+      final connectivity = StreamController<void>.broadcast(sync: true);
+      final resumes = StreamController<void>.broadcast(sync: true);
+      addTearDown(connectivity.close);
+      addTearDown(resumes.close);
+      var startupAttempts = 0;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(fixture.database),
+            credentialVaultProvider.overrideWithValue(fixture.vault),
+            nextcloudApiProvider.overrideWithValue(fixture.api),
+            connectivityWakeEventsProvider.overrideWithValue(
+              connectivity.stream,
+            ),
+            appLifecycleResumeEventsProvider.overrideWithValue(resumes.stream),
+            attachmentSourceProvider.overrideWith((_) => fixture.source),
+            attachmentServiceProvider.overrideWith((_) async {
+              if (++startupAttempts == 2) {
+                throw StateError('Synthetic attachment startup failure');
+              }
+              return fixture.service;
+            }),
+          ],
+          child: localizedTestApp(
+            home: Scaffold(
+              body: ChatRoomPane(
+                account: fixture.account,
+                conversation: fixture.conversation,
+              ),
             ),
           ),
         ),
-      ),
-    );
-
-    try {
-      final giphy = find.byKey(const Key('open-giphy-picker'));
-      bool giphyEnabled() => tester.widget<IconButton>(giphy).onPressed != null;
-
-      await pumpUntilCondition(tester, giphyEnabled);
-      final container = ProviderScope.containerOf(tester.element(giphy));
-      container.invalidate(attachmentServiceProvider);
-      await pumpUntilCondition(
-        tester,
-        () => container.read(attachmentServiceProvider).hasError,
-        pumpBeforeChecking: true,
       );
-      await tester.pump();
-      expect(giphyEnabled(), isFalse);
-      final retry = find.byKey(const Key('retry-media-capabilities'));
-      expect(retry, findsOneWidget);
 
-      await tester.tap(retry);
-      await pumpUntilCondition(tester, giphyEnabled);
-      expect(retry, findsNothing);
-      expect(startupAttempts, 3);
-    } finally {
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(milliseconds: 1));
-      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
-      await tester.pump();
-    }
-  });
+      try {
+        final giphy = find.byKey(const Key('open-giphy-picker'));
+        bool giphyEnabled() =>
+            tester.widget<IconButton>(giphy).onPressed != null;
+
+        await pumpUntilCondition(tester, giphyEnabled);
+        final container = ProviderScope.containerOf(tester.element(giphy));
+        container.invalidate(attachmentServiceProvider);
+        final retry = find.byKey(const Key('retry-media-capabilities'));
+        await pumpUntilCondition(tester, () => retry.evaluate().isNotEmpty);
+        expect(giphyEnabled(), isFalse);
+
+        switch (trigger) {
+          case _RetryTrigger.button:
+            await tester.tap(retry);
+          case _RetryTrigger.timer:
+            await tester.pump(const Duration(seconds: 10));
+          case _RetryTrigger.connectivity:
+            connectivity.add(null);
+            resumes.add(null);
+          case _RetryTrigger.resume:
+            resumes.add(null);
+        }
+
+        await pumpUntilCondition(
+          tester,
+          giphyEnabled,
+          timeout: const Duration(seconds: 3),
+        );
+        expect(retry, findsNothing);
+        await tester.pump(const Duration(seconds: 10));
+        expect(startupAttempts, 3);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(milliseconds: 1));
+        await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+        await tester.pump();
+      }
+    });
+  }
+
+  for (final status in [503, 401]) {
+    final transient = status == 503;
+    testWidgets(
+      transient
+          ? 'the attachment check retries after a temporary server failure'
+          : 'the attachment check stops when credentials are rejected',
+      (tester) async {
+        var responseStatus = status;
+        var capabilityReads = 0;
+        final fixture = await _attachmentStartupFixture(
+          tester,
+          capabilityStatus: () {
+            capabilityReads++;
+            return responseStatus;
+          },
+        );
+        final container = ProviderContainer(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(fixture.database),
+            credentialVaultProvider.overrideWithValue(fixture.vault),
+            nextcloudApiProvider.overrideWithValue(fixture.api),
+            attachmentSourceProvider.overrideWith((_) => fixture.source),
+            attachmentServiceProvider.overrideWith((_) => fixture.service),
+          ],
+        );
+        final provider = chatAttachmentDependenciesProvider((
+          accountId: fixture.account.id,
+          roomToken: fixture.conversation.token,
+          threadId: null,
+        ));
+        container.listen(provider, (_, _) {});
+        try {
+          await pumpUntilCondition(
+            tester,
+            () => container.read(provider).hasError,
+          );
+          expect(
+            container.read(provider).error,
+            isA<ChatAttachmentContextException>().having(
+              (error) => error.code,
+              'code',
+              transient
+                  ? ChatAttachmentContextError.capabilitiesUnavailable
+                  : ChatAttachmentContextError.reauthenticationRequired,
+            ),
+          );
+          expect(capabilityReads, 1);
+          responseStatus = 200;
+          await tester.pump(const Duration(seconds: 10));
+          if (transient) {
+            await pumpUntilCondition(
+              tester,
+              () =>
+                  container.read(provider).valueOrNull?.profile.enabled == true,
+              timeout: const Duration(seconds: 3),
+            );
+          }
+          expect(capabilityReads, transient ? 2 : 1);
+        } finally {
+          container.dispose();
+        }
+      },
+    );
+  }
 
   test(
     'account observation eagerly starts durable attachment recovery',
@@ -158,7 +243,10 @@ Future<
     HttpNextcloudApi api,
   })
 >
-_attachmentStartupFixture(WidgetTester tester) async {
+_attachmentStartupFixture(
+  WidgetTester tester, {
+  int Function()? capabilityStatus,
+}) async {
   final database = openTestDatabase();
   addTearDown(() async => tester.runAsync(database.close));
   final accounts = AccountRepository(database);
@@ -170,9 +258,13 @@ _attachmentStartupFixture(WidgetTester tester) async {
     attachments: const {'allowed': true, 'conversation-subfolders': true},
   );
   final api = HttpNextcloudApi(
-    client: MockClient(
-      (_) async => http.Response(jsonEncode(capabilities), 200),
-    ),
+    client: MockClient((_) async {
+      final status = capabilityStatus?.call() ?? 200;
+      return http.Response(
+        status == 200 ? jsonEncode(capabilities) : '',
+        status,
+      );
+    }),
   );
   addTearDown(api.close);
   final attachmentRuntime = (await tester.runAsync(() async {

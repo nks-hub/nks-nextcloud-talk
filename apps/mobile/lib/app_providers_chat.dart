@@ -332,7 +332,15 @@ final chatAttachmentDependenciesProvider = FutureProvider.autoDispose
           .when(
             skipLoadingOnRefresh: false,
             data: (ready) => ready,
-            error: Error.throwWithStackTrace,
+            error: (error, stack) {
+              if (error is! ChatAttachmentContextException ||
+                  error.code ==
+                      ChatAttachmentContextError.capabilitiesUnavailable ||
+                  error.code == ChatAttachmentContextError.contextChanged) {
+                _scheduleAttachmentCheckRetry(ref, key);
+              }
+              Error.throwWithStackTrace(error, stack);
+            },
             loading: () {
               final pending = ref.watch(preparation.future);
               const limit = Duration(seconds: 30);
@@ -351,16 +359,57 @@ final chatAttachmentDependenciesProvider = FutureProvider.autoDispose
           );
     });
 
-void retryChatAttachmentDependencies(WidgetRef ref, ChatRoomProviderKey key) {
-  if (ref.read(attachmentSourceProvider).hasError) {
-    ref.invalidate(attachmentSourceProvider);
-  } else if (ref.read(attachmentServiceProvider).hasError) {
-    ref.invalidate(attachmentServiceProvider);
+void _scheduleAttachmentCheckRetry(Ref ref, ChatRoomProviderKey key) {
+  var waiting = true;
+  void retry() {
+    if (!waiting) return;
+    waiting = false;
+    if (ref
+        .read(_chatAttachmentPreparationProvider(key))
+        .unwrapPrevious()
+        .hasError) {
+      _retryAttachmentPreparation(key, ref.read, ref.invalidate);
+    }
   }
+
+  final timer = Timer(const Duration(seconds: 10), retry);
+  final subscriptions = [
+    for (final wakes in [
+      connectivityWakeEventsProvider,
+      appLifecycleResumeEventsProvider,
+    ])
+      ref
+          .watch(wakes)
+          .listen((_) => retry(), onError: (Object _, StackTrace _) {}),
+  ];
+  ref.onDispose(() {
+    waiting = false;
+    timer.cancel();
+    for (final subscription in subscriptions) {
+      unawaited(subscription.cancel());
+    }
+  });
+}
+
+void _retryAttachmentPreparation(
+  ChatRoomProviderKey key,
+  T Function<T>(ProviderListenable<T>) read,
+  void Function(ProviderOrFamily) invalidate,
+) {
   final preparation = _chatAttachmentPreparationProvider(key);
-  if (!ref.read(preparation).isLoading) {
-    ref.invalidate(preparation);
+  if (read(preparation).isLoading) return;
+  final source = read(attachmentSourceProvider).unwrapPrevious();
+  final service = read(attachmentServiceProvider).unwrapPrevious();
+  if (source.hasError) {
+    invalidate(attachmentSourceProvider);
+  } else if (service.hasError) {
+    invalidate(attachmentServiceProvider);
   }
+  invalidate(preparation);
+}
+
+void retryChatAttachmentDependencies(WidgetRef ref, ChatRoomProviderKey key) {
+  _retryAttachmentPreparation(key, ref.read, ref.invalidate);
   ref.invalidate(chatAttachmentDependenciesProvider(key));
 }
 
