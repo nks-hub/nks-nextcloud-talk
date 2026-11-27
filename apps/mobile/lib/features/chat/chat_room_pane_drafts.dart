@@ -21,6 +21,8 @@ extension _ChatRoomDrafts on _ChatRoomPaneState {
   }
 
   Future<void> _flushDraft(ChatRoomProviderKey key, String text) async {
+    // Leaving before the asynchronous restore finishes must keep its disk row.
+    if (_draftTimer == null && text.isEmpty) return;
     _draftTimer?.cancel();
     _draftTimer = null;
     final store = _draftStore;
@@ -36,6 +38,7 @@ extension _ChatRoomDrafts on _ChatRoomPaneState {
       key.roomToken,
       key.threadId,
       text.trim(),
+      reply: _replyTo,
     );
   }
 
@@ -44,19 +47,40 @@ extension _ChatRoomDrafts on _ChatRoomPaneState {
     if (store == null) {
       return;
     }
-    final draft = await _composerDrafts.readComposer(
+    final draft = await _composerDrafts.readComposerDraft(
       store,
       key.accountId,
       key.roomToken,
       key.threadId,
     );
-    if (draft == null || !mounted || key != _key || _composer.text.isNotEmpty) {
+    if (draft == null ||
+        !mounted ||
+        key != _key ||
+        _replyTo != null ||
+        _composer.text.isNotEmpty) {
       return;
     }
+    _update(() => _replyTo = draft.reply);
     _composer.value = TextEditingValue(
-      text: draft,
-      selection: TextSelection.collapsed(offset: draft.length),
+      text: draft.text,
+      selection: TextSelection.collapsed(offset: draft.text.length),
     );
+    _focusOpenedDraft(key);
+  }
+
+  void _focusOpenedDraft(ChatRoomProviderKey key) {
+    if (ref.read(composerDraftFocusProvider) != key) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _key != key ||
+          ref.read(composerDraftFocusProvider) != key ||
+          ModalRoute.of(context)?.isCurrent == false) {
+        return;
+      }
+      ref.read(composerDraftFocusProvider.notifier).state = null;
+      _composerFocusNode.requestFocus();
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   Future<void> _returnPlainDraft(

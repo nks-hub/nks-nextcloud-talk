@@ -2,17 +2,23 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/data/chat_repository.dart';
+import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_list_actions.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
+part 'conversation_list_drafts_test.part.dart';
+
 void main() {
+  _draftTests();
   test('mention parsing is reused across large Drift-style emissions', () {
     var parseCount = 0;
     final cache = ConversationUnreadMentionCache(
@@ -94,6 +100,7 @@ void main() {
           Key('conversation-filter-unread'),
           Key('conversation-filter-mentions'),
           Key('conversation-filter-archived'),
+          Key('conversation-filter-drafts'),
         ];
         for (final locale in const [Locale('en'), Locale('cs')]) {
           await tester.pumpWidget(const SizedBox.shrink());
@@ -142,14 +149,11 @@ void main() {
               expect(chip.left - previous.right, 4, reason: 'gap, $locale');
             }
           }
-          final archived = find.byKey(filterKeys.last);
-          if (rects.last.right > bar.right - 12) {
-            await tester.drag(
-              find.byKey(const Key('conversation-filters')),
-              Offset(-rects.last.right, 0),
-            );
-            await tester.pumpAndSettle();
-          }
+          final archived = find.byKey(
+            const Key('conversation-filter-archived'),
+          );
+          await tester.ensureVisible(archived);
+          await tester.pumpAndSettle();
           await tester.tap(archived.hitTestable());
           await tester.pump();
           expect(tester.widget<FilterChip>(archived).selected, isTrue);

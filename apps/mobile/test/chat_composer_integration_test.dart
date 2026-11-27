@@ -28,6 +28,7 @@ import 'package:nextcloudtalk/features/chat/composer/clipboard_image_source.dart
 import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy_attachment.dart';
+import 'package:nextcloudtalk/features/chat/composer/reply_templates.dart';
 import 'package:nextcloudtalk/features/chat/emoji_only_message.dart';
 import 'package:nextcloudtalk/features/chat/location_share_service.dart';
 import 'package:nextcloudtalk/features/chat/quick_emoji_hold_button.dart';
@@ -49,6 +50,7 @@ part 'chat_composer_nonblocking_test.part.dart';
 part 'chat_composer_quick_emoji_test.part.dart';
 part 'chat_composer_clipboard_offer_test.part.dart';
 part 'chat_composer_compact_reply_test.part.dart';
+part 'chat_composer_templates_test.part.dart';
 
 typedef _ShortComposerGeometry = ({
   String name,
@@ -61,12 +63,7 @@ typedef _ShortComposerGeometry = ({
 });
 
 void main() {
-  _registerLocationComposerTests();
-  _registerGiphyReopenTests();
-  _registerNonBlockingComposerTests();
-  _registerQuickEmojiComposerTests();
-  _registerClipboardOfferComposerTests();
-  _registerCompactReplyComposerTest();
+  _registerComposerFeatureTests();
   for (final geometry in <_ShortComposerGeometry>[
     (
       name: 'Galaxy S9 landscape',

@@ -29,6 +29,7 @@ import '../../core/foreground_sync_loop.dart';
 import '../../core/giphy_reference.dart';
 import '../../core/stale_modifier_repair.dart';
 import '../../data/app_database.dart';
+import '../../data/composer_draft_focus.dart';
 import '../../data/chat_repository.dart';
 import '../../data/recoverable_text_draft_store.dart';
 import 'package:uuid/uuid.dart';
@@ -82,6 +83,7 @@ import 'composer/emoji_picker_labels.dart';
 import 'composer/emoji_usage_store.dart';
 import 'composer/giphy.dart';
 import 'composer/mention_suggestions.dart';
+import 'composer/reply_templates.dart';
 
 export 'chat_thread_context.dart';
 
@@ -700,6 +702,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(composerDraftFocusProvider, (_, key) {
+      if (key == _key) _focusOpenedDraft(key!);
+    });
     ref.listen(windowActiveProvider, (_, _) {
       _liveBinding?.setReaderActive(_readerIsActive());
       if (_jumpDeferred) _startPendingJump();

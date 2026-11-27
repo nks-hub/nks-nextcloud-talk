@@ -14,6 +14,9 @@ class ChatDrafts extends Table {
 
   TextColumn get draftText => text()();
 
+  /// Null for drafts saved before the editor kept the quoted message.
+  TextColumn get composerContext => text().nullable()();
+
   IntColumn get updatedAtMillis => integer()();
 
   @override

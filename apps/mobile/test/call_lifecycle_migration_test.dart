@@ -41,7 +41,7 @@ void main() {
           .customSelect('PRAGMA table_info(call_lifecycle_sessions)')
           .get();
 
-      expect(database.schemaVersion, 21);
+      expect(database.schemaVersion, 22);
       expect(
         columns.map((row) => row.read<String>('name')),
         containsAll(<String>[

@@ -9,6 +9,7 @@ import 'app_database.dart';
 import 'text_send_ownership.dart';
 
 part 'chat_repository_models.dart';
+part 'chat_repository_drafts.dart';
 part 'chat_repository_clear_history.dart';
 part 'chat_repository_conversation_previews.dart';
 part 'chat_repository_mutations.dart';
@@ -552,81 +553,25 @@ final class ChatRepository {
     required String accountId,
     required String roomToken,
     int? threadId,
-  }) async {
-    final row =
-        await (_database.select(_database.chatDrafts)..where(
-              (draft) =>
-                  draft.accountId.equals(accountId) &
-                  draft.roomToken.equals(roomToken) &
-                  draft.scopeKey.equals(_scopeKey(threadId)),
-            ))
-            .getSingleOrNull();
-    final text = row?.draftText;
-    if (row == null || text == null || text.isEmpty) {
-      return null;
-    }
-    // The draft is cleared after a send is admitted, in a write of its own.
-    // A process killed between the two leaves the text both in the outbox
-    // and here, one tap away from being sent twice. An outbox row with the
-    // same text that is not older than the draft is that send; a draft typed
-    // again after it is newer than the row and stays.
-    final sends = _database.textSendOperations;
-    final admitted =
-        await (_database.selectOnly(sends)
-              ..addColumns([sends.operationId])
-              ..where(
-                sends.accountId.equals(accountId) &
-                    sends.roomToken.equals(roomToken) &
-                    sends.message.equals(text) &
-                    sends.createdAtMillis.isBiggerOrEqualValue(
-                      row.updatedAtMillis,
-                    ),
-              )
-              ..limit(1))
-            .get();
-    if (admitted.isEmpty) {
-      return text;
-    }
-    await saveDraft(
-      accountId: accountId,
-      roomToken: roomToken,
-      threadId: threadId,
-      text: '',
-    );
-    return null;
-  }
+  }) async => (await readComposerDraft(
+    accountId: accountId,
+    roomToken: roomToken,
+    threadId: threadId,
+  ))?.text;
 
-  /// Stores composer text that is not admitted to the outbox yet. Empty text
-  /// removes the row so an abandoned draft never resurfaces.
   Future<void> saveDraft({
     required String accountId,
     required String roomToken,
     required String text,
     int? threadId,
-  }) async {
-    final scopeKey = _scopeKey(threadId);
-    if (text.isEmpty) {
-      await (_database.delete(_database.chatDrafts)..where(
-            (draft) =>
-                draft.accountId.equals(accountId) &
-                draft.roomToken.equals(roomToken) &
-                draft.scopeKey.equals(scopeKey),
-          ))
-          .go();
-      return;
-    }
-    await _database
-        .into(_database.chatDrafts)
-        .insertOnConflictUpdate(
-          ChatDraftsCompanion.insert(
-            accountId: accountId,
-            roomToken: roomToken,
-            scopeKey: scopeKey,
-            draftText: text,
-            updatedAtMillis: DateTime.now().toUtc().millisecondsSinceEpoch,
-          ),
-        );
-  }
+    CachedChatMessage? reply,
+  }) => _writeDraft(
+    accountId: accountId,
+    roomToken: roomToken,
+    text: text,
+    threadId: threadId,
+    reply: reply,
+  );
 
   Future<StoredChatScope?> getRootScope({
     required String accountId,

@@ -159,6 +159,7 @@ final class _ConversationFilters extends StatelessWidget {
       _ConversationListFilter.mentions: strings.conversationFilterMentions,
       if (showArchived)
         _ConversationListFilter.archived: strings.conversationFilterArchived,
+      _ConversationListFilter.drafts: strings.conversationFilterDrafts,
     };
     if (context.usesDesktopDensity) {
       final activeLabels = labels.entries

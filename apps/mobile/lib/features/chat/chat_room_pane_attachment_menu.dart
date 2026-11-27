@@ -34,6 +34,12 @@ extension _ChatRoomPaneAttachmentControls on _ChatRoomPaneState {
       label: strings.formatMenuTooltip,
       onSelected: _sending ? null : () => unawaited(_chooseComposerFormat()),
     ),
+    AttachmentMenuAction(
+      key: const Key('open-reply-templates'),
+      icon: const Icon(Icons.short_text_rounded),
+      label: strings.replyTemplates,
+      onSelected: _sending ? null : () => unawaited(_chooseReplyTemplate()),
+    ),
     if (voiceSupported)
       AttachmentMenuAction(
         key: const Key('record-voice-message'),
@@ -135,6 +141,18 @@ extension _ChatRoomPaneAttachmentControls on _ChatRoomPaneState {
         onSelected: _sending ? null : () => unawaited(_openPollComposer()),
       ),
   ];
+
+  Future<void> _chooseReplyTemplate() async {
+    final room = _key;
+    final text = await showReplyTemplates(
+      context,
+      account: AccountId.parse(room.accountId),
+      store: ref.read(replyTemplateStoreProvider),
+    );
+    if (text == null || !mounted || room != _key || _isReadOnlyNow()) return;
+    if (!insertComposerText(_composer, text)) _showComposerLimitError();
+    _composerFocusNode.requestFocus();
+  }
 
   Future<void> _chooseComposerFormat() async {
     final room = _key;

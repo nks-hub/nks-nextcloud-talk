@@ -9,7 +9,8 @@ final class RecoverableTextDraftStore extends ChangeNotifier {
   RecoverableTextDraftStore(this._db);
   final AppDatabase _db;
   final _active = <String, String>{};
-  final _composer = <(String, String, int?), ({String text, Object save})>{};
+  final _composer =
+      <(String, String, int?), ({ComposerDraft draft, Object save})>{};
   final _volatile = <String, RefusedTextDraft>{};
   final _generations = <String, int>{};
   bool _closed = false;
@@ -102,6 +103,7 @@ final class RecoverableTextDraftStore extends ChangeNotifier {
                 roomToken: draft.roomToken,
                 scopeKey: _scopeKey(draft.threadId),
                 draftText: draft.message,
+                composerContext: const Value('{}'),
                 updatedAtMillis: DateTime.now().millisecondsSinceEpoch,
               ),
             );
@@ -129,10 +131,11 @@ final class RecoverableTextDraftStore extends ChangeNotifier {
     String account,
     String room,
     int? thread,
-    String text,
-  ) async {
+    String text, {
+    CachedChatMessage? reply,
+  }) async {
     final key = (account, room, thread);
-    final value = (text: text, save: Object());
+    final value = (draft: (text: text, reply: reply), save: Object());
     _composer[key] = value;
     try {
       await store.saveDraft(
@@ -140,6 +143,7 @@ final class RecoverableTextDraftStore extends ChangeNotifier {
         roomToken: room,
         threadId: thread,
         text: text,
+        reply: reply,
       );
       if (_composer[key] == value) _composer.remove(key);
     } on Object {
@@ -153,10 +157,19 @@ final class RecoverableTextDraftStore extends ChangeNotifier {
     String room,
     int? thread,
   ) async {
+    return (await readComposerDraft(store, account, room, thread))?.text;
+  }
+
+  Future<ComposerDraft?> readComposerDraft(
+    ChatRepository store,
+    String account,
+    String room,
+    int? thread,
+  ) async {
     final memory = _composer[(account, room, thread)];
-    if (memory != null) return memory.text;
+    if (memory != null) return memory.draft;
     try {
-      return await store.readDraft(
+      return await store.readComposerDraft(
         accountId: account,
         roomToken: room,
         threadId: thread,

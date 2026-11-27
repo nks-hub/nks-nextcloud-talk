@@ -66,7 +66,7 @@ Future<void> _verifyInterruptedUpgrade() async {
         .customSelect("SELECT name FROM sqlite_master WHERE type = 'table'")
         .get();
 
-    expect(version.read<int>('user_version'), 21);
+    expect(version.read<int>('user_version'), 22);
     expect(room.isArchived, isTrue);
     expect(room.peerStatus, 'away');
     expect(
@@ -116,7 +116,7 @@ Future<void> _verifyReleaseUpgrade(_ReleaseSchema release) async {
         .customSelect('PRAGMA foreign_key_check')
         .get();
 
-    expect(version.read<int>('user_version'), 21);
+    expect(version.read<int>('user_version'), 22);
     expect(account.id, 'account-matrix');
     expect(account.loginName, 'fixture-user');
     expect(room.token, 'matrix-room');
@@ -188,6 +188,11 @@ Future<void> _downgradeToReleaseSchema(
   AppDatabase database,
   int version,
 ) async {
+  if (version >= 9 && version < 22) {
+    await database.customStatement(
+      'ALTER TABLE chat_drafts DROP COLUMN composer_context',
+    );
+  }
   if (version < 21) {
     await database.customStatement('DROP TABLE refused_text_drafts');
   }

@@ -7368,6 +7368,17 @@ class $ChatDraftsTable extends ChatDrafts
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _composerContextMeta = const VerificationMeta(
+    'composerContext',
+  );
+  @override
+  late final GeneratedColumn<String> composerContext = GeneratedColumn<String>(
+    'composer_context',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _updatedAtMillisMeta = const VerificationMeta(
     'updatedAtMillis',
   );
@@ -7385,6 +7396,7 @@ class $ChatDraftsTable extends ChatDrafts
     roomToken,
     scopeKey,
     draftText,
+    composerContext,
     updatedAtMillis,
   ];
   @override
@@ -7431,6 +7443,15 @@ class $ChatDraftsTable extends ChatDrafts
     } else if (isInserting) {
       context.missing(_draftTextMeta);
     }
+    if (data.containsKey('composer_context')) {
+      context.handle(
+        _composerContextMeta,
+        composerContext.isAcceptableOrUnknown(
+          data['composer_context']!,
+          _composerContextMeta,
+        ),
+      );
+    }
     if (data.containsKey('updated_at_millis')) {
       context.handle(
         _updatedAtMillisMeta,
@@ -7467,6 +7488,10 @@ class $ChatDraftsTable extends ChatDrafts
         DriftSqlType.string,
         data['${effectivePrefix}draft_text'],
       )!,
+      composerContext: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}composer_context'],
+      ),
       updatedAtMillis: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}updated_at_millis'],
@@ -7485,12 +7510,16 @@ class StoredChatDraft extends DataClass implements Insertable<StoredChatDraft> {
   final String roomToken;
   final String scopeKey;
   final String draftText;
+
+  /// Null for drafts saved before the editor kept the quoted message.
+  final String? composerContext;
   final int updatedAtMillis;
   const StoredChatDraft({
     required this.accountId,
     required this.roomToken,
     required this.scopeKey,
     required this.draftText,
+    this.composerContext,
     required this.updatedAtMillis,
   });
   @override
@@ -7500,6 +7529,9 @@ class StoredChatDraft extends DataClass implements Insertable<StoredChatDraft> {
     map['room_token'] = Variable<String>(roomToken);
     map['scope_key'] = Variable<String>(scopeKey);
     map['draft_text'] = Variable<String>(draftText);
+    if (!nullToAbsent || composerContext != null) {
+      map['composer_context'] = Variable<String>(composerContext);
+    }
     map['updated_at_millis'] = Variable<int>(updatedAtMillis);
     return map;
   }
@@ -7510,6 +7542,9 @@ class StoredChatDraft extends DataClass implements Insertable<StoredChatDraft> {
       roomToken: Value(roomToken),
       scopeKey: Value(scopeKey),
       draftText: Value(draftText),
+      composerContext: composerContext == null && nullToAbsent
+          ? const Value.absent()
+          : Value(composerContext),
       updatedAtMillis: Value(updatedAtMillis),
     );
   }
@@ -7524,6 +7559,7 @@ class StoredChatDraft extends DataClass implements Insertable<StoredChatDraft> {
       roomToken: serializer.fromJson<String>(json['roomToken']),
       scopeKey: serializer.fromJson<String>(json['scopeKey']),
       draftText: serializer.fromJson<String>(json['draftText']),
+      composerContext: serializer.fromJson<String?>(json['composerContext']),
       updatedAtMillis: serializer.fromJson<int>(json['updatedAtMillis']),
     );
   }
@@ -7535,6 +7571,7 @@ class StoredChatDraft extends DataClass implements Insertable<StoredChatDraft> {
       'roomToken': serializer.toJson<String>(roomToken),
       'scopeKey': serializer.toJson<String>(scopeKey),
       'draftText': serializer.toJson<String>(draftText),
+      'composerContext': serializer.toJson<String?>(composerContext),
       'updatedAtMillis': serializer.toJson<int>(updatedAtMillis),
     };
   }
@@ -7544,12 +7581,16 @@ class StoredChatDraft extends DataClass implements Insertable<StoredChatDraft> {
     String? roomToken,
     String? scopeKey,
     String? draftText,
+    Value<String?> composerContext = const Value.absent(),
     int? updatedAtMillis,
   }) => StoredChatDraft(
     accountId: accountId ?? this.accountId,
     roomToken: roomToken ?? this.roomToken,
     scopeKey: scopeKey ?? this.scopeKey,
     draftText: draftText ?? this.draftText,
+    composerContext: composerContext.present
+        ? composerContext.value
+        : this.composerContext,
     updatedAtMillis: updatedAtMillis ?? this.updatedAtMillis,
   );
   StoredChatDraft copyWithCompanion(ChatDraftsCompanion data) {
@@ -7558,6 +7599,9 @@ class StoredChatDraft extends DataClass implements Insertable<StoredChatDraft> {
       roomToken: data.roomToken.present ? data.roomToken.value : this.roomToken,
       scopeKey: data.scopeKey.present ? data.scopeKey.value : this.scopeKey,
       draftText: data.draftText.present ? data.draftText.value : this.draftText,
+      composerContext: data.composerContext.present
+          ? data.composerContext.value
+          : this.composerContext,
       updatedAtMillis: data.updatedAtMillis.present
           ? data.updatedAtMillis.value
           : this.updatedAtMillis,
@@ -7571,14 +7615,21 @@ class StoredChatDraft extends DataClass implements Insertable<StoredChatDraft> {
           ..write('roomToken: $roomToken, ')
           ..write('scopeKey: $scopeKey, ')
           ..write('draftText: $draftText, ')
+          ..write('composerContext: $composerContext, ')
           ..write('updatedAtMillis: $updatedAtMillis')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(accountId, roomToken, scopeKey, draftText, updatedAtMillis);
+  int get hashCode => Object.hash(
+    accountId,
+    roomToken,
+    scopeKey,
+    draftText,
+    composerContext,
+    updatedAtMillis,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -7587,6 +7638,7 @@ class StoredChatDraft extends DataClass implements Insertable<StoredChatDraft> {
           other.roomToken == this.roomToken &&
           other.scopeKey == this.scopeKey &&
           other.draftText == this.draftText &&
+          other.composerContext == this.composerContext &&
           other.updatedAtMillis == this.updatedAtMillis);
 }
 
@@ -7595,6 +7647,7 @@ class ChatDraftsCompanion extends UpdateCompanion<StoredChatDraft> {
   final Value<String> roomToken;
   final Value<String> scopeKey;
   final Value<String> draftText;
+  final Value<String?> composerContext;
   final Value<int> updatedAtMillis;
   final Value<int> rowid;
   const ChatDraftsCompanion({
@@ -7602,6 +7655,7 @@ class ChatDraftsCompanion extends UpdateCompanion<StoredChatDraft> {
     this.roomToken = const Value.absent(),
     this.scopeKey = const Value.absent(),
     this.draftText = const Value.absent(),
+    this.composerContext = const Value.absent(),
     this.updatedAtMillis = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -7610,6 +7664,7 @@ class ChatDraftsCompanion extends UpdateCompanion<StoredChatDraft> {
     required String roomToken,
     required String scopeKey,
     required String draftText,
+    this.composerContext = const Value.absent(),
     required int updatedAtMillis,
     this.rowid = const Value.absent(),
   }) : accountId = Value(accountId),
@@ -7622,6 +7677,7 @@ class ChatDraftsCompanion extends UpdateCompanion<StoredChatDraft> {
     Expression<String>? roomToken,
     Expression<String>? scopeKey,
     Expression<String>? draftText,
+    Expression<String>? composerContext,
     Expression<int>? updatedAtMillis,
     Expression<int>? rowid,
   }) {
@@ -7630,6 +7686,7 @@ class ChatDraftsCompanion extends UpdateCompanion<StoredChatDraft> {
       if (roomToken != null) 'room_token': roomToken,
       if (scopeKey != null) 'scope_key': scopeKey,
       if (draftText != null) 'draft_text': draftText,
+      if (composerContext != null) 'composer_context': composerContext,
       if (updatedAtMillis != null) 'updated_at_millis': updatedAtMillis,
       if (rowid != null) 'rowid': rowid,
     });
@@ -7640,6 +7697,7 @@ class ChatDraftsCompanion extends UpdateCompanion<StoredChatDraft> {
     Value<String>? roomToken,
     Value<String>? scopeKey,
     Value<String>? draftText,
+    Value<String?>? composerContext,
     Value<int>? updatedAtMillis,
     Value<int>? rowid,
   }) {
@@ -7648,6 +7706,7 @@ class ChatDraftsCompanion extends UpdateCompanion<StoredChatDraft> {
       roomToken: roomToken ?? this.roomToken,
       scopeKey: scopeKey ?? this.scopeKey,
       draftText: draftText ?? this.draftText,
+      composerContext: composerContext ?? this.composerContext,
       updatedAtMillis: updatedAtMillis ?? this.updatedAtMillis,
       rowid: rowid ?? this.rowid,
     );
@@ -7668,6 +7727,9 @@ class ChatDraftsCompanion extends UpdateCompanion<StoredChatDraft> {
     if (draftText.present) {
       map['draft_text'] = Variable<String>(draftText.value);
     }
+    if (composerContext.present) {
+      map['composer_context'] = Variable<String>(composerContext.value);
+    }
     if (updatedAtMillis.present) {
       map['updated_at_millis'] = Variable<int>(updatedAtMillis.value);
     }
@@ -7684,6 +7746,7 @@ class ChatDraftsCompanion extends UpdateCompanion<StoredChatDraft> {
           ..write('roomToken: $roomToken, ')
           ..write('scopeKey: $scopeKey, ')
           ..write('draftText: $draftText, ')
+          ..write('composerContext: $composerContext, ')
           ..write('updatedAtMillis: $updatedAtMillis, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -19425,6 +19488,7 @@ typedef $$ChatDraftsTableCreateCompanionBuilder =
       required String roomToken,
       required String scopeKey,
       required String draftText,
+      Value<String?> composerContext,
       required int updatedAtMillis,
       Value<int> rowid,
     });
@@ -19434,6 +19498,7 @@ typedef $$ChatDraftsTableUpdateCompanionBuilder =
       Value<String> roomToken,
       Value<String> scopeKey,
       Value<String> draftText,
+      Value<String?> composerContext,
       Value<int> updatedAtMillis,
       Value<int> rowid,
     });
@@ -19481,6 +19546,11 @@ class $$ChatDraftsTableFilterComposer
 
   ColumnFilters<String> get draftText => $composableBuilder(
     column: $table.draftText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get composerContext => $composableBuilder(
+    column: $table.composerContext,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -19537,6 +19607,11 @@ class $$ChatDraftsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get composerContext => $composableBuilder(
+    column: $table.composerContext,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get updatedAtMillis => $composableBuilder(
     column: $table.updatedAtMillis,
     builder: (column) => ColumnOrderings(column),
@@ -19583,6 +19658,11 @@ class $$ChatDraftsTableAnnotationComposer
 
   GeneratedColumn<String> get draftText =>
       $composableBuilder(column: $table.draftText, builder: (column) => column);
+
+  GeneratedColumn<String> get composerContext => $composableBuilder(
+    column: $table.composerContext,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get updatedAtMillis => $composableBuilder(
     column: $table.updatedAtMillis,
@@ -19645,6 +19725,7 @@ class $$ChatDraftsTableTableManager
                 Value<String> roomToken = const Value.absent(),
                 Value<String> scopeKey = const Value.absent(),
                 Value<String> draftText = const Value.absent(),
+                Value<String?> composerContext = const Value.absent(),
                 Value<int> updatedAtMillis = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ChatDraftsCompanion(
@@ -19652,6 +19733,7 @@ class $$ChatDraftsTableTableManager
                 roomToken: roomToken,
                 scopeKey: scopeKey,
                 draftText: draftText,
+                composerContext: composerContext,
                 updatedAtMillis: updatedAtMillis,
                 rowid: rowid,
               ),
@@ -19661,6 +19743,7 @@ class $$ChatDraftsTableTableManager
                 required String roomToken,
                 required String scopeKey,
                 required String draftText,
+                Value<String?> composerContext = const Value.absent(),
                 required int updatedAtMillis,
                 Value<int> rowid = const Value.absent(),
               }) => ChatDraftsCompanion.insert(
@@ -19668,6 +19751,7 @@ class $$ChatDraftsTableTableManager
                 roomToken: roomToken,
                 scopeKey: scopeKey,
                 draftText: draftText,
+                composerContext: composerContext,
                 updatedAtMillis: updatedAtMillis,
                 rowid: rowid,
               ),

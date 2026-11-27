@@ -187,6 +187,47 @@ void _registerChatRoomPaneDesktopInputTests() {
     await tester.pump(const Duration(milliseconds: 1));
   }, variant: TargetPlatformVariant.desktop());
 
+  testWidgets('leaving and reopening a quoted draft restores the same parent', (
+    tester,
+  ) async {
+    await pumpRoom(tester);
+    final composer = find.byKey(const Key('chat-composer'));
+    await tester.enterText(composer, 'Reply to this message');
+    await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('message-action-reply')));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(() => database.select(database.chatDrafts).get());
+
+    await pumpRoom(tester);
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-reply-banner')).evaluate().isNotEmpty,
+    );
+    expect(
+      tester.widget<TextField>(composer).controller!.text,
+      'Reply to this message',
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('chat-reply-banner')),
+        matching: find.textContaining('Cached hello'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('chat-cancel-reply')));
+    await tester.pumpWidget(const SizedBox.shrink());
+    final stored = await tester.runAsync(
+      () => ChatRepository(
+        database,
+      ).readComposerDraft(accountId: account.id, roomToken: conversation.token),
+    );
+    expect(stored?.text, 'Reply to this message');
+    expect(stored?.reply, isNull);
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   for (final (name, sentAfterDraft, sentBeforeDraft) in const [
     ('a draft whose send is already in the outbox', true, false),
     ('a draft whose send never reached the outbox', false, false),
@@ -197,7 +238,6 @@ void _registerChatRoomPaneDesktopInputTests() {
       (tester) async {
         // What a killed process leaves behind: the text of a send kept as the
         // draft until its admission, and the outbox row if admission made it.
-        final drafts = ChatRepository(database);
         await tester.runAsync(() async {
           if (sentBeforeDraft) {
             await _insertPendingOperation(
@@ -209,11 +249,17 @@ void _registerChatRoomPaneDesktopInputTests() {
               message: 'kill-s1',
             );
           }
-          await drafts.saveDraft(
-            accountId: account.id,
-            roomToken: conversation.token,
-            text: 'kill-s1',
-          );
+          await database
+              .into(database.chatDrafts)
+              .insert(
+                ChatDraftsCompanion.insert(
+                  accountId: account.id,
+                  roomToken: conversation.token,
+                  scopeKey: 'root',
+                  draftText: 'kill-s1',
+                  updatedAtMillis: DateTime.now().millisecondsSinceEpoch,
+                ),
+              );
           if (sentAfterDraft) {
             await _insertPendingOperation(
               database,

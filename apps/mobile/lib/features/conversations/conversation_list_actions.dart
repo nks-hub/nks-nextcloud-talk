@@ -10,9 +10,12 @@ import '../../core/desktop_metrics.dart';
 import '../../core/giphy_reference.dart';
 import '../../core/tonal_state_icon.dart';
 import '../../data/app_database.dart';
+import '../../data/composer_draft_focus.dart';
+import '../../data/chat_repository.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../calls/call_state.dart';
 import '../chat/outgoing_message_status.dart';
+import '../chat/chat_room_pane.dart';
 import '../rooms/room_settings_service.dart';
 import 'conversation_avatar.dart' show ConversationRoomType;
 import 'conversation_avatar_widget.dart';
@@ -22,10 +25,11 @@ import 'conversation_presence.dart';
 import 'conversation_sync_service.dart';
 
 part 'conversation_list_header.dart';
+part 'conversation_list_drafts.dart';
 
 enum _ConversationAction { markUnread, toggleArchived }
 
-enum _ConversationListFilter { unread, mentions, archived }
+enum _ConversationListFilter { unread, mentions, archived, drafts }
 
 /// Conversation list body used by the conversation shell.
 ///
@@ -231,10 +235,13 @@ final class _ConversationListViewState
     if (filters.contains(_ConversationListFilter.mentions)) {
       _unreadMentions.retainConversations(widget.conversations);
     }
+    final showDrafts = filters.contains(_ConversationListFilter.drafts);
     final shown = widget.conversations
         .where(
           (conversation) =>
-              conversation.displayName.toLowerCase().contains(_query) &&
+              conversation.accountId == widget.account.id &&
+              (showDrafts ||
+                  conversation.displayName.toLowerCase().contains(_query)) &&
               _matchesFilters(
                 conversation,
                 filters,
@@ -243,6 +250,18 @@ final class _ConversationListViewState
         )
         .toList(growable: false);
 
+    final drafts = showDrafts
+        ? ref.watch(_accountDrafts(widget.account.id))
+        : null;
+    final matchingDrafts = showDrafts
+        ? _matchDrafts(
+            widget.account.id,
+            drafts?.valueOrNull ?? [],
+            shown,
+            _query,
+          )
+        : const <_ListedDraft>[];
+    final count = showDrafts ? matchingDrafts.length : shown.length;
     final desktop = context.usesDesktopDensity;
     final shortcuts = desktop || (filters.isEmpty && _query.isEmpty)
         ? widget.conversations
@@ -261,7 +280,7 @@ final class _ConversationListViewState
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.only(bottom: widget.bottomInset),
-        itemCount: shown.isEmpty ? 2 : shown.length + 1,
+        itemCount: count == 0 ? 2 : count + 1,
         itemBuilder: (context, index) {
           if (index == 0) {
             final filterControls = _ConversationFilters(
@@ -294,8 +313,17 @@ final class _ConversationListViewState
               ],
             );
           }
-          if (shown.isEmpty) {
-            if (widget.loading && widget.conversations.isEmpty) {
+          if (drafts?.hasError == true) {
+            return TextButton.icon(
+              onPressed: () =>
+                  ref.invalidate(_accountDrafts(widget.account.id)),
+              icon: const Icon(Icons.refresh),
+              label: Text(AppLocalizations.of(context).retry),
+            );
+          }
+          if (count == 0) {
+            if ((drafts?.isLoading ?? false) ||
+                (widget.loading && widget.conversations.isEmpty)) {
               return const Padding(
                 padding: EdgeInsets.all(40),
                 child: Center(child: CircularProgressIndicator()),
@@ -307,6 +335,10 @@ final class _ConversationListViewState
                 filtered: filters.isNotEmpty || _query.isNotEmpty,
               ),
             );
+          }
+          if (showDrafts) {
+            final entry = matchingDrafts[index - 1];
+            return _DraftTile(entry: entry, onTap: () => _openDraft(entry));
           }
           final conversation = shown[index - 1];
           return _ConversationTile(

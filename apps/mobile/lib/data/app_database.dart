@@ -703,7 +703,7 @@ final class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 21;
+  int get schemaVersion => 22;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -1076,6 +1076,13 @@ final class AppDatabase extends _$AppDatabase {
     }
     if (from < 21) {
       await _createTableIfMissing(migrator, refusedTextDrafts);
+    }
+    if (from < 22) {
+      await _addColumnIfMissing(
+        migrator,
+        chatDrafts,
+        chatDrafts.composerContext,
+      );
     }
   }
 
