@@ -60,6 +60,9 @@ void main() {
   testWidgets(
     'saves a message into a new collection and selects its original thread',
     (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(797.7, 411.4);
+      addTearDown(tester.view.reset);
       SavedMessageLink? chosen;
       await tester.pumpWidget(
         MaterialApp(
@@ -119,11 +122,17 @@ void main() {
       await tester.enterText(find.byType(TextFormField), 'Invoices');
       await tap(strings.editMessageSave);
       await wait(find.byType(CheckboxListTile));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 244.5);
+      await tester.pumpAndSettle();
+      expect(find.byType(CheckboxListTile).hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
       expect(
         tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
         isTrue,
       );
       await tester.tap(find.byTooltip(strings.close));
+      await tester.pumpAndSettle();
+      tester.view.resetViewInsets();
       await tester.pumpAndSettle();
       await tap('Open list');
       await tap('Invoices');

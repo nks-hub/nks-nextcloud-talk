@@ -31,22 +31,55 @@ class _AccountCollectionDialogState<T>
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
+    final content = ListenableBuilder(
+      listenable: widget.store,
+      builder: (context, _) => FutureBuilder<List<T>>(
+        future: widget.store.read(widget.account),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(strings.personalCollectionLoadError),
+                    TextButton(
+                      onPressed: () => setState(() {}),
+                      child: Text(strings.retry),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          final entries = snapshot.data;
+          return entries == null
+              ? const Center(child: CircularProgressIndicator())
+              : widget.content(context, entries);
+        },
+      ),
+    );
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 460, maxHeight: 480),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 4, 4),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxHeight < 192;
+            final header = Padding(
+              padding: EdgeInsets.fromLTRB(20, compact ? 2 : 8, 4, 4),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
                       widget.title,
+                      maxLines: compact ? 2 : null,
+                      overflow: compact ? TextOverflow.ellipsis : null,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
+                  if (compact && widget.action != null)
+                    Flexible(child: widget.action!),
                   IconButton(
                     tooltip: strings.close,
                     icon: const Icon(Icons.close),
@@ -54,44 +87,27 @@ class _AccountCollectionDialogState<T>
                   ),
                 ],
               ),
-            ),
-            Expanded(
-              child: ListenableBuilder(
-                listenable: widget.store,
-                builder: (context, _) => FutureBuilder<List<T>>(
-                  future: widget.store.read(widget.account),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(strings.personalCollectionLoadError),
-                            TextButton(
-                              onPressed: () => setState(() {}),
-                              child: Text(strings.retry),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                    final entries = snapshot.data;
-                    return entries == null
-                        ? const Center(child: CircularProgressIndicator())
-                        : widget.content(context, entries);
-                  },
+            );
+            return Column(
+              children: [
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight / 2,
+                  ),
+                  child: SingleChildScrollView(child: header),
                 ),
-              ),
-            ),
-            if (widget.action != null)
-              Align(
-                alignment: Alignment.centerRight,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-                  child: widget.action,
-                ),
-              ),
-          ],
+                Expanded(child: content),
+                if (!compact && widget.action != null)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                      child: widget.action,
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );

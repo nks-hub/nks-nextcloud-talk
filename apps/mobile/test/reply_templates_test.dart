@@ -46,6 +46,9 @@ void main() {
   testWidgets('create, edit, insert at the selection and remove a reply', (
     tester,
   ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(797.7, 411.4);
+    addTearDown(tester.view.reset);
     final field = TextEditingController(text: 'before OLD after')
       ..selection = const TextSelection(baseOffset: 7, extentOffset: 10);
     addTearDown(field.dispose);
@@ -90,7 +93,13 @@ void main() {
 
     await tap('Open');
     final strings = AppLocalizations.of(tester.element(find.byType(Scaffold)));
+    await wait(find.text(strings.replyTemplatesEmpty));
+    tester.view.viewInsets = const FakeViewPadding(bottom: 244.5);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
     await tap(strings.newReplyTemplate);
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).first, 'Name');
     await tester.enterText(find.byType(TextFormField).last, 'initial');
     await tap(strings.editMessageSave);
@@ -105,7 +114,11 @@ void main() {
     await tester.enterText(find.byType(TextFormField).last, 'NEW');
     await tap(strings.editMessageSave);
     await wait(find.text('NEW'));
+    tester.view.viewInsets = const FakeViewPadding(bottom: 244.5);
+    await tester.pumpAndSettle();
     await tap('Name');
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
     expect(field.text, 'before NEW after');
     expect(field.selection, const TextSelection.collapsed(offset: 10));
     await tap('Open');
