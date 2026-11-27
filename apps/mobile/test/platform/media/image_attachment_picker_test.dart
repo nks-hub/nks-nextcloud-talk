@@ -325,6 +325,9 @@ void main() {
       'copies a gallery batch concurrently and preserves its order',
       () async {
         final gates = List.generate(5, (_) => Completer<void>());
+        final twoCopiesStarted = Completer<void>();
+        final secondCopyFinished = Completer<void>();
+        const deadline = Duration(seconds: 10);
         var inFlight = 0;
         var peak = 0;
         final selected = <int>[];
@@ -344,6 +347,9 @@ void main() {
                 return (() async* {
                   inFlight++;
                   peak = peak > inFlight ? peak : inFlight;
+                  if (inFlight == 2 && !twoCopiesStarted.isCompleted) {
+                    twoCopiesStarted.complete();
+                  }
                   try {
                     await gates[index].future;
                     yield _pngBytes;
@@ -361,7 +367,10 @@ void main() {
         );
         final future = picker.pickImages(
           onSelected: selected.add,
-          onCopied: (index, _) => copied.add(index),
+          onCopied: (index, _) {
+            copied.add(index);
+            if (index == 1) secondCopyFinished.complete();
+          },
         );
         addTearDown(() async {
           for (final gate in gates) {
@@ -370,17 +379,13 @@ void main() {
           await future;
         });
 
-        for (var turn = 0; turn < 20 && inFlight < 2; turn++) {
-          await pumpEventQueue();
-        }
+        await twoCopiesStarted.future.timeout(deadline);
         expect(inFlight, 2);
 
         // Let the second copy land first. Its callback carries the original
         // selection index while the returned list still keeps selection order.
         gates[1].complete();
-        for (var turn = 0; turn < 20 && !copied.contains(1); turn++) {
-          await pumpEventQueue();
-        }
+        await secondCopyFinished.future.timeout(deadline);
         for (final gate in gates) {
           if (!gate.isCompleted) gate.complete();
         }
