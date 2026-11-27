@@ -163,15 +163,24 @@ void main() {
 
   const jumpButton = Key('chat-jump-to-newest');
 
-  testWidgets('the jump control stays hidden at the newest message', (
+  testWidgets('opening a chat leaves space below the newest message', (
     tester,
   ) async {
     await openRoom(tester, await seedRoom('rooma1', 200));
-
-    expect(timelineScrollable(tester).position.pixels, 0);
-    expect(find.byKey(jumpButton), findsNothing);
-
-    await closeRoom(tester);
+    try {
+      final viewport = tester.getRect(
+        find.byKey(const Key('chat-message-list')),
+      );
+      final newest = tester.getRect(
+        find.byKey(const Key('chat-message-target-299')),
+      );
+      expect(timelineScrollable(tester).position.pixels, 0);
+      expect(newest.top, greaterThanOrEqualTo(viewport.top));
+      expect(viewport.bottom - newest.bottom, closeTo(12, 0.01));
+      expect(find.byKey(jumpButton), findsNothing);
+    } finally {
+      await closeRoom(tester);
+    }
   });
 
   testWidgets(

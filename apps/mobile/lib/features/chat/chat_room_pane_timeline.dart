@@ -536,6 +536,7 @@ final class _ChatTimeline extends StatelessWidget {
       'chat-centre-${account.id}-${conversation.token}-$threadId',
     );
     final newerCount = itemCount - 1 - anchorIndex;
+    final historyAnchored = anchorMessageId != null;
     return LayoutBuilder(
       builder: (context, box) {
         final horizontalInset = math.max(
@@ -548,17 +549,14 @@ final class _ChatTimeline extends StatelessWidget {
           reverse: true,
           center: centreKey,
           slivers: [
-            // Always present with the same padding, even with nothing in it:
-            // dropping it would change the slivers list and move which one
-            // `center` refers to, and changing its padding as the first arrival
-            // lands would move the scroll range under the reader at exactly the
-            // wrong moment. A constant extent before the centre costs nothing.
+            // Keep both slivers in place as newer rows arrive. At offset zero
+            // the empty sliver is below the viewport, so the centre owns the gap.
             SliverPadding(
               padding: EdgeInsets.fromLTRB(
                 horizontalInset,
                 0,
                 horizontalInset,
-                12,
+                historyAnchored ? 12 : 0,
               ),
               sliver: SliverList(
                 // This sliver grows down from the centre, so its first child
@@ -575,7 +573,7 @@ final class _ChatTimeline extends StatelessWidget {
                 horizontalInset,
                 12,
                 horizontalInset,
-                0,
+                historyAnchored ? 0 : 12,
               ),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(

@@ -109,6 +109,100 @@ void _registerChatRoomPaneThreadContextTests() {
 
     _registerDesktopThreadPreviewTests();
 
+    testWidgets('a reopened thread keeps its newest preview above the edge', (
+      tester,
+    ) async {
+      tester.view
+        ..physicalSize = const Size(1080, 2400)
+        ..devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      final image = await _solidPreview(tester, 808, 121);
+      await _insertCachedMessage(
+        database,
+        _messageJson(
+          id: 75,
+          actorId: 'thread-author',
+          actorDisplayName: 'Thread author',
+          timestamp: 1724300175,
+          message: 'Preview thread',
+          threadId: 75,
+          isThread: true,
+        ),
+        displayText: 'Preview thread',
+      );
+      await _insertCachedMessage(
+        database,
+        _layoutImageWire(76, includeDimensions: false)..['threadId'] = 75,
+        displayText: 'Image reply',
+      );
+
+      final preview = Completer<ChatMediaImage?>();
+      final open = find.byKey(const Key('chat-open-thread-75'));
+      final thread = find.byKey(const Key('chat-thread-screen-75'));
+      final list = find.descendant(
+        of: thread,
+        matching: find.byKey(const Key('chat-message-list')),
+      );
+      final newest = find.byKey(const Key('chat-message-target-76'));
+      final loading = find.byKey(const Key('chat-image-loading-76-0'));
+      final ready = find.byKey(const Key('chat-image-76-0'));
+
+      Future<void> enterThread() async {
+        await tester.ensureVisible(open);
+        await tester.tap(open);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 350));
+      }
+
+      void expectNewestGap() {
+        final viewport = tester.getRect(list);
+        final message = tester.getRect(newest);
+        final position = tester
+            .widget<CustomScrollView>(list)
+            .controller!
+            .position;
+        expect(position.pixels, 0);
+        expect(message.top, greaterThanOrEqualTo(viewport.top));
+        expect(viewport.bottom - message.bottom, closeTo(12, 0.01));
+      }
+
+      await tester.pumpWidget(
+        app(
+          home: roomScreen(),
+          overrides: [
+            threadReplyLayout,
+            chatMediaProvider.overrideWith((ref, key) => preview.future),
+          ],
+        ),
+      );
+      try {
+        await pumpUntilCondition(tester, () => open.evaluate().isNotEmpty);
+        await enterThread();
+        await pumpUntilCondition(tester, () => loading.evaluate().isNotEmpty);
+        final placeholder = tester.getSize(loading);
+        expectNewestGap();
+
+        preview.complete(image);
+        await pumpUntilCondition(
+          tester,
+          () => image.decodedDimensions != null && ready.evaluate().isNotEmpty,
+        );
+        expect(tester.getSize(ready), isNot(placeholder));
+        expectNewestGap();
+
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        expect(thread, findsNothing);
+        await enterThread();
+        await pumpUntilCondition(tester, () => ready.evaluate().isNotEmpty);
+        expectNewestGap();
+      } finally {
+        if (!preview.isCompleted) preview.complete(null);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(milliseconds: 1));
+      }
+    });
+
     for (final replyCount in [0, 2]) {
       testWidgets('a thread with $replyCount replies is closed off under its '
           'root and names its room', (tester) async {
