@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:ui' show AppLifecycleState;
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
@@ -14,6 +15,9 @@ import 'package:nextcloudtalk/core/background_drain.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_repository.dart';
+import 'package:nextcloudtalk/data/attachment_repository.dart';
+import 'package:nextcloudtalk/network/attachment_transport.dart';
+import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:nextcloudtalk/features/chat/attachment_transfer_keep_alive.dart';
 import 'package:nextcloudtalk/features/chat/chat_service.dart';
@@ -363,6 +367,84 @@ void main() {
       );
       addTearDown(container.dispose);
       return container;
+    }
+
+    for (final headless in [false, true]) {
+      for (final status in [503, 401]) {
+        test(
+          'scheduled wake headless=$headless status=$status matches the stored outcome',
+          () async {
+            final directory = await Directory.systemTemp.createTemp(
+              'owntalk-drain-',
+            );
+            addTearDown(() => directory.delete(recursive: true));
+            final media = AttachmentService(
+              repository: AttachmentRepository(database),
+              credentials: credentials,
+              releaseSource: (_) async {},
+              transport: HttpAttachmentTransport(
+                client: MockClient(
+                  (r) async =>
+                      throw StateError('unexpected attachment request'),
+                ),
+                sourceProvider: DurableAttachmentSourceStore(root: directory),
+              ),
+            );
+            addTearDown(media.close);
+            attachments.complete(media);
+            final container = runningApp(
+              client: MockClient((_) async => http.Response('{}', status)),
+            );
+            if (!headless) {
+              container.read(outboxDrainProvider);
+              await pumpEventQueue(times: 80);
+            }
+            await queueOfflineSend();
+            if (headless) {
+              await runBackgroundDrainIsolate(
+                drain: () => drainForBackground(container),
+                channel: platform.channel,
+              );
+              expect(platform.calls.last.arguments, {'retry': status == 503});
+            } else {
+              final response = Completer<ByteData?>();
+              await TestDefaultBinaryMessengerBinding
+                  .instance
+                  .defaultBinaryMessenger
+                  .handlePlatformMessage(
+                    _channelName,
+                    const StandardMethodCodec().encodeMethodCall(
+                      const MethodCall('runDrain'),
+                    ),
+                    response.complete,
+                  );
+              final bytes = (await response.future)!;
+              if (status == 503) {
+                expect(
+                  () => const StandardMethodCodec().decodeEnvelope(bytes),
+                  throwsA(
+                    isA<PlatformException>().having(
+                      (e) => e.code,
+                      'code',
+                      'text_delivery_pending',
+                    ),
+                  ),
+                );
+              } else {
+                expect(
+                  const StandardMethodCodec().decodeEnvelope(bytes),
+                  isNull,
+                );
+              }
+            }
+            expect(
+              (await database.select(database.textSendOperations).getSingle())
+                  .outboxState,
+              isNot('completed'),
+            );
+          },
+        );
+      }
     }
 
     test('delivers what the outbox still holds', () async {

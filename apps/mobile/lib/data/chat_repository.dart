@@ -10,6 +10,7 @@ import 'text_send_ownership.dart';
 
 part 'chat_repository_models.dart';
 part 'chat_repository_drafts.dart';
+part 'chat_repository_pending_head.dart';
 part 'chat_repository_clear_history.dart';
 part 'chat_repository_conversation_previews.dart';
 part 'chat_repository_mutations.dart';
@@ -1043,36 +1044,6 @@ final class ChatRepository {
     return head == null
         ? null
         : (threadId: head.threadId, verifiableAt: head.nextAttemptAt!);
-  }
-
-  Future<StoredTextSendOperation?> _absenceVerificationHead(
-    String accountId,
-    String roomToken,
-  ) async {
-    final head =
-        await (_database.select(_database.textSendOperations)
-              ..where(
-                (row) =>
-                    row.accountId.equals(accountId) &
-                    row.roomToken.equals(roomToken) &
-                    row.outboxState.isIn(const [
-                      'queued',
-                      'retryable',
-                      'sending',
-                      'awaitingConfirmation',
-                    ]),
-              )
-              ..orderBy([(row) => OrderingTerm.asc(row.enqueueSequence)])
-              ..limit(1))
-            .getSingleOrNull();
-    if (head == null ||
-        head.outboxState != TextSendOutboxState.awaitingConfirmation.name ||
-        head.nextAttemptAt == null ||
-        head.messageIdsJson != '[]' ||
-        head.automaticResendCount >= textSendMaximumAutomaticResends) {
-      return null;
-    }
-    return head;
   }
 
   /// Queues the room's ambiguous head-of-line send again after an HTTP read

@@ -86,13 +86,20 @@ final chatServiceProvider = Provider<ChatService>((ref) {
 ///
 /// The platform can tear down the headless engine as soon as this returns.
 Future<void> drainForBackground(ProviderContainer container) async {
-  await container.read(chatServiceProvider).drainPendingSends();
+  final retry = await container.read(chatServiceProvider).drainPendingSends();
   await container.read(appPasswordRevocationQueueProvider).drain();
   final attachments = await container.read(attachmentServiceProvider.future);
   try {
     await attachments.drainForBackground();
   } finally {
     await attachments.close();
+  }
+  _reportBackgroundTextResult(retry);
+}
+
+void _reportBackgroundTextResult(bool retry) {
+  if (retry) {
+    throw PlatformException(code: 'text_delivery_pending');
   }
 }
 
@@ -119,23 +126,22 @@ Future<void> _recoverBrowserLoginsWhileVisible(
 /// message twice.
 final outboxDrainProvider = Provider<void>((ref) {
   final chat = ref.watch(chatServiceProvider);
-  var running = false;
-  Future<void> drain() async {
-    if (running) {
-      return;
-    }
-    running = true;
+  Future<bool>? activeDrain;
+  Future<bool> drainOnce() async {
     try {
       final revocations = ref.read(appPasswordRevocationQueueProvider);
       unawaited(_recoverBrowserLoginsWhileVisible(revocations));
-      await chat.drainPendingSends();
+      final retry = await chat.drainPendingSends();
       await revocations.drain();
+      return retry;
     } on Object {
-      // A drain is best effort; the outbox keeps its rows for the next one.
-    } finally {
-      running = false;
+      return true;
     }
   }
+
+  Future<bool> drain() => activeDrain ??= drainOnce().whenComplete(() {
+    activeDrain = null;
+  });
 
   final wakes = <StreamSubscription<void>>[
     for (final events in [
@@ -175,7 +181,7 @@ final outboxDrainProvider = Provider<void>((ref) {
     if (call.method != 'runDrain') {
       throw MissingPluginException('${call.method} is not handled here');
     }
-    await drain();
+    final retry = await drain();
     if ((await ref.read(chatRepositoryProvider).roomsWithPendingTextSends())
         .isEmpty) {
       keepAlive?.unsentNotice(false);
@@ -183,6 +189,7 @@ final outboxDrainProvider = Provider<void>((ref) {
     // The attachment service keeps its own wake sources; a scheduled wake
     // reaches it here because the platform hint is not one of them.
     await (await ref.read(attachmentServiceProvider.future)).resumeRetries();
+    _reportBackgroundTextResult(retry);
     return null;
   });
   ref.onDispose(() {

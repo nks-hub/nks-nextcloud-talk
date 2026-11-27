@@ -6,7 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/services.dart'
-    show MethodChannel, MissingPluginException;
+    show MethodChannel, MissingPluginException, PlatformException;
 import 'package:flutter/widgets.dart'
     show
         AppLifecycleListener,
