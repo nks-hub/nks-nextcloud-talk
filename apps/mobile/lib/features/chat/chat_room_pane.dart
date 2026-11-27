@@ -158,6 +158,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   final Object _visibilityOwner = Object();
   ChatRoomVisibility? _roomVisibility;
   int _visibilityGeneration = 0;
+  bool _elementActive = true;
 
   /// Owned explicitly so the emoji panel can hand focus back to the composer
   /// on desktop instead of leaving the caret nowhere once the panel closes.
@@ -286,6 +287,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     threadId: widget.threadId,
   );
 
+  bool get _hasActiveElement => _elementActive && mounted;
+
   void _update(VoidCallback callback) => setState(callback);
 
   @override
@@ -313,6 +316,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           onError: (Object _, StackTrace _) {},
         );
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_hasActiveElement) return;
       _draftStore = ref.read(chatRepositoryProvider);
       unawaited(_restoreDraft(_key));
       unawaited(_restartLiveSync());
@@ -374,6 +378,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _appearanceMarkers = OwnTalkAppearanceMarkerWatch();
     _fileShares.reset();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_hasActiveElement) return;
       unawaited(_restoreDraft(_key));
       unawaited(_restartLiveSync(roomChanged: true));
     });
@@ -400,7 +405,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     );
     // Riverpod state must not change while the route's widgets are building.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && generation == _visibilityGeneration) {
+      if (_hasActiveElement && generation == _visibilityGeneration) {
         visibility.setVisible(_visibilityOwner, visible ? room : null);
         _liveBinding?.setReaderActive(
           visible && ref.read(windowActiveProvider),
@@ -412,6 +417,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
 
   @override
   void deactivate() {
+    // A binding can query the reader during dispose, while mounted is true.
+    _elementActive = false;
     _emojiPickerPending = false;
     _syncTypingActivity(forceInactive: true);
     super.deactivate();
@@ -420,6 +427,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   @override
   void activate() {
     super.activate();
+    _elementActive = true;
     _scheduleRoomVisibility();
     _scheduleTypingActivitySync();
   }

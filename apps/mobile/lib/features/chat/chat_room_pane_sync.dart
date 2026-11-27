@@ -3,14 +3,17 @@ part of 'chat_room_pane.dart';
 extension _ChatRoomPaneSync on _ChatRoomPaneState {
   Future<void> _sync() => _restartLiveSync();
 
+  bool _isCurrentSync(int generation) =>
+      _hasActiveElement && generation == _syncGeneration;
+
   bool _readerIsActive() =>
-      mounted &&
+      _hasActiveElement &&
       TickerMode.valuesOf(context).enabled &&
       ModalRoute.isCurrentOf(context) != false &&
       ref.read(windowActiveProvider);
 
   void _handleConnectivityWake() {
-    if (!mounted ||
+    if (!_hasActiveElement ||
         !_isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState)) {
       return;
     }
@@ -30,6 +33,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   ) async {
     try {
       await binding.wakeAfterConnectivity();
+      if (!_isCurrentSync(generation)) return;
       _rebuildSignalingAfterConnectivity();
       await _observeAuthoritativeIncomingMessages(generation);
       if (_isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState)) {
@@ -85,8 +89,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     } else {
       await previousLoop?.stop();
     }
-    if (!mounted ||
-        generation != _syncGeneration ||
+    if (!_isCurrentSync(generation) ||
         !_isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState)) {
       return;
     }
@@ -127,7 +130,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         _setSyncError(generation, error);
       },
     );
-    if (!mounted || generation != _syncGeneration) {
+    if (!_isCurrentSync(generation)) {
       binding.close();
       return;
     }
@@ -144,7 +147,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     _syncLoop = null;
     binding?.close();
     await loop?.stop();
-    if (mounted && generation == _syncGeneration && _syncing) {
+    if (_isCurrentSync(generation) && _syncing) {
       _update(() => _syncing = false);
     }
   }
@@ -229,22 +232,21 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   }
 
   bool _canAnnounceIncomingMessage(int generation, ChatRoomProviderKey key) =>
-      mounted &&
-      generation == _syncGeneration &&
+      _isCurrentSync(generation) &&
       key == _key &&
       TickerMode.valuesOf(context).enabled &&
       ModalRoute.isCurrentOf(context) != false &&
       _isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState);
 
   void _setSyncing(int generation, bool value) {
-    if (!mounted || generation != _syncGeneration || _syncing == value) {
+    if (!_isCurrentSync(generation) || _syncing == value) {
       return;
     }
     _update(() => _syncing = value);
   }
 
   void _setSyncSuccess(int generation) {
-    if (!mounted || generation != _syncGeneration) {
+    if (!_isCurrentSync(generation)) {
       return;
     }
     // Every long-poll round ends here, and most of them change nothing.
@@ -346,8 +348,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   }
 
   bool _canMarkVisibleRead(int generation, ChatRoomProviderKey key) {
-    return mounted &&
-        generation == _syncGeneration &&
+    return _isCurrentSync(generation) &&
         key == _key &&
         widget.jumpToMessageId == null &&
         _pendingJumpMessageId == null &&
@@ -413,7 +414,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   }
 
   void _setSyncError(int generation, Object error) {
-    if (!mounted || generation != _syncGeneration) {
+    if (!_isCurrentSync(generation)) {
       return;
     }
     final code = error is ChatServiceException
