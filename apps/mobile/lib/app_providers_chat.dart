@@ -296,6 +296,74 @@ final chatAttachmentContextResolverProvider =
       );
     });
 
+typedef ChatAttachmentDependencies = ({
+  DurableAttachmentSourceStore source,
+  AttachmentService service,
+  ChatAttachmentContextResolver resolver,
+  AttachmentCapabilityProfile profile,
+});
+
+final _chatAttachmentPreparationProvider = FutureProvider.autoDispose
+    .family<ChatAttachmentDependencies, ChatRoomProviderKey>((ref, key) async {
+      final source = ref.watch(attachmentSourceProvider.future);
+      final service = ref.watch(attachmentServiceProvider.future);
+      final resolver = ref.watch(chatAttachmentContextResolverProvider);
+      final preparedSource = await source;
+      final readyService = await service;
+      final profile = await resolver.resolveProfile(
+        accountId: AccountId.parse(key.accountId),
+        roomToken: ConversationToken.parse(key.roomToken, path: r'$.roomToken'),
+      );
+      return (
+        source: preparedSource,
+        service: readyService,
+        resolver: resolver,
+        profile: profile,
+      );
+    });
+
+final chatAttachmentDependenciesProvider = FutureProvider.autoDispose
+    .family<ChatAttachmentDependencies, ChatRoomProviderKey>((ref, key) {
+      final preparation = _chatAttachmentPreparationProvider(key);
+      // Keep watching the result after the UI's deadline. A second engine can
+      // still release the runtime without the user having to reopen the room.
+      return ref
+          .watch(preparation)
+          .when(
+            skipLoadingOnRefresh: false,
+            data: (ready) => ready,
+            error: Error.throwWithStackTrace,
+            loading: () {
+              final pending = ref.watch(preparation.future);
+              const limit = Duration(seconds: 30);
+              final expired = Completer<ChatAttachmentDependencies>();
+              final timer = Timer(limit, () {
+                expired.completeError(
+                  TimeoutException('Preparing chat attachments', limit),
+                );
+              });
+              ref.onDispose(timer.cancel);
+              return Future.any([
+                pending,
+                expired.future,
+              ]).whenComplete(timer.cancel);
+            },
+          );
+    });
+
+void retryChatAttachmentDependencies(WidgetRef ref, ChatRoomProviderKey key) {
+  if (ref.read(attachmentSourceProvider).hasError) {
+    ref.invalidate(attachmentSourceProvider);
+  } else if (ref.read(attachmentServiceProvider).hasError) {
+    ref.invalidate(attachmentServiceProvider);
+  }
+  final preparation = _chatAttachmentPreparationProvider(key);
+  if (!ref.read(preparation).isLoading) {
+    ref.invalidate(preparation);
+  }
+  ref.invalidate(chatAttachmentDependenciesProvider(key));
+}
+
 /// Bytes of each upload request in flight, by job id, for the progress bar.
 final attachmentInFlightBytesProvider =
     Provider<ValueNotifier<Map<String, int>>>(

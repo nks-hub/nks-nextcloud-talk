@@ -986,9 +986,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
         leadingAction: leadingAction,
         idleActions: idleActions,
         trailingActions: trailingActions,
-        onRetry: () {
-          ref.invalidate(chatAttachmentDependenciesProvider(_key));
-        },
+        onRetry: () => retryChatAttachmentDependencies(ref, _key),
       ),
       data: (value) {
         final captionOwner = _key;
@@ -1061,9 +1059,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             leadingAction: leadingAction,
             idleActions: idleActions,
             trailingActions: trailingActions,
-            onRetry: () {
-              ref.invalidate(chatAttachmentDependenciesProvider(_key));
-            },
+            onRetry: () => retryChatAttachmentDependencies(ref, _key),
           );
         }
       },

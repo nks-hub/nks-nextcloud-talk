@@ -433,6 +433,7 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
       request,
       allowedStatusCodes: const {200},
       maximumBytes: _capabilitiesMaximumBytes,
+      oneShotTransportLimit: requestTimeout,
     );
     return CapabilitySnapshot.fromJson(
       payload.json,

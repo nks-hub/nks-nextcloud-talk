@@ -825,7 +825,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       canPost: !readOnly && TickerMode.valuesOf(context).enabled,
     );
     final attachmentDependencies = !readOnly
-        ? ref.watch(chatAttachmentDependenciesProvider(_key))
+        ? ref.watch(chatAttachmentDependenciesProvider(_key)).unwrapPrevious()
         : null;
     final pollRoomKey = (
       accountId: widget.account.id,

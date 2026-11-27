@@ -734,30 +734,6 @@ final threadDetailProvider = StreamProvider.autoDispose
           );
     });
 
-typedef ChatAttachmentDependencies = ({
-  DurableAttachmentSourceStore source,
-  AttachmentService service,
-  ChatAttachmentContextResolver resolver,
-  AttachmentCapabilityProfile profile,
-});
-
-final chatAttachmentDependenciesProvider = FutureProvider.autoDispose
-    .family<ChatAttachmentDependencies, ChatRoomProviderKey>((ref, key) async {
-      final source = await ref.watch(attachmentSourceProvider.future);
-      final service = await ref.watch(attachmentServiceProvider.future);
-      final resolver = ref.watch(chatAttachmentContextResolverProvider);
-      final profile = await resolver.resolveProfile(
-        accountId: AccountId.parse(key.accountId),
-        roomToken: ConversationToken.parse(key.roomToken, path: r'$.roomToken'),
-      );
-      return (
-        source: source,
-        service: service,
-        resolver: resolver,
-        profile: profile,
-      );
-    });
-
 typedef MentionSuggestionsRoomKey = ({String accountId, String roomToken});
 
 /// Resolves the account, room and freshly fetched capabilities needed to

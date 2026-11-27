@@ -201,6 +201,49 @@ void main() {
   });
 
   test(
+    'bounds the whole capability response and allows a fresh read',
+    () async {
+      final snapshot = utf8.encode(jsonEncode(capabilitiesJson()));
+      var reads = 0;
+      final api = HttpNextcloudApi(
+        requestTimeout: const Duration(milliseconds: 250),
+        client: MockClient.streaming((request, _) async {
+          if (++reads == 1) {
+            return http.StreamedResponse(
+              Stream<List<int>>.periodic(
+                const Duration(milliseconds: 25),
+                (index) => index == 0 ? snapshot : const [0x20],
+              ).take(20),
+              200,
+            );
+          }
+          return http.StreamedResponse(Stream.value(snapshot), 200);
+        }),
+      );
+      addTearDown(api.close);
+
+      Future<CapabilitySnapshot> read() => api.getAuthenticatedCapabilities(
+        server: server,
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+      );
+
+      await expectLater(
+        read(),
+        throwsA(
+          isA<NextcloudApiException>().having(
+            (error) => error.code,
+            'code',
+            NextcloudApiError.timeout,
+          ),
+        ),
+      );
+      expect((await read()).hasTalk, isTrue);
+      expect(reads, 2);
+    },
+  );
+
+  test(
     'reads the capability snapshot once per account and validity window',
     () async {
       var requests = 0;
