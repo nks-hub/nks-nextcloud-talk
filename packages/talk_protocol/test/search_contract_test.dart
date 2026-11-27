@@ -17,6 +17,7 @@ void main() {
     String term = 'fixture term',
     int limit = 20,
     int? cursor,
+    MessageSearchFilters filters = const MessageSearchFilters(),
   }) => MessageSearchRequest(
     accountId: account,
     requestId: SearchRequestId.parse('fixture-request'),
@@ -25,6 +26,7 @@ void main() {
     term: term,
     limit: limit,
     cursor: cursor,
+    filters: filters,
   );
 
   MessageSearchRequest currentRoomRequest({
@@ -70,7 +72,7 @@ void main() {
   Object? successBody({
     List<Object?>? entries,
     bool isPaginated = true,
-    int? cursor = 20,
+    Object? cursor = 20,
   }) => {
     'ocs': {
       'meta': {'status': 'ok', 'statuscode': 200},
@@ -109,6 +111,27 @@ void main() {
       final request = globalRequest();
 
       expect(request.queryParameters.containsKey('cursor'), isFalse);
+    });
+
+    test('allows filters without a term and serializes UTC dates', () {
+      final request = globalRequest(
+        term: '',
+        cursor: 20,
+        filters: MessageSearchFilters(
+          person: 'fixture-user',
+          since: DateTime.parse('2026-05-10T00:00:00+02:00'),
+          until: DateTime.parse('2026-05-11T23:59:59.999+02:00'),
+        ),
+      );
+
+      expect(request.uri.queryParameters, {
+        'format': 'json',
+        'limit': '20',
+        'cursor': '20',
+        'person': 'nc-user/fixture-user',
+        'since': '2026-05-09T22:00:00.000Z',
+        'until': '2026-05-11T21:59:59.999Z',
+      });
     });
 
     test('rejects an empty search term', () {
@@ -193,6 +216,44 @@ void main() {
 
       expect(request.toString(), isNot(contains('fixture-secret-term')));
     });
+  });
+
+  test('discovers only correctly typed filters on the requested provider', () {
+    final payload = {
+      'ocs': {
+        'meta': {'status': 'ok', 'statuscode': 200},
+        'data': [
+          {
+            'id': 'files',
+            'filters': {'person': 'person'},
+          },
+          {'id': 'talk-message'},
+          {
+            'id': 'talk-message-current',
+            'filters': {
+              'person': 'person',
+              'since': 'text',
+              'until': 'datetime',
+            },
+          },
+        ],
+      },
+    };
+
+    expect(
+      decodeMessageSearchFilterSupport(
+        payload,
+        scope: MessageSearchScope.global,
+      ),
+      isEmpty,
+    );
+    expect(
+      decodeMessageSearchFilterSupport(
+        payload,
+        scope: MessageSearchScope.currentRoom,
+      ),
+      {MessageSearchFilter.person, MessageSearchFilter.until},
+    );
   });
 
   group('decodeMessageSearchResponse success shapes', () {
@@ -292,17 +353,27 @@ void main() {
       expect(response.results.single.timestamp, isNull);
     });
 
-    test('truncates an overlong excerpt', () {
-      final longSubline = ''.padRight(400, 'x');
+    test('a long Unicode message does not discard the rest of the page', () {
+      final longSubline = List.filled(4097, '🙂').join();
       final response = decodeMessageSearchResponse(
         request: globalRequest(),
         statusCode: 200,
-        json: successBody(entries: [searchEntry(subline: longSubline)]),
+        json: successBody(
+          entries: [
+            searchEntry(subline: longSubline),
+            searchEntry(messageId: '41'),
+          ],
+          cursor: '20',
+        ),
       );
 
-      final excerpt = response.results.single.excerpt;
-      expect(excerpt.length, messageSearchExcerptMaximumLength + 1);
-      expect(excerpt, endsWith('…'));
+      const limit = messageSearchExcerptMaximumLength;
+      expect(
+        response.results.first.excerpt,
+        '${List.filled(limit, '🙂').join()}…',
+      );
+      expect(response.results.last.messageId, 41);
+      expect(response.nextCursor, 20);
     });
 
     test('classifies zero entries as empty', () {
@@ -314,6 +385,7 @@ void main() {
 
       expect(response.classification, MessageSearchClassification.empty);
       expect(response.results, isEmpty);
+      expect(response.nextCursor, isNull);
     });
 
     test('accepts a current-room result matching the requested room', () {

@@ -30,18 +30,29 @@ final class MessageSearchException implements Exception {
 
 const int messageSearchDefaultLimit = 20;
 
+typedef MessageSearchPage = ({
+  List<MessageSearchResult> results,
+  int? nextCursor,
+});
+
 /// Searches Talk messages, scoped to one account.
 ///
 /// Passing [roomToken] searches that one conversation instead of all of them.
-/// Both scopes are verified against a live Talk 24.0.2 server; the wire
-/// details and why the two must not be mixed are on
-/// `MessageSearchRequest._fromRoute`.
+/// The request contract handles the two server scopes separately.
 abstract interface class MessageSearchService {
-  Future<List<MessageSearchResult>> search({
+  Future<Set<MessageSearchFilter>> supportedFilters({
+    required String accountId,
+    String? roomToken,
+    Future<void>? abortTrigger,
+  });
+
+  Future<MessageSearchPage> search({
     required String accountId,
     required String term,
     String? roomToken,
+    MessageSearchFilters filters = const MessageSearchFilters(),
     int limit = messageSearchDefaultLimit,
+    int? cursor,
     Future<void>? abortTrigger,
   });
 }
@@ -63,15 +74,43 @@ final class HttpMessageSearchService implements MessageSearchService {
   final Uuid _uuid;
 
   @override
-  Future<List<MessageSearchResult>> search({
+  Future<Set<MessageSearchFilter>> supportedFilters({
+    required String accountId,
+    String? roomToken,
+    Future<void>? abortTrigger,
+  }) async {
+    try {
+      final credentials = await _resolveCredentials(accountId);
+      return await _api.getMessageSearchFilterSupport(
+        server: credentials.server,
+        loginName: credentials.loginName,
+        appPassword: credentials.appPassword,
+        roomToken: roomToken == null
+            ? null
+            : ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        abortTrigger: abortTrigger,
+      );
+    } on NextcloudApiException {
+      return const {};
+    } on TalkProtocolException {
+      return const {};
+    } on MessageSearchException {
+      return const {};
+    }
+  }
+
+  @override
+  Future<MessageSearchPage> search({
     required String accountId,
     required String term,
     String? roomToken,
+    MessageSearchFilters filters = const MessageSearchFilters(),
     int limit = messageSearchDefaultLimit,
+    int? cursor,
     Future<void>? abortTrigger,
   }) async {
     final trimmed = term.trim();
-    if (trimmed.isEmpty) {
+    if (trimmed.isEmpty && filters.isEmpty) {
       throw const MessageSearchException(MessageSearchError.invalidSearchTerm);
     }
     final credentials = await _resolveCredentials(accountId);
@@ -89,7 +128,9 @@ final class HttpMessageSearchService implements MessageSearchService {
             ? null
             : ConversationToken.parse(roomToken, path: r'$.roomToken'),
         term: trimmed,
+        filters: filters,
         limit: limit,
+        cursor: cursor,
       );
     } on TalkProtocolException {
       throw const MessageSearchException(MessageSearchError.invalidSearchTerm);
@@ -111,7 +152,10 @@ final class HttpMessageSearchService implements MessageSearchService {
 
     return switch (response.classification) {
       MessageSearchClassification.results ||
-      MessageSearchClassification.empty => response.results,
+      MessageSearchClassification.empty => (
+        results: response.results,
+        nextCursor: response.nextCursor,
+      ),
       MessageSearchClassification.reauthenticationRequired =>
         throw const MessageSearchException(
           MessageSearchError.reauthenticationRequired,

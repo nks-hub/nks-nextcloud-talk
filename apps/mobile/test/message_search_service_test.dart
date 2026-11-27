@@ -7,6 +7,7 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/search/message_search_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
@@ -28,17 +29,20 @@ Map<String, Object?> _searchEntry({
   },
 };
 
-Map<String, Object?> _successBody(List<Map<String, Object?>> entries) =>
-    <String, Object?>{
-      'ocs': <String, Object?>{
-        'meta': <String, Object?>{'status': 'ok', 'statuscode': 200},
-        'data': <String, Object?>{
-          'name': 'Messages',
-          'isPaginated': false,
-          'entries': entries,
-        },
-      },
-    };
+Map<String, Object?> _successBody(
+  List<Map<String, Object?>> entries, {
+  int? cursor,
+}) => <String, Object?>{
+  'ocs': <String, Object?>{
+    'meta': <String, Object?>{'status': 'ok', 'statuscode': 200},
+    'data': <String, Object?>{
+      'name': 'Messages',
+      'isPaginated': cursor != null,
+      'cursor': ?cursor,
+      'entries': entries,
+    },
+  },
+};
 
 void main() {
   late AccountRepository repository;
@@ -91,7 +95,8 @@ void main() {
       );
     });
 
-    final results = await service.search(accountId: 'account-a', term: 'hello');
+    final page = await service.search(accountId: 'account-a', term: 'hello');
+    final results = page.results;
 
     expect(results, hasLength(1));
     expect(results.single.author, 'Alice');
@@ -130,17 +135,102 @@ void main() {
     await service.search(accountId: 'account-a', term: 'hello');
   });
 
+  for (final roomToken in [null, 'abcd1234']) {
+    test(
+      'discovers combined filters and pages search for $roomToken',
+      () async {
+        final provider = roomToken == null
+            ? 'talk-message'
+            : 'talk-message-current';
+        final requests = <Uri>[];
+        final service = buildService((request) async {
+          final url = request.url;
+          requests.add(url);
+          expect(request.headers['Authorization'], startsWith('Basic '));
+          expect(
+            url.queryParameters['from'],
+            roomToken == null ? null : '/call/$roomToken',
+          );
+          if (url.path.endsWith('/search/providers')) {
+            return http.Response(
+              jsonEncode({
+                'ocs': {
+                  'meta': {'status': 'ok', 'statuscode': 200},
+                  'data': [
+                    {
+                      'id': provider,
+                      'filters': {
+                        'person': 'person',
+                        'since': 'datetime',
+                        'until': 'datetime',
+                      },
+                    },
+                  ],
+                },
+              }),
+              200,
+            );
+          }
+          expect(url.path, endsWith('/$provider/search'));
+          expect(url.queryParameters, containsPair('term', 'hello'));
+          expect(url.queryParameters, containsPair('person', 'nc-user/alice'));
+          expect(
+            url.queryParameters,
+            containsPair('since', '2026-01-05T00:00:00.000Z'),
+          );
+          expect(
+            url.queryParameters,
+            containsPair('until', '2026-01-07T00:00:00.000Z'),
+          );
+          expect(url.queryParameters, containsPair('cursor', '20'));
+          return http.Response(
+            jsonEncode(
+              _successBody([
+                _searchEntry(
+                  title: 'Alice',
+                  subline: 'Hello again',
+                  roomToken: 'abcd1234',
+                  messageId: 21,
+                ),
+              ], cursor: 40),
+            ),
+            200,
+          );
+        });
+
+        expect(
+          await service.supportedFilters(
+            accountId: 'account-a',
+            roomToken: roomToken,
+          ),
+          MessageSearchFilter.values.toSet(),
+        );
+        final page = await service.search(
+          accountId: 'account-a',
+          term: 'hello',
+          roomToken: roomToken,
+          filters: MessageSearchFilters(
+            person: 'alice',
+            since: DateTime.utc(2026, 1, 5),
+            until: DateTime.utc(2026, 1, 7),
+          ),
+          cursor: 20,
+        );
+        expect(page.results.single.messageId, 21);
+        expect(page.nextCursor, 40);
+        expect(requests, hasLength(2));
+      },
+    );
+  }
+
   test('returns an empty list when the provider has no hits', () async {
     final service = buildService(
       (request) async => http.Response(jsonEncode(_successBody(const [])), 200),
     );
 
-    final results = await service.search(
-      accountId: 'account-a',
-      term: 'nothing',
-    );
+    final page = await service.search(accountId: 'account-a', term: 'nothing');
 
-    expect(results, isEmpty);
+    expect(page.results, isEmpty);
   });
 
   test('rejects a blank search term without a network call', () async {

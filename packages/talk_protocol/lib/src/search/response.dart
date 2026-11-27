@@ -25,8 +25,35 @@ enum MessageSearchClassification {
   /// HTTP 429 or 503. Retry later; no results were returned.
   transientError,
 
-  /// HTTP 200 carrying an OCS-level failure instead of search data.
+  /// HTTP 400 or an OCS-level failure instead of search data.
   ocsError,
+}
+
+Set<MessageSearchFilter> decodeMessageSearchFilterSupport(
+  Object? json, {
+  required MessageSearchScope scope,
+}) {
+  const code = TalkProtocolErrorCode.invalidSearchResponse;
+  final root = requireObject(json, path: r'$', code: code);
+  final ocs = requireObject(root['ocs'], path: r'$.ocs', code: code);
+  final meta = requireObject(ocs['meta'], path: r'$.ocs.meta', code: code);
+  if (meta['status'] != 'ok' || meta['statuscode'] != 200) return const {};
+
+  final providers = requireList(ocs['data'], path: r'$.ocs.data', code: code);
+  for (final provider in providers) {
+    if (provider is! Map<String, Object?> ||
+        provider['id'] != scope.providerId) {
+      continue;
+    }
+    final filters = provider['filters'];
+    if (filters is! Map<String, Object?>) return const {};
+    return {
+      if (filters['person'] == 'person') MessageSearchFilter.person,
+      if (filters['since'] == 'datetime') MessageSearchFilter.since,
+      if (filters['until'] == 'datetime') MessageSearchFilter.until,
+    };
+  }
+  return const {};
 }
 
 /// A classified, validated response from a Talk message search provider.
@@ -64,6 +91,8 @@ MessageSearchResponse decodeMessageSearchResponse({
         request,
         MessageSearchClassification.reauthenticationRequired,
       );
+    case 400:
+      return _empty(request, MessageSearchClassification.ocsError);
     case 404:
       return _empty(request, MessageSearchClassification.providerNotFound);
     case 429:
@@ -156,13 +185,19 @@ MessageSearchResponse _decodeSuccessOrOcsFailure({
     );
   }
   int? nextCursor;
-  if (data['cursor'] != null) {
-    nextCursor = requireInt(
-      data['cursor'],
-      path: r'$.ocs.data.cursor',
-      code: code,
-      minimum: 0,
-    );
+  if (data['cursor'] case final cursor?) {
+    final parsed = switch (cursor) {
+      final int value => value,
+      final String value when value.length <= 20 => int.tryParse(
+        value,
+        radix: 10,
+      ),
+      _ => null,
+    };
+    if (parsed == null || parsed < 0) {
+      protocolFailure(code, r'$.ocs.data.cursor');
+    }
+    if (rawEntries.isNotEmpty && isPaginated != false) nextCursor = parsed;
   }
 
   return MessageSearchResponse._(

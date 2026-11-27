@@ -705,6 +705,32 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
     );
   }
 
+  Future<Set<MessageSearchFilter>> getMessageSearchFilterSupport({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+    ConversationToken? roomToken,
+    Future<void>? abortTrigger,
+  }) async {
+    final payload = await _sendJson(
+      _authenticatedOcsRequest(
+        'GET',
+        messageSearchProvidersUri(server, roomToken: roomToken),
+        loginName: loginName,
+        appPassword: appPassword,
+        abortTrigger: abortTrigger,
+      ),
+      allowedStatusCodes: const {200},
+      maximumBytes: _messageSearchMaximumBytes,
+    );
+    return decodeMessageSearchFilterSupport(
+      payload.json,
+      scope: roomToken == null
+          ? MessageSearchScope.global
+          : MessageSearchScope.currentRoom,
+    );
+  }
+
   /// Searches Talk messages via Nextcloud's unified search providers.
   Future<MessageSearchResponse> searchMessages({
     required MessageSearchRequest searchRequest,

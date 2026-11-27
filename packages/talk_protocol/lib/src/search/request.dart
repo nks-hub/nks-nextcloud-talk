@@ -39,6 +39,29 @@ enum MessageSearchScope {
   };
 }
 
+enum MessageSearchFilter { person, since, until }
+
+final class MessageSearchFilters {
+  const MessageSearchFilters({this.person, this.since, this.until});
+
+  final String? person;
+  final DateTime? since;
+  final DateTime? until;
+
+  bool get isEmpty => person == null && since == null && until == null;
+}
+
+String? _searchFrom(ConversationToken? roomToken) =>
+    roomToken == null ? null : '/call/${roomToken.value}';
+
+Uri messageSearchProvidersUri(
+  ServerBase server, {
+  ConversationToken? roomToken,
+}) => server.uri.replace(
+  path: '${server.basePath}$searchProvidersPath',
+  queryParameters: {'format': 'json', 'from': ?_searchFrom(roomToken)},
+);
+
 /// A validated request against Talk's unified search message providers.
 ///
 /// `GET /ocs/v2.php/search/providers/{providerId}/search`
@@ -50,14 +73,28 @@ final class MessageSearchRequest {
     required this.scope,
     required this.term,
     required this.limit,
+    this.filters = const MessageSearchFilters(),
     this.cursor,
     this.roomToken,
     this.userAgent = searchContractUserAgent,
   }) {
-    if (term.trim().isEmpty ||
+    if ((term.trim().isEmpty && filters.isEmpty) ||
         term.length > messageSearchMaximumTermLength ||
         _hasControlCharacter(term)) {
       _requestFailure(r'$.query.term');
+    }
+    final person = filters.person;
+    if (person != null &&
+        (person.trim().isEmpty ||
+            person.trim() != person ||
+            person.length > 256 ||
+            _hasControlCharacter(person))) {
+      _requestFailure(r'$.query.person');
+    }
+    final since = filters.since;
+    final until = filters.until;
+    if (since != null && until != null && since.isAfter(until)) {
+      _requestFailure(r'$.query.until');
     }
     if (limit < messageSearchMinimumLimit ||
         limit > messageSearchMaximumLimit) {
@@ -85,6 +122,7 @@ final class MessageSearchRequest {
   final MessageSearchScope scope;
   final String term;
   final int limit;
+  final MessageSearchFilters filters;
   final int? cursor;
   final ConversationToken? roomToken;
   final String userAgent;
@@ -99,18 +137,19 @@ final class MessageSearchRequest {
   /// constructor above refuses a room token on a global search: it would
   /// silently hide exactly the room the user is looking at.
   ///
-  /// The current-room provider is not listed by `/search/providers` and
-  /// answers 200 with no entries when `from` is missing, so a wrong pairing
-  /// fails silently rather than loudly.
-  String? get _fromRoute =>
-      roomToken == null ? null : '/call/${roomToken!.value}';
+  /// Without `from`, the current-room provider is not listed and returns
+  /// no entries when searched directly.
+  String? get _fromRoute => _searchFrom(roomToken);
 
   Map<String, String> get queryParameters => UnmodifiableMapView({
     'format': 'json',
-    'term': term,
+    if (term.trim().isNotEmpty) 'term': term,
     'limit': limit.toString(),
     if (cursor != null) 'cursor': cursor.toString(),
     'from': ?_fromRoute,
+    if (filters.person case final person?) 'person': 'nc-user/$person',
+    'since': ?filters.since?.toUtc().toIso8601String(),
+    'until': ?filters.until?.toUtc().toIso8601String(),
   });
 
   Map<String, String> get headers =>

@@ -158,6 +158,7 @@ Widget buildMessageDestination({
   required CachedConversation conversation,
   required MessageDestinationTarget target,
   required ChatThreadContext? threadContext,
+  PreferredSizeWidget? searchNavigation,
 }) {
   final threadId = target.threadId;
   if (threadId == null || threadId == target.messageId) {
@@ -165,6 +166,7 @@ Widget buildMessageDestination({
       account: account,
       conversation: conversation,
       jumpToMessageId: target.messageId,
+      searchNavigation: searchNavigation,
     );
   }
   if (threadContext == null ||
@@ -182,6 +184,7 @@ Widget buildMessageDestination({
     conversation: conversation,
     threadContext: threadContext,
     jumpToMessageId: target.messageId,
+    searchNavigation: searchNavigation,
   );
 }
 
@@ -192,12 +195,14 @@ final class MessageSearchThreadScreen extends StatelessWidget {
     required this.conversation,
     required this.threadContext,
     required this.jumpToMessageId,
+    this.searchNavigation,
   });
 
   final StoredAccount account;
   final CachedConversation conversation;
   final ChatThreadContext threadContext;
   final int jumpToMessageId;
+  final PreferredSizeWidget? searchNavigation;
 
   @override
   Widget build(BuildContext context) {
@@ -209,6 +214,7 @@ final class MessageSearchThreadScreen extends StatelessWidget {
         conversation: conversation,
         threadContext: threadContext,
         jumpToMessageId: jumpToMessageId,
+        searchNavigation: searchNavigation,
       ),
     );
   }

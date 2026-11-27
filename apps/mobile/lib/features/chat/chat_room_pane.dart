@@ -339,6 +339,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     if (oldWidget.account.id == widget.account.id &&
         oldWidget.conversation.token == widget.conversation.token &&
         oldWidget.threadId == widget.threadId) {
+      _updateJumpTarget(oldWidget.jumpToMessageId);
       _scheduleTypingActivitySync();
       return;
     }
@@ -369,17 +370,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _sendGeneration++;
     _textSendGeneration++;
     _composerFocusGeneration++;
-    _jumpGeneration++;
-    _jumpInProgress = false;
-    _jumpFetching = false;
-    _jumpProgress = null;
-    _jumpDeferred = false;
-    _highlightTimer?.cancel();
-    _leaveIsland();
-    _highlightTimer = null;
-    _jumpTargetId = null;
-    _highlightedMessageId = null;
-    _pendingJumpMessageId = widget.jumpToMessageId;
+    _resetJumpForScope();
     _sending = false;
     _localError = null;
     _initialAttemptFinished = false;

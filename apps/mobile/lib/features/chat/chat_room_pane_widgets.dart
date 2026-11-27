@@ -1,5 +1,35 @@
 part of 'chat_room_pane.dart';
 
+extension _ChatRoomPaneJumpLifecycle on _ChatRoomPaneState {
+  void _updateJumpTarget(int? previousMessageId) {
+    final target = widget.jumpToMessageId;
+    if (target == null || target == previousMessageId) return;
+
+    final key = _key;
+    final generation = ++_jumpGeneration;
+    _pendingJumpMessageId = target;
+    _jumpDeferred = false;
+    if (!_initialAttemptFinished) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_isCurrentJump(key, generation)) _startPendingJump();
+    });
+  }
+
+  void _resetJumpForScope() {
+    _jumpGeneration++;
+    _jumpInProgress = false;
+    _jumpFetching = false;
+    _jumpProgress = null;
+    _jumpDeferred = false;
+    _highlightTimer?.cancel();
+    _leaveIsland();
+    _highlightTimer = null;
+    _jumpTargetId = null;
+    _highlightedMessageId = null;
+    _pendingJumpMessageId = widget.jumpToMessageId;
+  }
+}
+
 final class ChatThreadScreen extends ConsumerWidget {
   const ChatThreadScreen({
     super.key,
@@ -7,12 +37,14 @@ final class ChatThreadScreen extends ConsumerWidget {
     required this.conversation,
     required this.threadContext,
     this.jumpToMessageId,
+    this.searchNavigation,
   });
 
   final StoredAccount account;
   final CachedConversation conversation;
   final ChatThreadContext threadContext;
   final int? jumpToMessageId;
+  final PreferredSizeWidget? searchNavigation;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,6 +68,7 @@ final class ChatThreadScreen extends ConsumerWidget {
     return Scaffold(
       key: Key('chat-thread-screen-$threadId'),
       appBar: AppBar(
+        bottom: searchNavigation,
         // Two lines of text outgrow the stock 56 dp bar as soon as the text
         // is scaled, so the bar grows with it. AppBar stops scaling its title
         // at 1.34, and so does this.

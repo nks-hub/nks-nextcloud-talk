@@ -56,12 +56,8 @@ MessageSearchResult parseMessageSearchResult(
     code: _responseCode,
     maxLength: 512,
   );
-  final subline = requireString(
-    entry['subline'],
-    path: '$path.subline',
-    code: _responseCode,
-    maxLength: 4096,
-  );
+  final subline = entry['subline'];
+  if (subline is! String) protocolFailure(_responseCode, '$path.subline');
   final resourceUrl = requireString(
     entry['resourceUrl'],
     path: '$path.resourceUrl',
@@ -147,8 +143,13 @@ MessageSearchResult parseMessageSearchResult(
     );
   }
 
-  final excerpt = subline.length > messageSearchExcerptMaximumLength
-      ? subline.substring(0, messageSearchExcerptMaximumLength) +
+  final excerptRunes = subline.runes.take(
+    messageSearchExcerptMaximumLength + 1,
+  );
+  final excerpt = excerptRunes.length > messageSearchExcerptMaximumLength
+      ? String.fromCharCodes(
+              excerptRunes.take(messageSearchExcerptMaximumLength),
+            ) +
             _searchTruncationSuffix
       : subline;
 

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +10,7 @@ import 'package:http/testing.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
@@ -133,7 +134,7 @@ void main() {
     },
   );
 
-  testWidgets('the current result replaces search with its destination', (
+  testWidgets('search opens the match and Back restores the query', (
     tester,
   ) async {
     // The expanded shell folds its list below 620 px of conversation width,
@@ -168,9 +169,119 @@ void main() {
       tester,
       () => find.byType(PresenceChatRoomScreen).evaluate().isNotEmpty,
     );
-    expect(find.byType(PresenceChatRoomScreen), findsOneWidget);
+    Navigator.of(tester.element(find.byType(PresenceChatRoomScreen))).pop();
+    await tester.pumpAndSettle();
+    final query = find.byKey(const Key('message-search-field'));
+    expect(tester.widget<TextField>(query).controller!.text, 'fixture');
     expect(tester.takeException(), null);
   });
+
+  testWidgets(
+    'next and previous reveal matches across the first page boundary',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final fixture = await _LifecycleFixture.create();
+      addTearDown(fixture.dispose);
+      await fixture.insertTimeline(first: 101, last: 130);
+      final selectedAccounts = StreamController<StoredAccount?>();
+      addTearDown(selectedAccounts.close);
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return _capabilitiesResponse();
+          }
+          if (request.url.path.endsWith('/chat/rooma123')) {
+            return http.Response('', 304);
+          }
+          return http.Response('', 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      final secondPage = Completer<MessageSearchPage>();
+      final service = _FixedSearchService(
+        _rootResult(messageId: 105, excerpt: 'Match 20'),
+        leading: [
+          for (var index = 1; index < 20; index++)
+            _rootResult(messageId: 106 + index, excerpt: 'Match $index'),
+        ],
+        secondPage: secondPage.future,
+      );
+      await tester.pumpWidget(
+        _wrapShell(
+          fixture,
+          selectedAccounts.stream,
+          liveTimeline: true,
+          overrides: [
+            nextcloudApiProvider.overrideWithValue(api),
+            messageSearchServiceProvider.overrideWithValue(service),
+          ],
+        ),
+      );
+      addTearDown(() async {
+        if (!secondPage.isCompleted) {
+          secondPage.complete((
+            results: <MessageSearchResult>[],
+            nextCursor: null,
+          ));
+        }
+        await _disposeShell(tester);
+      });
+      selectedAccounts.add(fixture.account);
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('open-message-search')));
+      await tester.pumpAndSettle();
+      final query = find.byKey(const Key('message-search-field'));
+      await tester.enterText(query, 'fixture');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump();
+
+      final list = find.byKey(const Key('message-search-results'));
+      final scrollable = find.descendant(
+        of: list,
+        matching: find.byType(Scrollable),
+      );
+      final twentieth = find.text('Match 20');
+      await tester.scrollUntilVisible(twentieth, 130, scrollable: scrollable);
+      final initialOffset = tester
+          .state<ScrollableState>(scrollable)
+          .position
+          .pixels;
+      expect(initialOffset, greaterThan(0));
+      await tester.tap(twentieth);
+      await _pumpUntil(tester, () => _isMessageHighlighted(tester, 105));
+      final pane = tester.element(find.byType(ChatRoomPane));
+
+      final next = find.byKey(const Key('search-next-match'));
+      await tester.tap(next);
+      await tester.pump();
+      expect(service.cursors, [null, 20]);
+      secondPage.complete((
+        results: [_rootResult(messageId: 130, excerpt: 'Match 21')],
+        nextCursor: null,
+      ));
+      await _pumpUntil(tester, () => _isMessageHighlighted(tester, 130));
+      expect(tester.element(find.byType(ChatRoomPane)), same(pane));
+      expect(tester.widget<IconButton>(next).onPressed, isNull);
+
+      await tester.tap(find.byKey(const Key('search-previous-match')));
+      await _pumpUntil(tester, () => _isMessageHighlighted(tester, 105));
+      expect(tester.element(find.byType(ChatRoomPane)), same(pane));
+
+      Navigator.of(pane).pop();
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(query).controller!.text, 'fixture');
+      expect(
+        tester.state<ScrollableState>(scrollable).position.pixels,
+        initialOffset,
+      );
+      expect(service.cursors, [null, 20]);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('a missing conversation reports the failure without a guess', (
     tester,
@@ -319,6 +430,7 @@ Widget _wrapShell(
   Stream<StoredAccount?> selectedAccounts, {
   List<Override> overrides = const <Override>[],
   List<StoredAccount>? availableAccounts,
+  bool liveTimeline = false,
 }) {
   return ProviderScope(
     overrides: <Override>[
@@ -339,9 +451,10 @@ Widget _wrapShell(
         (ref, accountId) =>
             Stream.value(<CachedConversation>[fixture.conversation]),
       ),
-      chatMessagesProvider.overrideWith(
-        (ref, key) => Stream.value(const <CachedChatMessage>[]),
-      ),
+      if (!liveTimeline)
+        chatMessagesProvider.overrideWith(
+          (ref, key) => Stream.value(const <CachedChatMessage>[]),
+        ),
       outgoingMessageStatusesProvider.overrideWith(
         (ref, key) => Stream.value(const <OutgoingMessageStatus>[]),
       ),
@@ -351,7 +464,8 @@ Widget _wrapShell(
       attachmentRoomJobsProvider.overrideWith(
         (ref, key) => Stream.value(const <StoredAttachmentJob>[]),
       ),
-      chatScopeProvider.overrideWith((ref, key) => Stream.value(null)),
+      if (!liveTimeline)
+        chatScopeProvider.overrideWith((ref, key) => Stream.value(null)),
       connectivityWakeEventsProvider.overrideWithValue(
         const Stream<void>.empty(),
       ),
@@ -411,7 +525,35 @@ final class _LifecycleFixture {
     );
   }
 
-  Future<void> insertNamedThreadRoot(int messageId) {
+  Future<void> insertNamedThreadRoot(int messageId) =>
+      _insertMessage(messageId, threadTitle: 'Named fixture thread');
+
+  Future<void> insertTimeline({required int first, required int last}) async {
+    for (var id = first; id <= last; id++) {
+      await _insertMessage(id);
+    }
+    await database
+        .into(database.chatScopes)
+        .insert(
+          ChatScopesCompanion.insert(
+            accountId: account.id,
+            roomToken: conversation.token,
+            scopeKey: 'root',
+            historyCursor: '$first',
+            futureCursor: '$last',
+            lastCommonRead: '$last',
+            lastReadMessage: 0,
+            unreadMessages: 0,
+            hasHistory: false,
+            futureConverged: false,
+            blocksJson: '[["$first","$last"]]',
+            lastSyncedAtMillis: const Value(1724300000000),
+          ),
+        );
+  }
+
+  Future<void> _insertMessage(int messageId, {String? threadTitle}) {
+    final text = threadTitle ?? 'Message $messageId';
     final wire = <String, Object?>{
       'id': messageId,
       'token': conversation.token,
@@ -423,13 +565,15 @@ final class _LifecycleFixture {
       'messageType': 'comment',
       'isReplyable': true,
       'referenceId': 'reference-$messageId',
-      'message': 'Named fixture thread',
+      'message': text,
       'messageParameters': <String, Object?>{},
       'markdown': false,
       'reactions': <String, Object?>{},
-      'threadId': messageId,
-      'isThread': true,
-      'threadTitle': 'Named fixture thread',
+      if (threadTitle != null) ...{
+        'threadId': messageId,
+        'isThread': true,
+        'threadTitle': threadTitle,
+      },
     };
     return database
         .into(database.cachedChatMessages)
@@ -445,9 +589,9 @@ final class _LifecycleFixture {
             systemMessage: '',
             messageType: 'comment',
             referenceId: 'reference-$messageId',
-            displayText: 'Named fixture thread',
+            displayText: text,
             deleted: false,
-            threadId: Value(messageId),
+            threadId: Value(threadTitle == null ? null : messageId),
             rawJson: jsonEncode(wire),
           ),
         );
@@ -477,18 +621,37 @@ final class _LifecycleFixture {
 }
 
 final class _FixedSearchService implements MessageSearchService {
-  const _FixedSearchService(this.result);
+  _FixedSearchService(this.result, {this.leading = const [], this.secondPage});
 
   final MessageSearchResult result;
+  final List<MessageSearchResult> leading;
+  final Future<MessageSearchPage>? secondPage;
+  final List<int?> cursors = [];
 
   @override
-  Future<List<MessageSearchResult>> search({
+  Future<Set<MessageSearchFilter>> supportedFilters({
+    required String accountId,
+    String? roomToken,
+    Future<void>? abortTrigger,
+  }) async => const {};
+
+  @override
+  Future<MessageSearchPage> search({
     required String accountId,
     required String term,
     String? roomToken,
+    MessageSearchFilters filters = const MessageSearchFilters(),
     int limit = messageSearchDefaultLimit,
+    int? cursor,
     Future<void>? abortTrigger,
-  }) async => <MessageSearchResult>[result];
+  }) async {
+    cursors.add(cursor);
+    if (cursor == 20) return secondPage!;
+    return (
+      results: [...leading, result],
+      nextCursor: secondPage == null ? null : 20,
+    );
+  }
 }
 
 final class _SentinelScreen extends StatelessWidget {
@@ -554,14 +717,18 @@ MessageSearchResult _threadResult() {
   }, path: r'$');
 }
 
-MessageSearchResult _rootResult() {
+MessageSearchResult _rootResult({
+  int messageId = 42,
+  String excerpt = 'Fixture matching message',
+}) {
   return parseMessageSearchResult(<String, Object?>{
     'title': 'Fixture author',
-    'subline': 'Fixture matching message',
-    'resourceUrl': 'https://cloud.example.invalid/call/rooma123#message_42',
+    'subline': excerpt,
+    'resourceUrl':
+        'https://cloud.example.invalid/call/rooma123#message_$messageId',
     'attributes': <String, Object?>{
       'conversation': 'rooma123',
-      'messageId': '42',
+      'messageId': '$messageId',
     },
   }, path: r'$');
 }
@@ -670,7 +837,18 @@ Future<void> _waitForResultGuard(WidgetTester tester) {
 
 Future<void> _disposeShell(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox.shrink());
-  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 50));
+}
+
+bool _isMessageHighlighted(WidgetTester tester, int messageId) {
+  final bubble = find.descendant(
+    of: find.byKey(Key('chat-message-target-$messageId')),
+    matching: find.byType(AnimatedContainer),
+  );
+  return bubble.evaluate().length == 1 &&
+      (tester.widget<AnimatedContainer>(bubble).decoration! as BoxDecoration)
+              .border !=
+          null;
 }
 
 Future<void> _pumpUntil(
