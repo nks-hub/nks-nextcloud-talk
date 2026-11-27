@@ -175,7 +175,6 @@ jobs:
 
   android:
     name: android
-    needs: test
     if: ${{ !inputs.tests_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -278,7 +277,6 @@ jobs:
 
   linux:
     name: linux
-    needs: test
     if: ${{ !inputs.tests_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -450,7 +448,7 @@ jobs:
   # nowhere else, so a download link would only mislead.
   release:
     name: github release
-    needs: [android, linux, windows]
+    needs: [test, android, linux, windows]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -521,7 +519,7 @@ jobs:
   # tag has to match `v<pubspec version>` exactly - build number included.
   play:
     name: play alpha
-    needs: android
+    needs: [test, android]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 20
