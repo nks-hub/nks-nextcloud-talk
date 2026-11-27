@@ -9,6 +9,13 @@ final recoverableTextDraftStoreProvider =
       (ref) => RecoverableTextDraftStore(ref.watch(appDatabaseProvider)),
     );
 
+final roomRefusedDraftsProvider = StreamProvider.autoDispose
+    .family<List<RefusedTextDraft>, ChatRoomProviderKey>(
+      (ref, key) => ref
+          .watch(recoverableTextDraftStoreProvider.notifier)
+          .watch(key.accountId, key.roomToken, key.threadId),
+    );
+
 final accountRepositoryProvider = Provider<AccountRepository>((ref) {
   return AccountRepository(
     ref.watch(appDatabaseProvider),

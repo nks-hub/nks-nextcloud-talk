@@ -85,6 +85,9 @@ void main() {
           observedChatKeys?.add(key);
           return Stream.value(const <CachedChatMessage>[]);
         }),
+        roomRefusedDraftsProvider.overrideWith(
+          (ref, key) => Stream.value(const <RefusedTextDraft>[]),
+        ),
         outgoingMessageStatusesProvider.overrideWith(
           (ref, key) => Stream.value(const <OutgoingMessageStatus>[]),
         ),

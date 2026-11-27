@@ -2,13 +2,6 @@ part of 'chat_room_pane.dart';
 
 const _refusedDraftPrefix = 'refused-draft-';
 
-final _storedRefusedDrafts = StreamProvider.autoDispose
-    .family<List<RefusedTextDraft>, ChatRoomProviderKey>(
-      (ref, key) => ref
-          .watch(recoverableTextDraftStoreProvider.notifier)
-          .watch(key.accountId, key.roomToken, key.threadId),
-    );
-
 extension _ChatRoomDrafts on _ChatRoomPaneState {
   ChatThreadContext? get _currentThreadContext {
     final threadContext = widget.threadContext;
@@ -148,7 +141,7 @@ extension _ChatRoomDrafts on _ChatRoomPaneState {
     final recovery = ref.watch(recoverableTextDraftStoreProvider);
     return {
       for (final draft in [
-        ...?ref.watch(_storedRefusedDrafts(key)).valueOrNull,
+        ...?ref.watch(roomRefusedDraftsProvider(key)).valueOrNull,
         ...recovery.volatileDrafts(key.accountId, key.roomToken, key.threadId),
       ])
         if (!recovery.isActive(draft.draftId))
