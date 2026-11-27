@@ -4,10 +4,11 @@ void _registerQuickEmojiComposerTests() {
   testWidgets('tapping the quick emoji sends it as an ordinary message', (
     tester,
   ) async {
+    _installVoiceChannels();
     final server = FakeOwnTalkServer()
       ..setExternally({'composer.quickEmoji': '\u{1F44D}'});
     final harness = (await tester.runAsync(
-      () => _ComposerHarness.create(ownTalk: server),
+      () => _ComposerHarness.create(ownTalk: server, voice: true),
     ))!;
     _addHarnessTearDown(tester, harness);
     await tester.pumpWidget(
@@ -27,6 +28,15 @@ void _registerQuickEmojiComposerTests() {
       () => find.byKey(const Key('send-quick-emoji')).evaluate().isNotEmpty,
     );
 
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('voice-record'))
+          .hitTestable()
+          .evaluate()
+          .isNotEmpty,
+    );
+    expect(find.byKey(const Key('send-message')), findsNothing);
     await tester.tap(find.byKey(const Key('send-quick-emoji')));
     await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
 

@@ -373,7 +373,7 @@ void _registerChatMediaComposerToolbarTests(
     );
     final media = find.byType(ChatMediaComposer);
     final mediaElement = tester.element(media);
-    await tester.tap(find.byKey(const Key('voice-record')));
+    unawaited(tester.widget<ChatMediaComposer>(media).controller!.startVoice());
     await _pumpUntil(
       tester,
       () => find.byKey(const Key('voice-pause')).evaluate().isNotEmpty,

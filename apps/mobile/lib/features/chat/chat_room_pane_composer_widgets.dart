@@ -863,58 +863,31 @@ final class _PrivateReplyDialogState extends State<_PrivateReplyDialog> {
   }
 }
 
-/// The conversation's quick emoji in place of the send button while there is
-/// nothing to send. It never replaces the button once text or a file is
-/// waiting, so the tap target for a real message stays where it was.
-final class _SendOrQuickEmojiButton extends StatelessWidget {
-  const _SendOrQuickEmojiButton({
-    required this.composer,
-    required this.refresh,
+final class _QuickEmojiAction extends StatelessWidget {
+  const _QuickEmojiAction({
     required this.emoji,
     required this.sending,
-    required this.hasAttachment,
-    required this.sendButton,
     required this.onSendEmoji,
   });
 
-  final TextEditingController composer;
-
-  /// Fires when [hasAttachment] may answer differently.
-  final Listenable refresh;
   final String emoji;
   final bool sending;
-  final bool Function() hasAttachment;
-  final Widget sendButton;
   final void Function(String emoji, int? sizeStep) onSendEmoji;
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge([composer, refresh]),
-      builder: (context, _) {
-        final showSend = composer.text.trim().isNotEmpty || hasAttachment();
-        if (showSend) {
-          return _PopIn(showSend: true, child: sendButton);
-        }
-        final strings = AppLocalizations.of(context);
-        final name = EmojiCatalog.standard()
-            .byGlyph(emoji)
-            ?.nameFor(Localizations.maybeLocaleOf(context))
-            .toLowerCase();
-        final label = name == null
-            ? strings.ownTalkQuickEmojiSend
-            : strings.ownTalkQuickEmojiSendNamed(name);
-        // Holding it sends the emoji enlarged.
-        return _PopIn(
-          showSend: false,
-          child: QuickEmojiHoldButton(
-            emoji: emoji,
-            tooltip: label,
-            enabled: !sending,
-            onSend: onSendEmoji,
-          ),
-        );
-      },
+    final strings = AppLocalizations.of(context);
+    final name = EmojiCatalog.standard()
+        .byGlyph(emoji)
+        ?.nameFor(Localizations.maybeLocaleOf(context))
+        .toLowerCase();
+    return QuickEmojiHoldButton(
+      emoji: emoji,
+      tooltip: name == null
+          ? strings.ownTalkQuickEmojiSend
+          : strings.ownTalkQuickEmojiSendNamed(name),
+      enabled: !sending,
+      onSend: onSendEmoji,
     );
   }
 }

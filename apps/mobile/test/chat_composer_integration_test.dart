@@ -617,9 +617,6 @@ Future<void> _verifyShortComposer(
     composer,
     find.byKey(const Key('pick-image-attachment')),
     find.byKey(const Key('open-emoji-picker')),
-    find.byKey(const Key('voice-record')).evaluate().isNotEmpty
-        ? find.byKey(const Key('voice-record'))
-        : find.byKey(const Key('voice-record-unavailable')),
     send,
   ];
   for (final control in controls) {
@@ -737,6 +734,7 @@ final class _ComposerHarness {
 
   static Future<_ComposerHarness> create({
     FakeOwnTalkServer? ownTalk,
+    bool voice = false,
     int maximumSourceBytes = durableAttachmentDefaultMaximumBytes,
   }) async {
     final database = openTestDatabase();
@@ -843,7 +841,7 @@ final class _ComposerHarness {
           return ownTalk.handle(request);
         }
         if (request.url.path.endsWith('/cloud/capabilities')) {
-          final capabilities = _attachmentCapabilities();
+          final capabilities = _attachmentCapabilities(voice);
           if (ownTalk != null) {
             (((capabilities['ocs']! as Map<String, Object?>)['data']!
                         as Map<String, Object?>)['capabilities']!
@@ -1060,9 +1058,10 @@ HttpGiphyRepository _giphyRepository() {
   );
 }
 
-Map<String, Object?> _attachmentCapabilities() {
+Map<String, Object?> _attachmentCapabilities(bool voice) {
   final result = capabilitiesJson(
-    talkFeatures: const <String>[
+    talkFeatures: <String>[
+      if (voice) 'voice-message-sharing',
       'conversation-v4',
       'chat-v2',
       'chat-reference-id',

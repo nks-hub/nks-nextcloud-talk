@@ -114,7 +114,7 @@ final class ChatMediaThreadBinding {
 }
 
 final class ChatMediaComposerController {
-  Object? _owner;
+  _ChatMediaComposerState? _owner;
   Future<bool> Function(List<String>)? _attachFiles;
   Future<bool> Function(LoadGiphyAttachmentPayload loader)? _submitGiphy;
   Future<bool> Function(AttachmentPickerSource source)? _pickAttachment;
@@ -179,8 +179,20 @@ final class ChatMediaComposerController {
     return pick == null ? false : pick();
   }
 
+  Future<void> startVoice() async {
+    final owner = _owner;
+    final voice = owner?._voiceController;
+    if (owner != null &&
+        !owner._disposed &&
+        owner._voiceAdmissionSupported &&
+        voice != null &&
+        _showsIdleToolbar(voice.state)) {
+      await voice.start();
+    }
+  }
+
   void _attach(
-    Object owner,
+    _ChatMediaComposerState owner,
     Future<bool> Function(LoadGiphyAttachmentPayload loader) submitGiphy,
     Future<bool> Function(AttachmentPickerSource source) pickAttachment,
     Future<bool> Function() pickContact, {
@@ -239,6 +251,7 @@ final class ChatMediaComposer extends StatefulWidget {
     this.openAppSettings,
     this.controller,
     this.field,
+    this.draftActions,
     this.leadingAction,
     this.idleActions = const <Widget>[],
     this.trailingActions = const <Widget>[],
@@ -281,6 +294,7 @@ final class ChatMediaComposer extends StatefulWidget {
   final Future<bool> Function()? openAppSettings;
   final ChatMediaComposerController? controller;
   final Widget? field;
+  final ChatComposerDraftActions? draftActions;
   final Widget? leadingAction;
   final List<Widget> idleActions;
   final List<Widget> trailingActions;
@@ -701,10 +715,23 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
             controller: voiceController,
             labels: voiceLabels,
             showError: !voiceErrorUsesRemainingWidth,
-            onOpenSettings: widget.openAppSettings == null
+            onOpenSettings:
+                widget.draftActions != null || widget.openAppSettings == null
                 ? null
                 : () => unawaited(_openAppSettings()),
           );
+    final error = voiceController?.state.error;
+    final permissionDenied =
+        error == VoiceMessageError.permissionDenied ||
+        error == VoiceMessageError.permissionPermanentlyDenied;
+    final voiceRecovery = permissionDenied && widget.openAppSettings != null
+        ? IconButton(
+            key: const Key('voice-open-app-settings'),
+            tooltip: voiceLabels.openSettings,
+            onPressed: () => unawaited(_openAppSettings()),
+            icon: const Icon(Icons.settings_outlined),
+          )
+        : null;
     return Column(
       key: const Key('chat-media-composer'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -737,9 +764,12 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
                 compact: compactHeight,
                 pinnedAction: pinnedAction,
                 leadingAction: attachmentAction,
-                actions: <Widget>[
-                  ...widget.idleActions,
-                  idleVoiceAction,
+                draftActions: widget.draftActions,
+                voice: idleVoiceAction,
+                voiceAvailable: !showVoiceUnavailable,
+                voiceRecovery: voiceRecovery,
+                actions: <Widget>[...widget.idleActions],
+                trailing: [
                   ...trailingActions,
                   if (compactHeight) _attachmentPreviews(),
                 ],
@@ -752,6 +782,10 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
             compact: compactHeight,
             pinnedAction: pinnedAction,
             leadingAction: attachmentAction,
+            draftActions: widget.draftActions,
+            voice: idleVoiceAction,
+            voiceAvailable: !showVoiceUnavailable,
+            voiceRecovery: voiceRecovery,
             actions: <Widget>[
               if (voiceErrorUsesRemainingWidth)
                 SizedBox(
@@ -783,7 +817,8 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
                   ),
                 ),
               ...widget.idleActions,
-              idleVoiceAction,
+            ],
+            trailing: [
               ...trailingActions,
               if (compactHeight) _attachmentPreviews(),
             ],

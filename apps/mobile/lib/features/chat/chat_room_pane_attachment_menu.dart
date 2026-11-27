@@ -1,11 +1,32 @@
 part of 'chat_room_pane.dart';
 
 extension _ChatRoomPaneAttachmentControls on _ChatRoomPaneState {
+  bool _supportsFileAttachment(
+    AsyncValue<ChatAttachmentDependencies>? dependencies,
+  ) {
+    final profile = dependencies?.valueOrNull?.profile;
+    final thread = _currentThreadContext;
+    if (profile == null || (widget.threadId != null && thread == null)) {
+      return false;
+    }
+    return profile.supports(
+      AttachmentMetadata(
+        kind: AttachmentMessageKind.file,
+        replyTo: widget.threadId == null
+            ? _replyTo?.messageId
+            : thread?.replyTo,
+        threadId: widget.threadId == null ? null : thread?.networkThreadId,
+        silent: _silentSend,
+      ),
+    );
+  }
+
   List<AttachmentMenuAction> _attachmentMenuActions({
     required AppLocalizations strings,
     required bool attachmentSupported,
     required RichChatCapabilityProfile? actionsProfile,
     required AsyncValue<bool>? pollAvailable,
+    required bool voiceSupported,
     required String giphyLabel,
     required VoidCallback? giphyAction,
   }) => <AttachmentMenuAction>[
@@ -22,6 +43,15 @@ extension _ChatRoomPaneAttachmentControls on _ChatRoomPaneState {
       label: strings.formatMenuTooltip,
       onSelected: _sending ? null : () => unawaited(_chooseComposerFormat()),
     ),
+    if (voiceSupported)
+      AttachmentMenuAction(
+        key: const Key('record-voice-message'),
+        icon: const Icon(Icons.mic_none_rounded),
+        label: strings.recordVoiceMessage,
+        onSelected: _sending
+            ? null
+            : () => unawaited(_mediaComposerController.startVoice()),
+      ),
     AttachmentMenuAction(
       key: const Key('attach-source-gallery'),
       icon: const Icon(Icons.image_outlined),
@@ -170,20 +200,20 @@ extension _ChatRoomPaneAttachmentControls on _ChatRoomPaneState {
     required Widget field,
     required Widget leadingAction,
     required List<Widget> idleActions,
-    required List<Widget> trailingActions,
+    required ChatComposerDraftActions draftActions,
   }) {
     return dependencies.when(
       loading: () => ChatMediaComposerStatus.loading(
         field: field,
         leadingAction: leadingAction,
         idleActions: idleActions,
-        trailingActions: trailingActions,
+        draftActions: draftActions,
       ),
       error: (_, _) => ChatMediaComposerStatus.unavailable(
         field: field,
         leadingAction: leadingAction,
         idleActions: idleActions,
-        trailingActions: trailingActions,
+        draftActions: draftActions,
         onRetry: () => retryChatAttachmentDependencies(ref, _key),
       ),
       data: (value) {
@@ -245,7 +275,7 @@ extension _ChatRoomPaneAttachmentControls on _ChatRoomPaneState {
             field: field,
             leadingAction: leadingAction,
             idleActions: idleActions,
-            trailingActions: trailingActions,
+            draftActions: draftActions,
             showAttachmentButton: false,
             silent: _silentSend,
             captionSource: () => _composer.text,
@@ -258,7 +288,7 @@ extension _ChatRoomPaneAttachmentControls on _ChatRoomPaneState {
             field: field,
             leadingAction: leadingAction,
             idleActions: idleActions,
-            trailingActions: trailingActions,
+            draftActions: draftActions,
             onRetry: () => retryChatAttachmentDependencies(ref, _key),
           );
         }

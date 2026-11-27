@@ -1030,32 +1030,15 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         ? ref.watch(giphyRepositoryProvider(widget.account.id))
         : null;
     final giphyRepository = giphy?.valueOrNull;
-    final threadContext = _currentThreadContext;
-    final giphyMetadata = widget.threadId == null
-        ? AttachmentMetadata(
-            kind: AttachmentMessageKind.file,
-            replyTo: _replyTo?.messageId,
-            threadId: null,
-            silent: _silentSend,
-          )
-        : threadContext == null
-        ? null
-        : AttachmentMetadata(
-            kind: AttachmentMessageKind.file,
-            replyTo: threadContext.replyTo,
-            threadId: threadContext.networkThreadId,
-            silent: _silentSend,
-          );
-    final giphyAttachmentSupported =
-        giphyMetadata != null &&
-        (attachmentDependencies?.valueOrNull?.profile.supports(giphyMetadata) ??
-            false);
+    final fileAttachmentSupported = _supportsFileAttachment(
+      attachmentDependencies,
+    );
     final String giphyTooltip;
     final VoidCallback? giphyAction;
     if (attachmentDependencies?.isLoading ?? false) {
       giphyTooltip = strings.mediaCapabilityChecking;
       giphyAction = null;
-    } else if (!giphyAttachmentSupported) {
+    } else if (!fileAttachmentSupported) {
       giphyTooltip = strings.mediaCapabilityUnavailable;
       giphyAction = null;
     } else if (giphy == null) {
@@ -1077,11 +1060,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final canSendSilently = !readOnly && (actionsProfile?.silentSend ?? false);
     final attachmentMenuActions = _attachmentMenuActions(
       strings: strings,
-      attachmentSupported: giphyAttachmentSupported,
+      attachmentSupported: fileAttachmentSupported,
       actionsProfile: actionsProfile,
       pollAvailable: pollAvailable,
       giphyLabel: giphyTooltip,
       giphyAction: _sending ? null : giphyAction,
+      voiceSupported:
+          fileAttachmentSupported &&
+          (attachmentDependencies?.valueOrNull?.profile.voice ?? false),
     );
     _publishAttachmentMenuActions(attachmentMenuActions);
     final leadingComposerAction = ComposerActionMenuButton(
@@ -1163,26 +1149,29 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         ],
       ),
     );
-    final trailingComposerActions = <Widget>[
-      // Part of the field's own tap region: a tap here is not "outside" it,
-      // so a mouse, stylus or injected pointer no longer drops the focus,
-      // and with it the soft keyboard, before the send is even handled.
-      TextFieldTapRegion(
-        child: quickEmoji == null
-            ? sendButton
-            : _SendOrQuickEmojiButton(
-                composer: _composer,
-                refresh: _mediaComposerController.changes,
-                emoji: quickEmoji,
-                sending: _sending,
-                hasAttachment: () =>
-                    _mediaComposerController.hasPreparedAttachment,
-                sendButton: sendButton,
-                onSendEmoji: (emoji, sizeStep) =>
-                    unawaited(_sendQuickEmoji(emoji, sizeStep: sizeStep)),
-              ),
+    final draftActions = ChatComposerDraftActions(
+      changes: Listenable.merge([_composer, _mediaComposerController.changes]),
+      hasContent: () =>
+          _sending ||
+          _composer.text.trim().isNotEmpty ||
+          _mediaComposerController.hasPreparedAttachment,
+      send: TextFieldTapRegion(
+        child: _PopIn(showSend: true, child: sendButton),
       ),
-    ];
+      quickEmoji: quickEmoji == null
+          ? null
+          : TextFieldTapRegion(
+              child: _PopIn(
+                showSend: false,
+                child: _QuickEmojiAction(
+                  emoji: quickEmoji,
+                  sending: _sending,
+                  onSendEmoji: (emoji, sizeStep) =>
+                      unawaited(_sendQuickEmoji(emoji, sizeStep: sizeStep)),
+                ),
+              ),
+            ),
+    );
 
     return PollInteractionScope(
       roomKey: interactionKey,
@@ -1332,7 +1321,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                     field: field,
                     leadingAction: leadingComposerAction,
                     idleActions: idleComposerActions,
-                    trailingActions: trailingComposerActions,
+                    draftActions: draftActions,
                   ),
           ),
         ],
