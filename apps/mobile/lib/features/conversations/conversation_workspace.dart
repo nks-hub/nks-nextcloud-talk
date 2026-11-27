@@ -31,6 +31,7 @@ final class ConversationWorkspace extends StatelessWidget {
     this.unreadByAccount = const {},
     required this.conversations,
     required this.selectedConversationToken,
+    this.jumpToMessageId,
     required this.loading,
     required this.syncing,
     required this.onRefresh,
@@ -64,6 +65,7 @@ final class ConversationWorkspace extends StatelessWidget {
   final Map<String, int> unreadByAccount;
   final List<CachedConversation> conversations;
   final String? selectedConversationToken;
+  final int? jumpToMessageId;
   final bool loading;
   final bool syncing;
   final Future<void> Function() onRefresh;
@@ -144,6 +146,7 @@ final class ConversationWorkspace extends StatelessWidget {
             unreadByAccount: unreadByAccount,
             conversations: conversations,
             selectedConversation: selectedConversation,
+            jumpToMessageId: jumpToMessageId,
             loading: loading,
             syncing: syncing,
             onRefresh: onRefresh,
@@ -172,6 +175,7 @@ final class ConversationWorkspace extends StatelessWidget {
           unreadByAccount: unreadByAccount,
           conversations: conversations,
           selectedConversation: selectedConversation,
+          jumpToMessageId: jumpToMessageId,
           loading: loading,
           syncing: syncing,
           onRefresh: onRefresh,
@@ -223,6 +227,7 @@ final class _CompactShell extends StatelessWidget {
     required this.federationInvitations,
     required this.onDecideFederationInvitation,
     this.selectedConversation,
+    this.jumpToMessageId,
   });
 
   final StoredAccount account;
@@ -230,6 +235,7 @@ final class _CompactShell extends StatelessWidget {
   final Map<String, int> unreadByAccount;
   final List<CachedConversation> conversations;
   final CachedConversation? selectedConversation;
+  final int? jumpToMessageId;
   final bool loading;
   final bool syncing;
   final Future<void> Function() onRefresh;
@@ -295,6 +301,7 @@ final class _CompactShell extends StatelessWidget {
           child: PresenceChatRoomPane(
             account: account,
             conversation: selected,
+            jumpToMessageId: jumpToMessageId,
             onClose: onCloseConversation,
           ),
         ),
@@ -451,6 +458,7 @@ final class _ExpandedShell extends StatelessWidget {
     this.unreadByAccount = const {},
     required this.conversations,
     required this.selectedConversation,
+    this.jumpToMessageId,
     required this.loading,
     required this.syncing,
     required this.onRefresh,
@@ -476,6 +484,7 @@ final class _ExpandedShell extends StatelessWidget {
   final Map<String, int> unreadByAccount;
   final List<CachedConversation> conversations;
   final CachedConversation? selectedConversation;
+  final int? jumpToMessageId;
   final bool loading;
   final bool syncing;
   final Future<void> Function() onRefresh;
@@ -653,6 +662,7 @@ final class _ExpandedShell extends StatelessWidget {
                   child: PresenceChatRoomPane(
                     account: account,
                     conversation: selectedConversation!,
+                    jumpToMessageId: jumpToMessageId,
                     // Withheld when the panel would not fit, which is the
                     // pane's own signal to push the details as a page.
                     onOpenDetails: detailsFit ? onOpenDetails : null,

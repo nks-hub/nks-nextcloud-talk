@@ -31,6 +31,8 @@ int main() {
   // The wrapper the macOS runner already accepts.
   Expect(L"nctalk://open?uri=https%3A%2F%2Fcloud.example.invalid%2Findex.php%2Fcall%2Fabc123",
          kRoom);
+  Expect(L"nctalk://open?uri=https%3A%2F%2Fcloud.example.invalid%2Fcall%2Fabc123%3FthreadId%3D71%23message_204",
+         "https://cloud.example.invalid/call/abc123?threadId=71#message_204");
   // A plain link, which is what a browser hands over.
   Expect(L"https://cloud.example.invalid/index.php/call/abc123", kRoom);
   // Scheme and host are compared case-insensitively.

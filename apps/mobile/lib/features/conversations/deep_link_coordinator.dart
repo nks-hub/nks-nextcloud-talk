@@ -7,25 +7,26 @@ import 'package:flutter/services.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../data/account_repository.dart';
+import '../../data/app_database.dart' show StoredAccount;
 import 'deep_link_bridge.dart';
 
-/// An incoming Talk room link resolved to a known, locally signed-in
-/// account.
-///
-/// Resolution never guesses: [accountId] only ever refers to an account
-/// whose stored server URL shares an origin with the link that produced it.
+/// The signed-in accounts eligible to open this link. A choice is required
+/// when more than one eligible account knows the room, or none knows it.
 final class ResolvedDeepLink {
-  const ResolvedDeepLink({required this.accountId, required this.token});
+  const ResolvedDeepLink({
+    required this.accounts,
+    required this.token,
+    this.messageId,
+    this.threadId,
+  });
 
-  final String accountId;
+  final List<StoredAccount> accounts;
+  String? get accountId => accounts.length == 1 ? accounts.single.id : null;
   final ConversationToken token;
+  final int? messageId;
+  final int? threadId;
 }
 
-/// Matches an incoming `https://<server>/(index.php/)call/<token>` link to
-/// the one locally stored account whose server shares the link's origin.
-///
-/// A link that matches no known account resolves to `null` rather than
-/// opening a best guess.
 final class DeepLinkResolver {
   const DeepLinkResolver(this._accounts);
 
@@ -36,7 +37,10 @@ final class DeepLinkResolver {
   );
 
   Future<ResolvedDeepLink?> resolve(Uri uri) async {
+    if (uri.userInfo.isNotEmpty) return null;
     final accounts = await _accounts.listAccounts();
+    final candidates = <StoredAccount>[];
+    ConversationToken? token;
     for (final account in accounts) {
       final ServerBase server;
       try {
@@ -55,15 +59,47 @@ final class DeepLinkResolver {
         continue;
       }
       try {
-        return ResolvedDeepLink(
-          accountId: account.id,
-          token: ConversationToken.parse(rawToken, path: r'$.roomToken'),
-        );
+        token = ConversationToken.parse(rawToken, path: r'$.roomToken');
+        candidates.add(account);
       } on TalkProtocolException {
         continue;
       }
     }
-    return null;
+    if (token == null) return null;
+    final rawThread = uri.queryParametersAll['threadId'];
+    final thread = rawThread?.length == 1
+        ? _positiveId(rawThread!.single)
+        : null;
+    if (rawThread != null && thread == null) return null;
+    final message = uri.fragment.startsWith('message_')
+        ? _positiveId(uri.fragment.substring('message_'.length))
+        : null;
+    if (uri.fragment.startsWith('message_') && message == null) return null;
+
+    final known = <StoredAccount>[];
+    if (candidates.length > 1) {
+      for (final account in candidates) {
+        if (await _accounts.getConversation(
+              accountId: account.id,
+              token: token.value,
+            ) !=
+            null) {
+          known.add(account);
+        }
+      }
+    }
+    return ResolvedDeepLink(
+      accounts: List.unmodifiable(known.isEmpty ? candidates : known),
+      token: token,
+      messageId: message,
+      threadId: thread,
+    );
+  }
+
+  static int? _positiveId(String raw) {
+    if (!RegExp(r'^\d+$').hasMatch(raw)) return null;
+    final id = int.tryParse(raw);
+    return id != null && id > 0 ? id : null;
   }
 }
 

@@ -14,6 +14,7 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
+import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
 import 'package:nextcloudtalk/features/conversations/unread_badge.dart';
 import 'package:nextcloudtalk/features/push/windows_notification.dart';
@@ -173,6 +174,25 @@ void main() {
         )),
       );
       expect((await accounts.getAccount(accountA.id))?.selected, isFalse);
+      expect(
+        tester.widget<ChatRoomPane>(find.byType(ChatRoomPane)).jumpToMessageId,
+        isNull,
+      );
+      await _dispatchNative(
+        const MethodCall('notificationOpened', {
+          'accountId': 'account-b',
+          'roomToken': 'sharedroom',
+          'messageId': 39,
+        }),
+      );
+      await _pumpUntil(
+        tester,
+        () =>
+            tester
+                .widget<ChatRoomPane>(find.byType(ChatRoomPane))
+                .jumpToMessageId ==
+            39,
+      );
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

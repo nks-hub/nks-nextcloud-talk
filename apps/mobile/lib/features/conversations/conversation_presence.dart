@@ -305,6 +305,7 @@ final class PresenceChatRoomPane extends ConsumerWidget {
     this.onOpenDetails,
     this.onToggleList,
     this.listCollapsed = false,
+    this.jumpToMessageId,
   });
 
   final StoredAccount account;
@@ -323,6 +324,7 @@ final class PresenceChatRoomPane extends ConsumerWidget {
   /// fold it to.
   final VoidCallback? onToggleList;
   final bool listCollapsed;
+  final int? jumpToMessageId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -441,7 +443,11 @@ final class PresenceChatRoomPane extends ConsumerWidget {
           ),
           OngoingCallBanner(account: account, conversation: conversation),
           Expanded(
-            child: ChatRoomPane(account: account, conversation: conversation),
+            child: ChatRoomPane(
+              account: account,
+              conversation: conversation,
+              jumpToMessageId: jumpToMessageId,
+            ),
           ),
         ],
       ),

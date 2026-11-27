@@ -481,6 +481,10 @@ bool ShellNotification::HandleActivation() {
         {flutter::EncodableValue("roomToken"),
          flutter::EncodableValue(activation->route.room_token)},
     };
+    if (activation->route.message_id > 0 && activation->kind != L"markRead") {
+      payload[flutter::EncodableValue("messageId")] =
+          flutter::EncodableValue(activation->route.message_id);
+    }
     if (activation->kind == L"open") {
       channel_->InvokeMethod(
           "notificationOpened",
@@ -491,10 +495,6 @@ bool ShellNotification::HandleActivation() {
       if (activation->kind == L"reply") {
         payload[flutter::EncodableValue("replyText")] =
             flutter::EncodableValue(activation->reply_text);
-        if (activation->route.message_id > 0) {
-          payload[flutter::EncodableValue("messageId")] =
-              flutter::EncodableValue(activation->route.message_id);
-        }
       }
       channel_->InvokeMethod(
           "notificationAction",

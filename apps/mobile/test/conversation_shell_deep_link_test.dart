@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:drift/drift.dart' hide isNull;
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
+import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
 import 'package:nextcloudtalk/features/conversations/deep_link_bridge.dart';
 import 'package:nextcloudtalk/features/conversations/unread_badge.dart';
@@ -27,7 +29,7 @@ void main() {
 
     final otherAccount = await accounts.upsertAccount(
       accountId: 'account-other',
-      serverUrl: 'https://other.example.invalid',
+      serverUrl: 'https://cloud.example.invalid',
       loginName: 'other-user',
       serverProductName: 'Nextcloud',
       createdAt: DateTime.utc(2026, 1, 1),
@@ -68,6 +70,49 @@ void main() {
       token: 'roomtoken1',
     );
 
+    for (final (id, deleted) in [(71, false), (204, false), (209, true)]) {
+      await database
+          .into(database.cachedChatMessages)
+          .insert(
+            CachedChatMessagesCompanion.insert(
+              accountId: targetAccount.id,
+              roomToken: 'roomtoken1',
+              messageId: id,
+              actorType: 'users',
+              actorId: 'user',
+              actorDisplayName: 'User',
+              timestamp: 1760000000,
+              systemMessage: '',
+              messageType: 'comment',
+              referenceId: '',
+              displayText: 'Fixture $id',
+              deleted: deleted,
+              threadId: const Value(71),
+              rawJson: jsonEncode({
+                'id': id,
+                'token': 'roomtoken1',
+                'actorType': 'users',
+                'actorId': 'user',
+                'actorDisplayName': 'User',
+                'timestamp': 1760000000,
+                'message': 'Fixture $id',
+                'messageType': 'comment',
+                'systemMessage': '',
+                'referenceId': '',
+                'messageParameters': {},
+                'reactions': {},
+                'markdown': true,
+                'isReplyable': true,
+                'threadId': 71,
+                if (id == 71) ...{
+                  'isThread': true,
+                  'threadTitle': 'Target thread',
+                },
+              }),
+            ),
+          );
+    }
+    final rows = await database.select(database.cachedChatMessages).get();
     // The target account's server never answers while the link is handled:
     // a room that is already cached has to open without waiting for it.
     vault.values[targetAccount.id] = 'fixture-app-password-never-use';
@@ -128,9 +173,7 @@ void main() {
           // ChatRoomPane would otherwise tear down several live drift
           // StreamProviders at once, which schedules internal drift
           // cleanup timers the fake test clock never reliably drains.
-          chatMessagesProvider.overrideWith(
-            (ref, key) => Stream.value(const <CachedChatMessage>[]),
-          ),
+          chatMessagesProvider.overrideWith((ref, key) => Stream.value(rows)),
           outgoingMessageStatusesProvider.overrideWith(
             (ref, key) => Stream.value(const <OutgoingMessageStatus>[]),
           ),
@@ -204,6 +247,58 @@ void main() {
     expect(reportedRooms.last, (targetAccount.id, 'roomtoken1'));
     expect(heldRequests, greaterThan(0));
     expect(serverAnswers.isCompleted, isFalse);
+    // At first only B knew the room. Once both do, the link must stop for
+    // a choice and cannot silently reuse the active account.
+    await tester.runAsync(
+      () => database
+          .into(database.cachedConversations)
+          .insert(targetConversation!.copyWith(accountId: otherAccount.id)),
+    );
+    void open(int id) => deepLinkPlatform._controller.add(
+      Uri.parse(
+        'https://cloud.example.invalid/call/roomtoken1?threadId=71#message_$id',
+      ),
+    );
+    final chooseB = find.byKey(
+      ValueKey('deep-link-account-${targetAccount.id}'),
+    );
+    open(204);
+    await _pumpUntil(tester, () => chooseB.evaluate().isNotEmpty);
+    expect(
+      find.byKey(ValueKey('deep-link-account-${otherAccount.id}')),
+      findsOneWidget,
+    );
+    expect(find.byType(ChatThreadScreen), findsNothing);
+    await tester.tap(chooseB);
+    await _pumpUntil(
+      tester,
+      () =>
+          find.byKey(const Key('chat-thread-screen-71')).evaluate().isNotEmpty,
+    );
+    final targetPane = tester.widget<ChatRoomPane>(
+      find.descendant(
+        of: find.byType(ChatThreadScreen),
+        matching: find.byType(ChatRoomPane),
+      ),
+    );
+    expect(
+      (targetPane.account.id, targetPane.threadId, targetPane.jumpToMessageId),
+      (targetAccount.id, 71, 204),
+    );
+    open(209);
+    await _pumpUntil(tester, () => chooseB.evaluate().isNotEmpty);
+    await tester.tap(chooseB);
+    await _pumpUntil(
+      tester,
+      () =>
+          find
+              .byKey(const Key('external-message-unavailable'))
+              .evaluate()
+              .isNotEmpty &&
+          find.byType(ChatThreadScreen).evaluate().isEmpty,
+    );
+    expect(find.byType(ChatThreadScreen), findsNothing);
+    expect(find.byKey(const Key('chat-room-header')), findsOneWidget);
     serverAnswers.complete();
     await tester.pump(const Duration(milliseconds: 1));
     expect(tester.takeException(), isNull);

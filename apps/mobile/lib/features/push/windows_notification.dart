@@ -89,13 +89,21 @@ final class WindowsNotificationChannel {
         roomToken.isEmpty) {
       return false;
     }
+    final rawMessageId = args?['messageId'];
+    final messageId = rawMessageId is int && rawMessageId > 0
+        ? rawMessageId
+        : null;
     switch (call.method) {
       case 'notificationOpened':
         if (_pendingOpens.length == 32) {
           _pendingOpens.removeAt(0);
         }
         _pendingOpens.add(
-          WindowsNotificationOpen(accountId: accountId, roomToken: roomToken),
+          WindowsNotificationOpen(
+            accountId: accountId,
+            roomToken: roomToken,
+            messageId: messageId,
+          ),
         );
         _notificationOpenedController.add(null);
         return true;
@@ -104,13 +112,12 @@ final class WindowsNotificationChannel {
         if (kind != 'reply' && kind != 'markRead') {
           return false;
         }
-        final messageId = args?['messageId'];
         await _onNotificationAction?.call(
           kind: kind!,
           accountId: accountId,
           roomToken: roomToken,
           replyText: args?['replyText'] as String?,
-          messageId: messageId is int && messageId > 0 ? messageId : null,
+          messageId: messageId,
         );
         return true;
       default:
@@ -142,10 +149,12 @@ final class WindowsNotificationOpen {
   const WindowsNotificationOpen({
     required this.accountId,
     required this.roomToken,
+    this.messageId,
   });
 
   final String accountId;
   final String roomToken;
+  final int? messageId;
 }
 
 /// Displays only notifications approved by the server, not unread counts.

@@ -228,31 +228,38 @@ void main() {
     expect(shown, hasLength(1));
   });
 
-  test('native open preserves the exact account and room route', () async {
-    final notificationChannel = WindowsNotificationChannel(channel: channel);
-    addTearDown(notificationChannel.dispose);
-    final opened = notificationChannel.notificationOpened.first;
+  test(
+    'native open preserves the exact account, room and optional message',
+    () async {
+      final notificationChannel = WindowsNotificationChannel(channel: channel);
+      addTearDown(notificationChannel.dispose);
+      for (final id in <int?>[null, 39, 0]) {
+        final opened = notificationChannel.notificationOpened.first;
 
-    final response = await TestDefaultBinaryMessengerBinding
-        .instance
-        .defaultBinaryMessenger
-        .handlePlatformMessage(
-          WindowsNotificationChannel.channelName,
-          const StandardMethodCodec().encodeMethodCall(
-            MethodCall('notificationOpened', <String, Object>{
-              'accountId': 'account-b',
-              'roomToken': 'shared-host-room',
-            }),
-          ),
-          (_) {},
-        );
+        final response = await TestDefaultBinaryMessengerBinding
+            .instance
+            .defaultBinaryMessenger
+            .handlePlatformMessage(
+              WindowsNotificationChannel.channelName,
+              const StandardMethodCodec().encodeMethodCall(
+                MethodCall('notificationOpened', <String, Object>{
+                  'accountId': 'account-b',
+                  'roomToken': 'shared-host-room',
+                  if (id != null) 'messageId': id,
+                }),
+              ),
+              (_) {},
+            );
 
-    expect(const StandardMethodCodec().decodeEnvelope(response!), isTrue);
-    await opened;
-    final open = notificationChannel.takeNextNotificationOpen();
-    expect(open?.accountId, 'account-b');
-    expect(open?.roomToken, 'shared-host-room');
-  });
+        expect(const StandardMethodCodec().decodeEnvelope(response!), isTrue);
+        await opened;
+        final open = notificationChannel.takeNextNotificationOpen();
+        expect(open?.accountId, 'account-b');
+        expect(open?.roomToken, 'shared-host-room');
+        expect(open?.messageId, id == 39 ? id : null);
+      }
+    },
+  );
 
   test('native actions remain account scoped', () async {
     final actions = <Map<String, Object?>>[];

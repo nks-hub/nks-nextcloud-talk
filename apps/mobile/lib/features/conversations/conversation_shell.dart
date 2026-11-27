@@ -4,7 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart'
-    show AccountId, ConversationToken, FederationInvitation, MessageSearchResult;
+    show
+        AccountId,
+        ConversationToken,
+        FederationInvitation,
+        MessageSearchResult;
 
 import '../../app_providers.dart';
 import '../../core/app_lifecycle_policy.dart';
@@ -14,7 +18,8 @@ import '../../core/foreground_sync_loop.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../calls/call_state.dart';
-import '../chat/chat_room_pane.dart' show ChatThreadContext;
+import '../chat/chat_room_pane.dart' show ChatThreadContext, ChatThreadScreen;
+import '../chat/chat_service.dart' show ChatServiceException;
 import '../newconversation/new_conversation_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../push/android_web_push_bridge.dart';
@@ -42,6 +47,7 @@ import 'unread_badge.dart';
 part 'conversation_account_chrome.dart';
 part 'conversation_inbox_navigation.dart';
 part 'conversation_workspace.dart';
+part 'conversation_external_navigation.dart';
 part 'conversation_message_search.dart';
 
 final class ConversationShell extends ConsumerStatefulWidget {
@@ -56,6 +62,8 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   String? _scheduledAccountId;
   String? _syncingAccountId;
   String? _selectedConversationToken;
+  int? _externalJumpId;
+  int _externalOpenGeneration = 0;
 
   /// Whether the selected conversation's details show beside it.
   ///
@@ -206,7 +214,11 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   }
 
   Future<void> _openWindowsPushNotification(WindowsNotificationOpen open) {
-    return _openAccountConversation(open.accountId, open.roomToken);
+    return _openAccountConversation(
+      open.accountId,
+      open.roomToken,
+      messageId: open.messageId,
+    );
   }
 
   void _attachDeepLinkNavigation() {
@@ -235,10 +247,16 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
         if (resolved == null) {
           return;
         }
-        await _openAccountConversation(
-          resolved.accountId,
-          resolved.token.value,
-        );
+        final accountId =
+            resolved.accountId ?? await _chooseLinkAccount(resolved.accounts);
+        if (accountId != null && mounted) {
+          await _openAccountConversation(
+            accountId,
+            resolved.token.value,
+            messageId: resolved.messageId,
+            threadId: resolved.threadId,
+          );
+        }
       }
     } finally {
       _handlingDeepLink = false;
@@ -287,18 +305,24 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     return notice;
   }
 
-  Future<void> _openAccountConversation(String accountId, String token) async {
+  Future<void> _openAccountConversation(
+    String accountId,
+    String token, {
+    int? messageId,
+    int? threadId,
+  }) async {
     if (!mounted) {
       return;
     }
+    final generation = ++_externalOpenGeneration;
     final accounts = ref.read(accountRepositoryProvider);
     final sync = ref.read(conversationSyncServiceProvider);
     final account = await accounts.getAccount(accountId);
-    if (!mounted || account == null) {
+    if (!mounted || generation != _externalOpenGeneration || account == null) {
       return;
     }
     await accounts.selectAccount(account.id);
-    if (!mounted) {
+    if (!mounted || generation != _externalOpenGeneration) {
       return;
     }
     var conversation = await accounts.getConversation(
@@ -330,11 +354,13 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     // The room must not open under the account that was selected before:
     // with two accounts in the same room it would start that account's live
     // sync and report the wrong pair as on screen.
-    if (conversation == null) {
+    if (!mounted ||
+        generation != _externalOpenGeneration ||
+        conversation == null) {
       return;
     }
     final shown = await _selectedAccountShown(account.id);
-    if (!mounted || !shown) {
+    if (!mounted || generation != _externalOpenGeneration || !shown) {
       return;
     }
     // The link can arrive while the user is on any screen, so unwind back to
@@ -342,8 +368,23 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     // whatever was on top.
     Navigator.of(context).popUntil((route) => route.isFirst);
     final opened = conversation.token;
-    setState(() => _selectedConversationToken = opened);
+    setState(() {
+      _selectedConversationToken = opened;
+      _detailsOpen = false;
+      _externalJumpId = null;
+    });
+    if (messageId != null || threadId != null) {
+      await _openExternalMessage(
+        account,
+        conversation,
+        messageId,
+        threadId,
+        generation,
+      );
+    }
   }
+
+  void _jumpInSelectedRoom(int id) => setState(() => _externalJumpId = id);
 
   /// Waits until the shell shows [accountId]; false if it never does.
   Future<bool> _selectedAccountShown(String accountId) async {
@@ -588,6 +629,8 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     if (_scheduledAccountId == accountId) {
       return;
     }
+    _externalOpenGeneration++;
+    _externalJumpId = null;
     _selectedConversationToken = null;
     _detailsOpen = false;
     await ref.read(accountRepositoryProvider).selectAccount(accountId);
@@ -668,6 +711,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           unreadByAccount: ref.watch(unreadSummaryProvider).byAccount,
           conversations: conversations,
           selectedConversationToken: _selectedConversationToken,
+          jumpToMessageId: _externalJumpId,
           loading: conversationsValue.isLoading,
           syncing: _syncingAccountId == selected.id,
           onRefresh: () => _refresh(selected.id),
@@ -676,6 +720,8 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           onAddAccount: _addAccount,
           onOpenConversation: (conversation) {
             setState(() {
+              _externalOpenGeneration++;
+              _externalJumpId = null;
               _selectedConversationToken = conversation.token;
               // The details belong to whichever room is open, so switching
               // rooms with the panel up must not show the old room's details.
@@ -684,12 +730,16 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           },
           onSelectConversation: (conversation) {
             setState(() {
+              _externalOpenGeneration++;
+              _externalJumpId = null;
               _selectedConversationToken = conversation.token;
               _detailsOpen = false;
             });
           },
           onCloseConversation: () {
             setState(() {
+              _externalOpenGeneration++;
+              _externalJumpId = null;
               _selectedConversationToken = null;
               _detailsOpen = false;
             });

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
+import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/conversations/deep_link_bridge.dart';
 import 'package:nextcloudtalk/features/conversations/deep_link_coordinator.dart';
 
@@ -12,9 +13,10 @@ import 'test_support.dart';
 
 void main() {
   late AccountRepository accounts;
+  late AppDatabase database;
 
   setUp(() async {
-    final database = openTestDatabase();
+    database = openTestDatabase();
     addTearDown(database.close);
     accounts = AccountRepository(database);
   });
@@ -86,6 +88,67 @@ void main() {
       expect(resolved?.accountId, target.id);
     },
   );
+
+  test('same server routes by room membership and prompts on a tie', () async {
+    for (final id in ['a', 'b']) {
+      await accounts.upsertAccount(
+        accountId: id,
+        serverUrl: 'https://cloud.example.invalid',
+        loginName: id,
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026),
+      );
+    }
+    await accounts.selectAccount('a');
+    final resolver = DeepLinkResolver(accounts);
+    Future<ResolvedDeepLink?> resolve(String token) => resolver.resolve(
+      Uri.parse(
+        'https://cloud.example.invalid/call/$token?threadId=71#message_204',
+      ),
+    );
+    Future<void> add(String account, String room) => database
+        .into(database.cachedConversations)
+        .insert(
+          CachedConversationsCompanion.insert(
+            accountId: account,
+            token: room,
+            displayName: room,
+            description: '',
+            lastActivity: 0,
+            unreadMessages: 0,
+            favorite: false,
+            rawJson: '{}',
+          ),
+        );
+    await add('a', 'onlya');
+    await add('b', 'onlyb');
+    await add('a', 'both');
+    await add('b', 'both');
+    for (final (room, ids) in [
+      ('onlya', ['a']),
+      ('onlyb', ['b']),
+      ('both', ['a', 'b']),
+      ('newroom', ['a', 'b']),
+    ]) {
+      final link = (await resolve(room))!;
+      expect(link.accounts.map((a) => a.id), unorderedEquals(ids));
+      expect(link.accountId, ids.length == 1 ? ids.first : null);
+      expect(link.threadId, 71);
+      expect(link.messageId, 204);
+    }
+    for (final suffix in [
+      '?threadId=0#message_204',
+      '#message_-2',
+      '?threadId=2&threadId=3#message_4',
+    ]) {
+      expect(
+        await resolver.resolve(
+          Uri.parse('https://cloud.example.invalid/call/both$suffix'),
+        ),
+        isNull,
+      );
+    }
+  });
 
   test('never guesses when no account shares the link origin', () async {
     await accounts.upsertAccount(
