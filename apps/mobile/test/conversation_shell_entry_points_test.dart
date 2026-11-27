@@ -24,6 +24,8 @@ import 'package:nextcloudtalk/features/threads/thread_management_screen.dart';
 
 import 'test_support.dart';
 
+part 'conversation_shell_windows_inbox_test.part.dart';
+
 /// Both screens below already had their own passing tests while being
 /// unreachable from the running app. These tests assert the calling chain
 /// itself, so a screen can never again count as done without an entry point.
@@ -53,6 +55,7 @@ void main() {
     Stream<StoredAccount?>? selectedAccounts,
     Map<String, List<CachedConversation>> conversationsByAccount = const {},
     Set<ChatRoomProviderKey>? observedChatKeys,
+    Locale locale = const Locale('en'),
   }) {
     return ProviderScope(
       overrides: [
@@ -103,9 +106,28 @@ void main() {
         ),
         ...overrides,
       ],
-      child: localizedTestApp(home: const ConversationShell()),
+      child: localizedTestApp(locale: locale, home: const ConversationShell()),
     );
   }
+
+  _registerWindowsInboxTests(
+    (database) => seedAccount(
+      database,
+      talkFeatures: {'unified-search', 'archived-conversations-v2'},
+    ),
+    (database, account, rooms, observed) => wrapShell(
+      database,
+      account,
+      locale: const Locale('cs'),
+      conversationsByAccount: {account.id: rooms},
+      observedChatKeys: observed,
+      overrides: [
+        themePreferenceStoreProvider.overrideWithValue(
+          _MemoryThemePreferenceStore(),
+        ),
+      ],
+    ),
+  );
 
   /// The two layouts reach the same screens through different chrome, so a
   /// wiring gap in one of them is invisible from the other.
