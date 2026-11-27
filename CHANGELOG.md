@@ -11,6 +11,7 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 ## 1.2.1 (128) — 28 November 2026
 
 - Search results, filters and the person picker scroll when the keyboard leaves little room. You can still select a person and date range with the phone on its side.
+- In short landscape windows, the chat composer stays within reach above the keyboard. Saved replies and message collections keep their actions and scrollable lists accessible.
 - Leaving a conversation now cancels late read and connectivity updates. Closing the application while attachments are starting also cancels that startup.
 - Removing an account waits for its cached preview files to close before deleting them on Windows.
 - Star GIFs, find drafts and undelivered messages, save messages to collections, and browse a conversation's media gallery. In message search you can filter by person and date and move between matches.
