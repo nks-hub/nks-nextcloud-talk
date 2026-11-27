@@ -1609,5 +1609,42 @@
       }
     }
   },
-  "ownTalkBackgroundSheetBarrier": "Zavřít výběr pozadí"
+  "ownTalkBackgroundSheetBarrier": "Zavřít výběr pozadí",
+  "giphySaveFavorite": "Uložit GIF do oblíbených",
+  "giphyRemoveFavorite": "Odebrat GIF z oblíbených",
+  "giphyFavoritesError": "Oblíbené GIFy se nepodařilo aktualizovat.",
+  "conversationFilterDrafts": "Rozepsané zprávy",
+  "replyTemplates": "Šablony odpovědí",
+  "newReplyTemplate": "Nová šablona",
+  "replyTemplateName": "Název šablony",
+  "replyTemplateText": "Text odpovědi",
+  "replyTemplatesEmpty": "Zatím nemáte žádné vlastní šablony.",
+  "personalCollectionError": "Změny se nepodařilo uložit.",
+  "messageCollections": "Moje kolekce",
+  "saveToCollection": "Uložit do kolekce",
+  "newMessageCollection": "Nová kolekce",
+  "messageCollectionName": "Název kolekce",
+  "messageCollectionsEmpty": "Zatím nemáte žádné kolekce.",
+  "messageCollectionEmpty": "V této kolekci zatím nejsou žádné zprávy.",
+  "personalCollectionLoadError": "Uložené položky se nepodařilo načíst.",
+  "conversationFilterUndelivered": "Nedoručené",
+  "undeliveredOpenConversation": "Otevřít konverzaci",
+  "sharedChecklist": "Společný seznam",
+  "sharedChecklistTitle": "Název seznamu",
+  "sharedChecklistItems": "Položky, každá na vlastní řádek",
+  "sharedChecklistInsert": "Vložit do zprávy",
+  "unansweredReminder": "Připomenout, pokud nikdo neodpoví",
+  "roomToolFailure": "Změnu se nepodařilo uložit. Zkuste to znovu.",
+  "roomToolLoadFailure": "Aktuální stav se nepodařilo načíst.",
+  "giphyMyGifs": "Moje GIFy",
+  "giphyMyGifsEmpty": "GIFy uložíte hvězdou u výsledku.",
+  "giphySearchMyGifs": "Hledat v mých GIFech",
+  "giphySendResult": "Odeslat GIF: {title}",
+  "@giphySendResult": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  }
 }

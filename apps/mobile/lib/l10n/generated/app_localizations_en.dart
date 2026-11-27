@@ -4472,4 +4472,96 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ownTalkBackgroundSheetBarrier => 'Close the background picker';
+
+  @override
+  String get giphySaveFavorite => 'Save GIF to favorites';
+
+  @override
+  String get giphyRemoveFavorite => 'Remove GIF from favorites';
+
+  @override
+  String get giphyFavoritesError => 'Couldn\'t update favorite GIFs.';
+
+  @override
+  String get conversationFilterDrafts => 'Drafts';
+
+  @override
+  String get replyTemplates => 'Reply templates';
+
+  @override
+  String get newReplyTemplate => 'New template';
+
+  @override
+  String get replyTemplateName => 'Template name';
+
+  @override
+  String get replyTemplateText => 'Reply text';
+
+  @override
+  String get replyTemplatesEmpty => 'You have no reply templates yet.';
+
+  @override
+  String get personalCollectionError => 'Couldn\'t save the changes.';
+
+  @override
+  String get messageCollections => 'My collections';
+
+  @override
+  String get saveToCollection => 'Save to collection';
+
+  @override
+  String get newMessageCollection => 'New collection';
+
+  @override
+  String get messageCollectionName => 'Collection name';
+
+  @override
+  String get messageCollectionsEmpty => 'You have no collections yet.';
+
+  @override
+  String get messageCollectionEmpty => 'This collection has no messages yet.';
+
+  @override
+  String get personalCollectionLoadError => 'Could not load saved items.';
+
+  @override
+  String get conversationFilterUndelivered => 'Undelivered';
+
+  @override
+  String get undeliveredOpenConversation => 'Open conversation';
+
+  @override
+  String get sharedChecklist => 'Shared checklist';
+
+  @override
+  String get sharedChecklistTitle => 'List name';
+
+  @override
+  String get sharedChecklistItems => 'Items, one per line';
+
+  @override
+  String get sharedChecklistInsert => 'Insert into message';
+
+  @override
+  String get unansweredReminder => 'Remind me if nobody replies';
+
+  @override
+  String get roomToolFailure => 'Could not update this item. Try again.';
+
+  @override
+  String get roomToolLoadFailure => 'Could not load the current status.';
+
+  @override
+  String get giphyMyGifs => 'My GIFs';
+
+  @override
+  String get giphyMyGifsEmpty => 'Use the star on a result to save it here.';
+
+  @override
+  String get giphySearchMyGifs => 'Search my GIFs';
+
+  @override
+  String giphySendResult(String title) {
+    return 'Send GIF: $title';
+  }
 }

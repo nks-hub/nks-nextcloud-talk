@@ -2179,5 +2179,42 @@
       }
     }
   },
-  "ownTalkBackgroundSheetBarrier": "Close the background picker"
+  "ownTalkBackgroundSheetBarrier": "Close the background picker",
+  "giphySaveFavorite": "Save GIF to favorites",
+  "giphyRemoveFavorite": "Remove GIF from favorites",
+  "giphyFavoritesError": "Couldn't update favorite GIFs.",
+  "conversationFilterDrafts": "Drafts",
+  "replyTemplates": "Reply templates",
+  "newReplyTemplate": "New template",
+  "replyTemplateName": "Template name",
+  "replyTemplateText": "Reply text",
+  "replyTemplatesEmpty": "You have no reply templates yet.",
+  "personalCollectionError": "Couldn't save the changes.",
+  "messageCollections": "My collections",
+  "saveToCollection": "Save to collection",
+  "newMessageCollection": "New collection",
+  "messageCollectionName": "Collection name",
+  "messageCollectionsEmpty": "You have no collections yet.",
+  "messageCollectionEmpty": "This collection has no messages yet.",
+  "personalCollectionLoadError": "Could not load saved items.",
+  "conversationFilterUndelivered": "Undelivered",
+  "undeliveredOpenConversation": "Open conversation",
+  "sharedChecklist": "Shared checklist",
+  "sharedChecklistTitle": "List name",
+  "sharedChecklistItems": "Items, one per line",
+  "sharedChecklistInsert": "Insert into message",
+  "unansweredReminder": "Remind me if nobody replies",
+  "roomToolFailure": "Could not update this item. Try again.",
+  "roomToolLoadFailure": "Could not load the current status.",
+  "giphyMyGifs": "My GIFs",
+  "giphyMyGifsEmpty": "Use the star on a result to save it here.",
+  "giphySearchMyGifs": "Search my GIFs",
+  "giphySendResult": "Send GIF: {title}",
+  "@giphySendResult": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  }
 }

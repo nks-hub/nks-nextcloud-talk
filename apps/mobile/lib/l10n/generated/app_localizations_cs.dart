@@ -4479,4 +4479,98 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get ownTalkBackgroundSheetBarrier => 'Zavřít výběr pozadí';
+
+  @override
+  String get giphySaveFavorite => 'Uložit GIF do oblíbených';
+
+  @override
+  String get giphyRemoveFavorite => 'Odebrat GIF z oblíbených';
+
+  @override
+  String get giphyFavoritesError => 'Oblíbené GIFy se nepodařilo aktualizovat.';
+
+  @override
+  String get conversationFilterDrafts => 'Rozepsané zprávy';
+
+  @override
+  String get replyTemplates => 'Šablony odpovědí';
+
+  @override
+  String get newReplyTemplate => 'Nová šablona';
+
+  @override
+  String get replyTemplateName => 'Název šablony';
+
+  @override
+  String get replyTemplateText => 'Text odpovědi';
+
+  @override
+  String get replyTemplatesEmpty => 'Zatím nemáte žádné vlastní šablony.';
+
+  @override
+  String get personalCollectionError => 'Změny se nepodařilo uložit.';
+
+  @override
+  String get messageCollections => 'Moje kolekce';
+
+  @override
+  String get saveToCollection => 'Uložit do kolekce';
+
+  @override
+  String get newMessageCollection => 'Nová kolekce';
+
+  @override
+  String get messageCollectionName => 'Název kolekce';
+
+  @override
+  String get messageCollectionsEmpty => 'Zatím nemáte žádné kolekce.';
+
+  @override
+  String get messageCollectionEmpty =>
+      'V této kolekci zatím nejsou žádné zprávy.';
+
+  @override
+  String get personalCollectionLoadError =>
+      'Uložené položky se nepodařilo načíst.';
+
+  @override
+  String get conversationFilterUndelivered => 'Nedoručené';
+
+  @override
+  String get undeliveredOpenConversation => 'Otevřít konverzaci';
+
+  @override
+  String get sharedChecklist => 'Společný seznam';
+
+  @override
+  String get sharedChecklistTitle => 'Název seznamu';
+
+  @override
+  String get sharedChecklistItems => 'Položky, každá na vlastní řádek';
+
+  @override
+  String get sharedChecklistInsert => 'Vložit do zprávy';
+
+  @override
+  String get unansweredReminder => 'Připomenout, pokud nikdo neodpoví';
+
+  @override
+  String get roomToolFailure => 'Změnu se nepodařilo uložit. Zkuste to znovu.';
+
+  @override
+  String get roomToolLoadFailure => 'Aktuální stav se nepodařilo načíst.';
+
+  @override
+  String get giphyMyGifs => 'Moje GIFy';
+
+  @override
+  String get giphyMyGifsEmpty => 'GIFy uložíte hvězdou u výsledku.';
+
+  @override
+  String get giphySearchMyGifs => 'Hledat v mých GIFech';
+
+  @override
+  String giphySendResult(String title) {
+    return 'Odeslat GIF: $title';
+  }
 }

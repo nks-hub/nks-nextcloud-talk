@@ -7987,6 +7987,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Close the background picker'**
   String get ownTalkBackgroundSheetBarrier;
+
+  /// No description provided for @giphySaveFavorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Save GIF to favorites'**
+  String get giphySaveFavorite;
+
+  /// No description provided for @giphyRemoveFavorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove GIF from favorites'**
+  String get giphyRemoveFavorite;
+
+  /// No description provided for @giphyFavoritesError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update favorite GIFs.'**
+  String get giphyFavoritesError;
+
+  /// No description provided for @conversationFilterDrafts.
+  ///
+  /// In en, this message translates to:
+  /// **'Drafts'**
+  String get conversationFilterDrafts;
+
+  /// No description provided for @replyTemplates.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply templates'**
+  String get replyTemplates;
+
+  /// No description provided for @newReplyTemplate.
+  ///
+  /// In en, this message translates to:
+  /// **'New template'**
+  String get newReplyTemplate;
+
+  /// No description provided for @replyTemplateName.
+  ///
+  /// In en, this message translates to:
+  /// **'Template name'**
+  String get replyTemplateName;
+
+  /// No description provided for @replyTemplateText.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply text'**
+  String get replyTemplateText;
+
+  /// No description provided for @replyTemplatesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'You have no reply templates yet.'**
+  String get replyTemplatesEmpty;
+
+  /// No description provided for @personalCollectionError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the changes.'**
+  String get personalCollectionError;
+
+  /// No description provided for @messageCollections.
+  ///
+  /// In en, this message translates to:
+  /// **'My collections'**
+  String get messageCollections;
+
+  /// No description provided for @saveToCollection.
+  ///
+  /// In en, this message translates to:
+  /// **'Save to collection'**
+  String get saveToCollection;
+
+  /// No description provided for @newMessageCollection.
+  ///
+  /// In en, this message translates to:
+  /// **'New collection'**
+  String get newMessageCollection;
+
+  /// No description provided for @messageCollectionName.
+  ///
+  /// In en, this message translates to:
+  /// **'Collection name'**
+  String get messageCollectionName;
+
+  /// No description provided for @messageCollectionsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'You have no collections yet.'**
+  String get messageCollectionsEmpty;
+
+  /// No description provided for @messageCollectionEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'This collection has no messages yet.'**
+  String get messageCollectionEmpty;
+
+  /// No description provided for @personalCollectionLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load saved items.'**
+  String get personalCollectionLoadError;
+
+  /// No description provided for @conversationFilterUndelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'Undelivered'**
+  String get conversationFilterUndelivered;
+
+  /// No description provided for @undeliveredOpenConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Open conversation'**
+  String get undeliveredOpenConversation;
+
+  /// No description provided for @sharedChecklist.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared checklist'**
+  String get sharedChecklist;
+
+  /// No description provided for @sharedChecklistTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'List name'**
+  String get sharedChecklistTitle;
+
+  /// No description provided for @sharedChecklistItems.
+  ///
+  /// In en, this message translates to:
+  /// **'Items, one per line'**
+  String get sharedChecklistItems;
+
+  /// No description provided for @sharedChecklistInsert.
+  ///
+  /// In en, this message translates to:
+  /// **'Insert into message'**
+  String get sharedChecklistInsert;
+
+  /// No description provided for @unansweredReminder.
+  ///
+  /// In en, this message translates to:
+  /// **'Remind me if nobody replies'**
+  String get unansweredReminder;
+
+  /// No description provided for @roomToolFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update this item. Try again.'**
+  String get roomToolFailure;
+
+  /// No description provided for @roomToolLoadFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the current status.'**
+  String get roomToolLoadFailure;
+
+  /// No description provided for @giphyMyGifs.
+  ///
+  /// In en, this message translates to:
+  /// **'My GIFs'**
+  String get giphyMyGifs;
+
+  /// No description provided for @giphyMyGifsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the star on a result to save it here.'**
+  String get giphyMyGifsEmpty;
+
+  /// No description provided for @giphySearchMyGifs.
+  ///
+  /// In en, this message translates to:
+  /// **'Search my GIFs'**
+  String get giphySearchMyGifs;
+
+  /// No description provided for @giphySendResult.
+  ///
+  /// In en, this message translates to:
+  /// **'Send GIF: {title}'**
+  String giphySendResult(String title);
 }
 
 class _AppLocalizationsDelegate
