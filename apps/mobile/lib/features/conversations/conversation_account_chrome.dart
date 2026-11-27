@@ -82,7 +82,7 @@ final class _AccountRail extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
             child: Column(
               children: [
                 IconButton.filledTonal(
@@ -101,12 +101,14 @@ final class _AccountRail extends StatelessWidget {
                   tooltip: strings.reminderInboxTitle,
                   icon: const Icon(Icons.alarm_outlined),
                 ),
-                const SizedBox(height: 8),
-                IconButton(
-                  key: const Key('open-settings'),
-                  onPressed: () => _openSettings(context),
-                  tooltip: strings.settingsTitle,
-                  icon: const SettingsIconWithUpdateMark(),
+                _RailFooter(
+                  touchPadding: const EdgeInsets.only(top: 8, bottom: 12),
+                  child: IconButton(
+                    key: const Key('open-settings'),
+                    onPressed: () => _openSettings(context),
+                    tooltip: strings.settingsTitle,
+                    icon: const SettingsIconWithUpdateMark(),
+                  ),
                 ),
               ],
             ),

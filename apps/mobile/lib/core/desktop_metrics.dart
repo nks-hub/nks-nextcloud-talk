@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 /// conversation row is 53 px, an avatar in that row is 44 px and the server
 /// header is 44 px.
 extension AppMetrics on BuildContext {
-  bool get _pointerFirst => Theme.of(this).visualDensity.vertical < 0;
+  bool get usesDesktopDensity => Theme.of(this).visualDensity.vertical < 0;
 
   /// Width of the conversation list pane. Nextcloud's own navigation column is
   /// a flat 300 regardless of window size; the wider touch values only pay off
@@ -23,35 +23,36 @@ extension AppMetrics on BuildContext {
   // `kMaxListPaneWidth` (240 and 520), and the workspace prefers it over this
   // value. This comment used to say the splitter was not worth building yet,
   // which was true when it was written and misleading for days afterwards.
-  double get listPaneWidth =>
-      _pointerFirst ? 300 : (MediaQuery.sizeOf(this).width >= 1100 ? 390 : 330);
+  double get listPaneWidth => usesDesktopDensity
+      ? 300
+      : (MediaQuery.sizeOf(this).width >= 1100 ? 390 : 330);
 
   /// Height of one conversation row in the list.
-  double get listRowHeight => _pointerFirst ? 56 : 80;
+  double get listRowHeight => usesDesktopDensity ? 56 : 80;
 
   /// Radius of the avatar shown in a conversation row.
-  double get listAvatarRadius => _pointerFirst ? 20 : 28;
+  double get listAvatarRadius => usesDesktopDensity ? 20 : 28;
 
   /// Radius of the avatar in a pane header, which did not grow with the list's.
-  double get headerAvatarRadius => _pointerFirst ? 20 : 24;
+  double get headerAvatarRadius => usesDesktopDensity ? 20 : 24;
 
   /// Minimum height of a pane header — the conversation list header and the
   /// chat room header both use it, so they stay aligned with each other.
-  double get paneHeaderHeight => _pointerFirst ? 52 : 72;
+  double get paneHeaderHeight => usesDesktopDensity ? 52 : 72;
 
   /// Height of a secondary list row, such as a thread in the thread list.
   /// Shorter than [listRowHeight] because the row carries no unread badge.
-  double get secondaryRowHeight => _pointerFirst ? 52 : 72;
+  double get secondaryRowHeight => usesDesktopDensity ? 52 : 72;
 
   /// Height of an action row inside a card, such as "Rename thread".
-  double get actionRowHeight => _pointerFirst ? 44 : 56;
+  double get actionRowHeight => usesDesktopDensity ? 44 : 56;
 
   /// Whether Enter sends a message and Shift+Enter breaks the line.
   ///
   /// The desktop convention, and what `nextcloud/talk-desktop` does. On touch
   /// the send button is the only way to send and Enter is the only way to get
   /// a new line, so it stays a plain newline there.
-  bool get sendsOnEnter => _pointerFirst;
+  bool get sendsOnEnter => usesDesktopDensity;
 
   /// Maximum width of a settings-style column of rows.
   ///
@@ -61,7 +62,7 @@ extension AppMetrics on BuildContext {
   /// Reference is Nextcloud's own `#app-content .section`, which caps at
   /// 700 px. Touch keeps the full width: a phone is never wide enough for the
   /// gap to matter.
-  double get contentColumnWidth => _pointerFirst ? 700 : double.infinity;
+  double get contentColumnWidth => usesDesktopDensity ? 700 : double.infinity;
 }
 
 /// Caps [child] at [AppMetrics.contentColumnWidth] and centres it.

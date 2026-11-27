@@ -171,8 +171,8 @@ final class _InboxRail extends StatelessWidget {
               ),
               _InboxRailButtons(onReveal: onReveal),
               const Spacer(),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+              _RailFooter(
+                touchPadding: const EdgeInsets.only(bottom: 12),
                 child: accountMenu,
               ),
             ],
@@ -181,6 +181,23 @@ final class _InboxRail extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// Centres the last rail control on the desktop composer's bottom action row.
+final class _RailFooter extends StatelessWidget {
+  const _RailFooter({required this.touchPadding, required this.child});
+
+  final EdgeInsets touchPadding;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!context.usesDesktopDensity) {
+      return Padding(padding: touchPadding, child: child);
+    }
+    // The row has 48 logical pixels for the control and 8 on either side.
+    return SizedBox(height: 64, child: Center(child: child));
+  }
 }
 
 final class _InboxDesktopHeader extends StatelessWidget {

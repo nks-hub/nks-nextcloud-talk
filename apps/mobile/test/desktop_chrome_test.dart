@@ -51,6 +51,26 @@ void main() {
   });
 
   testWidgets(
+    'desktop account and settings controls share the bottom action axis',
+    (tester) async {
+      final first = account('account-a');
+      await _pumpWide(tester, accounts: [first]);
+      final footerY = tester.view.physicalSize.height - 32;
+      expect(
+        tester.getCenter(find.byType(PopupMenuButton<String>)).dy,
+        footerY,
+      );
+
+      await _pumpWide(tester, accounts: [first, account('account-b')]);
+      expect(
+        tester.getCenter(find.byKey(const Key('open-settings'))).dy,
+        footerY,
+      );
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
+
+  testWidgets(
     'a tablet keyboard keeps both accounts and navigation reachable',
     (tester) async {
       tester.view.physicalSize = const Size(900, 600);
