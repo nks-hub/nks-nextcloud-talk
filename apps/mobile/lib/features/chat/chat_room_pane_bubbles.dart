@@ -4,6 +4,7 @@ final class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     super.key,
     required this.account,
+    required this.conversation,
     required this.message,
     required this.parsed,
     required this.highlighted,
@@ -14,6 +15,8 @@ final class _MessageBubble extends StatelessWidget {
     required this.groupEnd,
     required this.showReplyPreview,
     required this.inlineReplies,
+    required this.readerIsActive,
+    required this.repliesVisible,
     required this.onOpenThread,
     required this.onMessageActions,
     required this.onReplySwipe,
@@ -24,6 +27,7 @@ final class _MessageBubble extends StatelessWidget {
   });
 
   final StoredAccount account;
+  final CachedConversation conversation;
   final CachedChatMessage message;
   final ChatMessage? parsed;
 
@@ -37,6 +41,8 @@ final class _MessageBubble extends StatelessWidget {
   final bool groupEnd;
   final bool showReplyPreview;
   final bool inlineReplies;
+  final bool Function() readerIsActive;
+  final bool repliesVisible;
   final ValueChanged<CachedChatMessage>? onOpenThread;
   final void Function(CachedChatMessage message, ChatMessage? parsed)
   onMessageActions;
@@ -124,9 +130,17 @@ final class _MessageBubble extends StatelessWidget {
         ),
       );
     }
+    final desktopThread =
+        canOpenThread && !repliesVisible && context.sendsOnEnter
+        ? ChatThreadContext.fromCachedRoot(
+            accountId: account.id,
+            roomToken: conversation.token,
+            root: message,
+          )
+        : null;
     // One message per line when a selection runs across several of them;
     // the avatar initials, the clock and the buttons stay out of the copy.
-    return ChatSelectionJoin(
+    final bubble = ChatSelectionJoin(
       separator: '\n',
       breakBefore: true,
       child: Padding(
@@ -327,7 +341,8 @@ final class _MessageBubble extends StatelessWidget {
                                         ],
                                       ),
                                     ),
-                                    if (canOpenThread) ...[
+                                    if (canOpenThread &&
+                                        desktopThread == null) ...[
                                       const SizedBox(height: 2),
                                       SelectionContainer.disabled(
                                         child: TextButton.icon(
@@ -374,6 +389,370 @@ final class _MessageBubble extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+    if (desktopThread == null) return bubble;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        bubble,
+        Padding(
+          padding: EdgeInsetsDirectional.only(start: outgoing ? 0 : 40),
+          child: Align(
+            alignment: outgoing
+                ? AlignmentDirectional.centerEnd
+                : AlignmentDirectional.centerStart,
+            child: _DesktopThreadBranch(
+              key: ValueKey((
+                account.id,
+                conversation.token,
+                message.messageId,
+              )),
+              account: account,
+              thread: desktopThread,
+              readerIsActive: readerIsActive,
+              replyCount: threadReplies,
+              canPost: ChatPostingAccess.fromCachedConversation(
+                conversation,
+              ).canPost,
+              onOpenThread: () => onOpenThread!(message),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+final class _DaySeparator extends StatelessWidget {
+  const _DaySeparator({required this.timestamp});
+
+  final int timestamp;
+
+  @override
+  Widget build(BuildContext context) {
+    final date = DateTime.fromMillisecondsSinceEpoch(
+      timestamp * 1000,
+    ).toLocal();
+    final today = DateTime.now();
+    final yesterday = DateTime(today.year, today.month, today.day - 1);
+    final strings = AppLocalizations.of(context);
+    final label = _sameCalendarDay(date, today)
+        ? strings.dateHeaderToday
+        : _sameCalendarDay(date, yesterday)
+        ? strings.dateHeaderYesterday
+        : MaterialLocalizations.of(context).formatMediumDate(date);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final fill =
+        ChatBackgroundChip.colorOf(context) ?? scheme.surfaceContainerHigh;
+    final style = theme.textTheme.labelMedium?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
+    return Semantics(
+      key: Key('chat-day-${date.year}-${date.month}-${date.day}'),
+      container: true,
+      excludeSemantics: true,
+      header: true,
+      label: label,
+      // Kept out of a copied selection, like the clock on each message; it
+      // used to land glued to the end of the message above it.
+      child: SelectionContainer.disabled(
+        child: Center(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(4, 14, 4, 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: ShapeDecoration(
+              color: fill,
+              shape: StadiumBorder(
+                side: BorderSide(color: scheme.outlineVariant),
+              ),
+            ),
+            child: Text(label, style: style),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _DesktopThreadBranch extends ConsumerStatefulWidget {
+  const _DesktopThreadBranch({
+    super.key,
+    required this.account,
+    required this.thread,
+    required this.readerIsActive,
+    required this.replyCount,
+    required this.canPost,
+    required this.onOpenThread,
+  });
+
+  final StoredAccount account;
+  final ChatThreadContext thread;
+  final bool Function() readerIsActive;
+  final int replyCount;
+  final bool canPost;
+  final VoidCallback onOpenThread;
+
+  @override
+  ConsumerState<_DesktopThreadBranch> createState() =>
+      _DesktopThreadBranchState();
+}
+
+final class _DesktopThreadBranchState
+    extends ConsumerState<_DesktopThreadBranch> {
+  static const _limit = 3;
+  Stream<List<CachedChatMessage>>? _rows;
+  bool _refreshing = false;
+  bool _failed = false;
+
+  Future<void> _load() async {
+    final thread = widget.thread;
+    final rows = ref
+        .read(chatRepositoryProvider)
+        .watchRecentThreadMessages(
+          accountId: thread.accountId,
+          roomToken: thread.roomToken,
+          threadId: thread.rootMessageId,
+          limit: _limit + 1,
+        );
+    setState(() {
+      _rows = rows;
+      _refreshing = true;
+      _failed = false;
+    });
+    bool stillOpen() => mounted && identical(_rows, rows);
+    var failed = false;
+    try {
+      final result = await ref
+          .read(chatServiceProvider)
+          .syncRoom(
+            accountId: thread.accountId,
+            roomToken: thread.roomToken,
+            threadId: thread.rootMessageId,
+            readerIsActive: () => stillOpen() && widget.readerIsActive(),
+          );
+      failed = result != ChatSynchronizationResult.converged;
+    } on Object {
+      failed = true;
+    }
+    if (!stillOpen()) return;
+    setState(() {
+      _refreshing = false;
+      _failed = failed;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final strings = AppLocalizations.of(context);
+    final rows = _rows;
+    final expanded = rows != null;
+    final buttonStyle = TextButton.styleFrom(
+      minimumSize: const Size(36, 34),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      textStyle: theme.textTheme.labelMedium,
+    );
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 440),
+      child: ChatBackgroundChip(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SelectionContainer.disabled(
+              child: Semantics(
+                expanded: expanded,
+                child: TextButton(
+                  key: Key('chat-open-thread-${widget.thread.rootMessageId}'),
+                  style: buttonStyle,
+                  onPressed: () {
+                    if (expanded) {
+                      setState(() => _rows = null);
+                    } else {
+                      unawaited(_load());
+                    }
+                  },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.forum_outlined, size: 16),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          widget.replyCount > 0
+                              ? strings.threadReplies(widget.replyCount)
+                              : widget.thread.title ?? strings.thread,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Icon(
+                        expanded ? Icons.expand_less : Icons.expand_more,
+                        size: 17,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (rows != null)
+              Container(
+                key: Key('chat-thread-preview-${widget.thread.rootMessageId}'),
+                margin: const EdgeInsetsDirectional.only(start: 12, bottom: 5),
+                padding: const EdgeInsetsDirectional.only(start: 14),
+                decoration: BoxDecoration(
+                  border: BorderDirectional(
+                    start: BorderSide(
+                      color: scheme.primary.withValues(alpha: .40),
+                      width: 2,
+                    ),
+                  ),
+                ),
+                child: StreamBuilder<List<CachedChatMessage>>(
+                  stream: rows,
+                  builder: (context, snapshot) {
+                    final replies =
+                        (snapshot.data ?? const <CachedChatMessage>[])
+                            .where(
+                              (row) =>
+                                  row.messageId != widget.thread.rootMessageId,
+                            )
+                            .toList(growable: false);
+                    final showReplyAction =
+                        widget.canPost &&
+                        replies.length <= _limit &&
+                        replies.length >= widget.replyCount;
+                    final failed = snapshot.hasError || _failed;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final reply in replies.skip(
+                          math.max(0, replies.length - _limit),
+                        ))
+                          _InlineThreadReply(
+                            account: widget.account,
+                            reply: reply,
+                          ),
+                        if (replies.isEmpty && !failed) ...[
+                          if (_refreshing || !snapshot.hasData)
+                            LinearProgressIndicator(
+                              minHeight: 2,
+                              semanticsLabel: strings.syncing,
+                            )
+                          else if (widget.replyCount == 0)
+                            Text(
+                              strings.threadNoReplies,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                        ],
+                        if (failed)
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                strings.syncUnavailable,
+                                style: theme.textTheme.bodySmall,
+                              ),
+                              TextButton(
+                                onPressed: _refreshing
+                                    ? null
+                                    : () => unawaited(_load()),
+                                style: buttonStyle,
+                                child: Text(strings.retry),
+                              ),
+                            ],
+                          ),
+                        SelectionContainer.disabled(
+                          child: TextButton.icon(
+                            key: Key(
+                              'chat-enter-thread-${widget.thread.rootMessageId}',
+                            ),
+                            onPressed: widget.onOpenThread,
+                            style: buttonStyle,
+                            icon: Icon(
+                              showReplyAction ? Icons.reply : Icons.open_in_new,
+                              size: 16,
+                            ),
+                            label: Text(
+                              showReplyAction
+                                  ? strings.replyInThread
+                                  : strings.openThread,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+final class _InlineThreadReply extends StatelessWidget {
+  const _InlineThreadReply({required this.account, required this.reply});
+
+  final StoredAccount account;
+  final CachedChatMessage reply;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final strings = AppLocalizations.of(context);
+    final author = chatParticipantSemanticsLabel(
+      actorType: reply.actorType,
+      displayName: reply.actorDisplayName,
+      strings: strings,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ExcludeSemantics(
+            child: ChatParticipantAvatar(
+              account: account,
+              actorType: reply.actorType,
+              actorId: reply.actorId,
+              displayName: reply.actorDisplayName,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(author, style: theme.textTheme.labelMedium),
+                    Text(
+                      _formatMessageClock(context, reply.timestamp),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  reply.deleted ? strings.deletedMessage : reply.displayText,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

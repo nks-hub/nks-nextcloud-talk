@@ -478,22 +478,24 @@ void _registerChatRoomPaneRenderingTests() {
 
     final link = find.text('the docs');
     expect(link, findsOneWidget);
-    await _rightClick(tester, tester.getCenter(link));
+    final pointer = tester.getCenter(link);
+    await _rightClick(tester, pointer);
 
-    expect(find.byKey(const Key('message-action-open-link')), findsOneWidget);
+    final openLink = find.byKey(const Key('message-action-open-link'));
+    expect(openLink, findsOneWidget);
     expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
     expect(find.text('Select all'), findsNothing);
     expect(find.byKey(const Key('message-action-reply')), findsOneWidget);
     expect(find.byKey(const Key('message-action-copy')), findsOneWidget);
     expect(find.byType(BottomSheet), findsNothing);
-    final menuTop = tester.getTopLeft(
-      find.byKey(const Key('message-action-open-link')),
+    final surface = find.ancestor(
+      of: openLink,
+      matching: find.byType(Material),
     );
-    expect(
-      (menuTop - tester.getCenter(link)).distance,
-      lessThan(80),
-      reason: 'the menu opens at the pointer',
-    );
+    final menu = tester.getRect(surface.first);
+    // Near the bottom edge Flutter slides the menu up to fit the screen.
+    expect(menu.left, closeTo(pointer.dx, 1));
+    expect(menu.inflate(1).contains(pointer), isTrue);
 
     await tester.tap(find.byKey(const Key('message-action-copy-link')));
     await tester.pumpAndSettle();

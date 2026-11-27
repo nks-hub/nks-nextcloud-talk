@@ -98,6 +98,7 @@ final class _Memo<T> {
 typedef _TimelineLayout = ({
   List<ChatMessage?> parsed,
   Set<int> pendingMessageIds,
+  Set<int> threadsWithVisibleReplies,
   Map<int, List<int>> albumRows,
   Map<String, List<int>> confirmedAttachments,
   Set<int> hidden,
@@ -163,6 +164,7 @@ final class _ChatTimeline extends StatelessWidget {
     required this.conversation,
     required this.threadId,
     required this.inlineReplies,
+    required this.readerIsActive,
     required this.messages,
     required this.blocks,
     required this.pending,
@@ -195,6 +197,7 @@ final class _ChatTimeline extends StatelessWidget {
   /// Replies are shown in this timeline under their quoted parent, so a
   /// derived reply count would only point at what is already on screen.
   final bool inlineReplies;
+  final bool Function() readerIsActive;
   final List<CachedChatMessage> messages;
 
   /// The scope's confirmed message-id ranges, `null` when the scope itself
@@ -255,6 +258,7 @@ final class _ChatTimeline extends StatelessWidget {
     final (
       parsed: parsedMessages,
       :pendingMessageIds,
+      :threadsWithVisibleReplies,
       :albumRows,
       :confirmedAttachments,
       :hidden,
@@ -317,8 +321,7 @@ final class _ChatTimeline extends StatelessWidget {
             ? null
             : messages[contentIndex + 1];
         final gapBeforeThis = _gapBeforeContentIndex(firstIndex);
-        // The replies divider sits under the root, so a group never runs
-        // through it.
+        // The divider under a thread's root breaks the author's group.
         final isRoot = threadId != null && message.messageId == threadId;
         final groupedWithPrevious =
             !gapBeforeThis &&
@@ -357,6 +360,7 @@ final class _ChatTimeline extends StatelessWidget {
                       ? jumpTargetKey
                       : null,
                   account: account,
+                  conversation: conversation,
                   message: message,
                   parsed: parsed,
                   highlighted: (album ?? [contentIndex]).any(
@@ -416,6 +420,10 @@ final class _ChatTimeline extends StatelessWidget {
                   groupEnd: !groupedWithNext,
                   showReplyPreview: _shouldShowReplyPreview(parsed, threadId),
                   inlineReplies: inlineReplies,
+                  repliesVisible: threadsWithVisibleReplies.contains(
+                    message.messageId,
+                  ),
+                  readerIsActive: readerIsActive,
                   onOpenThread: threadId == null ? onOpenThread : null,
                   onMessageActions: onMessageActions,
                   onReplySwipe: onReplySwipe,
@@ -621,6 +629,13 @@ final class _ChatTimeline extends StatelessWidget {
     return (
       parsed: parsedMessages,
       pendingMessageIds: pendingMessageIds,
+      threadsWithVisibleReplies: {
+        if (inlineReplies)
+          for (final row in messages)
+            if (row.threadId case final int id
+                when id > 0 && id != row.messageId)
+              id,
+      },
       albumRows: albumRows,
       confirmedAttachments: confirmedAttachments,
       hidden: {
@@ -724,59 +739,6 @@ final class _ThreadRepliesDivider extends StatelessWidget {
                 const Expanded(child: Divider()),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-final class _DaySeparator extends StatelessWidget {
-  const _DaySeparator({required this.timestamp});
-
-  final int timestamp;
-
-  @override
-  Widget build(BuildContext context) {
-    final date = DateTime.fromMillisecondsSinceEpoch(
-      timestamp * 1000,
-    ).toLocal();
-    final today = DateTime.now();
-    final yesterday = DateTime(today.year, today.month, today.day - 1);
-    final strings = AppLocalizations.of(context);
-    final label = _sameCalendarDay(date, today)
-        ? strings.dateHeaderToday
-        : _sameCalendarDay(date, yesterday)
-        ? strings.dateHeaderYesterday
-        : MaterialLocalizations.of(context).formatMediumDate(date);
-    final color = Theme.of(context).colorScheme.onSurfaceVariant;
-    return Semantics(
-      key: Key('chat-day-${date.year}-${date.month}-${date.day}'),
-      container: true,
-      excludeSemantics: true,
-      header: true,
-      label: label,
-      // Kept out of a copied selection, like the clock on each message; it
-      // used to land glued to the end of the message above it.
-      child: SelectionContainer.disabled(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 14, 4, 8),
-          child: Row(
-            children: [
-              const Expanded(child: Divider()),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: ChatBackgroundChip(
-                  child: Text(
-                    label,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelMedium?.copyWith(color: color),
-                  ),
-                ),
-              ),
-              const Expanded(child: Divider()),
-            ],
           ),
         ),
       ),

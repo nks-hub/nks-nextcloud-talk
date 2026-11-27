@@ -56,6 +56,7 @@ part 'chat_room_pane_rendering.part.dart';
 part 'chat_room_pane_wallpaper.part.dart';
 part 'chat_attachment_rendering_test.part.dart';
 part 'chat_room_pane_thread_context.part.dart';
+part 'chat_room_pane_desktop_thread.part.dart';
 part 'chat_room_pane_send_scope.part.dart';
 part 'chat_room_pane_history_scope.part.dart';
 part 'chat_room_pane_image_geometry.part.dart';

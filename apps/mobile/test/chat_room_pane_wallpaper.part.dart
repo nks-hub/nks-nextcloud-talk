@@ -52,8 +52,19 @@ void _registerChatRoomPaneWallpaperTests() {
     }
   }
 
-  testWidgets('without a wallpaper the day separator and the system message '
-      'stay as they were', (tester) async {
+  Finder dayCapsule(Finder day) => find.descendant(
+    of: day,
+    matching: find.byWidgetPredicate(
+      (widget) =>
+          widget is DecoratedBox &&
+          widget.decoration is ShapeDecoration &&
+          (widget.decoration as ShapeDecoration).shape is StadiumBorder,
+    ),
+  );
+
+  testWidgets('the day capsule uses the theme surface without a wallpaper', (
+    tester,
+  ) async {
     await insertSystemMessage();
     await tester.pumpWidget(pane(wallpaper: false));
     await tester.pump();
@@ -63,16 +74,10 @@ void _registerChatRoomPaneWallpaperTests() {
     expect(day, findsOneWidget);
     expect(chipFill(tester, day), isNull);
     expect(
-      find.descendant(
-        of: day,
-        matching: find.byWidgetPredicate(
-          (widget) =>
-              widget is DecoratedBox &&
-              widget.decoration is BoxDecoration &&
-              (widget.decoration as BoxDecoration).borderRadius != null,
-        ),
-      ),
-      findsNothing,
+      (tester.widget<DecoratedBox>(dayCapsule(day)).decoration
+              as ShapeDecoration)
+          .color,
+      Theme.of(tester.element(day)).colorScheme.surfaceContainerHigh,
     );
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
@@ -94,12 +99,13 @@ void _registerChatRoomPaneWallpaperTests() {
       expect(wallpaperChipAlpha(scheme), greaterThanOrEqualTo(0.8));
 
       final day = find.byKey(_dayKey(timestamp));
-      final dayChip = find.descendant(
-        of: day,
-        matching: find.byType(ChatBackgroundChip),
-      );
+      final dayChip = dayCapsule(day);
       expect(dayChip, findsOneWidget);
-      expect(chipFill(tester, dayChip), fill);
+      expect(
+        (tester.widget<DecoratedBox>(dayChip).decoration as ShapeDecoration)
+            .color,
+        fill,
+      );
       final dayText = tester.widget<Text>(
         find.descendant(of: dayChip, matching: find.byType(Text)),
       );

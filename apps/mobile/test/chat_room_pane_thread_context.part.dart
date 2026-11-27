@@ -107,6 +107,8 @@ void _registerChatRoomPaneThreadContextTests() {
       await tester.pump(const Duration(milliseconds: 1));
     });
 
+    _registerDesktopThreadPreviewTests();
+
     for (final replyCount in [0, 2]) {
       testWidgets('a thread with $replyCount replies is closed off under its '
           'root and names its room', (tester) async {
