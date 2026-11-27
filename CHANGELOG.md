@@ -8,6 +8,14 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.2.0 (127) — 27 November 2026
+
+- Save favourite GIFs from the picker. Switching between GIFs and emoji keeps the search and scroll position for each tab. Czech emoji searches also work without accents.
+- Find drafts and undelivered messages from the conversation list. Open a draft in its original room or thread, insert one of your saved replies, or save a message to a personal collection.
+- Filter message searches by author and date when the server supports it. Move between matches inside the chat, including across result pages. Browse conversation photos in Shared media and jump back to the original message.
+- With OwnTalk Extensions, members can check off items in a shared list or ask for a reminder if nobody replies. Version 0.7.0 adds GIF favourites across devices, private draft handoff that preserves conflicting edits, and replies pinned to a spot on a photo.
+- A stalled send can be skipped. Android retries temporary delivery failures in the background. Message links and Windows notifications open at the target message. Voice recording controls recover from a refused pause and calls retry a pending offer after reconnection.
+
 ## 1.1.5 (126) — 27 November 2026
 
 - Recently used emoji appear in one row above the catalogue. Use the star beside search to filter your favourites. Your search stays in place when you switch to GIFs and back.
