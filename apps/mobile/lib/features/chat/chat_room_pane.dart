@@ -1231,6 +1231,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                     children: [
                       _pointerSelectable(
                         _ChatTimeline(
+                          readerIsActive: _readerIsActive,
                           cache: _timelineCache,
                           account: widget.account,
                           conversation: widget.conversation,

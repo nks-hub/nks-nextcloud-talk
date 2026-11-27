@@ -7,7 +7,7 @@ abstract final class AppTheme {
   static const Color _secondarySeed = Color(0xFF4F6A7D);
   static const Color _tertiarySeed = Color(0xFF17616D);
   static const Color _lightSurface = Color(0xFFFAF9FC);
-  static const Color _darkSurface = Color(0xFF101014);
+  static const Color _darkSurface = Color(0xFF121216);
 
   /// Mouse and keyboard do not need the touch target minimum, and Nextcloud's
   /// own clients size their controls around `--default-clickable-area: 34px`.
@@ -123,7 +123,7 @@ abstract final class AppTheme {
           : roles.primary,
       onPrimary: branded && isDark ? const Color(0xFF20142F) : roles.onPrimary,
       surface: isDark ? _darkSurface : _lightSurface,
-      surfaceContainerLowest: isDark ? const Color(0xFF141418) : Colors.white,
+      surfaceContainerLowest: isDark ? const Color(0xFF101013) : Colors.white,
       surfaceContainerLow: isDark
           ? const Color(0xFF1B1B20)
           : const Color(0xFFF4F2F6),

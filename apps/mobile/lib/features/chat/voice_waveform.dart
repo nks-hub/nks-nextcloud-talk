@@ -35,8 +35,9 @@ List<double>? readVoicePeaks(String path) {
         if (fmt.getUint16(0, Endian.little) != 1 ||
             fmt.getUint16(14, Endian.little) != 16 ||
             frameBytes == 0 ||
-            frameBytes != 2 * fmt.getUint16(2, Endian.little))
+            frameBytes != 2 * fmt.getUint16(2, Endian.little)) {
           return null;
+        }
       }
       if (name == 'data' && frameBytes > 0) {
         final frames = size ~/ frameBytes;
