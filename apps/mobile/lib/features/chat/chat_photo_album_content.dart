@@ -8,7 +8,7 @@ ChatGalleryImage? chatGalleryImage(StoredAccount account, ChatMessage message) {
   }
   final files = message.messageParameters.values.where((p) => p.type == 'file');
   if (files.length != 1) return null;
-  return _galleryFile(account, files.single);
+  return _galleryFile(account, files.single, message);
 }
 
 List<ChatGalleryImage> sharedPhotosInMessage(
@@ -23,13 +23,14 @@ List<ChatGalleryImage> sharedPhotosInMessage(
   return [
     for (final file in message.messageParameters.values)
       if (file.type == 'file')
-        ?_galleryFile(account, file, originalOnlyAllowed: true),
+        ?_galleryFile(account, file, message, originalOnlyAllowed: true),
   ];
 }
 
 ChatGalleryImage? _galleryFile(
   StoredAccount account,
-  ChatRichObjectParameter file, {
+  ChatRichObjectParameter file,
+  ChatMessage message, {
   bool originalOnlyAllowed = false,
 }) {
   final mime = _mimeType(file);
@@ -47,7 +48,23 @@ ChatGalleryImage? _galleryFile(
     originalUri: original,
     contentType: mime,
     name: file.name ?? '',
+    noteTarget: _photoNoteTarget(
+      message.roomToken.value,
+      message.messageId,
+      file,
+    ),
   );
+}
+
+PhotoNoteTarget? _photoNoteTarget(
+  String token,
+  int messageId,
+  ChatRichObjectParameter file,
+) {
+  final id = int.tryParse(file.id ?? '');
+  return id == null || id < 1 || messageId < 1
+      ? null
+      : (room: token, message: messageId, file: id);
 }
 
 ChatRichObjectParameter _fileOf(ChatMessage message) =>

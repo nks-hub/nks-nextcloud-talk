@@ -80,6 +80,7 @@ final class _ChatAttachment extends ConsumerWidget {
             originalUri: originalUri,
             originalContentType: mimeType,
             imageName: name,
+            noteTarget: _photoNoteTarget(roomToken, messageId, parameter),
             repository: ref.read(chatMediaRepositoryProvider),
             openAppSettings: () => ref.read(appSettingsOpenerProvider).open(),
             onOpenFile: openFile == null ? null : () => unawaited(openFile()),

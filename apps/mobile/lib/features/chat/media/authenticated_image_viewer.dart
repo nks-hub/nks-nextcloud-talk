@@ -9,6 +9,7 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../chat_context_menu.dart';
 import 'chat_image_exporter.dart';
 import 'image_clipboard.dart';
+import 'photo_notes.dart';
 import 'proportional_image.dart';
 
 const double _minimumScale = 1;
@@ -22,6 +23,7 @@ Future<void> showAuthenticatedImageViewer(
   required Uri originalUri,
   required String originalContentType,
   required String imageName,
+  PhotoNoteTarget? noteTarget,
   required ChatMediaRepository repository,
   ChatImageExporter exporter = const PlatformChatImageExporter(),
   Future<bool> Function()? openAppSettings,
@@ -39,6 +41,7 @@ Future<void> showAuthenticatedImageViewer(
         originalUri: originalUri,
         originalContentType: originalContentType,
         imageName: imageName,
+        noteTarget: noteTarget,
         repository: repository,
         exporter: exporter,
         openAppSettings: openAppSettings,
@@ -58,6 +61,7 @@ final class AuthenticatedImageViewer extends StatefulWidget {
     required this.originalUri,
     required this.originalContentType,
     required this.imageName,
+    this.noteTarget,
     required this.repository,
     this.exporter = const PlatformChatImageExporter(),
     this.openAppSettings,
@@ -78,6 +82,7 @@ final class AuthenticatedImageViewer extends StatefulWidget {
   final Uri originalUri;
   final String originalContentType;
   final String imageName;
+  final PhotoNoteTarget? noteTarget;
   final ChatMediaRepository repository;
   final ChatImageExporter exporter;
   final Future<bool> Function()? openAppSettings;
@@ -533,6 +538,15 @@ final class _AuthenticatedImageViewerState
                           ? null
                           : () => _zoomBy(1.25),
                     ),
+                    if (widget.noteTarget case final target?)
+                      PhotoNotesButton(
+                        account: widget.account,
+                        target: target,
+                        repository: widget.repository,
+                        uri: widget.originalUri,
+                        contentType: widget.originalContentType,
+                        name: widget.imageName,
+                      ),
                     _ViewerIconButton(
                       key: const Key('authenticated-image-save'),
                       tooltip: strings.saveImage,

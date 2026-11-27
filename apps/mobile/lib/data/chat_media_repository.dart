@@ -62,10 +62,16 @@ final class ChatMediaImage {
 }
 
 final class ChatMediaFile {
-  ChatMediaFile({required Uint8List body, required this.contentType})
+  ChatMediaFile({required Uint8List body, required this.contentType, this.etag})
     : body = Uint8List.fromList(body);
 
-  ChatMediaFile._owned({required this.body, required this.contentType});
+  ChatMediaFile._owned({
+    required this.body,
+    required this.contentType,
+    this.etag,
+  });
+
+  final String? etag;
 
   final Uint8List body;
   final String contentType;
@@ -613,7 +619,11 @@ final class ChatMediaRepository {
         ChatMediaRepositoryError.invalidResponse,
       );
     }
-    return ChatMediaFile._owned(body: body, contentType: contentType);
+    return ChatMediaFile._owned(
+      body: body,
+      contentType: contentType,
+      etag: response.headers['etag'],
+    );
   });
 
   void close() {

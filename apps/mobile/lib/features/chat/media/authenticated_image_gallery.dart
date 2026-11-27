@@ -8,6 +8,7 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../../data/chat_media_repository.dart';
 import 'authenticated_image_viewer.dart';
 import 'chat_image_exporter.dart';
+import 'photo_notes.dart';
 
 final class ChatGalleryImage {
   const ChatGalleryImage({
@@ -16,8 +17,10 @@ final class ChatGalleryImage {
     required this.contentType,
     required this.name,
     this.smallerPreviewUri,
+    this.noteTarget,
   });
 
+  final PhotoNoteTarget? noteTarget;
   final Uri previewUri;
   final Uri? smallerPreviewUri;
   final Uri originalUri;
@@ -159,6 +162,7 @@ final class _AuthenticatedImageGalleryState
                   originalUri: image.originalUri,
                   originalContentType: image.contentType,
                   imageName: image.name,
+                  noteTarget: image.noteTarget,
                   repository: widget.repository,
                   exporter: widget.exporter,
                   openAppSettings: widget.openAppSettings,

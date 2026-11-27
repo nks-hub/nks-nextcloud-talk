@@ -31,6 +31,7 @@ import 'poll_dialog.dart';
 import 'composer/giphy.dart';
 import 'media/authenticated_image_viewer.dart';
 import 'media/authenticated_image_gallery.dart';
+import 'media/photo_notes.dart' show PhotoNoteTarget;
 import 'media/chat_attachment_opener.dart';
 import 'media/chat_attachment_exporter.dart';
 import 'media/chat_image_copy_action.dart';
