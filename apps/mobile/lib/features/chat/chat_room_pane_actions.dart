@@ -84,6 +84,28 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
             unawaited(_forwardMessage(copyText, filePath: forwardFilePath));
           },
         ),
+      if (message.messageId > 0 &&
+          !message.deleted &&
+          message.systemMessage.isEmpty)
+        ChatContextMenuEntry(
+          key: const Key('message-save-collection'),
+          icon: Icons.bookmark_add_outlined,
+          label: strings.saveToCollection,
+          onSelected: () => unawaited(
+            showSaveToMessageCollection(
+              context,
+              account: AccountId.parse(widget.account.id),
+              store: ref.read(messageCollectionStoreProvider),
+              message: SavedMessageLink(
+                roomToken: widget.conversation.token,
+                messageId: message.messageId,
+                threadId: widget.threadId ?? parsed?.threadId,
+                roomName: widget.conversation.displayName,
+                excerpt: copyText.characters.take(160).toString(),
+              ),
+            ),
+          ),
+        ),
       if (canForward && _noteToSelf() != null)
         ChatContextMenuEntry(
           key: const Key('message-action-note-to-self'),

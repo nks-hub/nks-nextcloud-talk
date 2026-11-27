@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart'
-    show FederationInvitation, MessageSearchResult;
+    show AccountId, ConversationToken, FederationInvitation, MessageSearchResult;
 
 import '../../app_providers.dart';
 import '../../core/app_lifecycle_policy.dart';
@@ -20,6 +20,7 @@ import '../onboarding/onboarding_screen.dart';
 import '../push/android_web_push_bridge.dart';
 import '../push/apple_push_channel.dart' show ApplePushNotificationOpen;
 import '../push/windows_notification.dart' show WindowsNotificationOpen;
+import '../chat/composer/message_collections.dart';
 import '../reminders/reminder_inbox.dart' show openReminderInbox;
 import '../../core/talk_features.dart';
 import '../rooms/room_details_screen.dart';

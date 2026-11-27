@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNull;
 import 'package:flutter/gestures.dart';
@@ -11,6 +12,7 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
+import 'package:nextcloudtalk/features/chat/composer/message_collections.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -227,6 +229,45 @@ void main() {
     await tester.tap(find.byKey(const Key('message-action-forward')));
     await settle(tester);
   }
+
+  testWidgets('saving from a real message menu keeps the source room and id', (
+    tester,
+  ) async {
+    final directory = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('owntalk-collection-entry-'),
+    ))!;
+    addTearDown(() => directory.delete(recursive: true));
+    final store = MessageCollectionStore(directory: directory);
+    final owner = AccountId.parse(account.id);
+    await tester.runAsync(() => store.create(owner, 'Receipts'));
+    await tester.pumpWidget(
+      app(
+        api: buildApi(),
+        overrides: [messageCollectionStoreProvider.overrideWithValue(store)],
+      ),
+    );
+    await settle(tester);
+    await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+    await settle(tester);
+    final action = find.byKey(const Key('message-save-collection'));
+    await tester.ensureVisible(action);
+    await tester.tap(action);
+    await pumpUntilCondition(
+      tester,
+      () => find.text('Receipts').hitTestable().evaluate().isNotEmpty,
+    );
+    await tester.tap(find.text('Receipts'));
+    await pumpUntilCondition(tester, () => tester.widgetList<CheckboxListTile>(find.byType(CheckboxListTile)).any((tile)=>tile.value==true));
+    final saved = (await tester.runAsync(
+      () => MessageCollectionStore(directory:directory).read(owner),
+    ))!.single.messages.single;
+    expect(saved.roomToken, source.token);
+    expect(saved.messageId, 10);
+    expect(saved.threadId, isNull);
+    expect(postedMessages, isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+  });
 
   testWidgets('forwards the message text into the picked conversation', (
     tester,

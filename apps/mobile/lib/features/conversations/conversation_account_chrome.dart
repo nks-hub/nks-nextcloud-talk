@@ -101,6 +101,12 @@ final class _AccountRail extends StatelessWidget {
                   tooltip: strings.reminderInboxTitle,
                   icon: const Icon(Icons.alarm_outlined),
                 ),
+                IconButton(
+                  key: const Key('open-message-collections'),
+                  tooltip: strings.messageCollections,
+                  icon: const Icon(Icons.bookmarks_outlined),
+                  onPressed: () => _openSavedCollections(context, selected),
+                ),
                 _RailFooter(
                   touchPadding: const EdgeInsets.only(top: 8, bottom: 12),
                   child: IconButton(
@@ -130,6 +136,7 @@ final class _AccountMenu extends StatelessWidget {
 
   static const _addKey = '__add_account__';
   static const _settingsKey = '__settings__';
+  static const _collectionsKey = '__message_collections__';
   static const _remindersKey = '__reminders__';
 
   final StoredAccount selected;
@@ -151,6 +158,7 @@ final class _AccountMenu extends StatelessWidget {
         _addKey => onAdd(),
         _settingsKey => _openSettings(context),
         _remindersKey => openReminderInbox(context),
+        _collectionsKey => _openSavedCollections(context, selected),
         _ => onSelect(value),
       },
       itemBuilder: (context) => [
@@ -172,6 +180,15 @@ final class _AccountMenu extends StatelessWidget {
             ),
           ),
         const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          key: const Key('open-message-collections'),
+          value: _collectionsKey,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.bookmarks_outlined),
+            title: Text(strings.messageCollections),
+          ),
+        ),
         PopupMenuItem<String>(
           key: const Key('open-reminder-inbox'),
           value: _remindersKey,
@@ -200,6 +217,81 @@ final class _AccountMenu extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+Future<void> _openSavedCollections(
+  BuildContext context,
+  StoredAccount account,
+) async {
+  final scope = ProviderScope.containerOf(context, listen: false);
+  final route = ModalRoute.of(context);
+  bool current() =>
+      context.mounted &&
+      (route == null || route.isCurrent) &&
+      scope.read(selectedAccountProvider).valueOrNull?.id == account.id;
+  final link = await showMessageCollections(
+    context,
+    account: AccountId.parse(account.id),
+    store: scope.read(messageCollectionStoreProvider),
+  );
+  if (link == null || !current()) return;
+  try {
+    final conversation = await scope
+        .read(accountRepositoryProvider)
+        .getConversation(accountId: account.id, token: link.roomToken);
+    if (!current()) return;
+    if (conversation == null) {
+      throw const MessageSearchThreadException(
+        MessageSearchThreadError.unavailable,
+      );
+    }
+    final target = MessageDestinationTarget(
+      roomToken: ConversationToken.parse(
+        link.roomToken,
+        path: 'collection.room',
+      ),
+      messageId: link.messageId,
+      threadId: link.threadId,
+    );
+    final thread =
+        target.threadId != null && target.threadId != target.messageId
+        ? await resolveMessageThread(
+            repository: scope.read(chatRepositoryProvider),
+            accountId: account.id,
+            target: target,
+            synchronizeThread: () => scope
+                .read(chatServiceProvider)
+                .syncRoom(
+                  accountId: account.id,
+                  roomToken: link.roomToken,
+                  threadId: target.threadId,
+                  readerIsActive: () =>
+                      current() && scope.read(windowActiveProvider),
+                ),
+          )
+        : null;
+    if (!context.mounted || !current()) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => buildMessageDestination(
+          account: account,
+          conversation: conversation,
+          target: target,
+          threadContext: thread,
+        ),
+      ),
+    );
+  } catch (_) {
+    if (context.mounted && current()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context).jumpToMessageConversationMissing,
+          ),
+        ),
+      );
+    }
   }
 }
 

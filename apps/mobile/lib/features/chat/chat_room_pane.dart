@@ -45,6 +45,7 @@ import 'chat_wallpaper.dart';
 import 'chat_context_menu.dart';
 import 'chat_selection.dart';
 import '../owntalk_extensions/chat_appearance.dart';
+import 'composer/message_collections.dart';
 import '../owntalk_extensions/owntalk_room_extras.dart';
 import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
