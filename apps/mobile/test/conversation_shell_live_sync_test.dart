@@ -511,11 +511,13 @@ Future<void> _verifyLifecycleSync(
     );
     await _pumpUntil(tester, () => conversationRequests == 1);
 
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     if (desktop) {
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       await tester.pump(const Duration(seconds: 16));
       await _pumpUntil(tester, () => conversationRequests == 2);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    }
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    if (desktop) {
       await tester.pump(const Duration(seconds: 16));
       await _pumpUntil(tester, () => conversationRequests == 3);
     }
@@ -525,6 +527,8 @@ Future<void> _verifyLifecycleSync(
     await tester.pump(const Duration(seconds: 16));
     expect(conversationRequests, requestsBeforePause);
 
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
     await _pumpUntil(

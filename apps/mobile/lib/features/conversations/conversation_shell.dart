@@ -13,6 +13,7 @@ import '../../core/desktop_metrics.dart';
 import '../../core/foreground_sync_loop.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../calls/call_state.dart';
 import '../chat/chat_room_pane.dart' show ChatThreadContext;
 import '../newconversation/new_conversation_screen.dart';
 import '../onboarding/onboarding_screen.dart';
@@ -26,6 +27,7 @@ import '../search/message_search_screen.dart';
 import '../search/message_search_thread_screen.dart';
 import '../settings/settings_screen.dart';
 import '../settings/update_check_tile.dart';
+import 'conversation_avatar_widget.dart';
 import 'conversation_list_actions.dart';
 import 'desktop_attachment_drop.dart';
 import 'federation_invitation_service.dart';
@@ -36,6 +38,7 @@ import 'list_pane_preference.dart' show kMinListPaneWidth;
 import 'unread_badge.dart';
 
 part 'conversation_account_chrome.dart';
+part 'conversation_inbox_navigation.dart';
 part 'conversation_workspace.dart';
 
 final class ConversationShell extends ConsumerStatefulWidget {

@@ -492,17 +492,8 @@ List<ConversationHeaderAction> _headerActions(
       id: const Key('open-thread-management'),
       icon: Icons.forum_outlined,
       label: strings.threadManagementOpenTooltip,
-      onPressed: () => unawaited(
-        Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(
-            settings: const RouteSettings(name: '/threads'),
-            builder: (context) => ThreadManagementScreen(
-              account: account,
-              conversation: conversation,
-            ),
-          ),
-        ),
-      ),
+      onPressed: () =>
+          unawaited(openConversationThreads(context, account, conversation)),
     ),
     ConversationHeaderAction(
       id: const Key('open-room-details'),
@@ -588,3 +579,15 @@ IconData _presenceIcon(ConversationPresenceKind kind) {
     ConversationPresenceKind.doNotDisturb => Icons.do_not_disturb_on,
   };
 }
+
+Future<void> openConversationThreads(
+  BuildContext context,
+  StoredAccount account,
+  CachedConversation conversation,
+) => Navigator.of(context).push<void>(
+  MaterialPageRoute<void>(
+    settings: const RouteSettings(name: '/threads'),
+    builder: (context) =>
+        ThreadManagementScreen(account: account, conversation: conversation),
+  ),
+);

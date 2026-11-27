@@ -120,10 +120,13 @@ final class ConversationWorkspace extends StatelessWidget {
       if (detailsOpen && closeDetails != null)
         const SingleActivator(LogicalKeyboardKey.escape): closeDetails,
     };
-    if (bindings.isEmpty) {
-      return _buildLayout(context);
-    }
-    return CallbackShortcuts(bindings: bindings, child: _buildLayout(context));
+    final layout = _buildLayout(context);
+    return _InboxNavigationHost(
+      key: ValueKey(account.id),
+      child: bindings.isEmpty
+          ? layout
+          : CallbackShortcuts(bindings: bindings, child: layout),
+    );
   }
 
   Widget _buildLayout(BuildContext context) {
@@ -300,7 +303,7 @@ final class _CompactShell extends StatelessWidget {
     BuildContext context,
     AppLocalizations strings,
   ) {
-    final listColor = Theme.of(context).colorScheme.surfaceContainerLow;
+    final listColor = _inboxSurface(context);
     return Scaffold(
       key: const Key('conversation-shell-compact'),
       backgroundColor: listColor,
@@ -309,36 +312,32 @@ final class _CompactShell extends StatelessWidget {
         titleSpacing: 16,
         title: Row(
           children: [
-            const BrandMark(size: 40),
-            const SizedBox(width: 12),
+            const BrandMark(size: 32),
+            const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(strings.conversations),
-                  Text(
-                    Uri.parse(account.serverUrl).host,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+              child: Text(
+                strings.appTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
             ),
           ],
         ),
         actions: [
-          // Without `unified-search` the server has no provider to ask, and
-          // the screen would only ever reach a dead end.
-          if (_hasUnifiedSearch(account))
-            IconButton(
-              key: const Key('open-message-search'),
-              onPressed: () => openMessageSearch(context, account.id),
-              tooltip: strings.searchMessagesTooltip,
-              icon: const Icon(Icons.search),
+          IconButton(
+            key: const Key('open-new-conversation'),
+            onPressed: () => _openNewConversation(
+              context,
+              account.id,
+              onRefresh,
+              onCreated: onOpenCreatedConversation,
             ),
+            tooltip: strings.newConversationTitle,
+            icon: const Icon(Icons.edit_square),
+          ),
           IconButton(
             onPressed: syncing ? null : onRefresh,
             tooltip: strings.refresh,
@@ -368,30 +367,18 @@ final class _CompactShell extends StatelessWidget {
               onDecide: onDecideFederationInvitation!,
             ),
           Expanded(
-            child: ConversationListView(
+            child: _InboxBody(
               account: account,
               conversations: conversations,
               loading: loading,
               onRefresh: onRefresh,
               onSelect: onOpenConversation,
-              // The new-conversation button floats over this list, and a list
-              // short enough not to scroll cannot be moved out from under it.
-              bottomInset: 88,
+              showHeading: true,
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        key: const Key('open-new-conversation'),
-        onPressed: () => _openNewConversation(
-          context,
-          account.id,
-          onRefresh,
-          onCreated: onOpenCreatedConversation,
-        ),
-        tooltip: strings.newConversationTitle,
-        child: const Icon(Icons.chat_bubble_outline_rounded),
-      ),
+      bottomNavigationBar: const _InboxNavigationBar(),
     );
   }
 }
@@ -526,21 +513,33 @@ final class _ExpandedShell extends StatelessWidget {
       body: SafeArea(
         child: Row(
           children: [
-            // Only drawn when it has something to switch between. With one
-            // account the rail is 88 px of window height showing a logo, an
-            // avatar whose own onTap is null, and two buttons that the
-            // account menu in the header already carries. See
-            // docs/architecture/desktop-chrome.md, D-041.
-            if (accounts.length > 1) ...[
-              _AccountRail(
-                selected: account,
-                accounts: accounts,
-                unreadByAccount: unreadByAccount,
-                onSelect: onSelectAccount,
-                onAdd: onAddAccount,
-              ),
-              const VerticalDivider(),
-            ],
+            LayoutBuilder(
+              builder: (context, bounds) {
+                if (accounts.length > 1 && bounds.maxHeight >= 440) {
+                  return _AccountRail(
+                    selected: account,
+                    accounts: accounts,
+                    unreadByAccount: unreadByAccount,
+                    onSelect: onSelectAccount,
+                    onAdd: onAddAccount,
+                    navigation: _InboxRailButtons(
+                      onReveal: listCollapsed ? onToggleList : null,
+                    ),
+                  );
+                }
+                return _InboxRail(
+                  onReveal: listCollapsed ? onToggleList : null,
+                  accountMenu: _AccountMenu(
+                    selected: account,
+                    accounts: accounts,
+                    unreadByAccount: unreadByAccount,
+                    onSelect: onSelectAccount,
+                    onAdd: onAddAccount,
+                  ),
+                );
+              },
+            ),
+            const VerticalDivider(),
             // Everything the panes have to share is measured here, past the
             // rail, so none of the arithmetic below has to know whether the
             // rail is drawn or how wide its divider is.
@@ -601,131 +600,23 @@ final class _ExpandedShell extends StatelessWidget {
     required bool showDetails,
     required bool detailsFit,
   }) {
-    final strings = AppLocalizations.of(context);
     return Row(
       children: [
         if (!listCollapsed)
           Container(
             key: const Key('conversation-list-pane'),
             width: listPaneWidth,
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            color: _inboxSurface(context),
             child: Column(
               children: [
-                ConstrainedBox(
-                  key: const Key('conversation-list-header'),
-                  constraints: BoxConstraints(
-                    minHeight: context.paneHeaderHeight,
+                _InboxDesktopHeader(
+                  onCompose: () => _openNewConversation(
+                    context,
+                    account.id,
+                    onRefresh,
+                    onCreated: onOpenCreatedConversation,
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            // Takes the rail's place when the rail is gone, so
-                            // switching accounts, adding one and reaching
-                            // settings never depend on a pane that is not drawn.
-                            if (accounts.length <= 1) ...[
-                              _AccountMenu(
-                                selected: account,
-                                accounts: accounts,
-                                unreadByAccount: unreadByAccount,
-                                onSelect: onSelectAccount,
-                                onAdd: onAddAccount,
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                            Expanded(
-                              child: Semantics(
-                                header: true,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      strings.conversations,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                    ),
-                                    Text(
-                                      Uri.parse(account.serverUrl).host,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.copyWith(
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            // Plain icon buttons of one family.
-                            IconButton(
-                              key: const Key('open-new-conversation'),
-                              onPressed: () => _openNewConversation(
-                                context,
-                                account.id,
-                                onRefresh,
-                                onCreated: onOpenCreatedConversation,
-                              ),
-                              tooltip: strings.newConversationTitle,
-                              icon: const Icon(
-                                Icons.chat_bubble_outline_rounded,
-                              ),
-                            ),
-                            IconButton(
-                              key: const Key('refresh-conversations'),
-                              onPressed: syncing ? null : onRefresh,
-                              tooltip: strings.refresh,
-                              icon: const Icon(Icons.refresh_rounded),
-                            ),
-                          ],
-                        ),
-                        if (_hasUnifiedSearch(account)) ...[
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: TextButton.icon(
-                              key: const Key('open-message-search'),
-                              onPressed: () =>
-                                  openMessageSearch(context, account.id),
-                              style: TextButton.styleFrom(
-                                minimumSize: const Size(0, 48),
-                                alignment: AlignmentDirectional.centerStart,
-                                foregroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                shape: const StadiumBorder(),
-                              ),
-                              icon: const Icon(Icons.search_rounded),
-                              label: Text(
-                                strings.searchMessagesTooltip,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+                  onRefresh: syncing ? null : onRefresh,
                 ),
                 if (syncing) const LinearProgressIndicator(minHeight: 3),
                 if (account.lastSyncError != null)
@@ -738,9 +629,8 @@ final class _ExpandedShell extends StatelessWidget {
                     invitations: federationInvitations,
                     onDecide: onDecideFederationInvitation!,
                   ),
-                const Divider(),
                 Expanded(
-                  child: ConversationListView(
+                  child: _InboxBody(
                     account: account,
                     conversations: conversations,
                     loading: loading,

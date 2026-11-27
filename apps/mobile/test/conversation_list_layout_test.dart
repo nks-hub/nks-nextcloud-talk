@@ -13,6 +13,7 @@ void main() {
   Future<void> pump(
     WidgetTester tester,
     List<CachedConversation> conversations, {
+    ValueChanged<CachedConversation>? onSelect,
     double textScale = 1,
     double width = 900,
     Locale locale = const Locale('en'),
@@ -35,7 +36,7 @@ void main() {
               conversations: conversations,
               loading: false,
               onRefresh: () async {},
-              onSelect: (_) {},
+              onSelect: onSelect ?? (_) {},
             ),
           ),
         ),
@@ -43,6 +44,37 @@ void main() {
     );
     await tester.pump();
   }
+
+  testWidgets(
+    'room search keeps focus through an empty result and clears back to favorites',
+    (tester) async {
+      final selected = <String>[];
+      await pump(tester, [
+        _conversation('room-a', 'Project A', favorite: true),
+        _conversation('room-b', 'Supply order'),
+        _conversation('room-c', 'Archived', favorite: true, archived: true),
+      ], onSelect: (room) => selected.add(room.token));
+      expect(find.byKey(const Key('favorite-room-room-c')), findsNothing);
+      expect(find.byKey(const Key('favorite-room-room-b')), findsNothing);
+      await tester.tap(find.byKey(const Key('favorite-room-room-a')));
+      expect(selected, ['room-a']);
+
+      final search = find.byKey(const Key('conversation-name-search'));
+      await tester.enterText(search, ' UNKNOWN ');
+      await tester.pump();
+      expect(find.byKey(const Key('conversation-tile-room-a')), findsNothing);
+      expect(find.byKey(const Key('favorite-conversations')), findsNothing);
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      await tester.enterText(search, ' SuPPly ');
+      await tester.pump();
+      expect(find.byKey(const Key('conversation-tile-room-b')), findsOneWidget);
+      await tester.tap(find.byTooltip('Clear the search'));
+      await tester.pump();
+      expect(find.byKey(const Key('conversation-tile-room-a')), findsOneWidget);
+      expect(find.byKey(const Key('favorite-room-room-a')), findsOneWidget);
+    },
+  );
 
   testWidgets('the date sits at the right edge of a wide row', (tester) async {
     await pump(tester, [_conversation('room-a', 'Synthetic peer')]);
@@ -75,21 +107,27 @@ void main() {
     final badge = tester.getRect(
       find.byKey(const Key('conversation-presence-badge-room-a')),
     );
-    expect(avatar.width, 56, reason: 'large round avatar on touch');
+    expect(avatar.width, 48, reason: 'the avatar fits the compact touch row');
     expect(badge.center.dx, greaterThan(avatar.center.dx));
     expect(badge.center.dy, greaterThan(avatar.center.dy));
     expect(badge.right, lessThanOrEqualTo(avatar.right + 4));
   });
 
-  testWidgets('rows are separated by space, not by divider lines', (
+  testWidgets('room rows stay compact and preserve a full touch target', (
     tester,
   ) async {
     await pump(tester, [
       _conversation('room-a', 'First'),
       _conversation('room-b', 'Second'),
     ]);
-
-    expect(find.byType(Divider), findsNothing);
+    final first = tester.getRect(
+      find.byKey(const Key('conversation-tile-room-a')),
+    );
+    final second = tester.getRect(
+      find.byKey(const Key('conversation-tile-room-b')),
+    );
+    expect(first.height, inInclusiveRange(48.0, 68.0));
+    expect(second.top, first.bottom);
   });
 
   testWidgets('an empty list shows the tonal state icon', (tester) async {
@@ -129,6 +167,7 @@ CachedConversation _conversation(
   String token,
   String name, {
   bool favorite = false,
+  bool archived = false,
   String? status,
   int type = 2,
 }) {
@@ -140,7 +179,7 @@ CachedConversation _conversation(
     lastActivity: 1735689600,
     unreadMessages: 0,
     favorite: favorite,
-    isArchived: false,
+    isArchived: archived,
     readOnly: 0,
     roomType: type,
     roomName: name,

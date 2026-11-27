@@ -50,6 +50,28 @@ void main() {
     expect(find.byKey(const Key('account-rail')), findsOneWidget);
   });
 
+  testWidgets(
+    'a tablet keyboard keeps both accounts and navigation reachable',
+    (tester) async {
+      tester.view.physicalSize = const Size(900, 600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await _pumpShell(
+        tester,
+        accounts: [account('account-a'), account('account-b')],
+      );
+      expect(find.byKey(const Key('account-rail')), findsOneWidget);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('account-rail')), findsNothing);
+      expect(find.byKey(const Key('inbox-nav-calls')), findsOneWidget);
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      expect(find.text('user-account-b'), findsOneWidget);
+    },
+  );
+
   testWidgets('wide layout separates the list from the conversation surface', (
     tester,
   ) async {
@@ -69,7 +91,7 @@ void main() {
     expect(find.text('No conversations yet'), findsOneWidget);
   });
 
-  testWidgets('dropping the rail hands its width to the conversation', (
+  testWidgets('single and multi-account navigation reserve only their width', (
     tester,
   ) async {
     await _pumpWide(tester, accounts: [account('account-a')]);
@@ -85,9 +107,7 @@ void main() {
         .getSize(find.byKey(const Key('conversation-detail-pane')))
         .width;
 
-    // 88 for the rail and 1 for its divider. Asserted as a number because
-    // "looks wider" is what let it sit there unnoticed.
-    expect(single - withRail, 89);
+    expect(single - withRail, kAccountRailWidth - 56);
   });
 
   testWidgets('the list is not folded away while no conversation is open', (
@@ -227,40 +247,21 @@ void main() {
         final refresh = tester.getRect(
           find.byKey(const Key('refresh-conversations')),
         );
-        final title = tester.getRect(find.text('Conversations'));
-
-        // Search is full width below the title row, on the 12 px insets.
-        expect(search.left - pane.left, 12);
+        final title = tester.getRect(find.byKey(const Key('inbox-heading')));
+        final localSearch = tester.getRect(
+          find.byKey(const Key('conversation-name-search')),
+        );
+        expect(localSearch.left - pane.left, 12);
         expect(pane.right - search.right, 12);
         expect(search.top, greaterThan(title.bottom));
-        // The actions share the title's row, on the right, as plain buttons
-        // with a 48 px target.
+        expect(localSearch.right, lessThanOrEqualTo(search.left));
         for (final action in [add, refresh]) {
           expect(action.width, greaterThanOrEqualTo(48));
           expect(action.height, greaterThanOrEqualTo(48));
           expect(action.center.dy, lessThan(search.top));
           expect(action.left, greaterThan(title.left));
         }
-        expect(refresh.right, lessThanOrEqualTo(pane.right - 12 + 0.5));
         expect(add.right, lessThanOrEqualTo(refresh.left + 0.5));
-        expect(
-          find.descendant(
-            of: find.byKey(const Key('open-new-conversation')),
-            matching: find.byType(Material),
-          ),
-          findsWidgets,
-        );
-        final fill = tester
-            .widget<Material>(
-              find
-                  .descendant(
-                    of: find.byKey(const Key('open-new-conversation')),
-                    matching: find.byType(Material),
-                  )
-                  .first,
-            )
-            .color;
-        expect(fill?.a ?? 0, 0, reason: 'no filled disc behind the action');
         expect(find.byTooltip('New conversation'), findsOneWidget);
         expect(find.byTooltip('Refresh'), findsOneWidget);
       });

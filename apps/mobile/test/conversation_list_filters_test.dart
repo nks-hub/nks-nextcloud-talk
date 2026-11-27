@@ -80,7 +80,7 @@ void main() {
 
   for (final width in [280.0, 300.0, 360.0]) {
     for (final scale in [1.0, 2.0]) {
-      testWidgets('three localized filters are comfortable pills at '
+      testWidgets('localized filter tabs remain reachable at '
           '${width.toInt()} dp and ${(scale * 100).toInt()} % text', (
         tester,
       ) async {
@@ -90,6 +90,7 @@ void main() {
         final semantics = tester.ensureSemantics();
 
         const filterKeys = <Key>[
+          Key('conversation-filter-all'),
           Key('conversation-filter-unread'),
           Key('conversation-filter-mentions'),
           Key('conversation-filter-archived'),
@@ -119,7 +120,7 @@ void main() {
           ];
           for (var i = 0; i < rects.length; i++) {
             final chip = rects[i];
-            // Every pill is fully inside the bar's insets without scrolling.
+            // Every tab is fully inside the bar's insets without scrolling.
             expect(chip.left, greaterThanOrEqualTo(bar.left + 12));
             expect(chip.right, lessThanOrEqualTo(bar.right - 12 + 0.5));
             final label = tester.getRect(
@@ -130,20 +131,20 @@ void main() {
             );
             expect(
               label.left - chip.left,
-              greaterThanOrEqualTo(12),
+              greaterThanOrEqualTo(8),
               reason: 'text keeps room from the left border, $locale',
             );
             expect(
               chip.right - label.right,
-              greaterThanOrEqualTo(12),
+              greaterThanOrEqualTo(8),
               reason: 'text keeps room from the right border, $locale',
             );
             if (i > 0) {
               final previous = rects[i - 1];
               if (previous.top == chip.top) {
-                expect(chip.left - previous.right, 8, reason: 'gap, $locale');
+                expect(chip.left - previous.right, 4, reason: 'gap, $locale');
               } else {
-                expect(chip.top - previous.bottom, greaterThanOrEqualTo(8));
+                expect(chip.top - previous.bottom, greaterThanOrEqualTo(2));
               }
             }
           }
@@ -310,7 +311,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('switching account clears account-specific filters', (
+  testWidgets('switching account clears its search and filters', (
     tester,
   ) async {
     final account = ValueNotifier<StoredAccount>(_account());
@@ -331,9 +332,14 @@ void main() {
     expect(_tile('aunread1'), findsOneWidget);
     expect(_tile('aread000'), findsNothing);
 
+    final search = find.byKey(const Key('conversation-name-search'));
+    await tester.enterText(search, 'aunread');
+    await tester.pump();
+
     account.value = _account(id: 'account-b');
     await tester.pump();
 
+    expect(tester.widget<TextField>(search).controller!.text, isEmpty);
     expect(_tile('bread000'), findsOneWidget);
     final chip = tester.widget<FilterChip>(
       find.byKey(const Key('conversation-filter-unread')),

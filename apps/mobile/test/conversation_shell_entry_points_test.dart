@@ -20,6 +20,7 @@ import 'package:nextcloudtalk/features/newconversation/new_conversation_screen.d
 import 'package:nextcloudtalk/features/rooms/room_details_screen.dart';
 import 'package:nextcloudtalk/features/settings/settings_screen.dart';
 import 'package:nextcloudtalk/features/settings/theme_preference.dart';
+import 'package:nextcloudtalk/features/threads/thread_management_screen.dart';
 
 import 'test_support.dart';
 
@@ -254,7 +255,10 @@ void main() {
       (tester) async {
         await pumpShell(tester);
 
-        expect(find.text('Conversations'), findsOneWidget);
+        expect(
+          tester.widget<Text>(find.byKey(const Key('inbox-heading'))).data,
+          'Messages',
+        );
         expect(find.byKey(const Key('open-message-search')), findsOneWidget);
         if (layout.key == 'expanded') {
           expect(
@@ -272,6 +276,51 @@ void main() {
           );
         }
         expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      '${layout.key}: Calls finds active rooms and Threads opens room threads',
+      (tester) async {
+        await pumpShell(
+          tester,
+          talkFeatures: const ['chat-v2', 'threads'],
+          overrides: [
+            recentThreadsProvider.overrideWith(
+              (ref, key) => Stream.value(const []),
+            ),
+            subscribedThreadsProvider.overrideWith(
+              (ref, key) => Stream.value(const []),
+            ),
+          ],
+          conversationsByAccount: {
+            'account-a': [
+              _conversation('account-a', 'idle'),
+              _conversation('account-a', 'live', rawJson: '{"hasCall":true}'),
+            ],
+          },
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('inbox-nav-calls')));
+        await tester.pump();
+        expect(find.byKey(const Key('inbox-calls-idle')), findsNothing);
+        expect(find.byKey(const Key('inbox-calls-live')), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('inbox-nav-threads')));
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('inbox-threads-idle')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        final screen = tester.widget<ThreadManagementScreen>(
+          find.byType(ThreadManagementScreen),
+        );
+        expect(screen.conversation.token, 'idle');
+        await tester.pageBack();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.tap(find.byKey(const Key('inbox-nav-messages')));
+        await tester.pump();
+        expect(find.byKey(const Key('conversation-tile-idle')), findsOneWidget);
       },
     );
 
@@ -313,7 +362,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
       var seen = <String?>[focusedToken()];
-      for (var step = 0; step < 6 && seen.last == null; step++) {
+      for (var step = 0; step < 20 && seen.last == null; step++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.tab);
         await tester.pump();
         seen = [...seen, focusedToken()];

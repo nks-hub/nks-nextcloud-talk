@@ -19,6 +19,8 @@ import 'conversation_delivery.dart';
 import 'conversation_presence.dart';
 import 'conversation_sync_service.dart';
 
+part 'conversation_list_header.dart';
+
 enum _ConversationAction { markUnread, toggleArchived }
 
 enum _ConversationListFilter { unread, mentions, archived }
@@ -39,6 +41,8 @@ final class ConversationListView extends ConsumerStatefulWidget {
     required this.onSelect,
     this.selectedToken,
     this.bottomInset = 0,
+    this.heading,
+    this.onMessageSearch,
   });
 
   final StoredAccount account;
@@ -48,11 +52,10 @@ final class ConversationListView extends ConsumerStatefulWidget {
   final ValueChanged<CachedConversation> onSelect;
   final String? selectedToken;
 
+  final Widget? heading;
+  final VoidCallback? onMessageSearch;
+
   /// Room to leave under the last row for whatever floats over the list.
-  ///
-  /// The compact shell puts the new-conversation button there, and a short
-  /// list does not scroll: at 200 % text the last conversation's message sat
-  /// under the button with no way to move it.
   final double bottomInset;
 
   @override
@@ -63,6 +66,15 @@ final class ConversationListView extends ConsumerStatefulWidget {
 final class _ConversationListViewState
     extends ConsumerState<ConversationListView> {
   final Set<_ConversationListFilter> _filters = {};
+  final _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
   final ConversationUnreadMentionCache _unreadMentions =
       ConversationUnreadMentionCache();
 
@@ -71,6 +83,8 @@ final class _ConversationListViewState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.account.id != widget.account.id) {
       _filters.clear();
+      _search.clear();
+      _query = '';
       _unreadMentions.clear();
       return;
     }
@@ -209,10 +223,6 @@ final class _ConversationListViewState
 
   @override
   Widget build(BuildContext context) {
-    if (widget.loading && widget.conversations.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
     final canViewArchived = _canViewArchived(widget.account);
     final filters = Set<_ConversationListFilter>.of(_filters);
     if (!canViewArchived) {
@@ -223,34 +233,19 @@ final class _ConversationListViewState
     }
     final shown = widget.conversations
         .where(
-          (conversation) => _matchesFilters(
-            conversation,
-            filters,
-            unreadMentions: _unreadMentions,
-          ),
+          (conversation) =>
+              conversation.displayName.toLowerCase().contains(_query) &&
+              _matchesFilters(
+                conversation,
+                filters,
+                unreadMentions: _unreadMentions,
+              ),
         )
         .toList(growable: false);
 
-    final filterBar = _ConversationFilterBar(
-      selected: filters,
-      showArchived: canViewArchived,
-      onToggle: _toggleFilter,
-    );
-
-    if (shown.isEmpty) {
-      return RefreshIndicator(
-        key: ValueKey<String>('conversation-list-${widget.account.id}'),
-        onRefresh: widget.onRefresh,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            filterBar,
-            const SizedBox(height: 120),
-            _EmptyConversations(filtered: filters.isNotEmpty),
-          ],
-        ),
-      );
-    }
+    final favorites = filters.isEmpty && _query.isEmpty
+        ? shown.where((room) => room.favorite).toList(growable: false)
+        : const <CachedConversation>[];
 
     return RefreshIndicator(
       key: ValueKey<String>('conversation-list-${widget.account.id}'),
@@ -258,10 +253,58 @@ final class _ConversationListViewState
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.only(bottom: widget.bottomInset),
-        itemCount: shown.length + 1,
+        itemCount: shown.isEmpty ? 2 : shown.length + 1,
         itemBuilder: (context, index) {
           if (index == 0) {
-            return filterBar;
+            final compact = widget.heading != null;
+            final shortcuts = _FavoriteConversations(
+              account: widget.account,
+              rooms: favorites,
+              onSelect: widget.onSelect,
+              compact: compact,
+            );
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (widget.heading != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                    child: widget.heading,
+                  ),
+                if (compact && favorites.isNotEmpty) shortcuts,
+                _ConversationSearch(
+                  controller: _search,
+                  onChanged: (value) => setState(() {
+                    _query = value.trim().toLowerCase();
+                  }),
+                  onMessageSearch: widget.onMessageSearch,
+                ),
+                if (!compact && favorites.isNotEmpty) shortcuts,
+                _ConversationFilterBar(
+                  selected: filters,
+                  showArchived: canViewArchived,
+                  onToggle: _toggleFilter,
+                  onClear: () => setState(() {
+                    _filters.clear();
+                    _unreadMentions.clear();
+                  }),
+                ),
+              ],
+            );
+          }
+          if (shown.isEmpty) {
+            if (widget.loading && widget.conversations.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.all(40),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            return Padding(
+              padding: const EdgeInsets.only(top: 40),
+              child: _EmptyConversations(
+                filtered: filters.isNotEmpty || _query.isNotEmpty,
+              ),
+            );
           }
           final conversation = shown[index - 1];
           return _ConversationTile(
@@ -272,91 +315,6 @@ final class _ConversationListViewState
             onLongPress: () => _openActions(conversation),
           );
         },
-      ),
-    );
-  }
-}
-
-final class _ConversationFilterBar extends StatelessWidget {
-  const _ConversationFilterBar({
-    required this.selected,
-    required this.showArchived,
-    required this.onToggle,
-  });
-
-  final Set<_ConversationListFilter> selected;
-  final bool showArchived;
-  final ValueChanged<_ConversationListFilter> onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = AppLocalizations.of(context);
-    return Semantics(
-      container: true,
-      label: strings.conversationFiltersLabel,
-      child: Padding(
-        key: const Key('conversation-filters'),
-        // The same 12 dp inset as the list header's search field, so the two
-        // share their edges. The pills keep their size and wrap to a second
-        // row in a narrow pane, so none is ever hidden off to the side.
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _chip(
-              context,
-              key: const Key('conversation-filter-unread'),
-              selected: selected.contains(_ConversationListFilter.unread),
-              label: Text(strings.conversationFilterUnread),
-              onSelected: (_) => onToggle(_ConversationListFilter.unread),
-            ),
-            _chip(
-              context,
-              key: const Key('conversation-filter-mentions'),
-              selected: selected.contains(_ConversationListFilter.mentions),
-              label: Text(strings.conversationFilterMentions),
-              onSelected: (_) => onToggle(_ConversationListFilter.mentions),
-            ),
-            if (showArchived)
-              _chip(
-                context,
-                key: const Key('conversation-filter-archived'),
-                selected: selected.contains(_ConversationListFilter.archived),
-                label: Text(strings.conversationFilterArchived),
-                onSelected: (_) => onToggle(_ConversationListFilter.archived),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _chip(
-    BuildContext context, {
-    required Key key,
-    required bool selected,
-    required Widget label,
-    required ValueChanged<bool> onSelected,
-  }) {
-    final scheme = Theme.of(context).colorScheme;
-    return FilterChip(
-      key: key,
-      selected: selected,
-      label: label,
-      onSelected: onSelected,
-      showCheckmark: false,
-      shape: const StadiumBorder(),
-      materialTapTargetSize: MaterialTapTargetSize.padded,
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-      side: BorderSide(
-        color: selected ? scheme.tertiary : scheme.outlineVariant,
-      ),
-      selectedColor: scheme.tertiaryContainer,
-      labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-        color: selected ? scheme.onTertiaryContainer : scheme.onSurfaceVariant,
-        fontWeight: FontWeight.w600,
       ),
     );
   }
@@ -392,22 +350,15 @@ final class _ConversationTile extends StatelessWidget {
     final read = delivery == OutgoingMessageDeliveryState.read;
     final unread = conversation.unreadMessages > 0;
     final tileColor = selected
-        ? scheme.secondaryContainer
+        ? Color.alphaBlend(
+            scheme.primary.withValues(alpha: 0.08),
+            scheme.surfaceContainerHigh,
+          )
         : unread
-        ? scheme.tertiaryContainer.withValues(alpha: 0.3)
+        ? scheme.primary.withValues(alpha: 0.045)
         : Colors.transparent;
-    final titleColor = selected
-        ? scheme.onSecondaryContainer
-        : unread
-        ? scheme.onTertiaryContainer
-        : scheme.onSurface;
-    // Opaque: at 0.72 and 0.74 alpha the light theme measured 4.01:1 and
-    // 3.92:1 against the row, under the 4.5:1 small text needs.
-    final supportingColor = selected
-        ? scheme.onSecondaryContainer
-        : unread
-        ? scheme.onTertiaryContainer
-        : scheme.onSurfaceVariant;
+    final titleColor = scheme.onSurface;
+    final supportingColor = scheme.onSurfaceVariant;
     final semanticsValue = [
       if (hasCall) strings.callBannerTitle,
       if (presence != null) presence.description(strings),
@@ -427,10 +378,10 @@ final class _ConversationTile extends StatelessWidget {
       onLongPress: onLongPress,
       child: ExcludeSemantics(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
           child: Material(
             color: tileColor,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(selected ? 10 : 0),
             clipBehavior: Clip.antiAlias,
             // Right-click reaches the same sheet as a long press: holding a
             // mouse button down is the wrong gesture on a desktop, and the two
@@ -440,198 +391,209 @@ final class _ConversationTile extends StatelessWidget {
               child: InkWell(
                 onTap: onTap,
                 onLongPress: onLongPress,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: context.listRowHeight),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      children: [
-                        // The presence mark sits on the avatar's corner, ringed
-                        // in the row colour so it reads against any picture.
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            ConversationAvatar(
-                              account: account,
-                              conversation: conversation,
+                child: Container(
+                  constraints: BoxConstraints(
+                    minHeight: context.listRowHeight.clamp(48.0, 64.0),
+                  ),
+                  padding: const EdgeInsetsDirectional.fromSTEB(9, 6, 6, 6),
+                  foregroundDecoration: BoxDecoration(
+                    border: BorderDirectional(
+                      start: selected
+                          ? BorderSide(color: scheme.primary, width: 3)
+                          : BorderSide.none,
+                      bottom: selected
+                          ? BorderSide.none
+                          : BorderSide(
+                              color: scheme.outlineVariant.withValues(
+                                alpha: 0.5,
+                              ),
+                              width: 0.5,
                             ),
-                            if (presence != null)
-                              Positioned(
-                                right: -2,
-                                bottom: -2,
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: Color.alphaBlend(
-                                      tileColor,
-                                      scheme.surfaceContainerLow,
-                                    ),
-                                    shape: BoxShape.circle,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      // The presence mark sits on the avatar's corner, ringed
+                      // in the row colour so it reads against any picture.
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          ConversationAvatar(
+                            account: account,
+                            conversation: conversation,
+                            radius: context.listAvatarRadius.clamp(20.0, 24.0),
+                          ),
+                          if (presence != null)
+                            Positioned(
+                              right: -2,
+                              bottom: -2,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Color.alphaBlend(
+                                    tileColor,
+                                    scheme.surfaceContainerLow,
                                   ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(2),
-                                    // An emoji status grows with the text size; capped so
-                                    // it stays a dot on the corner at 200 %.
-                                    child: MediaQuery.withClampedTextScaling(
-                                      maxScaleFactor: 1.2,
-                                      child: ConversationPresenceBadge(
-                                        conversation: conversation,
-                                      ),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(2),
+                                  // An emoji status grows with the text size; capped so
+                                  // it stays a dot on the corner at 200 %.
+                                  child: MediaQuery.withClampedTextScaling(
+                                    maxScaleFactor: 1.2,
+                                    child: ConversationPresenceBadge(
+                                      conversation: conversation,
                                     ),
                                   ),
                                 ),
                               ),
-                          ],
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              LayoutBuilder(
-                                builder: (context, box) {
-                                  return Row(
-                                    children: [
-                                      if (conversation.favorite) ...[
-                                        Icon(
-                                          Icons.star_rounded,
-                                          size: 18,
-                                          color: scheme.primary,
-                                        ),
-                                        const SizedBox(width: 4),
-                                      ],
-                                      if (conversation.isArchived) ...[
-                                        Icon(
-                                          Icons.archive_outlined,
-                                          size: 18,
-                                          color: scheme.onSurfaceVariant,
-                                        ),
-                                        const SizedBox(width: 4),
-                                      ],
-                                      if (hasCall) ...[
-                                        // Announced through the tile's semantics
-                                        // value, which this subtree is excluded from.
-                                        Icon(
-                                          Icons.videocam_rounded,
-                                          key: Key(
-                                            'conversation-call-'
-                                            '${conversation.token}',
-                                          ),
-                                          size: 18,
-                                          color: scheme.primary,
-                                        ),
-                                        const SizedBox(width: 4),
-                                      ],
-                                      Expanded(
-                                        child: Text(
-                                          conversation.displayName,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium
-                                              ?.copyWith(
-                                                color: titleColor,
-                                                fontWeight: unread || selected
-                                                    ? FontWeight.w700
-                                                    : FontWeight.w500,
-                                              ),
-                                        ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            LayoutBuilder(
+                              builder: (context, box) {
+                                return Row(
+                                  children: [
+                                    if (conversation.favorite) ...[
+                                      Icon(
+                                        Icons.star_rounded,
+                                        size: 18,
+                                        color: scheme.primary,
                                       ),
-                                      const SizedBox(width: 8),
-                                      // At 200 % text an absolute date is wider
-                                      // than the 240 dp the list may be dragged
-                                      // to (it once overflowed by 65 px), so it
-                                      // is capped at half the row.
-                                      ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                          maxWidth: box.maxWidth / 2,
-                                        ),
-                                        child: Text(
-                                          _formatActivity(
-                                            context,
-                                            conversation.lastActivity,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelSmall
-                                              ?.copyWith(
-                                                color: supportingColor,
-                                              ),
-                                        ),
-                                      ),
+                                      const SizedBox(width: 4),
                                     ],
-                                  );
-                                },
-                              ),
-                              if (statusMessage != null) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  statusMessage,
-                                  key: Key(
-                                    'conversation-presence-message-'
-                                    '${conversation.token}',
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: supportingColor),
-                                ),
-                              ],
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  if (delivery != null) ...[
-                                    // The marks of the chat bubbles: one tick
-                                    // once stored, two once everyone read it.
-                                    Icon(
-                                      read
-                                          ? Icons.done_all_rounded
-                                          : Icons.done_rounded,
-                                      key: Key(
-                                        'conversation-delivery-'
-                                        '${conversation.token}',
+                                    if (conversation.isArchived) ...[
+                                      Icon(
+                                        Icons.archive_outlined,
+                                        size: 18,
+                                        color: scheme.onSurfaceVariant,
                                       ),
-                                      size: 16,
-                                      color: read
-                                          ? scheme.primary
-                                          : scheme.onSurfaceVariant,
+                                      const SizedBox(width: 4),
+                                    ],
+                                    if (hasCall) ...[
+                                      // Announced through the tile's semantics
+                                      // value, which this subtree is excluded from.
+                                      Icon(
+                                        Icons.videocam_rounded,
+                                        key: Key(
+                                          'conversation-call-'
+                                          '${conversation.token}',
+                                        ),
+                                        size: 18,
+                                        color: scheme.primary,
+                                      ),
+                                      const SizedBox(width: 4),
+                                    ],
+                                    Expanded(
+                                      child: Text(
+                                        conversation.displayName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              color: titleColor,
+                                              fontWeight: unread || selected
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                            ),
+                                      ),
                                     ),
-                                    const SizedBox(width: 4),
-                                  ],
-                                  Expanded(
-                                    child: Text(
-                                      preview,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: supportingColor,
-                                            fontWeight: unread
-                                                ? FontWeight.w600
-                                                : null,
-                                          ),
-                                    ),
-                                  ),
-                                  if (conversation.unreadMessages > 0) ...[
                                     const SizedBox(width: 8),
-                                    _UnreadBadge(
-                                      count: conversation.unreadMessages,
+                                    // At 200 % text an absolute date is wider
+                                    // than the 240 dp the list may be dragged
+                                    // to (it once overflowed by 65 px), so it
+                                    // is capped at half the row.
+                                    ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxWidth: box.maxWidth / 2,
+                                      ),
+                                      child: Text(
+                                        _formatActivity(
+                                          context,
+                                          conversation.lastActivity,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelSmall
+                                            ?.copyWith(color: supportingColor),
+                                      ),
                                     ),
                                   ],
-                                ],
+                                );
+                              },
+                            ),
+                            if (statusMessage != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                statusMessage,
+                                key: Key(
+                                  'conversation-presence-message-'
+                                  '${conversation.token}',
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: supportingColor),
                               ),
                             ],
-                          ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                if (delivery != null) ...[
+                                  // The marks of the chat bubbles: one tick
+                                  // once stored, two once everyone read it.
+                                  Icon(
+                                    read
+                                        ? Icons.done_all_rounded
+                                        : Icons.done_rounded,
+                                    key: Key(
+                                      'conversation-delivery-'
+                                      '${conversation.token}',
+                                    ),
+                                    size: 16,
+                                    color: read
+                                        ? scheme.primary
+                                        : scheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    preview,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: supportingColor,
+                                          fontWeight: unread
+                                              ? FontWeight.w600
+                                              : null,
+                                        ),
+                                  ),
+                                ),
+                                if (conversation.unreadMessages > 0) ...[
+                                  const SizedBox(width: 8),
+                                  _UnreadBadge(
+                                    count: conversation.unreadMessages,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -658,14 +620,14 @@ final class _UnreadBadge extends StatelessWidget {
           constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
           decoration: BoxDecoration(
-            color: scheme.tertiary,
-            borderRadius: BorderRadius.circular(12),
+            color: scheme.primary,
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
             count > 99 ? '99+' : '$count',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: scheme.onTertiary,
+              color: scheme.onPrimary,
               fontWeight: FontWeight.w700,
             ),
           ),

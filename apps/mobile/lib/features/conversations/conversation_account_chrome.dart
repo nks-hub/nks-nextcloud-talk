@@ -12,6 +12,7 @@ final class _AccountRail extends StatelessWidget {
     this.unreadByAccount = const {},
     required this.onSelect,
     required this.onAdd,
+    required this.navigation,
   });
 
   final StoredAccount selected;
@@ -19,6 +20,7 @@ final class _AccountRail extends StatelessWidget {
   final Map<String, int> unreadByAccount;
   final ValueChanged<String> onSelect;
   final VoidCallback onAdd;
+  final Widget navigation;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +34,7 @@ final class _AccountRail extends StatelessWidget {
             padding: EdgeInsets.symmetric(vertical: 14),
             child: BrandMark(size: 44),
           ),
+          navigation,
           const Divider(),
           Expanded(
             child: ListView.builder(
