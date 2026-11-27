@@ -176,6 +176,92 @@ final class _PendingMessageBubbleState extends State<_PendingMessageBubble> {
         foregroundColor: onBubble,
       ),
     );
+    final bubble = DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: _bubbleRadius(
+          outgoing: true,
+          groupedWithPrevious: widget.groupedWithPrevious,
+          groupEnd: widget.groupEnd,
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          12,
+          8,
+          12,
+          !ambiguous && (cancelable || retryable) ? 4 : 7,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isGiphy)
+              ChatPendingGiphyReference(
+                account: account,
+                resourceUrl: resourceUrl,
+                foregroundColor: onBubble,
+              )
+            else if (isEmojiOnlyMessage(operation.message))
+              ChatEnlargedEmoji(
+                text: operation.message.trim(),
+                color: onBubble,
+                step:
+                    ChatEmojiSizeReference.tryParse(
+                      operation.referenceId,
+                    )?.step ??
+                    0,
+              )
+            else
+              Text(
+                normalizeGiphyReferencePreview(operation.message),
+                style: TextStyle(color: onBubble),
+              ),
+            if (!ambiguous)
+              IconButtonTheme(
+                data: action,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      operation.outboxState == 'failed'
+                          ? Icons.warning_amber_rounded
+                          : Icons.schedule_rounded,
+                      size: 14,
+                      color: onBubble.withValues(alpha: 0.9),
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        status,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: onBubble.withValues(alpha: 0.9),
+                        ),
+                      ),
+                    ),
+                    if (retryable)
+                      IconButton(
+                        key: Key('chat-retry-${operation.operationId}'),
+                        onPressed: onRetry,
+                        tooltip: strings.retrySend,
+                        iconSize: 18,
+                        icon: const Icon(Icons.refresh_rounded),
+                      ),
+                    if (cancelable)
+                      IconButton(
+                        key: Key('chat-cancel-${operation.operationId}'),
+                        onPressed: onCancel,
+                        tooltip: strings.cancelSend,
+                        iconSize: 18,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
     return Padding(
       padding: EdgeInsets.only(top: widget.groupedWithPrevious ? 2 : 12),
       child: Align(
@@ -185,102 +271,61 @@ final class _PendingMessageBubbleState extends State<_PendingMessageBubble> {
           child: Semantics(
             container: true,
             label: status,
-            child: DecoratedBox(
-              // Same shape and colour as a sent outgoing bubble, so a message
-              // on its way no longer reads as a separate card.
-              decoration: BoxDecoration(
-                color: colors.background,
-                borderRadius: _bubbleRadius(
-                  outgoing: true,
-                  groupedWithPrevious: widget.groupedWithPrevious,
-                  groupEnd: widget.groupEnd,
-                ),
-              ),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  12,
-                  8,
-                  12,
-                  cancelable || retryable || ambiguous ? 4 : 7,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (isGiphy)
-                      ChatPendingGiphyReference(
-                        account: account,
-                        resourceUrl: resourceUrl,
-                        foregroundColor: onBubble,
-                      )
-                    else if (isEmojiOnlyMessage(operation.message))
-                      ChatEnlargedEmoji(
-                        text: operation.message.trim(),
-                        color: onBubble,
-                        step:
-                            ChatEmojiSizeReference.tryParse(
-                              operation.referenceId,
-                            )?.step ??
-                            0,
-                      )
-                    else
-                      Text(
-                        normalizeGiphyReferencePreview(operation.message),
-                        style: TextStyle(color: onBubble),
-                      ),
-                    IconButtonTheme(
-                      data: action,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            ambiguous || operation.outboxState == 'failed'
-                                ? Icons.warning_amber_rounded
-                                : Icons.schedule_send_rounded,
-                            size: 14,
-                            color: onBubble.withValues(alpha: 0.9),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                bubble,
+                if (ambiguous)
+                  ChatBackgroundChip(
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: PopupMenuButton<bool>(
+                        key: Key(
+                          'chat-pending-status-${operation.operationId}',
+                        ),
+                        tooltip: status,
+                        onSelected: (resend) =>
+                            resend ? onResend() : onCancel(),
+                        itemBuilder: (_) => [
+                          PopupMenuItem(
+                            key: Key('chat-resend-${operation.operationId}'),
+                            value: true,
+                            child: Text(strings.resendMessage),
                           ),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(
-                              status,
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: onBubble.withValues(alpha: 0.9),
-                                  ),
-                            ),
+                          PopupMenuItem(
+                            key: Key('chat-cancel-${operation.operationId}'),
+                            value: false,
+                            child: Text(strings.cancelSend),
                           ),
-                          if (retryable)
-                            IconButton(
-                              key: Key('chat-retry-${operation.operationId}'),
-                              onPressed: onRetry,
-                              tooltip: strings.retrySend,
-                              iconSize: 18,
-                              icon: const Icon(Icons.refresh_rounded),
-                            ),
-                          if (ambiguous)
-                            IconButton(
-                              key: Key('chat-resend-${operation.operationId}'),
-                              onPressed: onResend,
-                              tooltip: strings.resendMessage,
-                              iconSize: 18,
-                              icon: const Icon(Icons.send_rounded),
-                            ),
-                          // Every pending state stays cancelable. Ambiguous
-                          // sends can refuse it with a visible explanation.
-                          if (cancelable)
-                            IconButton(
-                              key: Key('chat-cancel-${operation.operationId}'),
-                              onPressed: onCancel,
-                              tooltip: strings.cancelSend,
-                              iconSize: 18,
-                              icon: const Icon(Icons.close_rounded),
-                            ),
                         ],
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 44),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.schedule_rounded,
+                                size: 15,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  status,
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ],
-                ),
-              ),
+                  ),
+              ],
             ),
           ),
         ),

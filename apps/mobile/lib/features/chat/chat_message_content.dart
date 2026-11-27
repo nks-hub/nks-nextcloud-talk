@@ -22,6 +22,7 @@ import '../../l10n/generated/app_localizations.dart';
 import 'chat_context_menu.dart';
 import 'chat_selection.dart';
 import 'emoji_only_message.dart';
+import 'voice_waveform.dart';
 import 'location_map.dart';
 import 'poll_dialog.dart';
 import 'composer/giphy.dart';

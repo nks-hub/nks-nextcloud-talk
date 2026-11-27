@@ -445,6 +445,8 @@ void _registerChatRoomPaneInteractionTests() {
     await tester.pump();
     expect(find.text('Possibly GIF sent'), findsOneWidget);
     expect(find.textContaining(_giphyResourceUrl), findsNothing);
+    await tester.tap(find.byKey(const Key('chat-pending-status-operation-a')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('chat-resend-operation-a')));
     await tester.pumpAndSettle();
 
@@ -694,6 +696,8 @@ void _registerChatRoomPaneInteractionTests() {
     await tester.pumpWidget(app(home: roomScreen()));
     await tester.pump();
 
+    await tester.tap(find.byKey(const Key('chat-pending-status-operation-x')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('chat-cancel-operation-x')));
     await _pumpUntil(
       tester,

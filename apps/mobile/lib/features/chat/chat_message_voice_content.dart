@@ -37,6 +37,7 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
   bool _failed = false;
   Duration _position = Duration.zero;
   Duration? _total;
+  List<double>? _peaks;
 
   /// Set while the listener drags the slider, so incoming position ticks do
   /// not fight the thumb under their finger.
@@ -63,6 +64,7 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
       _discardTranscription();
     }
     if (oldWidget.uri != widget.uri) {
+      _peaks = null;
       _repairedUri = null;
       _pathRepairAttempted = false;
     }
@@ -227,6 +229,16 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
           setState(() => _total = value);
         }
       });
+      if (file.contentType.contains('wav')) {
+        unawaited(
+          _loadWaveform(
+            file.path,
+            widget.account.id,
+            widget.messageId,
+            widget.uri,
+          ),
+        );
+      }
       await backend.playFile(file.path, mimeType: file.contentType);
       if (mounted) {
         setState(() {
@@ -277,6 +289,22 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
     }
   }
 
+  Future<void> _loadWaveform(
+    String path,
+    String accountId,
+    int messageId,
+    Uri uri,
+  ) async {
+    final peaks = await compute(readVoicePeaks, path);
+    if (peaks != null &&
+        mounted &&
+        widget.account.id == accountId &&
+        widget.messageId == messageId &&
+        widget.uri == uri) {
+      setState(() => _peaks = peaks);
+    }
+  }
+
   Future<void> _seek(Duration position) async {
     final backend = _backend;
     setState(() {
@@ -307,18 +335,34 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
     return Container(
       key: Key('chat-voice-${widget.messageId}'),
       margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(12),
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(15),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _player(context, strings, scheme, label, total),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: scheme.primaryFixed,
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              child: _player(context, strings, scheme, label, total),
+            ),
+          ),
           if (transcriberFactory != null)
-            _transcription(context, strings, scheme, transcriberFactory),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: _transcription(
+                context,
+                strings,
+                scheme,
+                transcriberFactory,
+              ),
+            ),
         ],
       ),
     );
@@ -334,20 +378,28 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(
+        IconButton.filled(
+          style: IconButton.styleFrom(
+            backgroundColor: scheme.onPrimaryFixed,
+            foregroundColor: scheme.primaryFixed,
+          ),
           key: Key('chat-voice-toggle-${widget.messageId}'),
           tooltip: label,
           onPressed: _loading ? null : () => unawaited(_toggle()),
           icon: _loading
-              ? const SizedBox.square(
+              ? SizedBox.square(
                   dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: scheme.onPrimaryFixed,
+                  ),
                 )
               : Icon(
                   _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                   semanticLabel: label,
                 ),
         ),
+        const SizedBox(width: 8),
         Flexible(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -360,9 +412,9 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
                 _failed ? strings.voiceMessagePlaybackFailed : widget.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: _failed ? scheme.error : scheme.onSurface,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: scheme.onPrimaryFixed),
               ),
               if (total != null) _timeline(context, strings, total),
             ],
@@ -513,24 +565,33 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Flexible(
-          child: Slider(
-            key: Key('chat-voice-position-${widget.messageId}'),
-            value: clamped.inMilliseconds.toDouble(),
-            max: total.inMilliseconds.toDouble(),
-            label: _formatPlaybackTime(clamped),
-            semanticFormatterCallback: (_) => progress,
-            onChanged: (value) => setState(
-              () => _scrubbing = Duration(milliseconds: value.round()),
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackShape: _peaks == null ? null : _VoiceWaveTrack(_peaks!),
             ),
-            onChangeEnd: (value) =>
-                unawaited(_seek(Duration(milliseconds: value.round()))),
+            child: Slider(
+              activeColor: Theme.of(context).colorScheme.onPrimaryFixed,
+              inactiveColor: Theme.of(
+                context,
+              ).colorScheme.onPrimaryFixed.withValues(alpha: 0.25),
+              key: Key('chat-voice-position-${widget.messageId}'),
+              value: clamped.inMilliseconds.toDouble(),
+              max: total.inMilliseconds.toDouble(),
+              label: _formatPlaybackTime(clamped),
+              semanticFormatterCallback: (_) => progress,
+              onChanged: (value) => setState(
+                () => _scrubbing = Duration(milliseconds: value.round()),
+              ),
+              onChangeEnd: (value) =>
+                  unawaited(_seek(Duration(milliseconds: value.round()))),
+            ),
           ),
         ),
         Text(
           progress,
           key: Key('chat-voice-progress-${widget.messageId}'),
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            color: Theme.of(context).colorScheme.onPrimaryFixed,
           ),
         ),
       ],
@@ -548,4 +609,52 @@ String _formatPlaybackTime(Duration value) {
     return '$minutes:$seconds';
   }
   return '${total.inHours}:${minutes.toString().padLeft(2, '0')}:$seconds';
+}
+
+final class _VoiceWaveTrack extends RectangularSliderTrackShape {
+  const _VoiceWaveTrack(this.peaks);
+
+  final List<double> peaks;
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset offset, {
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required TextDirection textDirection,
+    required Offset thumbCenter,
+    Offset? secondaryOffset,
+    bool isDiscrete = false,
+    bool isEnabled = false,
+  }) {
+    final rect = getPreferredRect(
+      parentBox: parentBox,
+      offset: offset,
+      sliderTheme: sliderTheme,
+      isEnabled: isEnabled,
+      isDiscrete: isDiscrete,
+    );
+    if (rect.width <= 0) return;
+    final step = rect.width / peaks.length;
+    final paint = Paint()
+      ..strokeWidth = math.min(step * 0.55, 3)
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < peaks.length; i++) {
+      final dx = step * (i + 0.5);
+      final rtl = textDirection == TextDirection.rtl;
+      final x = rtl ? rect.right - dx : rect.left + dx;
+      final played = rtl ? x >= thumbCenter.dx : x <= thumbCenter.dx;
+      paint.color = (played
+          ? sliderTheme.activeTrackColor
+          : sliderTheme.inactiveTrackColor)!;
+      final halfHeight = 1 + peaks[i] * 9;
+      context.canvas.drawLine(
+        Offset(x, rect.center.dy - halfHeight),
+        Offset(x, rect.center.dy + halfHeight),
+        paint,
+      );
+    }
+  }
 }
