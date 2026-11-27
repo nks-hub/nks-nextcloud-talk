@@ -446,6 +446,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     await tester.pump(const Duration(milliseconds: 50));
+    expect(_composer(tester).text, startsWith('ctrl-free send'));
     expect(
       harness.sentMessages,
       isEmpty,

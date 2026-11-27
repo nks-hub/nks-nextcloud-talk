@@ -1,6 +1,8 @@
 import 'dart:ffi';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/services.dart';
 
 /// Drops modifiers Flutter believes are held while Windows says they are up.
@@ -44,7 +46,9 @@ final class StaleModifierRepair {
   HardwareKeyboard get _target => keyboard ?? HardwareKeyboard.instance;
 
   /// Only Windows is asked; an instance given its own answer is a test.
-  bool get _active => isDown != null || Platform.isWindows;
+  bool get _active =>
+      isDown != null ||
+      (Platform.isWindows && defaultTargetPlatform == TargetPlatform.windows);
 
   /// Starts noting when each key went down. Call once at startup, before the
   /// first key, so a modifier pressed for a shortcut is never taken for old.
