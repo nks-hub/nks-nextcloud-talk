@@ -306,18 +306,8 @@ final class _ComposerEmojiBrowserState extends State<_ComposerEmojiBrowser> {
     final favorites = widget.usage.favorites.toSet();
     if (_showFavorites) {
       final stored = _storedChoices(favorites, EmojiCategory.favorites);
-      final query = _query.toLowerCase();
-      final choices = query.isEmpty
-          ? stored
-          : stored
-                .where(
-                  (choice) =>
-                      choice.glyph == _query ||
-                      choice.searchTerms.any(
-                        (term) => term.toLowerCase().contains(query),
-                      ),
-                )
-                .toList(growable: false);
+      final query = _query;
+      final choices = widget.catalog.search(query, within: stored);
       return [
         SliverToBoxAdapter(
           child: Padding(

@@ -79,6 +79,39 @@ final class EmojiTranslation {
   final List<String> keywords;
 }
 
+const _emojiSearchAccents = {
+  'á': 'a',
+  'ä': 'a',
+  'č': 'c',
+  'ď': 'd',
+  'é': 'e',
+  'ě': 'e',
+  'í': 'i',
+  'ĺ': 'l',
+  'ľ': 'l',
+  'ň': 'n',
+  'ó': 'o',
+  'ô': 'o',
+  'ŕ': 'r',
+  'ř': 'r',
+  'š': 's',
+  'ť': 't',
+  'ú': 'u',
+  'ů': 'u',
+  'ý': 'y',
+  'ž': 'z',
+};
+
+final _emojiSearchMarks = RegExp(
+  '[${_emojiSearchAccents.keys.join()}\u0300-\u036f]',
+);
+
+String _normalizeEmojiSearch(String value) =>
+    value.toLowerCase().replaceAllMapped(
+      _emojiSearchMarks,
+      (match) => _emojiSearchAccents[match[0]] ?? '',
+    );
+
 final class EmojiCatalog {
   EmojiCatalog(Iterable<EmojiChoice> choices)
     : choices = List<EmojiChoice>.unmodifiable(choices) {
@@ -87,7 +120,7 @@ final class EmojiCatalog {
     };
     _searchIndex = <EmojiChoice, String>{
       for (final choice in this.choices)
-        choice: choice.searchTerms.join('\n').toLowerCase(),
+        choice: _normalizeEmojiSearch(choice.searchTerms.join('\n')),
     };
   }
 
@@ -111,16 +144,20 @@ final class EmojiCatalog {
         glyphs.map(byGlyph).whereType<EmojiChoice>(),
       );
 
-  List<EmojiChoice> search(String query) {
-    final normalized = query.trim().toLowerCase();
+  List<EmojiChoice> search(String query, {Iterable<EmojiChoice>? within}) {
+    final term = query.trim();
+    final normalized = _normalizeEmojiSearch(term);
+    final candidates = within ?? choices;
     if (normalized.isEmpty) {
-      return List<EmojiChoice>.unmodifiable(choices);
+      return List<EmojiChoice>.unmodifiable(candidates);
     }
     return List<EmojiChoice>.unmodifiable(
-      choices.where(
+      candidates.where(
         (choice) =>
-            choice.glyph == normalized ||
-            (_searchIndex[choice]?.contains(normalized) ?? false),
+            choice.glyph == term ||
+            (_searchIndex[choice] ??
+                    _normalizeEmojiSearch(choice.searchTerms.join('\n')))
+                .contains(normalized),
       ),
     );
   }

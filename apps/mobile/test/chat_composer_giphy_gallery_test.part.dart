@@ -82,7 +82,7 @@ void _registerGiphyGalleryTests() {
   }, variant: const TargetPlatformVariant({TargetPlatform.windows}));
 
   testWidgets(
-    'GIF search and its scroll position survive the Emoji tab',
+    'both expression tabs preserve the search and scroll position',
     (tester) async {
       _galleryWindow(tester, const Size(1280, 800));
       await _openGallery(tester);
@@ -104,7 +104,20 @@ void _registerGiphyGalleryTests() {
       await tester.tap(find.byKey(const Key('composer-emoji-tab')));
       await _pumpTransition(tester);
       expect(find.byKey(_gifSearch), findsNothing);
-      await tester.enterText(find.byKey(const Key('emoji-search')), 'wave');
+      await tester.enterText(find.byKey(const Key('emoji-search')), 'face');
+      await _pumpTransition(tester);
+      final emojiGrid = find.byKey(const Key('composer-emoji-scroll'));
+      final emojiScroller = find.descendant(
+        of: emojiGrid,
+        matching: find.byType(Scrollable),
+      );
+      await tester.drag(emojiGrid, const Offset(0, -260));
+      await _pumpTransition(tester);
+      final emojiOffset = tester
+          .state<ScrollableState>(emojiScroller)
+          .position
+          .pixels;
+      expect(emojiOffset, greaterThan(100));
 
       final gifTab = find.byKey(const Key('open-giphy-picker'));
       Focus.of(tester.element(gifTab)).requestFocus();
@@ -129,7 +142,11 @@ void _registerGiphyGalleryTests() {
             .widget<TextField>(find.byKey(const Key('emoji-search')))
             .controller!
             .text,
-        'wave',
+        'face',
+      );
+      expect(
+        tester.state<ScrollableState>(emojiScroller).position.pixels,
+        closeTo(emojiOffset, .1),
       );
       await _unmountComposer(tester);
     },

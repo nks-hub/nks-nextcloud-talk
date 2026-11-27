@@ -366,6 +366,38 @@ void main() {
     expect(tester.widget<TextField>(search).controller?.text, 'wave');
     expect(_choice('waving-hand'), findsOneWidget);
   });
+
+  testWidgets('Czech names work with or without accents in both views', (
+    tester,
+  ) async {
+    final standard = EmojiCatalog.standard();
+    final turtle = standard.byGlyph('🐢')!;
+    final giraffe = standard.byGlyph('🦒')!;
+    final store = _UsageStore()
+      ..rows[_account] = EmojiUsage(
+        recent: const [],
+        favorites: [turtle.glyph, giraffe.glyph],
+      );
+    await _show(tester, store, EmojiCatalog([turtle, giraffe, _cat]));
+    await tester.pumpAndSettle();
+
+    for (final (query, emoji) in [
+      ('želva', turtle),
+      ('zelva', turtle),
+      ('z\u030Celva', turtle),
+      ('žirafa', giraffe),
+      ('zirafa', giraffe),
+    ]) {
+      await tester.enterText(_key('emoji-search'), query);
+      await tester.pumpAndSettle();
+      expect(_choice(emoji.keyName), findsOneWidget, reason: query);
+      await tester.tap(_key('emoji-favorites'));
+      await tester.pumpAndSettle();
+      expect(_favorite(emoji.keyName), findsOneWidget, reason: query);
+      await tester.tap(_key('emoji-favorites'));
+      await tester.pumpAndSettle();
+    }
+  });
 }
 
 final class _UsageStore implements EmojiUsageStore {
