@@ -10,8 +10,8 @@ import io.flutter.embedding.android.FlutterView
 
 /**
  * Flutter's ImeSyncDeferringInsetsCallback consumes insets until the IME
- * animation ends. If the end callback goes missing, the viewport keeps the
- * keyboard inset even after the window reports it hidden.
+ * animation ends. A missing end or a late end replaying earlier insets can
+ * leave the viewport shortened after the window reports the keyboard hidden.
  */
 object FlutterWindowInsetsRepair {
     private const val IME_IDLE_DELAY_MS = 400L
@@ -108,7 +108,10 @@ object FlutterWindowInsetsRepair {
 
         override fun onEnd(animation: WindowInsetsAnimation) {
             if (animation.typeMask and ime != 0) {
-                cancelRepair()
+                // Flutter handles this end next and may replay the visible
+                // inset it saved before the activity lost focus.
+                repairPending = true
+                deferRepair()
             }
         }
 

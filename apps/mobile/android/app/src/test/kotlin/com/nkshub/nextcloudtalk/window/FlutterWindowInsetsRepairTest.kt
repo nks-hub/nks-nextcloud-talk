@@ -144,9 +144,7 @@ class FlutterWindowInsetsRepairTest {
         container.dispatchWindowInsetsAnimationEnd(animation)
         view.setOnApplyWindowInsetsListener(null)
         view.dispatchApplyWindowInsets(hidden)
-        val appliedAtEnd = view.applied.size
         mainLooper.idleFor(Duration.ofSeconds(1))
-        assertEquals(appliedAtEnd, view.applied.size)
         assertEquals(0, view.applied.last().getInsets(ime).bottom)
     }
 }
