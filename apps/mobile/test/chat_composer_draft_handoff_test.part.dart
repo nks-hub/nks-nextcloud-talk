@@ -16,11 +16,13 @@ void _registerDraftHandoffTests() {
     Widget device(
       String name,
       _ComposerHarness harness,
-      DraftHandoffStore store,
-    ) => Expanded(
+      DraftHandoffStore store, {
+      CachedConversation? conversation,
+    }) => Expanded(
       key: ValueKey(name),
       child: harness.app(
         wrapInScaffold: true,
+        conversation: conversation,
         overrides: [
           draftHandoffProvider.overrideWithValue(store),
           draftHandoffSupportProvider.overrideWith((_, _) async => true),
@@ -36,6 +38,7 @@ void _registerDraftHandoffTests() {
           query,
           values,
         }) async {
+          if (path[1] != harness.conversation.token) return {'variants': []};
           if (method == 'PUT') {
             versions.remove(values!['baseId']);
             versions[path.last] = {'id': path.last, ...values};
@@ -137,6 +140,69 @@ void _registerDraftHandoffTests() {
         versions.values.map((r) => r['text']),
         unorderedEquals(['Phone edit', 'Desktop edit']),
       );
+      Finder prompt(String device) => find.descendant(
+        of: find.byKey(ValueKey(device)),
+        matching: find.text('Choose a draft version'),
+      );
+      expect(
+        tester.getBottomLeft(prompt('phone')).dy,
+        lessThan(tester.getTopLeft(field('phone')).dy),
+      );
+      expect(field('phone').hitTestable(), findsOneWidget);
+      await tester.tap(prompt('phone'));
+      await _pumpUntil(
+        tester,
+        () => find.byType(AlertDialog).evaluate().isNotEmpty,
+      );
+      await tester.tap(find.widgetWithText(TextButton, 'Close'));
+      await _pumpTransition(tester);
+      expect(prompt('phone'), findsNothing);
+
+      final messenger = ScaffoldMessenger.of(tester.element(field('desktop')));
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Other update'), persist: true),
+      );
+      versions.clear();
+      await tester.pump(const Duration(seconds: 5));
+      await _pumpUntil(
+        tester,
+        () => value('desktop').isEmpty && value('phone').isEmpty,
+      );
+      expect(prompt('desktop'), findsNothing);
+      expect(find.text('Other update'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 1));
+      await tester.enterText(field('phone'), 'Second phone edit');
+      await tester.enterText(field('desktop'), 'Second desktop edit');
+      await tester.pump(const Duration(milliseconds: 600));
+      await _pumpUntil(tester, () => versions.length == 2);
+      await tester.pump(const Duration(seconds: 6));
+      await _pumpUntil(
+        tester,
+        () => find.text('Choose a draft version').evaluate().length == 2,
+      );
+      await tester.pumpWidget(
+        Row(
+          textDirection: TextDirection.ltr,
+          children: [
+            device(
+              'phone',
+              phone,
+              phoneStore,
+              conversation: phone.conversation.copyWith(token: 'roomnext'),
+            ),
+            device('desktop', desktop, desktopStore),
+          ],
+        ),
+      );
+      expect(prompt('phone'), findsNothing);
+      expect(prompt('desktop'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 15));
+      await _pumpTransition(tester);
+      expect(prompt('desktop'), findsNothing);
+      expect(prompt('phone'), findsNothing);
+      expect(versions, hasLength(2));
+      expect(find.text('Other update'), findsOneWidget);
     } finally {
       await _unmountComposer(tester);
     }

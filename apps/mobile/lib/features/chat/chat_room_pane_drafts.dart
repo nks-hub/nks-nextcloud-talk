@@ -15,6 +15,8 @@ mixin _ChatRoomDraftState {
   DraftRoom? _handoffRoom;
   ForegroundSyncLoop? _handoffLoop;
   String? _handoffNotice;
+  DraftRoom? _reportedDraftConflict;
+  Timer? _draftConflictHint;
 }
 
 extension _ChatRoomDrafts on _ChatRoomPaneState {

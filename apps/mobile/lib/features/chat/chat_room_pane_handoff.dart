@@ -35,11 +35,12 @@ extension _ChatRoomHandoff on _ChatRoomPaneState {
         _isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState) &&
         _readerIsActive();
     final room = active ? _key : null;
+    if (_reportedDraftConflict != _key) _reportedDraftConflict = null;
     if (room == _handoffRoom) return;
     _handoffRoom = room;
     _handoffNotice = null;
-    unawaited(_handoffLoop?.stop());
-    _handoffLoop = null;
+    _hideDraftConflictHint();
+    _stopHandoffReader();
     if (room == null) return;
     late final ForegroundSyncLoop loop;
     loop = ForegroundSyncLoop(
@@ -56,6 +57,28 @@ extension _ChatRoomHandoff on _ChatRoomPaneState {
     _handoffLoop = loop;
     loop.start();
   }
+
+  void _stopHandoffReader() {
+    unawaited(_handoffLoop?.stop());
+    _handoffLoop = null;
+    _draftConflictHint?.cancel();
+    _draftConflictHint = null;
+  }
+
+  void _hideDraftConflictHint() {
+    if (_draftConflictHint == null) return;
+    _draftConflictHint!.cancel();
+    _update(() => _draftConflictHint = null);
+  }
+
+  Widget _draftConflictButton(AppLocalizations strings) => Semantics(
+    liveRegion: true,
+    child: TextButton.icon(
+      icon: const Icon(Icons.edit_note_rounded),
+      label: Text(strings.draftHandoffVariants),
+      onPressed: _showDraftHandoff,
+    ),
+  );
 
   Future<void> _restoreSharedDraft(
     DraftRoom key,
@@ -91,9 +114,9 @@ extension _ChatRoomHandoff on _ChatRoomPaneState {
     if (!current()) return;
     final versions = await _handoff.sync(key);
     if (!mounted || !current()) return;
-    if (versions.length <= 1 &&
-        _handoffNotice?.startsWith('conflict:') == true) {
-      _handoffNotice = null;
+    if (versions.length <= 1) {
+      _reportedDraftConflict = null;
+      _hideDraftConflictHint();
     }
     if (versions.isEmpty) {
       // Another device sent or cleared the exact revision on screen.
@@ -104,18 +127,14 @@ extension _ChatRoomHandoff on _ChatRoomPaneState {
       return;
     }
     if (versions.length > 1) {
-      final ids = versions.map((v) => v.id).toList()..sort();
-      final notice = 'conflict:${ids.join(",")}';
-      if (_handoffNotice == notice) return;
-      _handoffNotice = notice;
-      final strings = AppLocalizations.of(context);
-      _showLocationSnackBar(
-        strings.draftHandoffVariants,
-        action: SnackBarAction(
-          label: strings.draftHandoffTitle,
-          onPressed: () => unawaited(_showDraftHandoff()),
-        ),
-      );
+      if (_reportedDraftConflict == key) return;
+      _reportedDraftConflict = key;
+      _update(() {
+        _draftConflictHint = Timer(
+          const Duration(seconds: 10),
+          _hideDraftConflictHint,
+        );
+      });
     } else if (versions.single.id != local?.id) {
       await _adoptDraft(
         key,
@@ -127,6 +146,7 @@ extension _ChatRoomHandoff on _ChatRoomPaneState {
   }
 
   Future<void> _showDraftHandoff() async {
+    _hideDraftConflictHint();
     final key = _key;
     final text = _composer.text;
     final reply = _replyTo?.messageId;

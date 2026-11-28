@@ -451,8 +451,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _liveBinding = null;
     _syncLoop = null;
     _draftTimer?.cancel();
-    unawaited(_handoffLoop?.stop());
-    _handoffLoop = null;
+    _stopHandoffReader();
     _highlightTimer?.cancel();
     _islandPause?.cancel();
     _fileShares.reset();
@@ -1066,6 +1065,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
               account: widget.account,
               conversation: widget.conversation,
             ),
+          if (_draftConflictHint != null) _draftConflictButton(strings),
           PinnedMessageBanner(
             account: widget.account,
             conversation: liveConversation,
