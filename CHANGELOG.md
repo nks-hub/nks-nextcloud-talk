@@ -8,6 +8,11 @@ Builds 17 to 19 have no tag and will not get one: on Play they were replaced by 
 
 Builds 1 and 3 came into being before the closed testing on Play and went only to TestFlight. Their content cannot be broken down item by item: at that time the build number was not raised by a commit, so no boundary in the history leads to them. Only what is documented from App Store Connect is stated for them.
 
+## 1.2.3 (130) — 28 November 2026
+
+- With draft sharing enabled on both devices, an open conversation picks up changes from the other device and checks again as soon as you return to the app. Quoted messages stay attached and simultaneous edits remain available to choose from.
+- On Android, returning from another app restores the chat to the available screen height even if the keyboard animation finishes late.
+
 ## 1.2.2 (129) — 28 November 2026
 
 - Android now accepts the optional link that Nextcloud Notifications 34.0.6 includes in Talk reminders. Tapping a reminder opens its conversation in the receiving account.
