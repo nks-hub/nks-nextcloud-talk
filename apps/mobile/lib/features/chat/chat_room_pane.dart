@@ -120,7 +120,7 @@ const int _oneToOneRoomType = 1;
 const double _chatContentMaxWidth = 920;
 
 final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, _ChatRoomDraftState {
   static const _quickReactionEmoji = <String>[
     '👍',
     '❤️',
@@ -209,7 +209,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   bool _initialAttemptFinished = false;
   bool _giphyRequested = false;
   ChatServiceError? _localError;
-  Timer? _draftTimer;
   Timer? _highlightTimer;
 
   /// The range around a jump target the timeline lists instead of the whole
@@ -241,7 +240,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// Running after an island page that failed or brought nothing; until it
   /// ends, scrolling to the island's edges asks for no page.
   Timer? _islandPause;
-  ChatRepository? _draftStore;
   CachedChatMessage? _replyTo;
   UndeliveredMessage? _openedIssue;
   int _jumpGeneration = 0;
@@ -324,13 +322,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     });
   }
 
-  late final DraftHandoffStore _handoff;
-  CachedChatMessage? _restoredQuote;
-  late final RecoverableTextDraftStore _composerDrafts;
-  ({ChatRoomProviderKey key, String text, Future<bool> done})? _returningDraft;
-  late int _draftAccountGeneration;
-  bool _suppressDraftSave = false;
-
   @override
   void didUpdateWidget(covariant ChatRoomPane oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -348,6 +339,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       threadId: oldWidget.threadId,
     );
     unawaited(_flushDraft(left, _composer.text));
+    _draftReadyKey = null;
+    _syncHandoffReader();
     _draftAccountGeneration = _composerDrafts.accountGeneration(
       widget.account.id,
     );
@@ -408,6 +401,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_hasActiveElement && generation == _visibilityGeneration) {
         visibility.setVisible(_visibilityOwner, visible ? room : null);
+        _syncHandoffReader();
         _liveBinding?.setReaderActive(
           visible && ref.read(windowActiveProvider),
         );
@@ -457,6 +451,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _liveBinding = null;
     _syncLoop = null;
     _draftTimer?.cancel();
+    unawaited(_handoffLoop?.stop());
+    _handoffLoop = null;
     _highlightTimer?.cancel();
     _islandPause?.cancel();
     _fileShares.reset();
@@ -513,6 +509,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _syncHandoffReader();
     if (state == AppLifecycleState.resumed) {
       unawaited(_restartLiveSync());
       _scheduleTypingActivitySync();
@@ -684,6 +681,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       if (key == _key) _focusOpenedDraft(key!);
     });
     ref.listen(windowActiveProvider, (_, _) {
+      _syncHandoffReader();
       _liveBinding?.setReaderActive(_readerIsActive());
       if (_jumpDeferred) _startPendingJump();
     });

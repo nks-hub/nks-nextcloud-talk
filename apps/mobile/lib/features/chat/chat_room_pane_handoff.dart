@@ -29,49 +29,100 @@ extension _ChatRoomHandoff on _ChatRoomPaneState {
     }
   }
 
-  Future<void> _restoreSharedDraft(DraftRoom key) async {
+  void _syncHandoffReader() {
+    final active =
+        _draftReadyKey == _key &&
+        _isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState) &&
+        _readerIsActive();
+    final room = active ? _key : null;
+    if (room == _handoffRoom) return;
+    _handoffRoom = room;
+    _handoffNotice = null;
+    unawaited(_handoffLoop?.stop());
+    _handoffLoop = null;
+    if (room == null) return;
+    late final ForegroundSyncLoop loop;
+    loop = ForegroundSyncLoop(
+      task: (cancellation) async {
+        if (!await _handoff.enabled(room.accountId)) return cancellation;
+        if (identical(_handoffLoop, loop)) {
+          await _restoreSharedDraft(room, loop);
+        }
+      },
+      successInterval: const Duration(seconds: 5),
+      retryBaseDelay: const Duration(seconds: 5),
+      retryMaximumDelay: const Duration(minutes: 1),
+    );
+    _handoffLoop = loop;
+    loop.start();
+  }
+
+  Future<void> _restoreSharedDraft(
+    DraftRoom key,
+    ForegroundSyncLoop loop,
+  ) async {
     final text = _composer.text;
     final reply = _replyTo;
+    // A selected quote and a pending local clear both belong to this editor.
+    if (text.isEmpty &&
+        (reply != null ||
+            _draftTimer != null ||
+            _provisionalSends.any(
+              (s) => s.key == key && s.operationId == null,
+            ))) {
+      return;
+    }
     final generation = _handoff.generation(key.accountId);
     bool current() =>
-        mounted &&
+        _hasActiveElement &&
+        identical(_handoffLoop, loop) &&
+        _handoff.generation(key.accountId) == generation &&
         key == _key &&
         _composer.text == text &&
         identical(_replyTo, reply);
-    try {
-      if (!await _handoff.enabled(key.accountId) || !current()) return;
-      final local = text.trim().isEmpty
-          ? null
-          : await _handoff.stage(key, text, reply?.messageId);
+    HandoffVersion? local;
+    if (text.trim().isNotEmpty) {
+      local = await _handoff.current(key);
       if (!current()) return;
-      final versions = await _handoff.sync(key);
-      if (!mounted ||
-          !current() ||
-          _handoff.generation(key.accountId) != generation) {
-        return;
+      if (local?.text != text || local?.replyTo != reply?.messageId) {
+        local = await _handoff.stage(key, text, reply?.messageId);
       }
-      if (versions.isEmpty) {
-        // Another device sent or cleared the exact revision on screen.
-        if (local != null) {
-          _update(() => _replyTo = null);
-          _composer.clear();
-        }
-        return;
+    }
+    if (!current()) return;
+    final versions = await _handoff.sync(key);
+    if (!mounted || !current()) return;
+    if (versions.length <= 1 &&
+        _handoffNotice?.startsWith('conflict:') == true) {
+      _handoffNotice = null;
+    }
+    if (versions.isEmpty) {
+      // Another device sent or cleared the exact revision on screen.
+      if (local != null) {
+        _update(() => _replyTo = null);
+        _composer.clear();
       }
-      if (versions.length > 1) {
-        final strings = AppLocalizations.of(context);
-        _showLocationSnackBar(
-          strings.draftHandoffVariants,
-          action: SnackBarAction(
-            label: strings.draftHandoffTitle,
-            onPressed: () => unawaited(_showDraftHandoff()),
-          ),
-        );
-      } else if (versions.single.id != local?.id) {
-        await _adoptDraft(key, versions.single, automatic: true);
-      }
-    } on Exception {
-      // The handoff sheet lets the user retry without interrupting local typing.
+      return;
+    }
+    if (versions.length > 1) {
+      final ids = versions.map((v) => v.id).toList()..sort();
+      final notice = 'conflict:${ids.join(",")}';
+      if (_handoffNotice == notice) return;
+      _handoffNotice = notice;
+      final strings = AppLocalizations.of(context);
+      _showLocationSnackBar(
+        strings.draftHandoffVariants,
+        action: SnackBarAction(
+          label: strings.draftHandoffTitle,
+          onPressed: () => unawaited(_showDraftHandoff()),
+        ),
+      );
+    } else if (versions.single.id != local?.id) {
+      await _adoptDraft(
+        key,
+        versions.single,
+        automatic: true,
+        readerCurrent: current,
+      );
     }
   }
 
@@ -111,11 +162,13 @@ extension _ChatRoomHandoff on _ChatRoomPaneState {
     DraftRoom key,
     HandoffVersion version, {
     required bool automatic,
+    bool Function()? readerCurrent,
   }) async {
     final original = _composer.text;
     final originalReply = _replyTo;
     bool current() =>
-        mounted &&
+        _hasActiveElement &&
+        (readerCurrent?.call() ?? true) &&
         _key == key &&
         _composer.text == original &&
         identical(originalReply, _replyTo) &&
@@ -161,6 +214,8 @@ extension _ChatRoomHandoff on _ChatRoomPaneState {
       if (quote == null || !quote.canQuoteIn(key.threadId)) {
         final strings = AppLocalizations.of(context);
         if (automatic) {
+          if (_handoffNotice == version.id) return;
+          _handoffNotice = version.id;
           _showLocationSnackBar(strings.draftHandoffMissingQuote);
           return;
         }

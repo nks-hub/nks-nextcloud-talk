@@ -193,6 +193,14 @@ final class DraftHandoffStore
     return result;
   }
 
+  Future<HandoffVersion?> current(DraftRoom scope) async {
+    final rows = await read(AccountId.parse(scope.accountId));
+    final row = rows
+        .where((r) => _inRoom(r, scope) && r['kind'] == 'current')
+        .firstOrNull;
+    return row == null ? null : HandoffVersion.read(row);
+  }
+
   Future<HandoffVersion?> reserved(DraftRoom scope, String draftId) async {
     if (!await enabled(scope.accountId)) return null;
     final rows = await read(AccountId.parse(scope.accountId));

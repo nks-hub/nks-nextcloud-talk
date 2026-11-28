@@ -1,6 +1,146 @@
 part of 'chat_composer_integration_test.dart';
 
 void _registerDraftHandoffTests() {
+  testWidgets('two open editors hand off a draft and keep concurrent edits', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final phone = (await tester.runAsync(_ComposerHarness.create))!;
+    final desktop = (await tester.runAsync(_ComposerHarness.create))!;
+    _addHarnessTearDown(tester, phone);
+    _addHarnessTearDown(tester, desktop);
+    final versions = <String, Map<String, Object?>>{};
+    final reads = <String>{};
+    Widget device(
+      String name,
+      _ComposerHarness harness,
+      DraftHandoffStore store,
+    ) => Expanded(
+      key: ValueKey(name),
+      child: harness.app(
+        wrapInScaffold: true,
+        overrides: [
+          draftHandoffProvider.overrideWithValue(store),
+          draftHandoffSupportProvider.overrideWith((_, _) async => true),
+        ],
+      ),
+    );
+    DraftHandoffStore store(String name, _ComposerHarness harness) =>
+        DraftHandoffStore(({
+          required accountId,
+          required feature,
+          required path,
+          method = 'GET',
+          query,
+          values,
+        }) async {
+          if (method == 'PUT') {
+            versions.remove(values!['baseId']);
+            versions[path.last] = {'id': path.last, ...values};
+          } else if (method == 'DELETE') {
+            versions.remove(path.last);
+          } else {
+            reads.add(name);
+          }
+          return {'variants': versions.values.toList()};
+        }, directory: harness.attachmentRoot);
+    final phoneStore = store('phone', phone);
+    final desktopStore = store('desktop', desktop);
+    await tester.runAsync(() async {
+      await phoneStore.setEnabled(phone.account.id, true);
+      await desktopStore.setEnabled(desktop.account.id, true);
+    });
+    await tester.pumpWidget(
+      Row(
+        textDirection: TextDirection.ltr,
+        children: [
+          device('phone', phone, phoneStore),
+          device('desktop', desktop, desktopStore),
+        ],
+      ),
+    );
+    Finder field(String device) => find.descendant(
+      of: find.byKey(ValueKey(device)),
+      matching: find.byKey(const Key('chat-composer')),
+    );
+    String value(String device) =>
+        tester.widget<TextField>(field(device)).controller!.text;
+    try {
+      await _pumpUntil(tester, () => reads.length == 2);
+      await tester.enterText(field('phone'), 'Start on phone');
+      await tester.pump(const Duration(milliseconds: 600));
+      await _pumpUntil(
+        tester,
+        () => versions.values.any((r) => r['text'] == 'Start on phone'),
+      );
+      await tester.pump(const Duration(seconds: 10));
+      await _pumpUntil(tester, () => value('desktop') == 'Start on phone');
+      await tester.enterText(
+        field('desktop'),
+        'Start on phone, finish on desktop',
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      await _pumpUntil(
+        tester,
+        () => versions.values.any(
+          (r) => r['text'] == 'Start on phone, finish on desktop',
+        ),
+      );
+      for (final state in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await tester.pump();
+      for (final state in [
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await _pumpUntil(
+        tester,
+        () => value('phone') == 'Start on phone, finish on desktop',
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('desktop')),
+          matching: find.byKey(const Key('send-message-gesture')),
+        ),
+      );
+      await _pumpUntil(
+        tester,
+        () => versions.isEmpty && desktop.sentMessages.length == 1,
+      );
+      await tester.pump(const Duration(seconds: 10));
+      await _pumpUntil(tester, () => value('phone').isEmpty);
+      expect(desktop.sentMessages.single, 'Start on phone, finish on desktop');
+      expect(phone.sentMessages, isEmpty);
+
+      await tester.enterText(field('phone'), 'Phone edit');
+      await tester.enterText(field('desktop'), 'Desktop edit');
+      await tester.pump(const Duration(milliseconds: 600));
+      await _pumpUntil(tester, () => versions.length == 2);
+      await tester.pump(const Duration(seconds: 10));
+      await _pumpUntil(
+        tester,
+        () => find.text('Choose a draft version').evaluate().length == 2,
+      );
+      expect(value('phone'), 'Phone edit');
+      expect(value('desktop'), 'Desktop edit');
+      expect(
+        versions.values.map((r) => r['text']),
+        unorderedEquals(['Phone edit', 'Desktop edit']),
+      );
+    } finally {
+      await _unmountComposer(tester);
+    }
+  });
   for (final edited in [false, true]) {
     testWidgets(
       'remote removal clears only the exact untouched draft (edited=$edited)',

@@ -2,6 +2,21 @@ part of 'chat_room_pane.dart';
 
 const _refusedDraftPrefix = 'refused-draft-';
 
+mixin _ChatRoomDraftState {
+  late final DraftHandoffStore _handoff;
+  late final RecoverableTextDraftStore _composerDrafts;
+  late int _draftAccountGeneration;
+  ChatRepository? _draftStore;
+  Timer? _draftTimer;
+  bool _suppressDraftSave = false;
+  CachedChatMessage? _restoredQuote;
+  ({ChatRoomProviderKey key, String text, Future<bool> done})? _returningDraft;
+  DraftRoom? _draftReadyKey;
+  DraftRoom? _handoffRoom;
+  ForegroundSyncLoop? _handoffLoop;
+  String? _handoffNotice;
+}
+
 extension _ChatRoomDrafts on _ChatRoomPaneState {
   ChatThreadContext? get _currentThreadContext {
     final threadContext = widget.threadContext;
@@ -61,25 +76,18 @@ extension _ChatRoomDrafts on _ChatRoomPaneState {
       key.roomToken,
       key.threadId,
     );
-    if (draft == null && mounted && key == _key) {
-      await _restoreSharedDraft(key);
-      return;
+    if (!_hasActiveElement || key != _key) return;
+    if (draft != null && _replyTo == null && _composer.text.isEmpty) {
+      _restoredQuote = draft.reply;
+      _update(() => _replyTo = draft.reply);
+      _composer.value = TextEditingValue(
+        text: draft.text,
+        selection: TextSelection.collapsed(offset: draft.text.length),
+      );
+      _focusOpenedDraft(key);
     }
-    if (draft == null ||
-        !mounted ||
-        key != _key ||
-        _replyTo != null ||
-        _composer.text.isNotEmpty) {
-      return;
-    }
-    _restoredQuote = draft.reply;
-    _update(() => _replyTo = draft.reply);
-    _composer.value = TextEditingValue(
-      text: draft.text,
-      selection: TextSelection.collapsed(offset: draft.text.length),
-    );
-    _focusOpenedDraft(key);
-    unawaited(_restoreSharedDraft(key));
+    _draftReadyKey = key;
+    _syncHandoffReader();
   }
 
   void _focusOpenedDraft(ChatRoomProviderKey key) {
