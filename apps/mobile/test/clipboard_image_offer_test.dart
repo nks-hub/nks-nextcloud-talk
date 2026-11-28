@@ -23,37 +23,29 @@ void main() {
   late ValueNotifier<bool> blocked;
   late List<PastedImage> attached;
   late int sends;
+  late Directory scratch;
   late Directory memory;
+  var nextCase = 0;
+
+  setUpAll(
+    () => scratch = Directory.systemTemp.createTempSync(
+      'nctalk-clipboard-offer-',
+    ),
+  );
+  tearDownAll(() => scratch.delete(recursive: true));
 
   setUp(() {
     ClipboardImageOffer.debugForgetHandledClip();
-    clipboard = FakeClipboardImageSource();
+    clipboard = FakeClipboardImageSource()..durable = false;
     focus = FocusNode();
     blocked = ValueNotifier<bool>(false);
     attached = <PastedImage>[];
     sends = 0;
-    memory = Directory.systemTemp.createTempSync('nctalk-clipboard-offer-');
+    // Only the restart tests persist an answer and create their directory.
+    memory = Directory('${scratch.path}/case-${++nextCase}');
   });
 
-  tearDown(() async {
-    blocked.dispose();
-    // An answer is written to disk without being awaited, and on Windows a
-    // file still open cannot be deleted. Use the same real deadline as the
-    // shared widget waits because a loaded full-suite worker can finish more
-    // than two seconds after the test body.
-    final deadline = DateTime.now().add(const Duration(seconds: 30));
-    while (true) {
-      try {
-        memory.deleteSync(recursive: true);
-        return;
-      } on FileSystemException {
-        if (DateTime.now().isAfter(deadline)) {
-          rethrow;
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-      }
-    }
-  });
+  tearDown(() => blocked.dispose());
 
   // The framework asserts on a lifecycle jump that skips a state.
   var backgrounded = false;
@@ -275,7 +267,9 @@ void main() {
 
   testWidgets('an answered clip stays answered across a restart when its '
       'identity does', (tester) async {
-    clipboard.copyImage('clip-1', tinyPng);
+    clipboard
+      ..durable = true
+      ..copyImage('clip-1', tinyPng);
     await pumpComposer(tester);
     await focusField(tester);
     await tester.tap(find.byKey(const Key('clipboard-image-offer-dismiss')));
@@ -993,6 +987,7 @@ void main() {
         () => ClipboardOfferMemory(directory: memory).write('clip-1'),
       );
       clipboard
+        ..durable = true
         ..offersWhileVisible = true
         ..copyImage('clip-1', tinyPng);
       await pumpPanes(tester);
@@ -1050,7 +1045,6 @@ void main() {
     tester,
   ) async {
     clipboard
-      ..durable = false
       ..readNeedsConsent = true
       ..copyImage('clip-1', tinyPng);
     await pumpComposer(tester);
@@ -1106,6 +1100,7 @@ void main() {
       await tester.tap(attach);
       await settle(tester);
       expect(attached, hasLength(1));
+      expect(memory.existsSync(), isFalse);
     },
   );
 
