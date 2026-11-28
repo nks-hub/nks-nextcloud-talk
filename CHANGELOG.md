@@ -10,7 +10,7 @@ Builds 1 and 3 came into being before the closed testing on Play and went only t
 
 ## 1.2.3 (130) — 28 November 2026
 
-- With draft sharing enabled on both devices, an open conversation picks up changes from the other device and checks again as soon as you return to the app. Quoted messages stay attached and simultaneous edits remain available to choose from.
+- With draft sharing enabled on both devices, an open conversation picks up changes from the other device and checks again as soon as you return to the app. Quoted messages stay attached. If both devices edit at the same time, the chat offers both drafts and keeps the message field accessible.
 - On Android, returning from another app restores the chat to the available screen height even if the keyboard animation finishes late.
 
 ## 1.2.2 (129) — 28 November 2026
